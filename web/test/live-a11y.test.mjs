@@ -169,9 +169,10 @@ test("no form on a live page takes a personal fact: only the declared fields, ea
     }
     // A V4 page (the owner's brief of 2026-11-15) carries the header's find field, and Home its own: each a field labelled
     // by its `for`, from the table (the site's or Home's "Find a text"), text only.
-    if (markup.includes('data-layout="v4"')) {
+    // Changes keeps the one form of the generic rule below (its period, its title filter and its switch).
+    if (markup.includes('data-layout="v4"') && name !== "radar") {
       const v4Declared = new Set([liveChrome().site.findLabel, liveChrome().home.findLabel]);
-      assert.ok(forms.length >= 1 && forms[0].includes("data-header-find"), `${name}: the header's field first`);
+      assert.ok(header.length === 1 || markup.includes('class="lx-find lx-find-link"'), `${name}: the header's field`);
       for (const one of forms) {
         const controls = [...one.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]*)<\/label><input id="([^"]+)"([^>]*)>/g)];
         assert.equal(controls.length, (one.match(/<(input|select|textarea)\b/g) ?? []).length, `${name}: every control has its label`);

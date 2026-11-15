@@ -354,7 +354,8 @@ test("the build writes a server renderer per language, which renders the page in
       assert.match(home, new RegExp(`^<!doctype html>\\n<html lang="${language}" data-product-line="lex-v3" data-preview-state="live-home"`), `${language}: the home page`);
       assert.ok(home.includes(`placeholder="${copy.home.findPlaceholder.replaceAll("'", "&#x27;")}"`), `${language}: the find field's placeholder`);
       assert.equal((home.match(/data-start-text="/g) ?? []).length, 6, `${language}: the six starting texts`);
-      assert.ok(home.includes(`href="/${language}/lu-legilux/loi-1997-07-27-n10" data-start-text=`), `${language}: each a link to its text`);
+      // Each a link to its text page, its query written by hand (textHref: no URLSearchParams in this engine).
+      assert.ok(home.includes(`href="/${language}/text.html?text=%2Flu-legilux%2Floi-1997-07-27-n10" data-start-text=`), `${language}: each a link to its text`);
       const { totals } = COVERAGE.result.value;
       const line = fillText(copy.home.holds, {
         texts: fillCounted(copy.home.holdsTexts, totals.works, {}, language),

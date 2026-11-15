@@ -114,8 +114,9 @@ test("every live page renders its chrome from the table", () => {
     // The home page, Decisions and Evidence carry no eyebrow line (the owner's order of 2026-11-14, evening), and the two
     // pages no introduction; every other page its table's eyebrow, heading and introduction.
     if (v4) {
-      // A V4 page opens with its own heading and sentence, from its table, and no eyebrow.
-      assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
+      // A V4 page opens with its own heading and sentence, from its table, and no eyebrow; the earlier pages set in the V4
+      // frame (Trust and Coverage, the legal pages, the 404 and maintenance pages: `.lx-prose`) keep theirs.
+      if (!html.includes('class="lx-main lx-prose"')) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
       for (const opening of V4_OPENINGS[key]?.(entry) ?? []) assert.ok(html.includes(opening), `${key}: ${opening}`);
       continue;
     }

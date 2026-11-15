@@ -297,15 +297,9 @@ export function VersionMarks({ dates }) {
   );
 }
 
-/**
- * A starting text's link, which the server renders too: `textHref` where the engine has URLSearchParams (the browser, Node),
- * else, in the API's renderer, whose engine holds none (as on 2026-11-14 for the dossier's compare links), the same link
- * written by hand. The driver: once `textHref` builds its query without URLSearchParams, this is `textHref({ identifier })`.
- */
+/** A starting text's link, which the server renders too: the text page (`textHref` builds its query by hand, for the API's renderer). */
 export function startTextHref(identifier) {
-  if (typeof URLSearchParams === 'function') return textHref({ identifier });
-  const path = textPath(identifier);
-  return path === null ? null : `/${CHROME_LOCALE}${path}`;
+  return textHref({ identifier });
 }
 
 /** One starting text: its title, where it comes from and its articles, its versions on the scale, how many. */
