@@ -31,7 +31,7 @@ export function europeKind(celex) {
  * The texts a search view lists, each `{ key, identifier, title, titleLanguage, kind, href }`, in the order the rule above
  * says, each text once: `kind` is `lu` for a Luxembourg act and the CELEX letter for an EU act.
  */
-export function findRows(view) {
+export function findRows(view, query = "") {
   if (view === null || typeof view !== "object" || view.kind === "reference") return [];
   const rows = [];
   const seen = new Set();
@@ -52,7 +52,23 @@ export function findRows(view) {
     if (typeof act?.workKey === "string") add(`/lu-legilux/${act.workKey}`, act.title, act.titleLanguage, "lu");
   }
   for (const act of view.europeTitles?.acts ?? []) add(act.seedCelex, act.title, act.titleLanguage, europeKind(act.seedCelex));
-  return rows;
+  return byTitleMatch(rows, query);
+}
+
+/** Text compared for a title match: lower case, no accents, one apostrophe, one space. */
+const folded = (text) => String(text ?? "").normalize("NFD").replace(/\p{M}/gu, "").replace(/[’‘ʼ]/gu, "'").replace(/\s+/gu, " ").trim().toLowerCase();
+
+/**
+ * The rows with the texts whose own title holds the words searched first, the shortest such title first (the text that is
+ * about them before the acts that amend it: "contrat d'assurance" lists the insurance contract law before the laws that
+ * modify it), every other row after them in the search's own order. The search's ranking is the engine's and is unchanged.
+ */
+export function byTitleMatch(rows, query) {
+  const words = folded(query);
+  if (words.length === 0) return rows;
+  const matching = rows.filter((row) => folded(row.title).includes(words));
+  const others = rows.filter((row) => !folded(row.title).includes(words));
+  return [...[...matching].sort((a, b) => a.title.length - b.title.length), ...others];
 }
 
 /** How many rows the page shows before it says how many more hold the words. */

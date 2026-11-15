@@ -24,7 +24,7 @@ const CONSOLIDATION_PREFIX = /^Version consolid[ée]e applicable au [0-9]{2}\/[0
 /** A title as shown: its consolidation prefix and its final full stop taken off, its spaces kept. */
 export function cleanTitle(title) {
   if (typeof title !== 'string') return null;
-  const shown = title.replace(CONSOLIDATION_PREFIX, '').trim().replace(/\.$/u, '').trim();
+  const shown = title.split(/\\n|\n/u)[0].replace(CONSOLIDATION_PREFIX, '').trim().replace(/[.:;]$/u, '').trim();
   return shown.length === 0 ? null : shown;
 }
 
@@ -101,7 +101,7 @@ export function axisGeometry(versions, today, width, { left = 46, right = 46 } =
   for (let year = firstYear + 1; year <= lastYear; year += 1) {
     if (year % step !== 0) continue;
     const x = at(`${year}-01-01`);
-    if (x > x0 + 24 && x < x1 - 40) ticks.push(Object.freeze({ year, x }));
+    if (x > x0 + 24 && x < x1 - 72) ticks.push(Object.freeze({ year, x }));
   }
   return Object.freeze({ x0, x1, at, ticks: Object.freeze(ticks) });
 }

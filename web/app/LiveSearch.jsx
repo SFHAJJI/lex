@@ -1024,7 +1024,7 @@ export function FindResults({ contract, fetchImpl }) {
           window.location.replace(href);
           return;
         }
-        if (outcome.state === 'success') return setView({ state: 'rows', query: request.query, rows: findRows(outcome.view) });
+        if (outcome.state === 'success') return setView({ state: 'rows', query: request.query, rows: findRows(outcome.view, request.query) });
         // A failure of the service (R60: no corpus mounted, the server unreachable, a timeout) is no "no match": it is said in
         // the failure panel, in its own sentence, with a retry.
         if (isFailure(outcome)) return setView({ state: 'failed', query: request.query, outcome });

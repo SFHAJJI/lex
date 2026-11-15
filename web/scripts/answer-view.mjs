@@ -335,6 +335,10 @@ export function bundleFacts(value, article = null, language = null) {
  */
 export function ownTitle(title) {
   const stripped = String(title)
+    // The publisher's title of an amending act lists the acts it amends after a colon and a line break, sometimes written
+    // as the two characters "\n": only the act's own words are kept.
+    .split(/\\n|\n/u)[0]
+    .replace(/\s*[:;]\s*$/u, '')
     .replace(/^\s*Version\s+consolid[ée]e\s+applicable\s+au\s+[0-9/.-]+\s*:\s*/iu, '')
     .replace(/\s*\((?:Text with EEA relevance|Texte présentant de l'intérêt pour l'EEE|Texte présentant de l’intérêt pour l’EEE)\)\s*$/u, '')
     .trim();

@@ -6,7 +6,7 @@ import {
   alignParagraphs, articleNumberOf, articleParts, axisGeometry, changeIndex, cleanTitle, ownTitleOf, sameVisibleWording, versionAt, versionsOf, wordDiff,
 } from "../scripts/text-page.mjs";
 import { textHref, textStateOf } from "../scripts/text-address.mjs";
-import { CompareArticle, numericDate, renderLiveTextPage, typedDate } from "../.react-build/app.mjs";
+import { CompareArticle, ReadArticle, numericDate, renderLiveTextPage, typedDate } from "../.react-build/app.mjs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -122,4 +122,25 @@ test("compared wording is marked in the text's own language, the interface's lab
     assert.ok(paragraphs.length >= 4 && paragraphs.every((lang) => lang === textLang), `${textLang}: ${paragraphs}`);
     assert.ok(!/class="lx-compare-grid" lang=/.test(markup), "the grid's column labels are the interface's");
   }
+});
+
+test("an article reads before the versions that changed it are known, then says when it changed (the candidate's screenshot of 2026-11-15: the page threw)", () => {
+  const versions = [{ date: "2011-04-16" }, { date: "2013-03-01" }];
+  const article = { publisher_id: "art_38", text: ART_38_2013, language: "fra", official_source: "https://legilux.public.lu/x" };
+  const props = { entry: { id: "art_38", number: "38", textHeld: true }, article, parts: articleParts(ART_38_2013), versions, identifier: "/lu-legilux/loi-1997-07-27-n10", highlighted: false, version: versions[1], onCompareOn: () => {} };
+  const before = renderToStaticMarkup(h(ReadArticle, { ...props, changedDates: null }));
+  assert.ok(before.includes("Durée des obligations") && !before.includes("Wording changed"));
+  const after = renderToStaticMarkup(h(ReadArticle, { ...props, changedDates: ["2013-03-01"] }));
+  assert.ok(after.includes("Wording changed on 01/03/2013"));
+});
+
+test("the search page lists first the texts whose own title holds the words, the shortest first (the engine's ranking unchanged)", async () => {
+  const { byTitleMatch } = await import("../scripts/find-results.mjs");
+  const rows = [
+    { title: "Loi du 20 novembre 2025 portant modification" },
+    { title: "Loi du 6 décembre 2019 relative aux détecteurs de fumée et modifiant la loi modifiée du 27 juillet 1997 sur le contrat d’assurance" },
+    { title: "Loi du 27 juillet 1997 sur le contrat d'assurance" },
+  ];
+  assert.deepEqual(byTitleMatch(rows, "contrat d'assurance").map((row) => row.title.slice(0, 22)), ["Loi du 27 juillet 1997", "Loi du 6 décembre 2019", "Loi du 20 novembre 202"]);
+  assert.equal(byTitleMatch(rows, ""), rows);
 });

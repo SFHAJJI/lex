@@ -62,12 +62,15 @@ function readingLanguage(publisher, available) {
 function europeTitle(dossier, language) {
   const entries = dossier?.titles?.entries ?? [];
   const pick = entries.find((entry) => entry.kind === 'title' && entry.language === language) ?? entries.find((entry) => entry.kind === 'title');
-  return typeof pick?.text === 'string' ? pick.text.replace(/\s*\((?:Text with EEA relevance|Texte présentant de l'intérêt pour l'EEE)\)\s*$/u, '') : null;
+  if (typeof pick?.text !== 'string') return null;
+  const long = pick.text.replace(/\s*\((?:Text with EEA relevance|Texte présentant de l['’]intérêt pour l['’]EEE)\)\s*$/u, '');
+  const short = /\(([^()]{8,80})\)\s*$/u.exec(long)?.[1];
+  return short ? short.charAt(0).toUpperCase() + short.slice(1) : long;
 }
 
 /** An EU article's parts: the text runs "Article 5 Principles … 1. Personal data shall be: (a) …", spaces kept. */
 function europeParts(text) {
-  const body = String(text ?? '').replace(/^\s*Article\s+[0-9]+[a-z]?\s*/u, '');
+  const body = String(text ?? '').replace(/^\s*Article\s+(?:premier|first|[0-9]+[a-z]?)\s*/iu, '');
   const firstPoint = body.search(/(?:^|\s)(?:1\.\s|\(1\)\s)/u);
   let heading = null;
   let rest = body;
@@ -189,10 +192,11 @@ function SourceAndCitation({ article, version }) {
 }
 
 /** One article in reading mode: the margin (number, strip, sentence, links) and the body (heading, paragraphs). */
-function ReadArticle({ entry, article, parts, versions, changedDates, identifier, highlighted, version, onCompareOn }) {
+export function ReadArticle({ entry, article, parts, versions, changedDates, identifier, highlighted, version, onCompareOn }) {
   const copy = liveChrome().text;
   const number = entry.number;
-  const last = changedDates.at(-1) ?? null;
+  // The versions that changed it are read after first paint (the pairwise diffs): until then, none is said.
+  const last = (changedDates ?? []).at(-1) ?? null;
   const previous = last ? versions[versions.findIndex((v) => v.date === last) - 1]?.date ?? null : null;
   let sentence = null;
   if (versions.length > 1 && changedDates !== null) {
@@ -544,7 +548,8 @@ export function TextPage({ contract, fetchImpl, now = null }) {
     const element = document.getElementById(`article-${address.article}`);
     const loaded = [...pages.values()].some((articles) => articles.some((a) => a.publisher_id === address.article));
     if (element !== null && loaded) {
-      element.scrollIntoView({ block: 'start' });
+      const column = element.closest('.lx-reading');
+      if (column !== null) column.scrollTop += element.getBoundingClientRect().top - column.getBoundingClientRect().top - 8;
       scrolled.current = `${versionKey}:${address.article}`;
     }
   });

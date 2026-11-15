@@ -3482,7 +3482,7 @@ html[data-layout="v4"] .lx-find input::placeholder { color: var(--lx-faint); opa
 html[data-layout="v4"] .lx-find input::-webkit-search-cancel-button { display: none; }
 html[data-layout="v4"] .lx-nav { margin-left: auto; }
 html[data-layout="v4"] .lx-nav ul { display: flex; gap: 26px; margin: 0; padding: 0; list-style: none; }
-html[data-layout="v4"] .lx-nav a { display: block; padding: 17px 0 15px; border-bottom: 2px solid transparent; color: var(--lx-muted); font-size: 14.5px; font-weight: 500; line-height: 1.45; text-decoration: none; }
+html[data-layout="v4"] .lx-nav a { display: block; box-sizing: border-box; min-inline-size: 0; padding: 17px 0 15px; border-bottom: 2px solid transparent; color: var(--lx-muted); font-size: 14.5px; font-weight: 500; line-height: 1.45; text-decoration: none; }
 html[data-layout="v4"] .lx-nav a:hover { color: var(--lx-ink); }
 html[data-layout="v4"] .lx-nav a[aria-current="page"] { border-bottom-color: var(--lx-green); color: var(--lx-ink); font-weight: 600; }
 html[data-layout="v4"] .lx-header .locale-nav ul { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
@@ -3491,7 +3491,7 @@ html[data-layout="v4"] .lx-header .locale-nav a[aria-current="true"] { color: va
 /* The frame: the page's own column scrolls under the header; the dock keeps its place beside it, full height. */
 html[data-layout="v4"] .lx-frame { display: flex; height: calc(100vh - 56px); min-height: 0; }
 html[data-layout="v4"] .lx-scroll { flex: 1 1 auto; min-width: 0; overflow-y: auto; overflow-x: hidden; }
-html[data-layout="v4"] .lx-main { display: block; box-sizing: border-box; max-width: none; margin: 0; padding: 0; background: #FFFFFF; }
+html[data-layout="v4"] .lx-main { display: block; box-sizing: border-box; max-width: none; min-block-size: 0; align-content: normal; margin: 0; padding: 0; background: #FFFFFF; }
 html[data-layout="v4"] .lx-dock { flex: 0 0 var(--lx-dock-width); width: var(--lx-dock-width); box-sizing: border-box; min-height: 0; display: flex; flex-direction: column; background: var(--lx-panel); border-left: 1px solid var(--lx-line); }
 html[data-layout="v4"] .lx-dock-root { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 html[data-layout="v4"] .lx-dock[data-collapsed="true"] { flex-basis: 48px; width: 48px; }
@@ -4042,6 +4042,10 @@ html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size
 
 
 /* == v4: phone width end == */
+/* Changes' period buttons take the width of their words (the French "30 derniers jours" is longer than the English). */
+html[data-layout="v4"] .lx-changes .lx-segmented { min-width: 0; }
+html[data-layout="v4"] .lx-changes .lx-segmented > * { flex: 1 1 auto; padding-inline: 12px; white-space: nowrap; }
+
 /* Every V4 field shows where the keyboard's focus is (WCAG 2.4.7; the journeys' keyboard path): the fields drawn borderless
    inside their box (the header's and Home's "Find a text", Find in this law, the dock's question, the Changes filter) set
    no outline of their own, so the focus ring is drawn here, last in the cascade. */
