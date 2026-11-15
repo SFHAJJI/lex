@@ -93,7 +93,8 @@ const DAY_FIRST = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
 const withoutQuotations = (markup) => markup
   .replace(/<blockquote[\s\S]*?<\/blockquote>/g, "")
   .replace(/<q(?:\s[^>]*)?>[\s\S]*?<\/q>/g, "")
-  .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "")
+  // Text marked in its own language, wherever the attribute stands (the dock's example questions, 2026-11-15).
+  .replace(/<span(?:\s[^>]*)?\slang="[^"]*"[^>]*>[\s\S]*?<\/span>/g, "")
   .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "");
 
 test("every date a live screen shows is an explicit calendar date, never relative and never a local format", async () => {
@@ -162,7 +163,8 @@ test("no form on a live page takes a personal fact: only the declared fields, ea
     // The V4 header's "Find a text" (the driver's shell, every V4 page): one search field, a plain form to the search page.
     const header = [...markup.matchAll(/<form [^>]*data-header-find=""[\s\S]*?<\/form>/g)].map((match) => match[0]);
     for (const find of header) assert.deepEqual(find.match(/<(input|select|textarea)\b[^>]*>/g).map((control) => /type="search"/.test(control)), [true], `${name}: the header's find is one search field`);
-    const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]).filter((one) => !one.includes('data-header-find=""'));
+    // The dock's question box (the owner's brief of 2026-11-15) is the assistant's, held by its own tests (`assistant-dock`).
+    const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]).filter((one) => !one.includes('data-header-find=""') && !one.includes('class="lx-dock-ask"'));
     if (name === "coverage") {
       assert.equal(forms.length, 0, "Trust and Coverage asks nothing of the reader");
       continue;

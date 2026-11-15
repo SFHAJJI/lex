@@ -87,7 +87,7 @@ test("the server renders the form in its idle state, and asks nothing", () => {
   assert.match(page, /id="live-search-root"/);
   // The V4 search page (the owner's brief of 2026-11-15) has no form of its own: the header's field brings the words after
   // "#", and no form asks for an identifier anywhere. The header's form names no control either (R109).
-  const forms = page.match(/<form\b[^>]*>[\s\S]*?<\/form>/g) ?? [];
+  const forms = (page.match(/<form\b[^>]*>[\s\S]*?<\/form>/g) ?? []).filter((one) => !one.includes('class="lx-dock-ask"'));
   assert.equal(forms.length, 1, "the header's field alone");
   assert.match(forms[0], /data-header-find=""/);
   assert.doesNotMatch(forms[0], /\sname=/, "no control is named, so a submit the browser performs before hydration sends nothing (review of #772)");

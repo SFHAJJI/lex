@@ -326,7 +326,8 @@ test("the V4 search results: the header's field alone, no form asking for an ide
   const html = renderLiveSearchPage();
   const search = mainOf(html).replaceAll("<!-- -->", "");
   assert.ok(html.includes('data-layout="v4"') && html.includes('<aside class="lx-dock"'), "the V4 frame with the dock");
-  assert.equal((html.match(/<form\b/g) ?? []).length, 1, "the header's field alone");
+  // The dock's question box aside (the assistant's, `assistant-dock.test`).
+  assert.equal((html.match(/<form\b(?![^>]*class="lx-dock-ask")/g) ?? []).length, 1, "the header's field alone");
   assert.ok(!search.includes(escaped(EN.form.workIdentifierOptional)) && !search.includes("<input"), "no field for an identifier, no form of its own");
   assert.ok(search.includes(`<h1 class="lx-find-heading">${escaped(EN.search.findHeading)}</h1><p class="lx-find-status">${escaped(EN.search.findIdle)}</p>`));
   assert.ok(search.includes('id="live-search-root" data-variant="search" data-address="kept"'));

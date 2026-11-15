@@ -207,7 +207,7 @@ test('an answer: the question as a bubble, the verdict, the first sentence and [
   assert.doesNotMatch(said, /\/lu-legilux\/|art_44|[0-9a-f]{64}|\d{4}-\d{2}-\d{2}/u, said);
   // On another page the card links the text at the article, at the answer's date (today: none).
   const elsewhere = renderToStaticMarkup(h(DockView, { page: 'live-radar', shown: answerTurn() }));
-  assert.ok(elsewhere.includes(`href="${textHref({ identifier: WORK, article: 'art_44' }, 'en')}"`), elsewhere);
+  assert.ok(elsewhere.includes(`href="${textHref({ identifier: WORK, article: 'art_44' }, 'en').replaceAll('&', '&amp;')}"`), elsewhere);
   assert.ok(shown(elsewhere).includes(EN.dockWholeLink));
   // A wording that changed says when, dd/mm/yyyy, its tick in the time colour.
   const changed = renderToStaticMarkup(h(DockView, { page: 'live-text', shown: answerTurn({ strip: articleStrip(history(3), 'fra') }) }));
