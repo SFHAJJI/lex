@@ -198,7 +198,7 @@ function yieldServing(value, articles) {
 /** An answer given long after any build the census records: its index is older than today, so today is said beside it. */
 const LATER = "2026-12-01T10:00:00.0000000Z";
 
-test("the home page's coverage line says the counts the coverage answer serves, and no other number than its build's date and today's", () => {
+test("the home page's coverage line says the counts the coverage answer serves, and no other number", () => {
   const base = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
   // Counts no table holds, and the pack's own figures served as counts: a served figure is shown, as served; and the same
   // answered once the index is older than today (R13; the plan's item 3.4), when today's date is said beside the build's.
@@ -215,7 +215,9 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     const html = renderLiveHomePage({ facts });
     const line = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn, ...(later ? ["2026-12-01"] : [])], line);
+    // The V4 line (the mockup V1Home, 2026-11-15): the texts and their dated versions, grouped as the language groups them;
+    // the index's date is the footer's freshness strip's.
+    assert.deepEqual(line.replace(/(\d),(\d)/g, "$1$2").match(/\d+(?:-\d+)*/g), [String(works), String(states)], line);
   }
 });
 

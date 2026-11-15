@@ -34,7 +34,8 @@ const EN = Object.freeze({
     loading: "Asking this server for its coverage report.",
   }),
   search: Object.freeze({
-    title: "Search",
+    // The page's title: the V4 search results (2026-11-15).
+    title: "Find a text",
     eyebrow: "Search",
     heading: "Search the held text",
     // Only the phrase is matched (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
@@ -217,6 +218,32 @@ const EN = Object.freeze({
     officialSites: Object.freeze({
       legilux: "Legilux search, for Luxembourg law",
       eurlex: "EUR-Lex advanced search, for EU law",
+    }),
+    // The V4 search results (the owner's brief of 2026-11-15, section 5): the header's field brings the words here; an
+    // exact reference opens the text itself; otherwise the matching texts by title, one row each.
+    findHeading: "Find a text",
+    findIdle: "Type the name or the number of a text in the field above.",
+    findLoading: "Finding the texts…",
+    findOpening: "Opening the text…",
+    findCount: Object.freeze({
+      one: "{count} text matches “{query}”.",
+      other: "{count} texts match “{query}”.",
+    }),
+    findMore: Object.freeze({
+      one: "{count} more text holds these words: add a word to narrow the list.",
+      other: "{count} more texts hold these words: add a word to narrow the list.",
+    }),
+    findNone: "No text this site holds matches “{query}”.",
+    findHint: "Try the text’s name, as in “contrat d’assurance”, or its number.",
+    findFailed: "The search could not be done just now.",
+    findRetry: "Try again",
+    findUnread: "The words in this page’s address could not be read as a search.",
+    findKind: Object.freeze({
+      lu: "Luxembourg law",
+      R: "EU regulation",
+      L: "EU directive",
+      D: "EU decision",
+      eu: "EU act",
     }),
   }),
   dossier: Object.freeze({
@@ -931,6 +958,51 @@ const EN = Object.freeze({
     // their text's language.
     examplesHeading: "Example searches",
     examplesIntro: "Each searches for an article this site holds, cited as it is usually written, and leads to its text.",
+    // The V4 Home (the owner's brief of 2026-11-15, section 5; the mockup V1Home): the headline, one field, six starting
+    // texts on one scale, the newest changes and one line of coverage. The examples and the assistant are in the dock.
+    headline: "Luxembourg and EU law, as it read on any date.",
+    lede: "Open a text, move it back in time, and see which articles changed, when, and how the wording differs.",
+    findLabel: "Find a text",
+    findPlaceholder: "Find a text by name or number, for example “contrat d’assurance”",
+    findSubmit: "Find",
+    startHeading: "Start with a text",
+    startNote: "Each mark is a dated version.",
+    // A Luxembourg text, and an EU act by its number in the Official Journal, each with its articles counted.
+    startLu: "Luxembourg, {articles}",
+    startLuPlain: "Luxembourg",
+    startEu: "EU, Regulation {number}, {articles}",
+    startEuPlain: "EU, Regulation {number}",
+    startVersions: Object.freeze({
+      one: "one version held",
+      other: "{count} versions",
+    }),
+    // The EU acts by their usual names (the publisher's titles run to several lines), by CELEX.
+    startTexts: Object.freeze({
+      "32016R0679": "General Data Protection Regulation",
+      "32022R2554": "Digital Operational Resilience Act",
+      "32024R1689": "Artificial Intelligence Act",
+    }),
+    recentHeading: "Changed recently",
+    recentAll: "All changes",
+    recentLoading: "Reading the newest changes…",
+    recentFailed: "The newest changes could not be read just now.",
+    recentNone: "No change of wording is held for the last twelve months.",
+    // A change's counts: the first names the articles, the next ones only the count ("1 article added, 1 changed").
+    recentFirst: Object.freeze({
+      added: Object.freeze({ one: "{count} article added", other: "{count} articles added" }),
+      changed: Object.freeze({ one: "{count} article changed", other: "{count} articles changed" }),
+      removed: Object.freeze({ one: "{count} article removed", other: "{count} articles removed" }),
+    }),
+    recentNext: Object.freeze({
+      added: Object.freeze({ one: "{count} added", other: "{count} added" }),
+      changed: Object.freeze({ one: "{count} changed", other: "{count} changed" }),
+      removed: Object.freeze({ one: "{count} removed", other: "{count} removed" }),
+    }),
+    recentJoin: "{first}, {next}",
+    holds: "Lex holds {texts} in {versions}.",
+    holdsTexts: Object.freeze({ one: "{count} text", other: "{count} texts" }),
+    holdsVersions: Object.freeze({ one: "{count} dated version", other: "{count} dated versions" }),
+    holdsLink: "What it holds, and what it does not",
   }),
   // A service failure on a screen, panel by panel (the specification of record's R60; `live-failure.mjs`): its line, word
   // for word the specification's, above what the screen says of the failure; the retry, which asks the same request again;
