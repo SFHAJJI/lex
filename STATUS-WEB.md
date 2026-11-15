@@ -4,6 +4,31 @@ Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The V4 front end: the owner's brief of 2026-11-15, the validated mockup (sole driver and four agents, 2026-11-15)
+
+`web/text-page` (#1062). The owner lifted the freeze for `web/` only (the brief is kept at
+`C:\lex-v3\FRONT-END-BRIEF-2026-11-15.md`); the engine, the API, the index, the planner prompt, the templates and the gates are
+untouched. Built by the driver (the shell, the text page, phone width) and four agents in their own worktrees (Changes, How
+it works and Decisions, Home and search, the assistant dock), each merged here with its tests.
+- **The shell:** Spectral, IBM Plex Sans and Mono self-hosted; the brief's tokens; the V4 header (the wordmark, "Find a text",
+  Changes, Decisions, How it works, EN/FR) whose field takes the words to the search page after "#" (R109, pinned); the
+  frame with the assistant docked beside Home, the text page, Changes and the search results. Trust and Coverage, the legal
+  pages, the 404 and maintenance pages sit in the V4 frame with their own words.
+- **The text page** (`text.html?text=…&date=…&article=…&from=…&to=…`, every state a link): the title once (trap 2: the
+  text's own versions' titles, never an amending act's), the time axis with a bar per version from one `changes_in_period`
+  answer (insurance law 4, 0, 5, 1, 18, 1, 1, 1, 1), the article list with the years each changed (the pairwise diffs after
+  first paint), the wording rebuilt into headings, paragraphs and numbered points (the API serves an article as one string),
+  margin strips, "Source and citation" (the only place ids and digests appear), "Show the law on". Compare mode: two marks
+  on the axis, side by side or in one text, word-level, ' and ’ as one, short common islands joined into one change, "No
+  visible difference" (trap 1). Trap 4: article 7 is held without text (`no_text_tokens`) and is said so.
+- **Changes, Home, How it works, the dock:** see the agents' records in the pull request. Trap 2 measured on 61 texts: the
+  first title in a dossier names another act for 53; the rule gives the own title for 61 of 61.
+- **Driver decisions (reversible):** the old addresses (a law's address, reading, history, compare, export) are not redirected
+  tonight: the journeys pin them, and nothing in the V4 pages links them; the cost per answer is the test run's average,
+  said "about"; Changes counts its presets back from today (the corpus holds versions to today and beyond).
+- **For the owner (public claims):** the privacy notice and the cookies page now say the dock keeps the conversation in the
+  tab's session storage (deleted with the tab, sent nowhere); How it works's heading and the sentences the agent listed.
+
 ## Release 13 is live; the freeze resumes (sole driver, 2026-11-15)
 
 `docs/release-13-live`.
