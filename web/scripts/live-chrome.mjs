@@ -652,6 +652,12 @@ const EN = Object.freeze({
       other: "{count} works",
     }),
     noRow: "No held state is dated in this window.",
+    // The rows in words, counted from the rows shown (the owner's order of 2026-11-15, "Changes made readable").
+    tally: "In this list, wording changed: {changed}; same wording: {unchanged}; first version held, so nothing to compare: {first}; not compared for another reason: {other}.",
+    // A compared row's link to the comparison of its two versions, on the compare page.
+    compareLink: "Compare the two versions",
+    // The platform's caveat, in the page's language (`RADAR_PLATFORM_CAVEAT`); another caveat is shown as the API says it.
+    caveat: "A version row does not by itself assert a wording change, legal effect, or entry into force.",
     windowMisses: "This window does not meet what this index holds.",
     windowMissesRange: "This window does not meet what this index holds, from {first} to {last}.",
     row: "{work}, {language}, from {from}: {verdict}. {permalink}",
@@ -1732,6 +1738,20 @@ const EN = Object.freeze({
     longDate: "{day} {month} {year}",
     firstDay: "{day}",
     months: Object.freeze(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]),
+    // Acts named in words from their keys (`act-names.mjs`): a law or a grand-ducal regulation by its date, a code by its name.
+    actNames: Object.freeze({
+      dated: Object.freeze({ loi: "Law of {date}", rgd: "Grand-ducal regulation of {date}" }),
+      codes: Object.freeze({
+        "code-civil": "Civil Code",
+        "code-commerce": "Commercial Code",
+        "code-consommation": "Consumer Code",
+        "code-penal": "Criminal Code",
+        "code-procedure_civile": "New Code of Civil Procedure",
+        "code-procedure_penale": "Code of Criminal Procedure",
+        "code-securite_sociale": "Social Security Code",
+        "code-travail": "Labour Code",
+      }),
+    }),
     // The annexes of one EU wording a corpus disposition holds, never served as text (`europe-annexes.mjs`).
     europeAnnexes: Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",

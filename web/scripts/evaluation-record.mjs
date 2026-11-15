@@ -3,9 +3,9 @@
 
 export const EVALUATION_RECORD = Object.freeze({
   "dev": {
-    "run": "20261114-r12-candidate-dev",
-    "runId": "f97f6970bf1a420f841821c5848f9940",
-    "date": "2026-11-14",
+    "run": "20261115-r12-live-register-2",
+    "runId": "f09d6f549e804f60a5bc8889686399d1",
+    "date": "2026-11-15",
     "servingCommit": "b635bdb8c495680c34c3e79f6f7eb1bc99bc2ac8",
     "plannerId": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
     "modelDeployment": "gpt-4.1-mini",
@@ -19,10 +19,10 @@ export const EVALUATION_RECORD = Object.freeze({
     "quotes": 25,
     "quoteVerifiedRate": 1,
     "replaySameVerdict": 0.9464285714285714,
-    "replaySamePlan": 0.6363636363636364,
-    "p50": 1.5584247499937192,
-    "p95": 1.8943055999989156,
-    "costEur": 0.0010998545454545454,
+    "replaySamePlan": 0.6666666666666666,
+    "p50": 1.4430200000060722,
+    "p95": 3.2357646000455134,
+    "costEur": 0.0010916644444444444,
     "questions": [
       {
         "id": "lu-code-civil-art1",
@@ -329,7 +329,7 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "gdpr-portability-concept-en",
         "question": "What does the GDPR say about the right to data portability?",
         "language": "en",
-        "verdict": "assistant_v3_unavailable",
+        "verdict": "point",
         "outcome": "not_found"
       },
       {

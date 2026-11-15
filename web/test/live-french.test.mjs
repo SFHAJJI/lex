@@ -243,7 +243,15 @@ test("the platform's English on a French page is marked English, and on an Engli
     }
   }
   assert.ok(marked >= 40, `the platform's prose was found on the pages (${marked})`);
-  assert.deepEqual([...shownKinds].sort(), ["compare", "coverage", "dossier", "export", "history", "radar", "reading", "search"], "on every screen");
+  // The radar's one piece of platform prose, its caveat, is said in French when it is the API's known caveat (the owner's order
+  // of 2026-11-15, `RADAR_PLATFORM_CAVEAT`); any other caveat is still the platform's English, marked, checked below.
+  assert.deepEqual([...shownKinds].sort(), ["compare", "coverage", "dossier", "export", "history", "reading", "search"], "on every screen");
+  const radarEnvelope = envelopeOf("changes_in_period", "a window holding");
+  const radarFrench = renderToStaticMarkup(h(french.RadarAnswerView, props(frenchModule("live-radar.mjs").radarOutcome({ state: "success", envelope: radarEnvelope }))));
+  assert.ok(radarFrench.includes(`<p data-caveat="">${escaped(LIVE_CHROME.fr.radar.caveat)}</p>`), "the known caveat, in French");
+  radarEnvelope.result.value.caveat = "a row says nothing of legal effect";
+  const otherCaveat = renderToStaticMarkup(h(french.RadarAnswerView, props(frenchModule("live-radar.mjs").radarOutcome({ state: "success", envelope: radarEnvelope }))));
+  assert.ok(otherCaveat.includes('<p data-caveat="" lang="en">A row says nothing of legal effect.</p>'), "another caveat, as the API wrote it, marked English");
 
   // The EU acknowledgement and authenticity statement stand above an EU text, marked English.
   const view = {

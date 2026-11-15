@@ -14,8 +14,10 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LAST_TWELVE_MONTHS_HASH, LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession, lastTwelveMonths } from '../scripts/live-radar.mjs';
-import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
+import { LAST_TWELVE_MONTHS_HASH, LIVE_RADAR_IDLE, RADAR_LANGUAGES, RADAR_PLATFORM_CAVEAT, createRadarSession, lastTwelveMonths, radarTally } from '../scripts/live-radar.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, fillCounted, livePath, liveChrome } from '../scripts/live-chrome.mjs';
+import { actNameOf } from '../scripts/act-names.mjs';
+import { compareQueryOf, permalinkHref } from '../scripts/permalinks.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { todayAt } from '../scripts/initial-answer.mjs';
@@ -24,6 +26,32 @@ import { TodayHint, useLuxembourgToday } from './Today.jsx';
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
 const COPY = liveChrome().radar;
+const LANGUAGE_NAMES = liveChrome().common.languageNames;
+
+/**
+ * A row's act, named in words when its key names one (`actNameOf`), else by its key, and linked to its page (the owner's order
+ * of 2026-11-15, "Changes made readable").
+ */
+function ActName({ workKey }) {
+  const name = actNameOf(workKey);
+  return (
+    <strong>
+      <a href={permalinkHref(`/lu-legilux/${workKey}`, CHROME_LOCALE)} data-act-name={workKey}>{name ?? <code>{workKey}</code>}</a>
+    </strong>
+  );
+}
+
+/** A compared row's link to the comparison of its version with its baseline, on the compare page; null when it has none. */
+function compareHref(row) {
+  if (row.reason !== null || row.baseline === null) return null;
+  const query = compareQueryOf({
+    identifier: `/lu-legilux/${row.workKey}`,
+    dateFrom: row.baseline.applicabilityDate,
+    dateTo: row.state.applicabilityDate,
+    language: row.state.language,
+  });
+  return query === null ? null : `${livePath('compare.html')}${query}`;
+}
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_RADAR_IDLE });
 
@@ -92,7 +120,14 @@ export function RadarView({ view }) {
           }}
         />
       </p>
-      <p data-caveat="" lang={ENGLISH_LANG}>{asSentence(view.caveat)}</p>
+      {view.rows.length === 0 ? null : (
+        <p data-radar-tally="">
+          <Say template={COPY.tally} values={radarTally(view.rows)} />
+        </p>
+      )}
+      {view.caveat === RADAR_PLATFORM_CAVEAT
+        ? <p data-caveat="">{COPY.caveat}</p>
+        : <p data-caveat="" lang={ENGLISH_LANG}>{asSentence(view.caveat)}</p>}
       {view.rows.length === 0 ? (
         <p data-no-row="">
           {population.windowOverlapsWhatIsHeld
@@ -108,13 +143,14 @@ export function RadarView({ view }) {
               <Say
                 template={datedByEntryIntoForce(row.state) ? COPY.rowEntryIntoForce : COPY.row}
                 values={{
-                  work: <strong>{row.workKey}</strong>,
-                  language: row.state.language,
+                  work: <ActName workKey={row.workKey} />,
+                  language: LANGUAGE_NAMES[row.state.language] ?? row.state.language,
                   from: row.state.applicabilityDate,
                   verdict: <Verdict row={row} />,
                   permalink: <Permalink value={row.state.permalink} />,
                 }}
               />
+              {compareHref(row) === null ? null : <>{' '}<a href={compareHref(row)} data-compare-link="">{COPY.compareLink}</a></>}
             </li>
           ))}
         </ol>

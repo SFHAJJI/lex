@@ -5,7 +5,7 @@ export const REGISTRY_RECORD = Object.freeze({
   "mlflow_version": "3.18.0",
   "model": "lex-assistant",
   "aliases": {
-    "champion": 5
+    "champion": 7
   },
   "versions": [
     {
@@ -146,9 +146,7 @@ export const REGISTRY_RECORD = Object.freeze({
         "snapshot_id": "corpus-b2c3c1ba55bdda9a",
         "gates": "passed"
       },
-      "aliases": [
-        "champion"
-      ],
+      "aliases": [],
       "params": {
         "dataset_sha256": "0f55595228b3719ad1b7aa4cddf76a027d71632891cf9c3dcafa7dbbf96b4750",
         "base_url": "https://law.soufien.lu"
@@ -167,9 +165,91 @@ export const REGISTRY_RECORD = Object.freeze({
         "results.jsonl",
         "summary.md"
       ]
+    },
+    {
+      "version": 6,
+      "created": "2026-11-15T08:54:59Z",
+      "source": "models:/m-0994a040f1c84f49b09f79234a71ffc2",
+      "run_id": "b76733dd7cac414f9d7f1aba77ed9b54",
+      "run_name": "b635bdb8-278b2dce",
+      "tags": {
+        "serving_commit": "b635bdb8c495680c34c3e79f6f7eb1bc99bc2ac8",
+        "planner_id": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "failed"
+      },
+      "aliases": [],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://law.soufien.lu"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.44642857142857145,
+        "citation_accuracy": 0.3404255319148936,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 0.9642857142857143,
+        "replay_same_plan_rate": 0.7272727272727273,
+        "latency_p50_s": 1.5171085000038147,
+        "latency_p95_s": 2.7017917999764904,
+        "outcome_right_article": 16,
+        "outcome_wrong_article": 0,
+        "outcome_not_found": 26,
+        "outcome_wrongly_refused": 5,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.0010924159090909091
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
+    },
+    {
+      "version": 7,
+      "created": "2026-11-15T09:09:24Z",
+      "source": "models:/m-1eb9cbad060c457195cf4fda4f83e24e",
+      "run_id": "f09d6f549e804f60a5bc8889686399d1",
+      "run_name": "b635bdb8-278b2dce",
+      "tags": {
+        "serving_commit": "b635bdb8c495680c34c3e79f6f7eb1bc99bc2ac8",
+        "planner_id": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "passed"
+      },
+      "aliases": [
+        "champion"
+      ],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://law.soufien.lu"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.4642857142857143,
+        "citation_accuracy": 0.3617021276595745,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 0.9464285714285714,
+        "replay_same_plan_rate": 0.6666666666666666,
+        "latency_p50_s": 1.4430200000060722,
+        "latency_p95_s": 3.2357646000455134,
+        "outcome_right_article": 17,
+        "outcome_wrong_article": 0,
+        "outcome_not_found": 25,
+        "outcome_wrongly_refused": 5,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.0010916644444444444
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
     }
   ],
   "experiment": "lex-assistant",
-  "runs_logged": 21,
-  "exported": "2026-11-15T08:45:32Z"
+  "runs_logged": 23,
+  "exported": "2026-11-15T09:09:46Z"
 });
