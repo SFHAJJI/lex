@@ -4,6 +4,27 @@ Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 14 is live on the owner's exception to the promotion gate (sole driver, 2026-11-16)
+
+- **Release 14** (`v3-20261115T183640Z-b117b3fba166`, built on Azure from #1062's b117b3fb; revision
+  `ca-lex-v3--v3-20261115t183640z-b117b3fba166-19f24051`). On the candidate: the owner's seven acceptance checks 7 of 7; the
+  gate with `-NoPromote` passed every gate (17 right articles of 56, 0 wrong, 5 refused by mistake, 0 wrong behaviour;
+  replay same verdict 1.000; p50 1.52 s); screenshots on the runner (`ops/screens-r14`, 44 shots, French and English,
+  1366 and phone). The owner said yes.
+- **The promotion gate failed twice** on `ins-cover-start-fr` ("Quand la garantie d'un contrat d'assurance prend-elle
+  effet ?"), which got art 57 instead of art 37: run 1 15 right, 1 wrong; run 2 17 right, 1 wrong (`lu-masked-email`
+  unavailable in run 1, the known planner failure). No traffic moved. The live Release 13, asked the same question three
+  times at that moment, gave art 57 twice and arts 1er and 9 once: the planner's choice on this question, not the front
+  end (the release changes `web/` only). MLflow registered versions 9 and 10, gates failed.
+- **The owner's explicit exception:** Release 14 put live by `az containerapp ingress traffic set` (the deploy kit's own
+  command), 100 % on Release 14; acceptance 7 of 7 on the live site; two-address PASS; Release 13 deactivated, kept for
+  rollback; MLflow version 10 tagged `serving` and `owner_exception`, alias `serving` on 10, `champion` left on 8 (the last
+  version that passed every gate). The backup is verified (see below).
+- **Open, for the owner:** `ins-cover-start-fr` answers art 57 on the live site about two times in three: an engine
+  question (the planner), frozen until the owner says otherwise. The phone axis's year labels are cramped; a few EU
+  articles show no heading in the list; the old addresses keep their old pages; Changes' duplicate window request is
+  fixed on the branch (81ee27fb), not in the image.
+
 ## The V4 front end: the owner's brief of 2026-11-15, the validated mockup (sole driver and four agents, 2026-11-15)
 
 `web/text-page` (#1062). The owner lifted the freeze for `web/` only (the brief is kept at
