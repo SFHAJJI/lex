@@ -319,10 +319,20 @@ test("what the legal pages say of the site is what its code and its deployment d
   const client = await readFile(new URL("../scripts/v3-client.mjs", import.meta.url), "utf8");
   assert.match(client, /fetchImpl\(`\/api\/v3\/\$\{operation\}`, \{\s*method: "POST",[\s\S]*?body: JSON\.stringify\(\{ operation_id: operation, parameters \}\)/);
   assert.match(searchFragment({ query: "bail à loyer", language: "fra" }, { work: false }), /^#q=bail%20%C3%A0%20loyer&lang=fra$/);
-  // "No cookie, no browser storage": no live page's code sets a cookie or writes the browser's storage.
+  // "No cookie, no browser storage": no live page's code sets a cookie or writes the browser's storage, but one, pinned:
+  // the assistant dock keeps the reader's conversation in this tab's session storage, under one key, so it survives
+  // navigation (the owner's brief of 2026-11-15, section 5; the driver's binding instruction). That makes the two sentences
+  // above untrue while it ships: the privacy notice and the cookies page must say it before going live (an owner's decision,
+  // reported by the dock's agent). No other file, no other storage, no cookie.
   for (const name of await readdir(new URL("../app/", import.meta.url))) {
     if (!/\.(?:jsx|mjs)$/.test(name)) continue;
     const source = await readFile(new URL(`../app/${name}`, import.meta.url), "utf8");
+    if (name === "AssistantDock.jsx") {
+      assert.doesNotMatch(source, /document\.cookie\s*=|localStorage|indexedDB/, `app/${name}`);
+      assert.deepEqual(source.match(/(?<![A-Za-z])sessionStorage(?![A-Za-z])/g)?.length ?? 0, 2, "the dock reads and writes one key, each once");
+      assert.match(source, /export const MEMORY_KEY = 'lex-dock-conversation';/);
+      continue;
+    }
     assert.doesNotMatch(source, /document\.cookie\s*=|localStorage|sessionStorage|indexedDB/, `app/${name}`);
   }
   // The EU acknowledgement the legal notice quotes is the one the platform serves with EU text (Decision 95).

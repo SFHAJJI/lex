@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-11-15 by the driver (heads). This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-11-16 by the driver (heads). This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,13 +13,14 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `bc79a5ac` (2026-11-15, #1060 merged). Served at law.soufien.lu since 2026-11-15 about 11:50 UTC,
-  publicly: Release 13 `v3-20261115T092447Z-38c1a47bac9a` (serving commit 38c1a47b, the same tree as bc79a5ac: How it
-  works with the MLflow registry, the OpenAPI file, Changes made readable), over Release 4's data (derive
-  `d4-20261113-bfb83983`, rule set `lu-release-4`), built and signed on Azure, promoted on the owner's yes after the
-  candidate's screenshots; registered in MLflow as lex-assistant version 8, the champion. Releases 10, 11 and 12 are kept,
-  deactivated, for rollback. Detail in STATUS-WEB.md. The required checks: `dotnet` (the whole solution), `web`,
-  `canon-windows`, `journeys` and `image-conditions`.
+- `v3/integration`: #1062 (the V4 front end) merging on green CI. Served at law.soufien.lu since 2026-11-16 about 10:30
+  UTC, publicly: Release 14 `v3-20261115T183640Z-b117b3fba166` (serving commit b117b3fb: the V4 front end of the owner's
+  brief of 2026-11-15, front end only), over Release 4's data (derive `d4-20261113-bfb83983`, rule set `lu-release-4`),
+  built and signed on Azure, put live on the owner's explicit exception to the promotion gate (two runs: 1 wrong article,
+  `ins-cover-start-fr` art 57, which the live Release 13 gave too); MLflow lex-assistant version 10, alias `serving`
+  (`champion` stays on version 8, the last that passed). Release 13 is kept, deactivated, for rollback. Detail in
+  STATUS-WEB.md. The required checks: `dotnet` (the whole solution), `web`, `canon-windows`, `journeys` and
+  `image-conditions`.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.

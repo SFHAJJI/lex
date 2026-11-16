@@ -103,8 +103,10 @@ test("when the index is older than today, the search's population and the home p
       history: { ...value.history, snapshots_with_text: value.history.snapshots_with_text.map((snapshot) => ({ ...snapshot, built_at: "2026-10-24T21:59:59Z" })) },
     }));
     const facts = homeFacts(coverage, LIVE_CONTRACT);
+    // The V4 Home (2026-11-15) says the counts alone, as the mockup does; the footer's freshness strip dates the index.
     const said = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(plain(renderLiveHomePage({ facts })))[1];
-    assert.ok(today === null ? said.endsWith("as of the index built on 2026-10-24.") : said.endsWith(`as of the index built on 2026-10-24; today in Luxembourg is ${today}.`), `${observedAt}: ${said}`);
+    assert.doesNotMatch(said, /\d{4}-\d{2}-\d{2}/, `${observedAt}: ${said}`);
+    assert.equal(facts.today, today ?? "2026-10-24", `${observedAt}: today in Luxembourg, for the page's own use`);
   }
 });
 
@@ -157,6 +159,6 @@ test("the trace: every request that answers as of today names its date, and the 
   assert.equal(readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra", null, () => "2026-10-24T22:00:00Z").request.date, "2026-10-25");
   // The answer echoes the date it was asked for, which the page names as the date read.
   assert.equal(readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra", READING).request.date, READING.result.value.requested_date);
-  // The home page's search names today too (its date field starts at it; `live-search.test.mjs` holds the body).
-  assert.match(renderLiveHomePage({ facts: homeFacts(at(COVERAGE, "2026-10-24T22:00:00.0000000Z"), LIVE_CONTRACT) }), /data-search-date="" aria-describedby="search-today" value="2026-10-25"/);
+  // The V4 Home (2026-11-15) has no date field: its field finds a text, and the text page reads it at today's date.
+  assert.doesNotMatch(renderLiveHomePage({ facts: homeFacts(at(COVERAGE, "2026-10-24T22:00:00.0000000Z"), LIVE_CONTRACT) }), /data-search-date=/);
 });

@@ -44,7 +44,8 @@ const PAGES = {
   "reading.html": ["reading", "client-live-reading.js", renderLiveReadingPage, "idle"],
   "history.html": ["history", "client-live-history.js", renderLiveHistoryPage, "idle"],
   "compare.html": ["compare", "client-live-compare.js", renderLiveComparePage, "idle"],
-  "radar.html": ["radar", "client-live-radar.js", renderLiveRadarPage, "idle"],
+  // Changes (the owner's brief of 2026-11-15) asks the last 30 days once hydrated: as built, it is loading.
+  "radar.html": ["radar", "client-live-radar.js", renderLiveRadarPage, "loading"],
   "export.html": ["export", "client-live-export.js", renderLiveExportPage, "idle"],
 };
 
@@ -162,13 +163,21 @@ test("the product build writes every page in French under /fr/, in the French ta
 
       // The French table's chrome: the page's own entries, its first state, the shell's.
       assert.ok(html.includes(`<title>${escaped(fillText(french.shell.title, { title: french[key].title }))}</title>`), `fr/${page} has the French title`);
-      // The home page carries no eyebrow line (the owner's order of 2026-11-14, evening).
-      for (const text of [...(key === "home" ? [] : [french[key].eyebrow]), french[key].heading, french[key].intro, french.shell.localeNav, french.site.menuDecisions, french.site.menu, french.site.notAdvice, french.site.authenticity, french.site.sources]) {
+      // The V4 Home and search results (the owner's brief of 2026-11-15): their own heading and sentence, the V4 header's
+      // field, and Home's own find button; Changes (V4Changes) its own words and no eyebrow; every other page as before.
+      const v4 = { home: [french.home.headline, french.home.lede, french.home.findLabel, french.site.findLabel], search: [french.search.findHeading, french.search.findIdle, french.site.findLabel] }[key];
+      const opening = v4 ?? [...(key === "radar" ? [] : [french[key].eyebrow]), french[key].heading, french[key].intro];
+      for (const text of [...opening, french.shell.localeNav, french.site.menuDecisions, french.site.menu, french.site.notAdvice, french.site.authenticity, french.site.sources]) {
         assert.ok(html.includes(escaped(text)), `fr/${page} says ${JSON.stringify(text.slice(0, 50))}`);
       }
-      const first = state === "loading" ? french.coverage.loading : french[formKey].idle;
-      assert.ok(html.includes(`<p role="status">${escaped(first)}</p>`), `fr/${page} says its ${state} sentence in French`);
-      if (key !== "coverage") {
+      if (key === "home") assert.ok(html.includes(`<button type="submit">${escaped(french.home.findSubmit)}</button>`), `fr/${page}: the French find button`);
+      if (v4 === undefined) {
+        const first = state === "loading" ? (key === "radar" ? french.common.loading : french.coverage.loading) : french[formKey].idle;
+        assert.ok(html.includes(`<p role="status">${escaped(first)}</p>`), `fr/${page} says its ${state} sentence in French`);
+      }
+      if (key === "radar") {
+        assert.ok(html.includes(`<button class="lx-visually-hidden" type="submit">${escaped(french.radar.showPeriod)}</button>`), `fr/${page}: the French submit button`);
+      } else if (key !== "coverage" && v4 === undefined) {
         assert.ok(html.includes(`<button type="submit">${escaped(french.form.submit[formKey])}</button>`), `fr/${page}: the French submit button`);
       }
       assert.match(html, /lang="fr" hrefLang="fr" aria-current="true" data-same-document="fr">Français/, `fr/${page}: French is the current language`);

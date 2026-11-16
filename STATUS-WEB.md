@@ -4,6 +4,64 @@ Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 14 is live on the owner's exception to the promotion gate (sole driver, 2026-11-16)
+
+- **Release 14** (`v3-20261115T183640Z-b117b3fba166`, built on Azure from #1062's b117b3fb; revision
+  `ca-lex-v3--v3-20261115t183640z-b117b3fba166-19f24051`). On the candidate: the owner's seven acceptance checks 7 of 7; the
+  gate with `-NoPromote` passed every gate (17 right articles of 56, 0 wrong, 5 refused by mistake, 0 wrong behaviour;
+  replay same verdict 1.000; p50 1.52 s); screenshots on the runner (`ops/screens-r14`, 44 shots, French and English,
+  1366 and phone). The owner said yes.
+- **The promotion gate failed twice** on `ins-cover-start-fr` ("Quand la garantie d'un contrat d'assurance prend-elle
+  effet ?"), which got art 57 instead of art 37: run 1 15 right, 1 wrong; run 2 17 right, 1 wrong (`lu-masked-email`
+  unavailable in run 1, the known planner failure). No traffic moved. The live Release 13, asked the same question three
+  times at that moment, gave art 57 twice and arts 1er and 9 once: the planner's choice on this question, not the front
+  end (the release changes `web/` only). MLflow registered versions 9 and 10, gates failed.
+- **The owner's explicit exception:** Release 14 put live by `az containerapp ingress traffic set` (the deploy kit's own
+  command), 100 % on Release 14; acceptance 7 of 7 on the live site; two-address PASS; Release 13 deactivated, kept for
+  rollback; MLflow version 10 tagged `serving` and `owner_exception`, alias `serving` on 10, `champion` left on 8 (the last
+  version that passed every gate). The backup is verified (see below).
+- **Open, for the owner:** `ins-cover-start-fr` answers art 57 on the live site about two times in three: an engine
+  question (the planner), frozen until the owner says otherwise. The phone axis's year labels are cramped; a few EU
+  articles show no heading in the list; the old addresses keep their old pages; Changes' duplicate window request is
+  fixed on the branch (81ee27fb), not in the image.
+
+## The V4 front end: the owner's brief of 2026-11-15, the validated mockup (sole driver and four agents, 2026-11-15)
+
+`web/text-page` (#1062). The owner lifted the freeze for `web/` only (the brief is kept at
+`C:\lex-v3\FRONT-END-BRIEF-2026-11-15.md`); the engine, the API, the index, the planner prompt, the templates and the gates are
+untouched. Built by the driver (the shell, the text page, phone width) and four agents in their own worktrees (Changes, How
+it works and Decisions, Home and search, the assistant dock), each merged here with its tests.
+- **The shell:** Spectral, IBM Plex Sans and Mono self-hosted; the brief's tokens; the V4 header (the wordmark, "Find a text",
+  Changes, Decisions, How it works, EN/FR) whose field takes the words to the search page after "#" (R109, pinned); the
+  frame with the assistant docked beside Home, the text page, Changes and the search results. Trust and Coverage, the legal
+  pages, the 404 and maintenance pages sit in the V4 frame with their own words.
+- **The text page** (`text.html?text=…&date=…&article=…&from=…&to=…`, every state a link): the title once (trap 2: the
+  text's own versions' titles, never an amending act's), the time axis with a bar per version from one `changes_in_period`
+  answer (insurance law 4, 0, 5, 1, 18, 1, 1, 1, 1), the article list with the years each changed (the pairwise diffs after
+  first paint), the wording rebuilt into headings, paragraphs and numbered points (the API serves an article as one string),
+  margin strips, "Source and citation" (the only place ids and digests appear), "Show the law on". Compare mode: two marks
+  on the axis, side by side or in one text, word-level, ' and ’ as one, short common islands joined into one change, "No
+  visible difference" (trap 1). Trap 4: article 7 is held without text (`no_text_tokens`) and is said so.
+- **Changes, Home, How it works, the dock:** see the agents' records in the pull request. Trap 2 measured on 61 texts: the
+  first title in a dossier names another act for 53; the rule gives the own title for 61 of 61.
+- **Driver decisions (reversible):** the old addresses (a law's address, reading, history, compare, export) are not redirected
+  tonight: the journeys pin them, and nothing in the V4 pages links them; the cost per answer is the test run's average,
+  said "about"; Changes counts its presets back from today (the corpus holds versions to today and beyond).
+- **For the owner (public claims):** the privacy notice and the cookies page now say the dock keeps the conversation in the
+  tab's session storage (deleted with the tab, sent nowhere); How it works's heading and the sentences the agent listed.
+- **Builds and what they found (2026-11-15):** the first build (87717151) was stopped when CI's journeys found the bundles
+  sharing minified names on the window (each page now loads three scripts: every client bundle is an IIFE since dd1cea9b);
+  test versions of dd1cea9b and 34f49716 were deployed with no traffic for screenshots and then deactivated; their
+  screenshots and CI found: a class shared by the page body and the article body (lx-article-body), two copy templates
+  filled with a value they have no place for (the text page now fills only what a template names), the reading page
+  throwing before the change dates load, main centred in a full-height box, Changes' French buttons, the clarify card's raw
+  "
+" in amending acts' titles, focus rings on the borderless fields, and the period asked twice. Builds of 372a18ca,
+  546d8c84, 582a85d4 and 60cfbae7 were stopped for those fixes; the candidate is built from b117b3fb.
+- **Journeys:** updated to V4 by an agent (each page's own form, never the header's; Home measured before typing; the text
+  page's own journey; the search page's failure panel restored); the eu search journey now types an EU citation into the
+  header's field and is held to the API's answer.
+
 ## Release 13 is live; the freeze resumes (sole driver, 2026-11-15)
 
 `docs/release-13-live`.

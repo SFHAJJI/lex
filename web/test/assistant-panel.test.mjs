@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createElement as h } from 'react';
@@ -74,7 +74,9 @@ test('the panel is hidden: the module admits only that, and only the assistant p
   // The panel is drawn by the assistant's page and its entry alone, which the server serves only while the assistant is on
   // (V3WebRoot); `ssr-entry.jsx` renders that page for the server; the home page imports the copy module for the one link's
   // name, which it shows only then (`LiveHome.jsx`). No other module reaches the panel.
-  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx'];
+  // Since the owner's brief of 2026-11-15 the assistant is also docked beside every main page (`AssistantDock.jsx`, which reads
+  // the panel's copy and rules from its module); it never draws the old panel itself.
+  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx', 'AssistantDock.jsx'];
   for (const directory of ['app', 'scripts']) {
     for (const name of await readdir(join(web, directory))) {
       if (!/\.(mjs|jsx)$/.test(name) || reaching.includes(name)) continue;
@@ -100,14 +102,16 @@ test('no built page carries the panel or any assistant control', async () => {
           const html = await readFile(path, 'utf8');
           assert.ok(!html.includes(ASSISTANT_PANEL_MARKER), `${path} carries the assistant panel`);
           assert.ok(!html.includes('assistant-question'), `${path} carries the assistant's field`);
-        } else if (entry.name.endsWith('.js') && entry.name !== 'client-live-assistant.js') {
-          // The processor and preview sentences reach a visitor's browser only in the assistant page's own script, which the
-          // server serves only while the assistant is on; no other bundle (the home page's included) carries the panel's copy.
+        } else if (entry.name.endsWith('.js') && entry.name !== 'client-live-assistant.js' && basename(directory) !== 'ssr') {
+          // (`ssr/` holds the server's renderer, which renders the assistant's page itself and reaches no visitor's browser.)
+          // Since the owner's brief of 2026-11-15 the assistant is docked beside every main page (`AssistantDock.jsx`, which the
+          // shell renders on each page, so each page's script carries it): the processor and preview sentences reach a visitor's
+          // browser with the dock, which shows them before a question, under "preview, not legal advice". A script that carries
+          // them carries the dock's field; none carries the old panel's marker, which only the assistant page's script draws.
           const js = await readFile(path, 'utf8');
-          // The panel's own processor sentences, not the service's name: the privacy notice names Azure OpenAI on every page's
-          // chrome since the switch-on (the owner's yes of 2026-11-10), and says so in its own words.
-          for (const needle of [ASSISTANT_PANEL_MARKER, ASSISTANT_PANEL_COPY.en.processor, ASSISTANT_PANEL_COPY.fr.processor, ASSISTANT_PANEL_COPY.en.preview, ASSISTANT_PANEL_COPY.fr.preview]) {
-            assert.ok(!js.includes(needle), `${path} carries the assistant panel's copy (${needle.slice(0, 30)})`);
+          assert.ok(!js.includes(ASSISTANT_PANEL_MARKER), `${path} carries the assistant panel's marker`);
+          for (const needle of [ASSISTANT_PANEL_COPY.en.processor, ASSISTANT_PANEL_COPY.fr.processor, ASSISTANT_PANEL_COPY.en.preview, ASSISTANT_PANEL_COPY.fr.preview]) {
+            if (js.includes(needle)) assert.ok(js.includes('lx-dock-q'), `${path} carries the assistant panel's copy (${needle.slice(0, 30)}) without the dock`);
           }
         }
       }

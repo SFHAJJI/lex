@@ -16,6 +16,8 @@
 // describes nothing the contracts do not hold, and throws without them. Both servers render it from their own answer to
 // `browse` (`ssr-entry.jsx`), which it shows as its live examples (`live`); as built it says it carries none.
 
+import { Fragment } from 'react';
+
 import { Document, SITE_ORIGIN } from './Document.jsx';
 import { Say, inEnglish } from './LiveAnswer.jsx';
 import { countedEntry, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
@@ -37,6 +39,9 @@ import { COVERAGE_RECORD } from '../scripts/coverage-record.mjs';
 import { REGISTRY_RECORD } from '../scripts/registry-record.mjs';
 import { OPENAPI_FILE, OPENAPI_ORIGIN } from '../scripts/openapi.mjs';
 import { plannerName } from '../scripts/answer-view.mjs';
+import { HOW_ANSWER_RECORD } from '../scripts/how-answer-record.mjs';
+import { howAnswerStages } from '../scripts/how-answer.mjs';
+import { textHref } from '../scripts/text-address.mjs';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
 const pageLink = (file, text) => <a href={livePath(file)}>{text}</a>;
@@ -156,8 +161,8 @@ export function measured() {
     unanswered: count(dev.notFound + dev.wronglyRefused),
     heldoutRight: count(heldout.rightArticle),
     heldoutCases: count(heldout.cases),
-    heldoutDate: heldout.date,
-    devDate: dev.date,
+    heldoutDate: numericDate(heldout.date),
+    devDate: numericDate(dev.date),
     cost: decimal3(dev.costEur),
     typical: decimal1(dev.p50),
     slow: decimal1(dev.p95),
@@ -172,12 +177,15 @@ export function measured() {
     share: Math.floor((100 * COVERAGE_RECORD.versionsWithText) / COVERAGE_RECORD.versionsCatalogued + 0.5),
     files: count(COVERAGE_RECORD.files),
     withheld: count(COVERAGE_RECORD.filesWithheld),
-    builtOn: COVERAGE_RECORD.builtOn,
+    builtOn: numericDate(COVERAGE_RECORD.builtOn),
   };
 }
 
 /** A template filled with the figures it names, of all `values` (`fillText` takes no value a template has no place for). */
 const say = (template, values) => fillText(template, Object.fromEntries([...template.matchAll(/\{([A-Za-z]+)\}/g)].map(([, name]) => [name, values[name]])));
+
+/** A calendar date as the V4 pages write it in both languages, dd/mm/yyyy (the brief's section 9): 2026-11-15 is 15/11/2026. */
+const numericDate = (iso) => (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}/u.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
 
 /** The groups of decision cards, each a key and its cards' keys, in the page's order (the owner's order of 2026-11-14). */
 export const DECISION_GROUPS = Object.freeze([
@@ -188,43 +196,44 @@ export const DECISION_GROUPS = Object.freeze([
 ]);
 
 /**
- * Decisions: cards in four groups, each a decision's title, one line of what it gains and one of what it costs, and where
- * there is one, a grey line naming the incident or the open problem behind it. No paragraph: every figure is measured.
+ * Decisions (V4, V5How's typography): the decisions in four groups, each a row of its title, what it gains and what it costs
+ * side by side, and where there is one, a grey line naming the incident or the open problem behind it. Each decision has its
+ * own anchor (`decision-{key}`), which How it works links. Every figure is measured.
  */
 export function DecisionsBody() {
   const page = liveChrome().decisions;
   const values = measured();
   return (
-    <>
+    <div className="lx-dec">
       <h1>{page.heading}</h1>
       {DECISION_GROUPS.map((group) => (
-        <section className="decision-group" aria-labelledby={`decisions-${group.key}`} data-reference-section={group.key} key={group.key}>
+        <section className="lx-dec-group" aria-labelledby={`decisions-${group.key}`} data-reference-section={group.key} key={group.key}>
           <h2 id={`decisions-${group.key}`}>{page.groups[group.key]}</h2>
-          <ul className="decision-cards">
+          <ul className="lx-dec-list">
             {group.cards.map((key) => {
               const card = page.cards[key];
               return (
-                <li className="decision-card" data-decision={key} key={key}>
+                <li className="lx-dec-item" id={`decision-${key}`} data-decision={key} key={key}>
                   <h3>{card.title}</h3>
-                  <p><strong>{page.gain}</strong> {say(card.gain, values)}</p>
-                  <p><strong>{page.cost}</strong> {say(card.cost, values)}</p>
-                  {card.note === undefined ? null : <p className="decision-note">{say(card.note, values)}</p>}
+                  <p className="lx-dec-gain"><strong>{page.gain}</strong> {say(card.gain, values)}</p>
+                  <p className="lx-dec-cost"><strong>{page.cost}</strong> {say(card.cost, values)}</p>
+                  {card.note === undefined ? null : <p className="lx-dec-note">{say(card.note, values)}</p>}
                 </li>
               );
             })}
           </ul>
         </section>
       ))}
-    </>
+    </div>
   );
 }
 
-/** A row of boxes (a flow): each a step's words, the one in the accent colour marked (`accent`). */
+/** A row of steps (a flow): each a step's words, the one the flow turns on marked (`accent`: the model, the owner). */
 function Flow({ name, steps, accent }) {
   return (
-    <ol className="flow-boxes" data-flow={name}>
+    <ol className="lx-how-steps" data-flow={name}>
       {Object.entries(steps).map(([key, text]) => (
-        <li key={key} className={key === accent ? 'flow-accent' : undefined} data-step={key}>{text}</li>
+        <li key={key} className="lx-how-step" data-accent={key === accent ? '' : undefined} data-step={key}>{text}</li>
       ))}
     </ol>
   );
@@ -240,12 +249,6 @@ export const PUBLIC_LINKS = Object.freeze({
   registryCode: 'https://github.com/SFHAJJI/lex-eval/blob/main/src/lex_eval/run.py',
   monitor: 'https://github.com/SFHAJJI/lex/actions/workflows/v3-monitor.yml',
   nightly: 'https://github.com/SFHAJJI/lex-eval/actions/workflows/nightly.yml',
-});
-
-/** The test question the page offers to try, in the page's language: one the release gate saw answered with the right article. */
-const TRY_QUESTION = Object.freeze({
-  fr: "Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?",
-  en: 'What does article 5 of the GDPR say?',
 });
 
 /** The registry's figures the page prints (`registry-record.mjs`, MLflow's own export). */
@@ -265,16 +268,12 @@ function registryValues() {
   };
 }
 
-/** A calendar date as this page's language writes it: 25/11/2025 in French, 2025-11-25 in English. */
-const pageDate = (iso) => (CHROME_LOCALE === 'fr' && /^\d{4}-\d{2}-\d{2}/u.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso.slice(0, 10));
-
-
 /** The model registry, as MLflow holds it: one row a version, the champion marked. */
 function RegistryTable({ page }) {
   const columns = ['version', 'registered', 'planner', 'code', 'data', 'result', 'gates'];
   return (
-    <div className="table-scroll">
-      <table className="quality-table registry-table" data-registry-versions={REGISTRY_RECORD.versions.length}>
+    <div className="lx-how-table-scroll">
+      <table className="lx-how-table" data-registry-versions={REGISTRY_RECORD.versions.length}>
         <thead><tr>{columns.map((column) => <th key={column} scope="col">{page.registryColumns[column]}</th>)}</tr></thead>
         <tbody>
           {REGISTRY_RECORD.versions.map((version) => {
@@ -286,7 +285,7 @@ function RegistryTable({ page }) {
             return (
               <tr key={version.version} data-registry-version={version.version} className={champion ? 'registry-champion' : undefined}>
                 <th scope="row">{champion ? `${version.version} · champion` : version.version}</th>
-                <td>{pageDate(version.created)}</td>
+                <td>{numericDate(version.created)}</td>
                 <td>{plannerName(version.tags.planner_id)}</td>
                 <td><code>{String(version.tags.serving_commit ?? '').slice(0, 8)}</code></td>
                 <td><code>{String(version.tags.snapshot_id ?? '').replace(/^corpus-/u, '').slice(0, 8)}</code></td>
@@ -301,24 +300,182 @@ function RegistryTable({ page }) {
   );
 }
 
-/** One titled block of the page, its heading's id derived from its key. */
-function Block({ id, heading, children }) {
+/** One titled block of the page under the first screen, its heading's id derived from its key; `wide` spans both columns. */
+function Block({ id, heading, wide = false, children }) {
   return (
-    <section className="evidence-block" aria-labelledby={`how-${id}`} data-reference-section={id} id={id}>
+    <section className={wide ? 'lx-how-block lx-how-wide' : 'lx-how-block'} aria-labelledby={`how-${id}`} data-reference-section={id} id={id}>
       <h2 id={`how-${id}`}>{heading}</h2>
       {children}
     </section>
   );
 }
 
-/** The parts of How it works, in its order (the reference pages' test reads them). */
-export const HOW_IT_WORKS_PARTS = Object.freeze(['card', 'architecture', 'trace', 'api', 'registry', 'supervision', 'improvement', 'quality', 'coverage', 'incidents', 'safeguards', 'limits', 'built']);
+/** The parts of How it works, in its order (the reference pages' test reads them): the first screen's three, then Release 13's. */
+export const HOW_IT_WORKS_PARTS = Object.freeze([
+  'answer', 'measured', 'decisions',
+  'card', 'architecture', 'registry', 'api', 'supervision', 'improvement', 'quality', 'coverage', 'incidents', 'safeguards', 'limits', 'built',
+]);
+
+/** The outcomes the bar and its legend count, in their order, each with the test run's own count's name. */
+const OUTCOMES = Object.freeze([
+  ['right', 'rightArticle'], ['wrong', 'wrongArticle'], ['notFound', 'notFound'], ['wronglyRefused', 'wronglyRefused'], ['rightBehaviour', 'rightBehaviour'],
+]);
+
+/** The bar's width in the panel, in CSS pixels (the panel's 400 less its padding), and its height. */
+const BAR_WIDTH = 324;
+const BAR_HEIGHT = 30;
 
 /**
- * How Lex works (the owner's order of 2026-11-15; at evidence.html): a system card on the first screen; the architecture;
- * one answer traced; the API; the model registry as MLflow holds it; supervision; improvement with its dates; the evaluation;
- * what Lex holds; incidents, safeguards and limits; how it is built. No paragraph: lines, boxes and tables. Every figure is a
- * test run's, the registry's, the coverage answer's or the code's.
+ * The test questions as one bar, a segment per outcome in proportion to its count (a count of 0 draws none), each segment
+ * with its count when it is wide enough to hold it. Drawn: the legend under it says the same counts in words.
+ */
+function MeasuredBar({ run }) {
+  const total = OUTCOMES.reduce((sum, [, field]) => sum + run[field], 0);
+  let x = 0;
+  const segments = OUTCOMES.filter(([, field]) => run[field] > 0).map(([key, field]) => {
+    const width = total === 0 ? 0 : (BAR_WIDTH * run[field]) / total;
+    const segment = { key, value: run[field], x, width };
+    x += width;
+    return segment;
+  });
+  const round = (value) => Math.round(value * 10) / 10;
+  return (
+    <svg className="lx-how-bar" viewBox={`0 0 ${BAR_WIDTH} ${BAR_HEIGHT}`} width={BAR_WIDTH} height={BAR_HEIGHT} aria-hidden="true" focusable="false" data-bar="">
+      <defs><clipPath id="lx-how-bar-clip"><rect width={BAR_WIDTH} height={BAR_HEIGHT} rx="6" /></clipPath></defs>
+      <g clipPath="url(#lx-how-bar-clip)">
+        {segments.map((segment) => <rect key={segment.key} className="lx-how-bar-part" data-outcome={segment.key} x={round(segment.x)} y="0" width={round(segment.width)} height={BAR_HEIGHT} />)}
+      </g>
+      {segments.filter((segment) => segment.width >= 18).map((segment) => (
+        <text key={segment.key} className="lx-how-bar-count" data-outcome={segment.key} x={round(segment.x + segment.width / 2)} y={BAR_HEIGHT / 2} textAnchor="middle" dominantBaseline="central">{count(segment.value)}</text>
+      ))}
+    </svg>
+  );
+}
+
+/** One stage of the answer: its number, its name, its tag (code, or the model's only call), its sentence and its record. */
+function Stage({ index, name, model, sentence, children, stage }) {
+  const page = liveChrome().evidence;
+  return (
+    <li className="lx-how-stage" data-stage={stage}>
+      <span className="lx-how-n" aria-hidden="true">{index}</span>
+      <div className="lx-how-name">
+        <h2>{name}</h2>
+        <span className={model ? 'lx-how-tag lx-how-tag-model' : 'lx-how-tag'}>{model ? page.tagModel : page.tagCode}</span>
+      </div>
+      <div className="lx-how-body">
+        <p>{sentence}</p>
+        <pre className="lx-how-record"><code>{children}</code></pre>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * How it works, first screen (V5How): on the left the recorded answer (`how-answer-record.mjs`) through its six stages, each
+ * value read from the answer, and the answer itself with the link that opens it on the text page; on the right the test
+ * questions' outcomes, the held-out result, the time and cost per answer, and the decisions with what each costs.
+ */
+function FirstScreen({ values }) {
+  const copy = liveChrome();
+  const page = copy.evidence;
+  const decisions = copy.decisions;
+  const stages = howAnswerStages(HOW_ANSWER_RECORD);
+  const run = EVALUATION_RECORD.dev;
+  const asked = stages.language === 'fr' || stages.language === 'en' || stages.language === 'de' ? stages.language : undefined;
+  const statute = stages.act.language === 'fra' ? 'fr' : undefined;
+  const words = (text) => <span lang={asked}>{text}</span>;
+  const parse = [
+    say(page.parseLanguage, { language: page.languages[stages.language] ?? stages.language }),
+    stages.date.today ? say(page.parseToday, { date: numericDate(stages.date.date) }) : say(page.parseDate, { date: numericDate(stages.date.date) }),
+    stages.cues === 0 ? page.parseNoCues : say(page.parseCues, { count: count(stages.cues) }),
+  ].join('\n');
+  const runs = stages.runs.map((one, index) => {
+    const line = one.kind === 'search' ? <Say template={page.runSearch} values={{ query: words(one.query) }} />
+      : one.kind === 'single' ? `  ${page.runSingle}`
+        : one.kind === 'read' ? <Say template={page.runRead} values={{ article: one.article, title: <span lang={statute}>{stages.act.title}</span>, date: numericDate(one.date) }} />
+          : say(page.runOther, { operation: one.operation });
+    return <Fragment key={index}>{index > 0 ? '\n' : null}{line}</Fragment>;
+  });
+  const answer = stages.answer;
+  const open = answer === null ? null : textHref({ identifier: answer.identifier, article: answer.anchor }, CHROME_LOCALE);
+  return (
+    <div className="lx-how-first">
+      <div className="lx-how-flow" data-reference-section="answer">
+        <h1>{page.heading}</h1>
+        <p className="lx-how-intro">{page.answerIntro}</p>
+        <p className="lx-how-bubble" lang={asked}>{stages.question}</p>
+        <ol className="lx-how-stages" data-recorded={HOW_ANSWER_RECORD.recordedAt}>
+          <Stage index="1" stage="mask" name={page.stages.mask} sentence={page.maskText}>
+            {stages.masked === null ? page.maskNone : <Say template={page.maskDone} values={{ question: words(stages.masked) }} />}
+          </Stage>
+          <Stage index="2" stage="parse" name={page.stages.parse} sentence={page.parseText}>{parse}</Stage>
+          <Stage
+            index="3"
+            stage="plan"
+            name={page.stages.plan}
+            model
+            sentence={`${say(page.modelLine, { model: stages.model })}${stages.span === null ? '' : ` ${say(page.planSpan, { from: count(stages.span[0]), to: count(stages.span[1]) })}`}`}
+          >
+            {stages.plan}
+          </Stage>
+          <Stage index="4" stage="check" name={page.stages.check} sentence={page.checkText}>{stages.accepted ? page.checkAccepted : page.checkRejected}</Stage>
+          <Stage index="5" stage="run" name={page.stages.run} sentence={page.runText}>{runs}</Stage>
+          <Stage index="6" stage="compose" name={page.stages.compose} sentence={page.composeText}>
+            {[
+              say(page.composeQuotes, { count: count(stages.gates.quotes) }),
+              say(page.composeOutside, { count: count(stages.gates.outside) }),
+              say(page.composeNotes, { count: count(stages.gates.notes) }),
+            ].join('\n')}
+          </Stage>
+        </ol>
+        {answer === null ? null : (
+          <div className="lx-how-answer" data-answer="">
+            <span className="lx-how-n" aria-hidden="true" />
+            <p className="lx-how-answer-label">{page.answerLabel}</p>
+            <p className="lx-how-body">
+              {say(answer.shortened ? page.answerPart : page.answerFull, { article: answer.article })}
+              {' '}
+              {open === null ? null : <a href={open} data-open-answer="">{page.answerOpen}</a>}
+            </p>
+          </div>
+        )}
+      </div>
+      <aside className="lx-how-panel" aria-labelledby="how-measured">
+        <section data-reference-section="measured">
+          <h2 id="how-measured">{say(page.measuredHeading, values)}</h2>
+          <p className="lx-how-when">{say(page.measuredWhen, { date: numericDate(run.date) })}</p>
+          <MeasuredBar run={run} />
+          <ul className="lx-how-legend">
+            {OUTCOMES.map(([key, field]) => <li key={key} data-count={key}><strong>{count(run[field])}</strong><span>{page.counts[key]}</span></li>)}
+          </ul>
+          <p className="lx-how-heldout" data-heldout="">{page.gateRule} {say(page.heldout, values)}</p>
+          <p className="lx-how-cost">{say(page.perAnswer, values)}</p>
+        </section>
+        <section data-reference-section="decisions" aria-labelledby="how-decisions">
+          <h2 id="how-decisions">{page.decisionsHeading}</h2>
+          <ul className="lx-how-decisions">
+            {DECISION_GROUPS.flatMap((group) => group.cards).map((key) => (
+              <li key={key}>
+                <a href={`${livePath(referencePage('decisions').file)}#decision-${key}`} data-decision-link={key}>
+                  <span className="lx-how-decision-title">{decisions.cards[key].title}</span>
+                  <span className="lx-how-decision-cost">{decisions.cost} {say(decisions.cards[key].cost, values)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+          <p className="lx-how-all"><a href={livePath(referencePage('decisions').file)}>{page.allDecisions}</a></p>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
+/**
+ * How Lex works (at evidence.html; V5How, the owner's brief of 2026-11-15): the first screen follows one recorded answer
+ * through the six stages beside the measured results and the decisions; under it, Release 13's parts in V4's type: the
+ * system card, the architecture, the model registry as MLflow holds it (its versions folded), the API, supervision,
+ * improvement, the evaluation, what Lex holds, incidents, safeguards, limits and how it is built. Every figure is the recorded
+ * answer's, a test run's, the registry's, the coverage answer's or the code's.
  */
 export function EvidenceBody() {
   const page = liveChrome().evidence;
@@ -338,113 +495,100 @@ export function EvidenceBody() {
     artifacts: [...new Set(REGISTRY_RECORD.versions.flatMap((version) => version.artifacts))].join(', '),
   };
   values.model = dev.modelDeployment;
-  const tiles = [['right', dev.rightArticle], ['wrong', dev.wrongArticle], ['notFound', dev.notFound], ['wronglyRefused', dev.wronglyRefused], ['rightBehaviour', dev.rightBehaviour]];
-  const question = TRY_QUESTION[CHROME_LOCALE] ?? TRY_QUESTION.en;
+  // The call the API section shows is the recorded answer's own request, sent where it was sent.
+  const question = HOW_ANSWER_RECORD.request.parameters.question;
   const external = (href, text) => <a href={href} rel="external">{text}</a>;
   return (
-    <>
-      <h1>{page.heading}</h1>
-      <Block id="card" heading={page.cardHeading}>
-        <ul className="decision-cards system-card">
-          {Object.entries(page.card).map(([key, item]) => (
-            <li className="decision-card" data-card={key} key={key}><h3>{item.title}</h3><p>{say(item.text, values)}</p></li>
-          ))}
-        </ul>
-      </Block>
-      <Block id="architecture" heading={page.architectureHeading}>
-        <p className="lane-label">{page.questionLane}</p>
-        <Flow name="question" steps={page.questionSteps} accent="plan" />
-        <p className="evidence-line">{say(page.modelLine, values)}</p>
-        <p className="lane-label">{page.releaseLane}</p>
-        <Flow name="release" steps={page.releaseSteps} accent="owner" />
-        <p className="evidence-line">{page.hosting}</p>
-      </Block>
-      <Block id="trace" heading={page.traceHeading}>
-        <ul className="evidence-lines">
-          <li>{page.traceLine}</li>
-          {/* The Ask page, which is the home page: a page built ahead of time never links the assistant's own page, which is
-              served only while the assistant is on (R52). */}
-          <li><a href={`/${CHROME_LOCALE}/`} data-try-question="">{page.traceTry}</a> · <span lang={CHROME_LOCALE === 'fr' ? 'fr' : 'en'}>{question}</span></li>
-        </ul>
-      </Block>
-      <Block id="api" heading={page.apiHeading}>
-        <ul className="evidence-lines">
-          <li>{page.apiDoors}</li>
-          <li>{page.apiDocumented} <a href={livePath(referencePage('developers').file)}>{page.apiDevelopers}</a> · <a href={`/${OPENAPI_FILE}`} data-openapi="">{page.apiOpenApi}</a></li>
-          <li>{page.apiCall}</li>
-        </ul>
-        <pre className="api-call"><code>{`curl -X POST ${OPENAPI_ORIGIN}${REST_PREFIX}ask \\\n  -H 'content-type: application/json' \\\n  -d '{"operation_id":"ask","parameters":{"question":"${question.replace(/'/gu, "'\\''")}"}}'`}</code></pre>
-      </Block>
-      <Block id="registry" heading={page.registryHeading}>
-        <ul className="evidence-lines">
-          <li data-registry-model="">{say(page.registryModel, { ...values, model: values.registryModel, versions: values.registryVersions })}</li>
-        </ul>
-        <RegistryTable page={page} />
-        <ul className="evidence-lines">
-          <li>{say(page.registryTags, values)}</li>
-          <li>{external(PUBLIC_LINKS.registryCode, page.registryCode)}</li>
-        </ul>
-      </Block>
-      <Block id="supervision" heading={page.supervisionHeading}>
-        <ul className="evidence-lines">
-          <li>{page.supAvailability} {external(PUBLIC_LINKS.monitor, page.supAvailabilityLink)}</li>
-          <li>{say(page.supNightly, values)} {external(PUBLIC_LINKS.nightly, page.supNightlyLink)}</li>
-          <li>{say(page.supLimits, values)}</li>
-        </ul>
-      </Block>
-      <Block id="improvement" heading={page.improvementHeading}>
-        <ul className="evidence-lines">{Object.entries(page.improvement).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
-      </Block>
-      <Block id="quality" heading={say(page.qualityHeading, values)}>
-        <ul className="evidence-counts">
-          {tiles.map(([key, value]) => (
-            <li key={key} data-count={key} className={key === 'wrong' ? 'count-accent' : undefined}><strong>{count(value)}</strong><span>{page.counts[key]}</span></li>
-          ))}
-        </ul>
-        <ul className="evidence-lines">
-          <li data-stability="">{say(page.stability, values)}</li>
-          <li data-heldout="">{say(page.heldout, values)}</li>
-          <li>{page.gateRule}</li>
-          <li>
-            <details className="evidence-questions">
-              <summary>{say(page.everyQuestion, values)}</summary>
-              <table className="quality-table">
-                <tbody>
-                  {dev.questions.map((one) => (
-                    <tr key={one.id} data-outcome={one.outcome}>
-                      <th scope="row" lang={one.language}>{one.question.replace(/[^\s@]+@[^\s@,]+/gu, page.maskedEmail)}</th>
-                      <td>{page.outcomes[one.outcome] ?? one.outcome}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
-          </li>
-        </ul>
-      </Block>
-      <Block id="coverage" heading={page.coverageHeading}>
-        <ul className="evidence-lines">
-          <li data-coverage-held="">{say(page.held, values)}</li>
-          <li data-coverage-missing="">{say(page.missing, values)}</li>
-        </ul>
-      </Block>
-      <Block id="incidents" heading={page.incidentsHeading}>
-        <ul className="evidence-lines">{Object.entries(page.incidents).map(([key, line]) => <li key={key}>{line}</li>)}</ul>
-      </Block>
-      <Block id="safeguards" heading={page.safeguardsHeading}>
-        <ul className="evidence-lines">{Object.entries(page.safeguards).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
-      </Block>
-      <Block id="limits" heading={page.limitsHeading}>
-        <ul className="evidence-lines">{Object.entries(page.limits).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
-      </Block>
-      <Block id="built" heading={page.builtHeading}>
-        <ul className="evidence-lines">
-          <li>{external(PUBLIC_LINKS.code, page.builtCode)} · {external(PUBLIC_LINKS.harness, page.builtEval)}</li>
-          <li>{page.builtCi}</li>
-          <li>{page.builtRelease}</li>
-        </ul>
-      </Block>
-    </>
+    <div className="lx-how">
+      <FirstScreen values={values} />
+      <div className="lx-how-more">
+        <Block id="card" heading={page.cardHeading} wide>
+          <dl className="lx-how-card">
+            {Object.entries(page.card).map(([key, item]) => (
+              <div data-card={key} key={key}><dt>{item.title}</dt><dd>{say(item.text, values)}</dd></div>
+            ))}
+          </dl>
+        </Block>
+        <Block id="architecture" heading={page.architectureHeading} wide>
+          <p className="lx-how-lane">{page.questionLane}</p>
+          <Flow name="question" steps={page.questionSteps} accent="plan" />
+          <p className="lx-how-lane">{page.releaseLane}</p>
+          <Flow name="release" steps={page.releaseSteps} accent="owner" />
+          <p className="lx-how-line">{page.hosting}</p>
+        </Block>
+        <Block id="registry" heading={page.registryHeading} wide>
+          <ul className="lx-how-lines">
+            <li data-registry-model="">{say(page.registryModel, { ...values, model: values.registryModel, versions: values.registryVersions })}</li>
+          </ul>
+          <details className="lx-how-fold">
+            <summary>{say(page.registryEvery, { versions: values.registryVersions })}</summary>
+            <RegistryTable page={page} />
+          </details>
+          <ul className="lx-how-lines">
+            <li>{say(page.registryTags, values)}</li>
+            <li>{external(PUBLIC_LINKS.registryCode, page.registryCode)}</li>
+          </ul>
+        </Block>
+        <Block id="api" heading={page.apiHeading}>
+          <ul className="lx-how-lines">
+            <li>{page.apiDoors}</li>
+            <li>{page.apiDocumented} <a href={livePath(referencePage('developers').file)}>{page.apiDevelopers}</a> · <a href={`/${OPENAPI_FILE}`} data-openapi="">{page.apiOpenApi}</a></li>
+            <li>{page.apiCall}</li>
+          </ul>
+          <pre className="lx-how-record lx-how-call"><code>{`curl -X POST ${OPENAPI_ORIGIN}${REST_PREFIX}ask \\\n  -H 'content-type: application/json' \\\n  -d '{"operation_id":"ask","parameters":{"question":"${question.replace(/'/gu, "'\\''")}"}}'`}</code></pre>
+        </Block>
+        <Block id="supervision" heading={page.supervisionHeading}>
+          <ul className="lx-how-lines">
+            <li>{page.supAvailability} {external(PUBLIC_LINKS.monitor, page.supAvailabilityLink)}</li>
+            <li>{say(page.supNightly, values)} {external(PUBLIC_LINKS.nightly, page.supNightlyLink)}</li>
+            <li>{say(page.supLimits, values)}</li>
+          </ul>
+        </Block>
+        <Block id="improvement" heading={page.improvementHeading}>
+          <ul className="lx-how-lines">{Object.entries(page.improvement).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
+        </Block>
+        <Block id="quality" heading={say(page.qualityHeading, values)}>
+          <ul className="lx-how-lines">
+            <li data-stability="">{say(page.stability, values)}</li>
+          </ul>
+          <details className="lx-how-fold">
+            <summary>{say(page.everyQuestion, values)}</summary>
+            <table className="lx-how-table lx-how-questions">
+              <tbody>
+                {dev.questions.map((one) => (
+                  <tr key={one.id} data-outcome={one.outcome}>
+                    <th scope="row" lang={one.language}>{one.question.replace(/[^\s@]+@[^\s@,]+/gu, page.maskedEmail)}</th>
+                    <td>{page.outcomes[one.outcome] ?? one.outcome}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </Block>
+        <Block id="coverage" heading={page.coverageHeading}>
+          <ul className="lx-how-lines">
+            <li data-coverage-held="">{say(page.held, values)}</li>
+            <li data-coverage-missing="">{say(page.missing, values)}</li>
+          </ul>
+        </Block>
+        <Block id="incidents" heading={page.incidentsHeading}>
+          <ul className="lx-how-lines">{Object.entries(page.incidents).map(([key, line]) => <li key={key}>{line}</li>)}</ul>
+        </Block>
+        <Block id="safeguards" heading={page.safeguardsHeading}>
+          <ul className="lx-how-lines">{Object.entries(page.safeguards).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
+        </Block>
+        <Block id="limits" heading={page.limitsHeading}>
+          <ul className="lx-how-lines">{Object.entries(page.limits).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
+        </Block>
+        <Block id="built" heading={page.builtHeading}>
+          <ul className="lx-how-lines">
+            <li>{external(PUBLIC_LINKS.code, page.builtCode)} · {external(PUBLIC_LINKS.harness, page.builtEval)}</li>
+            <li>{page.builtCi}</li>
+            <li>{page.builtRelease}</li>
+          </ul>
+        </Block>
+      </div>
+    </div>
   );
 }
 
@@ -874,6 +1018,9 @@ export function DevelopersBody({ model, live = null }) {
   );
 }
 
+/** The reference pages in the V4 layout. */
+export const V4_REFERENCE_PAGES = Object.freeze(['decisions', 'evidence']);
+
 /**
  * One reference page, by its chrome section's key (`REFERENCE_PAGES`); the Developers page needs the contracts' `developers`,
  * and, when a server renders it, `live`, the envelope of its own answer to `browse` for the first act it holds.
@@ -883,15 +1030,19 @@ export function renderLiveReferencePage(pageKey, { developers = null, live = nul
   if (page === undefined) throw new Error(`${JSON.stringify(pageKey)} is none of the reference pages: ${REFERENCE_PAGES.map((one) => one.key).join(', ')}`);
   if (live !== null && pageKey !== 'developers') throw new Error(`only the Developers page is rendered from an answer, not ${pageKey}`);
   const body = { decisions: <DecisionsBody />, evidence: <EvidenceBody />, help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} live={live} /> }[pageKey];
+  // How it works and Decisions are V4 pages (the owner's brief of 2026-11-15, V5How): the V4 header and frame, no dock and
+  // no skin of their own; Get help, How to read Lex and Developers keep their look.
+  const v4 = V4_REFERENCE_PAGES.includes(pageKey);
   return renderDocument(
     <Document
       state={page.state}
       title={liveChrome()[pageKey].title}
-      shell="ask"
-      density={skinFor('ask').density}
+      shell={v4 ? null : 'ask'}
+      density={v4 ? null : skinFor('ask').density}
       banner="live"
       localePage={page.file}
       answers={false}
+      layout={v4 ? 'v4' : null}
     >
       {body}
     </Document>,

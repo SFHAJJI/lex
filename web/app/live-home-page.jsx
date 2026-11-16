@@ -38,10 +38,11 @@ export function renderLiveHomePage({ facts = null, freshness = null } = {}) {
       banner="live"
       indexing={facts?.coverage?.state === 'counted' ? 'switch' : 'never'}
       freshness={freshness}
+      layout="v4"
+      dock
     >
       {/* Outside the root, the page is the page as built whatever the answer says (the deploy probe holds it byte for byte,
-          `homePageFailures`): what depends on the assistant's switch is said inside the root (`LiveHome.jsx`). */}
-      <h1>{copy.heading}</h1>
+          `homePageFailures`): the headline and all that depends on the answer are inside the root (`LiveHome.jsx`). */}
       <div id={LIVE_HOME_ROOT}>{liveHomeTree(facts)}</div>
       {facts === null ? null : <script type="application/json" id={HOME_FACTS_ID} dangerouslySetInnerHTML={{ __html: jsonInScript(facts) }} />}
       <script src={livePath('client-live-home.js')} defer />

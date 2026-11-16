@@ -174,3 +174,173 @@ export function registryVersionFor(registry, plannerId, servingCommit) {
     ?? same.filter((version) => version.tags?.gates === 'passed').at(-1)
     ?? same.at(-1);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The docked assistant's reading of an answer (the owner's brief of 2026-11-15, sections 5 and 6). Pure functions again:
+// every line the dock draws of an answer's work is read from its trace, its gates or the site's own operations.
+
+/** A calendar date as the V4 pages write it in both languages (the brief's section 9): dd/mm/yyyy, or the value as it is. */
+export function numericDate(date) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(date ?? ''));
+  return match === null ? String(date ?? '') : `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+/**
+ * The first sentence of a quotation's text (its number and heading left out), as a span of its own characters, and whether
+ * the quotation says more after it (the dock shows the sentence and " […]": the whole article is on the text page). Null when
+ * the quotation has no sentence.
+ */
+export function firstSentenceOf(text) {
+  const sentences = textSentencesOf(text);
+  if (sentences.length === 0) return null;
+  return Object.freeze({ sentence: sentences[0], more: sentences.length > 1 });
+}
+
+/**
+ * The runs of a question that the platform's intake masks before the planner sees it: the same six patterns as
+ * `V3AssistantParsers.IdentifierPatterns` (an e-mail, an IBAN, an international phone number, a national number, a run of
+ * 11 to 13 digits, a Luxembourg phone number). The trace carries the question as asked, not its mask, so the dock counts
+ * them again with the same rules; the count is all it shows.
+ */
+const IDENTIFIER_PATTERNS = Object.freeze([
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gu,
+  /(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,4})?(?![A-Za-z0-9])/gu,
+  /(?<![\p{L}\p{N}_/])(?:\+|00)[1-9][\d ./-]{6,18}\d(?![\p{L}\p{N}_])/gu,
+  /(?<!\d)\d{4} ?\d{4} ?\d{5}(?!\d)/gu,
+  /(?<![\d\-/.])\d{11,13}(?![\d\-/.])/gu,
+  /(?<![\d-])\d{3} \d{3} \d{3}(?![\d-])/gu,
+]);
+
+/** How many runs of the question the intake masks (overlapping runs counted once). */
+export function maskedCount(question) {
+  const runs = [];
+  for (const pattern of IDENTIFIER_PATTERNS) {
+    for (const match of String(question ?? '').matchAll(pattern)) runs.push([match.index, match.index + match[0].length]);
+  }
+  runs.sort((a, b) => a[0] - b[0]);
+  let count = 0;
+  let end = -1;
+  for (const [start, stop] of runs) {
+    if (start >= end) count += 1;
+    end = Math.max(end, stop);
+  }
+  return count;
+}
+
+/** The operations the plan asked for, in its order: its steps, then its follow-ups (`followUp` true), as the trace holds it. */
+export function plannedOperations(trace) {
+  const plan = trace?.plan ?? {};
+  const steps = (Array.isArray(plan.steps) ? plan.steps : []).map((step) => Object.freeze({ operation: String(step?.operation_id ?? ''), followUp: false }));
+  const follow = (Array.isArray(plan.follow_ups) ? plan.follow_ups : []).map((step) => Object.freeze({ operation: String(step?.operation_id ?? ''), followUp: true }));
+  return Object.freeze([...steps, ...follow].filter((entry) => entry.operation.length > 0));
+}
+
+/** What the trace's steps ran: how many fired, the article a fired step read (with its text and date), a refusal. */
+export function executionOf(trace) {
+  const steps = Array.isArray(trace?.steps) ? trace.steps : [];
+  const fired = steps.filter((step) => step?.fired !== false);
+  const read = [...fired].reverse().find((step) => step?.operation_id === 'evidence_bundle' && typeof step?.parameters?.article === 'string') ?? null;
+  const refused = fired.find((step) => step?.outcome === 'refusal') ?? null;
+  return Object.freeze({
+    planned: steps.length,
+    fired: fired.length,
+    unfired: steps.length - fired.length,
+    read: read === null ? null : Object.freeze({ identifier: read.parameters.identifier ?? null, article: read.parameters.article, date: read.parameters.date ?? null }),
+    refused: refused === null ? null : String(refused.operation_id ?? ''),
+  });
+}
+
+/**
+ * The ten-tick strip of an article's versions (`article_history`): one tick per version held in `language` that holds the
+ * article, oldest first, each with its date and whether its wording changed from the one before; and the date of the latest
+ * change, or null when the wording is the same in every version held.
+ */
+export function articleStrip(value, language = null) {
+  const states = (Array.isArray(value?.states) ? value.states : []).filter((state) => typeof state?.applicability_date === 'string');
+  const inLanguage = language !== null && states.some((state) => state.language === language) ? states.filter((state) => state.language === language) : states;
+  const ticks = inLanguage
+    .filter((state) => state.text_status === undefined || state.text_status === 'held')
+    .filter((state) => !Array.isArray(state.articles) || state.articles.length > 0)
+    .slice()
+    .sort((a, b) => (a.applicability_date < b.applicability_date ? -1 : a.applicability_date > b.applicability_date ? 1 : 0))
+    .map((state, index) => Object.freeze({ date: state.applicability_date, changed: index > 0 && state.wording_changed === true }));
+  const changes = ticks.filter((tick) => tick.changed);
+  return Object.freeze({ ticks: Object.freeze(ticks), changedOn: changes.length === 0 ? null : changes.at(-1).date, since: ticks[0]?.date ?? null });
+}
+
+/**
+ * Where an exact reference opens its text, from a `search` answer's value: the text (its address on this site), the date
+ * the reference names (else the version's own date), the article, and the act's title as the reference read it. Null when
+ * the search did not read the words as an exact reference that opens (phase `exact_reference`, outcome `opens`).
+ */
+export function referenceOpening(value) {
+  const reference = value?.reference;
+  if (reference?.phase !== 'exact_reference' || reference?.outcome !== 'opens' || reference?.opens === null || typeof reference?.opens !== 'object') return null;
+  const opens = reference.opens;
+  if (typeof opens.publisher !== 'string' || typeof opens.work !== 'string') return null;
+  const named = reference.recognised?.date?.date;
+  return Object.freeze({
+    identifier: `/${opens.publisher}/${opens.work}`,
+    date: typeof named === 'string' ? named : typeof opens.state_date === 'string' ? opens.state_date : null,
+    article: typeof opens.article_id === 'string' ? opens.article_id : null,
+    title: typeof reference.recognised?.act?.title === 'string' ? ownTitle(reference.recognised.act.title) : null,
+    titleLanguage: typeof reference.recognised?.act?.title_language === 'string' ? reference.recognised.act.title_language : null,
+    language: typeof opens.language === 'string' ? opens.language : null,
+  });
+}
+
+/**
+ * The text's own title and the article's heading, from an `evidence_bundle` answer for one article: the title of the very
+ * version read (its expression's, in the version's language, "Version consolidée applicable au …:" taken off, never the
+ * title of a modifying act the work's dossier may name first), and the article's heading. Each null when not carried.
+ */
+export function bundleFacts(value, article = null, language = null) {
+  const pick = (articles) => {
+    const list = Array.isArray(articles) ? articles : [];
+    return list.find((candidate) => candidate?.publisher_id === article) ?? (list.length === 1 ? list[0] : null);
+  };
+  const heading = (found) => (typeof found?.text === 'string' ? articleHeadingOf(found.text) || null : null);
+  // An EU act (`wordings`, `titles.entries`): the wording in the language asked, its article, the expression's title.
+  if (Array.isArray(value?.wordings)) {
+    const wording = value.wordings.find((candidate) => candidate?.language === language) ?? value.wordings[0] ?? null;
+    const entries = (Array.isArray(value?.titles?.entries) ? value.titles.entries : []).filter((entry) => entry?.kind === 'title' && typeof entry.text === 'string');
+    const lang = wording?.language ?? language;
+    const entry = entries.find((candidate) => candidate.language === lang && candidate.source === 'cellar_expression_title')
+      ?? entries.find((candidate) => candidate.language === lang) ?? entries[0] ?? null;
+    return Object.freeze({
+      title: entry === null ? null : ownTitle(entry.text),
+      titleLanguage: entry?.language ?? null,
+      heading: heading(pick(wording?.articles)),
+    });
+  }
+  // A Luxembourg act (`states`, `citation_facts.titles`): the version read, its article, the title of that version's own
+  // expression (never a modifying act's).
+  const state = Array.isArray(value?.states) ? value.states[0] ?? null : null;
+  const groups = Array.isArray(value?.citation_facts?.titles) ? value.citation_facts.titles : [];
+  const group = groups.find((candidate) => candidate?.expression_iri === state?.expression_iri && candidate?.titles?.length > 0)
+    ?? groups.find((candidate) => candidate?.language === state?.language && candidate?.titles?.length > 0)
+    ?? groups.find((candidate) => candidate?.titles?.length > 0)
+    ?? null;
+  const raw = group?.titles?.[0]?.title;
+  return Object.freeze({
+    title: typeof raw === 'string' ? ownTitle(raw) : null,
+    titleLanguage: typeof group?.language === 'string' ? group.language : null,
+    heading: heading(pick(state?.articles)),
+  });
+}
+
+/**
+ * A version's title as the act's own: its "Version consolidée applicable au dd/mm/yyyy :" prefix, an EU act's "(Text with
+ * EEA relevance)" note and its final stop taken off.
+ */
+export function ownTitle(title) {
+  const stripped = String(title)
+    // The publisher's title of an amending act lists the acts it amends after a colon and a line break, sometimes written
+    // as the two characters "\n": only the act's own words are kept.
+    .split(/\\n|\n/u)[0]
+    .replace(/\s*[:;]\s*$/u, '')
+    .replace(/^\s*Version\s+consolid[ée]e\s+applicable\s+au\s+[0-9/.-]+\s*:\s*/iu, '')
+    .replace(/\s*\((?:Text with EEA relevance|Texte présentant de l'intérêt pour l'EEE|Texte présentant de l’intérêt pour l’EEE)\)\s*$/u, '')
+    .trim();
+  return (stripped.length > 0 ? stripped : String(title).trim()).replace(/\s*\.$/u, '');
+}

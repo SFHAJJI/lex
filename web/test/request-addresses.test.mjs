@@ -38,7 +38,7 @@ const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ENTRIES = [
   "client-live-home-entry.jsx", "client-live-entry.jsx", "client-live-search-entry.jsx", "client-live-dossier-entry.jsx",
   "client-live-reading-entry.jsx", "client-live-history-entry.jsx", "client-live-compare-entry.jsx", "client-live-radar-entry.jsx",
-  "client-live-export-entry.jsx",
+  "client-live-export-entry.jsx", "client-live-header-entry.jsx", "client-live-text-entry.jsx", "client-live-dock-entry.jsx",
 ].map((name) => join(WEB, "app", name));
 
 /** The web's own files an entry imports, transitively (packages are not the site's code). */
@@ -106,7 +106,24 @@ const PINNED = Object.freeze({
   // R57: a comparison asked of an act named by this site's address is written into the compare page's own query, so it can be
   // shared and read without JavaScript: a law's address and two dates (`compareQueryOf`), never a word.
   "app/LiveCompare.jsx: the page's address: if (session.current.ask(request) && search !== null) replacePageAddress(window, { search });": "a law's address and two dates, in the query",
+  // The text page (2026-11-15) writes its state into its own address: a law's identifier, dates and an article's id in the
+  // query (`textHref`), never a word a reader typed.
+  "app/TextPage.jsx: the history: if (href !== null) window.history.replaceState(window.history.state, '', href);": "the text page's own address: a law, dates and an article id",
+  // The V4 header's find field (2026-11-15): the search page, the words after "#" (`searchFragment`), never in the query.
+  "app/client-live-header-entry.jsx: a navigation: if (address !== null) window.location.assign(address);": "the search page, the words after #",
+  // The V4 Home's find field (2026-11-15): the same, the search page with the words after "#" (`findHref`, `searchFragment`).
+  "app/LiveHome.jsx: a navigation: if (address !== null) window.location.assign(address);": "the search page, the words after #",
+  // The V4 search results (2026-11-15): an exact reference that opens goes to the text page (`openedHref`, `textHref`): a law's
+  // address, the version's date and the article's id the platform minted, in the query, never a word the reader typed.
+  "app/LiveSearch.jsx: a navigation: window.location.replace(href);": "the text page: a law's address, a date and an article id",
   "app/LiveDossier.jsx: a form's own submit: <form method=\"get\" action={readable} data-read-on-date=\"\">": "a law's readable address, which the platform mints, and a calendar date from a date field, in the query",
+  // The assistant dock (the owner's brief of 2026-11-15): every page carries it (`Document.jsx`), so every page's code holds
+  // it. It asks the API only through `askV3` (the question in the body); after an answer or an exact reference it opens the
+  // text page at `textHref(...)`, which writes a law's address, a date and an article id, each of its shape or left out: never
+  // a word the reader typed.
+  "app/AssistantDock.jsx: a navigation: window.location.assign(href);": "the text page: a law's address, a date and an article id (`textHref`)",
+  // The old assistant page's act titles (`actTitlesOf`), which the dock's module carries: an act's address, in the body.
+  "scripts/assistant-panel.mjs: fetch: const response = await fetchImpl('/api/v3/dossier', {": "the API, an act's address in the body",
 });
 
 test("every place the pages' code could send a request or change an address is pinned, with why it carries no word", () => {

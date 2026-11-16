@@ -37,6 +37,7 @@ import {
   heldLuxembourgWorkFromAnswers,
   MCP_PROTOCOL_VERSION,
   NO_HIT_SEARCH_STEP,
+  NO_HIT_PHRASE,
   READING_DATE,
   SEARCH_PHRASE,
   UNKNOWN_LAW,
@@ -73,6 +74,7 @@ import {
   watchApiFiles,
 } from "../scripts/journey.mjs";
 import { cspValue } from "../scripts/csp.mjs";
+import { textHref } from "../scripts/text-address.mjs";
 import { EXPORT_WATERMARK } from "../scripts/export-build.mjs";
 
 const ORIGIN = "http://127.0.0.1:5000";
@@ -160,6 +162,18 @@ test("each way a run can fail is a failure, named", () => {
     .some((failure) => /does not name the refusal no_corpus_mounted/.test(failure)));
 });
 
+/**
+ * The earlier search page's step (before V4: the page's own form, its search kept in its own address, one request): the shape
+ * the 404 page's search still has, on which the verdict's general rules are held below. The V4 steps have their own tests.
+ */
+const EARLIER_SEARCH = Object.freeze({
+  path: "/en/search.html",
+  cites: true,
+  operation: "search",
+  typed: SEARCH_PHRASE,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict" }) }),
+});
+
 /** Where a step's page ends on `today` (`endAddressesOf`): its path, with what the page writes into its own address. */
 const endOf = (step, today = todayInLuxembourgAt(Date.now())) => `${ORIGIN}${endAddressesOf(step, [today])[0]}`;
 
@@ -175,16 +189,16 @@ function goodSearch() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         headersSent: true,
-        postData: JSON.stringify(JOURNEY_STEPS.search.body),
+        postData: JSON.stringify(EARLIER_SEARCH.body),
       },
     ],
-    location: endOf(JOURNEY_STEPS.search),
+    location: endOf(EARLIER_SEARCH),
     history: { atLoad: 2, atEnd: 2, state: "null" },
     cookie: "",
   };
 }
 
-const SEARCH = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success", texts: ["4 with the exact phrase", "art_15 in"] };
+const SEARCH = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success", texts: ["4 with the exact phrase", "art_15 in"] };
 
 test("a search run that typed, submitted and read the answer passes", () => {
   assert.deepEqual(journeyVerdict(goodSearch(), SEARCH), []);
@@ -227,24 +241,37 @@ test("a page that scrolls sideways at 320 CSS pixels fails, naming what stands o
   assert.ok(journeyVerdict({ ...fits, reflow: { width: 1265, scrollWidth: 1265, offenders: [] } }, SEARCH).includes("the page was measured in a 1265 px window, not one of at most 320"));
 });
 
-/** A home page's run that did what the front door must: its search dated today, its own bytes and its first screen. */
+/**
+ * V4 Home's run that did what the front door must (the brief, section 5): its own first screen asked as it loaded (coverage
+ * line, recent changes, timelines: never the typed words), the words typed into its field taken to the search page after "#"
+ * (one history entry), one search with exactly the step's body; its own bytes and its first screen.
+ */
 function goodHome(today = todayInLuxembourgAt(Date.now())) {
   const run = goodSearch();
-  run.requests[0].url = `${ORIGIN}/en/`;
-  run.requests[1].url = `${ORIGIN}/en/client-live-home.js`;
-  run.requests[2].postData = JSON.stringify(bodyOn(JOURNEY_STEPS.home.body, today));
+  const own = (operation, parameters) => ({ url: `${ORIGIN}/api/v3/${operation}`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify({ operation_id: operation, parameters }) });
+  run.requests = [
+    { url: `${ORIGIN}/en/`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/en/client-live-home.js`, method: "GET", headers: {} },
+    own("changes_in_period", { date_from: "2026-10-01", date_to: today, limit: 200 }),
+    own("timeline", { identifier: "/lu-legilux/code-civil" }),
+    { url: `${ORIGIN}/en/search.html`, method: "GET", headers: {} },
+    { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: { "Content-Type": "application/json" }, headersSent: true, postData: JSON.stringify(bodyOn(JOURNEY_STEPS.home.body, today)) },
+  ];
   run.location = endOf(JOURNEY_STEPS.home, today);
+  run.history = { atLoad: 2, atEnd: 3, state: "null" };
   run.todays = [today];
-  run.frontDoor = { coverageLine: "counted", dateField: today, facts: true };
-  run.firstScreen = { height: 640, inputFirst: true, input: 333, statement: 591 };
+  run.frontDoor = { coverageLine: "counted", dateField: null, facts: true, startTexts: [{ href: textHref({ identifier: "/lu-legilux/code-civil" }, "en"), identifier: "/lu-legilux/code-civil" }] };
+  run.firstScreen = { height: 640, inputFirst: true, input: 333, statement: null, notAdvice: true };
   return run;
 }
 
 const HOME = { origin: ORIGIN, step: JOURNEY_STEPS.home, state: "success", texts: ["4 with the exact phrase"] };
 
-test("the home page's run passes when it arrived rendered, dated today in Luxembourg, with the box and the sentence under it in view", () => {
+test("the home page's run passes when it arrived rendered, its field taking the words to the search page, with the box first and in view", () => {
   assert.equal(JOURNEY_STEPS.home.frontDoor, true);
-  assert.deepEqual(JOURNEY_STEPS.home.body.parameters, { query: SEARCH_PHRASE, language: "fra", mode: "strict", date: TODAY_IN_LUXEMBOURG });
+  assert.equal(JOURNEY_STEPS.home.form, "form[data-home-find]", "typed into Home's own field, never the header's");
+  assert.deepEqual(JOURNEY_STEPS.home.body.parameters, { query: SEARCH_PHRASE, language: "fra", mode: "strict" }, "the V4 field sends no date");
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.home, ["2026-10-24"]), ["/en/search.html#q=assembl%C3%A9e%20g%C3%A9n%C3%A9rale&lang=fra"]);
   assert.deepEqual(journeyVerdict(goodHome(), HOME), []);
   // A run across midnight in Luxembourg: the page asked on either of its two days.
   const across = goodHome("2026-10-25");
@@ -252,30 +279,41 @@ test("the home page's run passes when it arrived rendered, dated today in Luxemb
   assert.deepEqual(journeyVerdict(across, HOME), []);
   assert.equal(todayInLuxembourgAt(Date.parse("2026-10-24T22:30:00Z")), "2026-10-25", "the coded rule: 23:30 in summer time is 00:30 on the 25th");
   assert.deepEqual(frontDoorOf('<p class="coverage-line" data-coverage-line="counted">x</p><input type="text" data-search-date="" aria-describedby="search-today" value="2026-10-16"/>'
-    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true, examples: [] });
-  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false, examples: [] });
-  // The example searches it lists (R47), each link's address and the article it opens.
-  assert.deepEqual(frontDoorOf('<li><a href="/en/search.html#q=x&amp;lang=fra" data-home-example="/lu-legilux/a/fra/art_1er" lang="fr">x</a></li>').examples,
-    [{ href: "/en/search.html#q=x&lang=fra", opens: "/lu-legilux/a/fra/art_1er" }]);
+    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true, examples: [], startTexts: [] });
+  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false, examples: [], startTexts: [] });
+  // The starting texts V4 Home lists, each a link to the text page.
+  assert.deepEqual(frontDoorOf('<li><a class="lx-home-text" href="/en/text.html?text=%2Flu-legilux%2Fcode-civil" data-start-text="/lu-legilux/code-civil">x</a></li>').startTexts,
+    [{ href: "/en/text.html?text=%2Flu-legilux%2Fcode-civil", identifier: "/lu-legilux/code-civil" }]);
   assert.equal(NOT_ADVICE_SAID, "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.");
 });
 
 test("each way the home page's run can fail is a failure, named", () => {
+  const ownRequest = (o) => o.requests[2];
   const cases = [
-    ["another day sent", (o) => { o.requests[2].postData = JSON.stringify(bodyOn(JOURNEY_STEPS.home.body, "2001-01-01")); }, /body was .*2001-01-01.*, not /],
-    ["no date sent", (o) => { o.requests[2].postData = JSON.stringify(JOURNEY_STEPS.search.body); }, /body was .*, not /],
-    ["the placeholder sent", (o) => { o.requests[2].postData = JSON.stringify(JOURNEY_STEPS.home.body); }, /body was .*today in Luxembourg/],
+    ["another body", (o) => { o.requests[5].postData = JSON.stringify({ ...JOURNEY_STEPS.home.body, parameters: { ...JOURNEY_STEPS.home.body.parameters, date: "2001-01-01" } }); }, /0 requests to the API with the step's body/],
+    ["two searches", (o) => { o.requests.push({ ...o.requests[5] }); }, /2 requests to the API with the step's body/],
+    ["the words in a page's own request", (o) => { ownRequest(o).postData = JSON.stringify({ operation_id: "changes_in_period", parameters: { q: SEARCH_PHRASE } }); }, /carried the typed words/],
+    ["an operation the page does not ask", (o) => { ownRequest(o).url = `${ORIGIN}/api/v3/ask`; ownRequest(o).postData = JSON.stringify({ operation_id: "ask", parameters: {} }); }, /none of its own requests/],
+    ["a query string on its own request", (o) => { ownRequest(o).url += "?x=1"; }, /none of its own requests/],
+    ["a body naming another operation", (o) => { ownRequest(o).postData = JSON.stringify({ operation_id: "timeline", parameters: {} }); }, /carried the body/],
+    ["a GET of its own", (o) => { ownRequest(o).method = "GET"; }, /used GET/],
+    ["a referrer on its own request", (o) => { ownRequest(o).headers = { Referer: `${ORIGIN}/` }; }, /carried a referrer/],
+    ["more than its budget", (o) => { for (let n = 0; n < 14; n += 1) o.requests.push({ ...o.requests[3] }); }, /asked 16 requests of its own, more than 15/],
+    ["the words in an address", (o) => { o.requests[4].url = `${ORIGIN}/en/search.html?q=${encodeURIComponent(SEARCH_PHRASE)}`; }, /carried the typed words in its address/],
+    ["no navigation recorded", (o) => { o.history.atEnd = 2; }, /from 2 entries to 2, not by 1/],
+    ["two entries pushed", (o) => { o.history.atEnd = 4; }, /from 2 entries to 4, not by 1/],
+    ["history state written", (o) => { o.history.state = JSON.stringify({ query: SEARCH_PHRASE }); }, /wrote history state/],
+    ["still on Home", (o) => { o.location = `${ORIGIN}/en/`; }, /ended at .*\/en\/, not at .*search\.html#q=/],
     ["its own bytes not read", (o) => { delete o.frontDoor; }, /home page's own bytes were not read/],
     ["not rendered by the server", (o) => { o.frontDoor.facts = false; }, /arrived without the facts the server renders it from/],
     ["no coverage line", (o) => { o.frontDoor.coverageLine = null; }, /coverage line is absent, not counted/],
     ["the no-mount line on a mount", (o) => { o.frontDoor.coverageLine = "unmounted"; }, /coverage line is unmounted, not counted/],
-    ["another day in the field", (o) => { o.frontDoor.dateField = "2001-01-01"; }, /date field holds "2001-01-01", not today in Luxembourg/],
-    ["an empty field", (o) => { o.frontDoor.dateField = ""; }, /date field holds "", not today/],
+    ["no starting text", (o) => { o.frontDoor.startTexts = []; }, /lists no starting text/],
+    ["a starting text linked elsewhere", (o) => { o.frontDoor.startTexts[0].href = "/en/dossier.html"; }, /starting text \/lu-legilux\/code-civil links \/en\/dossier\.html/],
     ["not measured on a phone", (o) => { delete o.firstScreen; }, /not measured at a small phone's size/],
     ["the box not first", (o) => { o.firstScreen.inputFirst = false; }, /search box is not the first control/],
     ["the box below the fold", (o) => { o.firstScreen.input = 700; }, /search box ends at 700 px, below the first 640 px/],
-    ["the sentence below the fold", (o) => { o.firstScreen.statement = 659; }, /sentence under the box ends at 659 px, below the first 640 px/],
-    ["no sentence", (o) => { o.firstScreen.statement = null; }, /sentence under the box ends at null px/],
+    ["no sentence of what Lex is not", (o) => { o.firstScreen.notAdvice = false; }, /does not say what Lex is not/],
   ];
   for (const [what, mutate, reason] of cases) {
     const observed = goodHome();
@@ -666,20 +704,38 @@ test("a compare run types the identifier and two dates and is held to all three 
   assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request with another date fails");
 });
 
-test("a radar run types two dates and is held to exactly those in the body", () => {
-  assert.deepEqual(JOURNEY_STEPS.radar.typed, [READING_DATE, READING_DATE]);
-  assert.deepEqual(JOURNEY_STEPS.radar.body, { operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE } });
+test("a radar run lets the page answer, types two dates day first and is held to exactly those in the body", () => {
+  // V4 Changes: dates typed day first into From and To, asked with the page's limit, after the page's own last 30 days.
+  assert.deepEqual(JOURNEY_STEPS.radar.typed, ["01/02/2024", "01/02/2024"]);
+  assert.equal(JOURNEY_STEPS.radar.form, "form.lx-changes-period");
+  assert.equal(JOURNEY_STEPS.radar.settle, true, "the page's own first answer is let arrive before the reader types");
+  assert.deepEqual(JOURNEY_STEPS.radar.body, { operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE, limit: 200 } });
   const observed = goodSearch();
+  const ask = (parameters) => ({ url: `${ORIGIN}/api/v3/changes_in_period`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify({ operation_id: "changes_in_period", parameters }) });
   observed.requests = [
     { url: `${ORIGIN}/en/radar.html`, method: "GET", headers: {} },
-    { url: `${ORIGIN}/api/v3/changes_in_period`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.radar.body) },
+    ask({ date_from: "2026-10-17", date_to: "2026-11-15", limit: 200 }),
+    ask({ date_from: "2024-01-03", date_to: READING_DATE, limit: 200 }),
+    ask(JOURNEY_STEPS.radar.body.parameters),
+    { url: `${ORIGIN}/api/v3/dossier`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify({ operation_id: "dossier", parameters: { identifier: DOSSIER_IDENTIFIER } }) },
   ];
   observed.location = `${ORIGIN}/en/radar.html`;
-  observed.text = "1 state of 1 work";
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.radar, state: "success", texts: ["1 state of 1 work"] };
+  observed.text = "01/02/2024 Read this version";
+  observed.then = "reached";
+  const link = textHref({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }, "en");
+  observed.links = [link];
+  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.radar, state: "success", texts: ["01/02/2024"], links: [link] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
-  observed.requests[1].postData = JSON.stringify({ operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE, identifier: "x" } });
-  assert.ok(journeyVerdict(observed, expected).some((failure) => /body was/.test(failure)), "a request carrying an identifier nobody typed fails");
+  const failing = (mutate, reason, what) => {
+    const run = structuredClone(observed);
+    mutate(run);
+    assert.ok(journeyVerdict(run, expected).some((failure) => reason.test(failure)), what);
+  };
+  failing((o) => { o.requests[3].postData = JSON.stringify({ operation_id: "changes_in_period", parameters: { date_from: READING_DATE, date_to: READING_DATE, limit: 200, identifier: "x" } }); }, /0 requests to the API with the step's body/, "a request carrying an identifier nobody typed fails");
+  failing((o) => { o.requests.push({ ...o.requests[3] }); }, /2 requests to the API with the step's body/, "the period asked twice fails");
+  failing((o) => { o.links = []; }, /links no \/en\/text\.html\?text=/, "a row with no link to the text page fails");
+  failing((o) => { o.then = "absent"; }, /never showed \[data-live-answer\] li\.lx-change/, "the switch turned off with no row shown fails");
+  failing((o) => { o.requests[1].url = `${ORIGIN}/api/v3/search`; }, /none of its own requests/, "a request the page does not make by itself fails");
 });
 
 test("an export run reads, pins, and is held to the composed export and to its one request", () => {
@@ -708,7 +764,7 @@ test("an export run reads, pins, and is held to the composed export and to its o
 test("a run is held to the API process recording nothing: no query text, user agent, address, output or file", () => {
   const observed = goodSearch();
   observed.userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HeadlessChrome/140.0.0.0";
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   assert.deepEqual(journeyVerdict({ ...observed, api: { output: "", changedFiles: [] } }, expected), [], "silent and file-less passes");
   const startup = "lex_v3_preview_bootstrap_failed reason=immutable_custody\n";
   assert.deepEqual(journeyVerdict({ ...observed, api: { startup, output: "", changedFiles: [] } }, expected), [], "a startup message written before the first answer is the process's startup, not the run's");
@@ -730,7 +786,7 @@ test("a file written and deleted while the run is watched fails it, though both 
   const home = await mkdtemp(join(tmpdir(), "lex-journey-watch-"));
   try {
     const observed = goodSearch();
-    const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+    const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
     const quiet = watchFiles(home);
     assert.deepEqual(journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: await quiet.stop() } }, expected), [], "an untouched directory passes");
     const watched = watchFiles(home);
@@ -754,7 +810,7 @@ test("a file the API writes in its temporary folder while serving fails the run,
   const temporary = await mkdtemp(join(tmpdir(), "lex-journey-watch-tmp-"));
   try {
     const observed = goodSearch();
-    const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+    const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
     const quiet = watchApiFiles(home, temporary);
     assert.equal(quiet.stop(), quiet.stop(), "the run and the API's close get one stop");
     assert.deepEqual(journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: await quiet.stop() } }, expected), [], "untouched folders pass");
@@ -771,7 +827,7 @@ test("a file the API writes in its temporary folder while serving fails the run,
 
 test("a file watch that failed fails the run with its reason, never as a file the API touched", () => {
   const observed = goodSearch();
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   const message = "ENOENT: no such file or directory, scandir '/tmp/lex-journey-api-x/runtimes/linux-musl-arm64'";
   const failures = journeyVerdict({ ...observed, api: { output: "", changedFiles: [], fileEvents: [["error", message]] } }, expected);
   assert.deepEqual(failures, [`the file watch failed, so the run cannot say the API touched no file: ${message}`],
@@ -801,7 +857,7 @@ test("a watch that fails is recorded as an event, not thrown, and its stop is on
 
 test("the answer is held to a polite live region that exists before it arrives (the screen-reader path)", () => {
   const observed = { ...goodSearch(), liveRegion: { atLoad: "polite", atEnd: "polite" } };
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, liveRegion: { atLoad: null, atEnd: "polite" } }, expected).some((failure) => failure.includes("at load is in no live region")), "a region created with the answer is not announced");
   assert.ok(journeyVerdict({ ...observed, liveRegion: { atLoad: "polite", atEnd: null } }, expected).some((failure) => failure.includes("arrived outside any live region")));
@@ -814,7 +870,7 @@ test("a keyboard run reaches every field by Tab alone, and every stop shows wher
     ...goodSearch(),
     keyboard: { stops: [stop("a", null, true, "Skip"), stop("input", "text", true, "Phrase")], placed: 1, wanted: 1, characters: 18, keyPresses: 18 },
   };
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success", keyboard: true };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success", keyboard: true };
   assert.deepEqual(journeyVerdict(observed, expected), []);
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, placed: 0 } }, expected).some((failure) => failure === "Tab reached 0 of the form's 1 fields"));
   assert.ok(journeyVerdict({ ...observed, keyboard: { ...observed.keyboard, stops: [stop("button", "submit", false, "Search")] } }, expected)
@@ -833,7 +889,7 @@ test("every citation the page prints is hash-pinned and verifies as the state an
   const article = `${state}/art_15`;
   const matches = (identifier, anchor = null) => ({ identifier, refusal: null, verdict: "digest_matches", stateSha256: digest, requestedAnchor: anchor });
   const observed = { ...goodSearch(), citations: [state, article], verifications: [matches(state), matches(article, "art_15")] };
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   const failing = (change) => journeyVerdict({ ...observed, ...change }, expected);
   assert.deepEqual(journeyVerdict(observed, expected), [], "pinned citations that verify pass");
 
@@ -865,7 +921,7 @@ test("every quotation carries its digests, its official source and a citation pi
   const source = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo";
   const quoted = (article, codes = [digest, "b".repeat(64), source, `${state}/${article}`]) => ({ article, codes });
   const observed = { ...goodSearch(), quotes: [quoted("art_15"), quoted("art_16")] };
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   const failing = (quotes) => journeyVerdict({ ...observed, quotes }, expected);
   assert.deepEqual(journeyVerdict(observed, expected), [], "quotes that carry all four pass");
   assert.ok(failing([quoted("art_15"), quoted("art_16", [digest, "b".repeat(64), source])])
@@ -883,7 +939,7 @@ test("an EU quotation is pinned by its EU wording permalink, its provision escap
   const wording = `/eu-eurlex/32016R0679/2016-04-27--${digest}/eng`;
   const source = "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0006.02/DOC_1";
   const quoted = (article, codes) => ({ article, codes });
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   const verdict = (quotes) => journeyVerdict({ ...goodSearch(), quotes }, expected);
   assert.deepEqual(verdict([quoted("001", [digest, "d".repeat(64), source, `${wording}/001`])]), [], "an EU quote with its own provision permalink passes");
   assert.deepEqual(verdict([quoted("art 1", [digest, "d".repeat(64), source, `${wording}/art%201`])]), [], "a provision id is compared unescaped");
@@ -894,7 +950,7 @@ test("an EU quotation is pinned by its EU wording permalink, its provision escap
 });
 
 test("nothing on the page means anything by colour alone: painted elements say what they are", () => {
-  const expected = { origin: ORIGIN, step: JOURNEY_STEPS.search, state: "success" };
+  const expected = { origin: ORIGIN, step: EARLIER_SEARCH, state: "success" };
   assert.deepEqual(journeyVerdict({ ...goodSearch(), paint: { painted: 4, unnamed: [] } }, expected), [], "a page whose painted elements all speak passes");
   assert.ok(journeyVerdict({ ...goodSearch(), paint: { painted: 4, unnamed: ["span.badge", "span.badge"] } }, expected)
     .includes("meaning by colour alone: span.badge painted with no words or accessible name"), "a painted, wordless badge fails, named once");
@@ -951,13 +1007,15 @@ test("a run whose page the API served is held to the headers the page arrived wi
 
 test("a page ends at its own address with what it writes there: a search after #, a readable address's date (plan 3.4, 3.5)", () => {
   const phrase = "#q=assembl%C3%A9e%20g%C3%A9n%C3%A9rale&lang=fra";
-  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.search, ["2026-10-18"]), [`/en/search.html${phrase}`], "the search kept after #, undated");
-  // The home page's search is dated today: either of a run's two days, across midnight in Luxembourg.
-  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.home, ["2026-10-24", "2026-10-25"]), [`/en/${phrase}&date=2026-10-24`, `/en/${phrase}&date=2026-10-25`]);
+  assert.deepEqual(endAddressesOf(EARLIER_SEARCH, ["2026-10-18"]), [`/en/search.html${phrase}`], "the search kept after #, undated");
+  // V4: Home's field and the header's take the words to the search page, undated.
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.home, ["2026-10-24", "2026-10-25"]), [`/en/search.html${phrase}`]);
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.search, ["2026-10-18"]), [`/en/search.html${phrase}`]);
   assert.deepEqual(endAddressesOf(EU_SEARCH_STEP, ["2026-10-18"]), ["/en/search.html#q=personal%20data&lang=eng&work=32016R0679"], "the work named");
-  // The 404 page's box keeps nothing; a page opened at a kept search stays there.
+  // The 404 page's box keeps nothing; a page opened at a kept search stays there unless it opens a text (`opens`).
   assert.deepEqual(endAddressesOf(NOT_FOUND_STEP, ["2026-10-18"]), ["/en/no-such-page"]);
-  assert.deepEqual(endAddressesOf(KEPT_SEARCH_STEP, ["2026-10-18"]), [`/en/search.html${phrase}`]);
+  assert.deepEqual(endAddressesOf(KEPT_SEARCH_STEP, ["2026-10-18"]), [KEPT_SEARCH_STEP.path]);
+  assert.equal(KEPT_SEARCH_STEP.opens, "/en/text.html?text=%2Flu-legilux%2Floi-1991-08-10-n3&date=2024-02-01&article=art_15");
   // An act's readable address ends with the date it read the act at; one that keeps a date keeps it; a permalink names its own.
   // The readable address step asks the date it was made on (`journeyStepsFor`'s `today`), the date its page writes back.
   assert.deepEqual(endAddressesOf(JOURNEY_STEPS.current, ["2026-10-18"]), [`${JOURNEY_STEPS.current.path}?date=${JOURNEY_STEPS.current.body.parameters.date}`]);
@@ -981,14 +1039,35 @@ test("a page ends at its own address with what it writes there: a search after #
   const ended = { ...goodSearch(), location: `${ORIGIN}/en/compare.html` };
   assert.ok(journeyVerdict(ended, { ...addressExpectations()[0][1], step: JOURNEY_STEPS.compare }).some((failure) => /the page ended at .*compare\.html, not at .*\?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-02-01&to=2024-02-01$/.test(failure)),
     "the bare page is no longer where a comparison ends");
-  // The kept search's run is one request, its body the fragment's search, ending where it began.
-  const [[name, expected]] = addressExpectations();
+  // The kept search's run (V4): one search, its body the fragment's citation, which opens the text page at that article,
+  // replacing the address (no history entry); the text page asks its own and shows the article.
+  const [[name, expected], [textName, textExpected]] = addressExpectations();
   assert.equal(name, "a search kept in the address");
   assert.equal(expected.step, KEPT_SEARCH_STEP);
   assert.equal(KEPT_SEARCH_STEP.typed, undefined, "nothing typed");
-  const observed = { ...goodSearch(), location: `${ORIGIN}${KEPT_SEARCH_STEP.path}` };
-  assert.deepEqual(journeyVerdict(observed, { origin: ORIGIN, ...expected, texts: ["4 with the exact phrase"] }), []);
-  assert.ok(journeyVerdict({ ...observed, location: `${ORIGIN}/en/search.html` }, { origin: ORIGIN, ...expected, texts: [] }).some((failure) => /ended at/.test(failure)), "the fragment dropped");
+  const own = (operation, parameters) => ({ url: `${ORIGIN}/api/v3/${operation}`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify({ operation_id: operation, parameters }) });
+  const observed = {
+    ...goodSearch(),
+    requests: [
+      { url: `${ORIGIN}/en/search.html`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(KEPT_SEARCH_STEP.body) },
+      { url: `${ORIGIN}/en/text.html?text=%2Flu-legilux%2Floi-1991-08-10-n3&date=2024-02-01&article=art_15`, method: "GET", headers: {} },
+      own("dossier", { identifier: DOSSIER_IDENTIFIER }),
+      own("evidence_bundle", { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, language: "fra", contents: true, article: "art_15" }),
+    ],
+    location: `${ORIGIN}${KEPT_SEARCH_STEP.opens}`,
+    present: [...KEPT_SEARCH_STEP.present],
+  };
+  assert.deepEqual(journeyVerdict(observed, { origin: ORIGIN, ...expected }), []);
+  assert.ok(journeyVerdict({ ...observed, location: `${ORIGIN}${KEPT_SEARCH_STEP.path}` }, { origin: ORIGIN, ...expected }).some((failure) => /ended at/.test(failure)), "the text not opened");
+  assert.ok(journeyVerdict({ ...observed, present: [] }, { origin: ORIGIN, ...expected }).some((failure) => /shows no \[data-text-page\]/.test(failure)), "the text page not shown");
+  assert.ok(journeyVerdict({ ...observed, history: { atLoad: 2, atEnd: 3, state: "null" } }, { origin: ORIGIN, ...expected }).some((failure) => /changed the history/.test(failure)), "an entry pushed");
+  assert.ok(journeyVerdict({ ...observed, requests: observed.requests.filter((request) => !request.url.endsWith("/dossier")) }, { origin: ORIGIN, ...expected }).some((failure) => /never asked dossier/.test(failure)), "the text page's dossier not asked");
+  // The text page itself at an article: its dossier, its versions, and the version of today with that article, in bodies.
+  assert.equal(textName, "the text page at an article");
+  assert.equal(textExpected.step.path, "/en/text.html?text=%2Flu-legilux%2Floi-1991-08-10-n3&article=art_15");
+  assert.deepEqual(textExpected.step.mustAsk, ["dossier", "changes_in_period"]);
+  assert.deepEqual(textExpected.step.body.parameters, { identifier: DOSSIER_IDENTIFIER, date: TODAY_IN_LUXEMBOURG, language: "fra", contents: true, article: "art_15" });
 });
 
 test("on the fixture mount every step must answer, and coverage must name the mount's own digests", () => {
@@ -1047,9 +1126,9 @@ test("the EU search step names the GDPR by its CELEX, chooses English and is hel
   assert.deepEqual(realMountSteps(report).map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification],
     "a real mount without an EU index runs the eight, then J2 and J5");
   const withEurope = realMountSteps({ ...report, europeIndex: { Sha256: "c".repeat(64) } });
-  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification, "eu search", "eu dossier", "eu reading"],
-    "and one with an EU index runs the EU search, dossier and reading too");
-  assert.equal(withEurope.at(-3)[1], EU_SEARCH_STEP);
+  // V4: the search page has no CELEX field nor a language to choose; on a real mount the EU dossier and reading run.
+  assert.deepEqual(withEurope.map(([name]) => name), [...Object.keys(JOURNEY_STEPS), ...specification, "eu dossier", "eu reading"],
+    "and one with an EU index runs the EU dossier and reading too");
   assert.equal(withEurope.at(-2)[1], EU_DOSSIER_STEP);
   assert.equal(withEurope.at(-1)[1], EU_READING_STEP);
   // The EU reading: the same work on its wording date (the GDPR's Formex act date), on the reading page.
@@ -1142,14 +1221,20 @@ test("the specification's journeys the eight steps do not walk are held to their
     { url: `${ORIGIN}/en/search.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(NO_HIT_SEARCH_STEP.body) },
   ];
+  // V4: typed into the header's field on the search page (one history entry, the reader's), and the page says no text
+  // matches the words, with its hint and the absence note.
+  assert.equal(NO_HIT_SEARCH_STEP.form, "form[data-header-find]");
   observed.location = endOf(NO_HIT_SEARCH_STEP);
+  observed.history = { atLoad: 2, atEnd: 3, state: "null" };
   observed.text = byJourney.J2.texts.join(" ");
   observed.citations = [];
   observed.emptyAnswer = true;
   const expected = { origin: ORIGIN, ...byJourney.J2 };
   assert.deepEqual(journeyVerdict(observed, expected), []);
-  assert.ok(journeyVerdict({ ...observed, emptyAnswer: false }, expected).includes("the page printed no citation"), "a page that does not say it holds nothing must cite");
+  assert.ok(byJourney.J2.texts[0].includes(NO_HIT_PHRASE), "the sentence names the words searched");
+  assert.ok(journeyVerdict({ ...observed, text: byJourney.J2.texts[1] }, expected).some((failure) => failure.includes(NO_HIT_PHRASE)), "the words searched are required");
   assert.ok(journeyVerdict({ ...observed, text: byJourney.J2.texts[0] }, expected).some((failure) => /It is not evidence/.test(failure)), "the absence note is required");
+  assert.ok(journeyVerdict({ ...observed, history: { atLoad: 2, atEnd: 2, state: "null" } }, expected).some((failure) => /not by 1/.test(failure)), "the search is the reader's navigation");
 });
 
 test("journey J7: REST and MCP answer one envelope, apart from the request's own reference and the moment it was answered", () => {
@@ -1239,8 +1324,12 @@ test("on the two-state mount journey J3 compares two different states and journe
   assert.ok(compare.texts.includes("art_7: changed"), "the amended article is named as changed");
   assert.ok(compare.texts.includes("1 changed, 0 added, 0 removed"));
   assert.equal(radar.step.operation, "changes_in_period");
-  assert.deepEqual(radar.step.body.parameters, { date_from: READING_DATE, date_to: "2025-01-01" });
-  assert.ok(radar.texts.includes(`wording changed from the state of ${READING_DATE}`), "the later state is compared with the one it replaced");
+  // V4 Changes asks the period in windows of 30 days, the latest first: the later version is in the first, 03/12/2024 to 01/01/2025.
+  assert.deepEqual(radar.step.body.parameters, { date_from: "2024-12-03", date_to: "2025-01-01", limit: 200 });
+  assert.deepEqual(radar.step.typed, ["01/02/2024", "01/01/2025"], "the two dates typed day first");
+  // V4 Changes: the later version's row, "See what changed", linking the text page comparing it with the version before.
+  assert.ok(radar.texts.includes("1 article changed") && radar.texts.includes("See what changed"), "the change said in words");
+  assert.deepEqual(radar.links, [`/en/text.html?text=%2Flu-legilux%2Floi-1991-08-10-n3&from=${READING_DATE}&to=2025-01-01`], "the later version compared with the one it replaced");
   assert.equal(JOURNEY_STEPS.compare.typed[1], JOURNEY_STEPS.compare.typed[2], "the one-state fixture's compare asks one date twice, the reason this mount exists");
 });
 
@@ -1329,7 +1418,8 @@ test("on a real mount the steps ask for a Luxembourg work the mount holds, and J
   assert.deepEqual(steps.reading.body.parameters, { identifier: held.identifier, date: held.date });
   assert.deepEqual(steps.export.typed, [held.identifier, held.date]);
   assert.deepEqual(steps.compare.typed, [held.identifier, held.date, held.date]);
-  assert.deepEqual(steps.radar.body.parameters, { date_from: held.date, date_to: held.date });
+  assert.deepEqual(steps.radar.body.parameters, { date_from: held.date, date_to: held.date, limit: 200 });
+  assert.deepEqual(steps.radar.typed, ["11/12/2015", "11/12/2015"], "typed day first, as a reader types them");
   assert.deepEqual(steps.history.body.parameters, { identifier: held.identifier, anchor: held.anchor });
   assert.deepEqual(steps.search, JOURNEY_STEPS.search, "the search phrase is the same");
   const j1 = steps["J1, a date before the history"];

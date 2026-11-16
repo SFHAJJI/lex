@@ -232,7 +232,9 @@ test("a page that ships no script says its strip carries no answer, in English a
       } else {
         quiet.push(label);
         assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.noAnswer)}</div>`, label);
-        assert.ok(!html.includes("<form"), `${label}: asks nothing`);
+        // The V4 header's find field (How it works, Decisions) is a plain GET form to the search page, sent only when the reader
+        // types a name: the page itself asks nothing.
+        assert.ok(!html.replace(/<form class="lx-find" role="search" action="\/(?:en|fr)\/search\.html" method="get" data-header-find="">/, "").includes("<form"), `${label}: asks nothing`);
       }
     }
     // The pages that never ask: the ten legal pages, the six reference pages (Get help, How to read Lex and Developers, in

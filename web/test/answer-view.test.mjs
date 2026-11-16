@@ -75,7 +75,8 @@ test('Decisions and Evidence print the recorded runs\' and the coverage answer\'
   assert.ok(decisions.includes(`${dev.wrongArticle} wrong articles in ${dev.cases} test questions.`));
   assert.ok(decisions.includes(`${dev.notFound + dev.wronglyRefused} of the ${dev.rightArticle + dev.wrongArticle + dev.notFound + dev.wronglyRefused} questions that call for an article get none.`));
   assert.ok(decisions.includes(`Open problem: ${heldout.rightArticle} of ${heldout.cases} unseen questions get the right article.`));
-  assert.equal((decisions.match(/class="decision-card"/g) ?? []).length, 7, 'seven cards');
+  // V4 (V5How's typography): each decision a row, with its own anchor How it works links.
+  assert.equal((decisions.match(/<li class="lx-dec-item" id="decision-[a-zA-Z]+" data-decision=/g) ?? []).length, 7, 'seven decisions');
   const evidence = renderLiveReferencePage('evidence');
   for (const [key, value] of [['right', dev.rightArticle], ['wrong', dev.wrongArticle], ['notFound', dev.notFound], ['wronglyRefused', dev.wronglyRefused], ['rightBehaviour', dev.rightBehaviour]]) {
     assert.match(evidence, new RegExp(`data-count="${key}"[^>]*><strong>${value}</strong>`), key);
@@ -88,7 +89,7 @@ test('Decisions and Evidence print the recorded runs\' and the coverage answer\'
   assert.ok(evidence.includes(`Held: the text of ${held.toLocaleString('en-GB')} versions of ${COVERAGE_RECORD.worksWithText.toLocaleString('en-GB')} acts`));
   assert.ok(evidence.includes(`Missing: the text of ${missing.toLocaleString('en-GB')} more of the ${COVERAGE_RECORD.versionsCatalogued.toLocaleString('en-GB')} versions`));
   assert.equal(held + missing, COVERAGE_RECORD.versionsCatalogued);
-  assert.equal((evidence.match(/class="flow-accent"/g) ?? []).length, 2, 'the model and the owner, each in the accent colour');
+  assert.equal((evidence.match(/data-accent=""/g) ?? []).length, 2, 'the model and the owner, each marked');
   assert.ok(!/@example\.com/.test(evidence), 'no e-mail address on the page');
 });
 

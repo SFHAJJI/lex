@@ -27,6 +27,8 @@ export function renderLiveMaintenancePage() {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      layout="v4"
+      prose
       answers={false}
     >
       <p className="eyebrow">{copy.eyebrow}</p>
