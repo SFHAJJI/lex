@@ -90,10 +90,10 @@ public sealed class V4Dictionary
             _terms.Add(keyword.Keyword);
         }
 
-        // Rule: the longest key first, so a phrase is read whole before any of its words is read alone.
+        // Rule: the longest key first, so a phrase is read whole before any of its words is read alone. Among keys of as
+        // many words, the file's order decides: the law's word stands before a reader's, a base form before its plural.
         _lookup = keywords.Where(static keyword => keyword.Word != "answer")
             .OrderByDescending(static keyword => keyword.Key.Length)
-            .ThenByDescending(static keyword => keyword.Keyword.Length)
             .ThenBy(static keyword => keyword.Row)
             .ToArray();
     }

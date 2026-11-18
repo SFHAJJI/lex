@@ -226,7 +226,9 @@ public static class V4Bricks
             var keyword = dictionary.Keyword(read.Keyword)!;
             var written = string.Join(' ', V4Text.Words(row.Folded[read.Start..read.End]).Select(static word => word.Text));
             var law = string.Join(' ', V4Text.Words(V4Text.Fold(dictionary.Concept(read.Concept)!.LabelFr)).Select(static word => word.Text));
-            if (keyword.Word == "reader" || (keyword.Word == "law" && !keyword.Pattern && written != law && keyword.Keyword == dictionary.Concept(read.Concept)!.LabelFr))
+            var lawHasAWord = dictionary.KeywordsOf(read.Concept, "law").Any();
+            if (lawHasAWord && written != law &&
+                (keyword.Word == "reader" || (keyword.Word == "law" && !keyword.Pattern && keyword.Keyword == dictionary.Concept(read.Concept)!.LabelFr)))
             {
                 notes.Add(new V4AnswerNote("law_term", new V4Span(read.Start, read.End), read.Concept));
             }
