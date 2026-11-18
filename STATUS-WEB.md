@@ -88,6 +88,23 @@ the contract):
 - `caveat.general_and_special` and `caveat.not_defined` were reworded after the French review found that both overstated
   ("s'appliquent toutes deux"; "le texte ne définit pas").
 
+**First measure on the insurance set** (`C:\lex-v3\lex-eval\cases\lex-insurance-v1.jsonl`, 79 questions, each expectation
+checked against the law's text by `C:\lex-v3etrieval-proto-2026-11-18\make_insurance_cases.py`; local server on mount d4,
+real model, 2026-11-18): verdict right on 0.937, the right line quoted on 0.776 of those that expect one, 104 quotations all
+verified, no sentence outside the templates, p50 0.7 s, p95 5.0 s. What it found was fixed in the detectors (the heading the
+question names, an article's lead line, a special heading, two concepts in one heading, the question's literal words) and
+in the dictionary; the second measure is the next thing to run.
+
+**Next slice, designed, not built (so that it survives a context change):** the question call in place of the planner.
+`V4QuestionCall` (Contracts, Bricks): one model call that describes a question the bricks' own routes do not answer
+(`asks`: the text of a citation, the text on a subject, an act's versions, its record, the act on a date, two dates compared,
+the changes of a period; the spans of the citation, of the act and of the words; the language; the date reference; own case;
+a second part). Code maps `asks` to the same plans the planner's prompt described (search + evidence follow-up; timeline;
+dossier; as_of; diff; changes_in_period), as a plan /2 with route `operations` and a bricks record, composed by the existing
+composer with a new notice (`notice.model_described`). Then `assistant-planner-prompt.md`, `V3AssistantPlanWire` and the
+planner's `Plan` are retired with their tests, Program.cs wires no fallback, the 56 questions are run against the baseline,
+and How it works, the privacy notice and the Developers page are rewritten for what a model now does.
+
 **Owner items this slice raises** (taken as recommended, on the owner's standing go; each is reversible):
 
 - The advice boundary: a question with "peut-on", "faut-il", "doit-on" and no role of the law named stays refused, as
