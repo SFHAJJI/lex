@@ -36,6 +36,19 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void TheFoldIsWrittenOutAndAsksNothingOfThePlatform()
+    {
+        // The API runs with InvariantGlobalization, where string.Normalize decomposes nothing: found on 2026-11-18, when a
+        // local run of the server folded no accent and every pattern written without accents ("prevus", "fixe par le
+        // contrat") met no line. The base letters are a table in the source.
+        Assert.AreEqual("eeeeaaaacuuuuiioooeeacoo", V4Text.Fold("éèêëàâäãçùûüúîïôöóÉÈÀÇŒœ"));
+        Assert.AreEqual("prevus fixe delai resilie lesee", V4Text.Fold("PRÉVUS fixé DÉLAI résilié lésée"));
+        Assert.AreEqual("\u00D7\u00F7", V4Text.Fold("\u00D7\u00F7"), "a sign that is no letter keeps itself");
+        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "Lex.V3.Contracts", "Platform", "Assistant", "Bricks", "V4Text.cs"));
+        Assert.IsFalse(source.Contains(".Normalize(", StringComparison.Ordinal), "the fold asks no normalisation of the platform");
+    }
+
+    [TestMethod]
     public void FormsOfOneWordMeetByRuleAndAPhraseStaysWhole()
     {
         foreach (var form in new[] { "lésée", "lésé", "lésés", "lésées" })
@@ -588,55 +601,113 @@ public sealed class BricksTests
     });
 
     [TestMethod]
-    public void WithAModelTheRuleAndItsCasesAreTheOnesItPointedAtAndCodeChecked()
+    public void WhenCodeIsSureOfTheRuleTheModelOnlyPointsAtItsCasesAndCodeChecksThem()
     {
         const string question = "l'assureur peut résilier le contrat de façon unilatérale ?";
         var model = CarefulModel();
         var dossier = Answered(BricksFixture.Ask(question, model));
-        CollectionAssert.AreEqual(new[] { "arbiter", "extraction" }, model.Calls.Select(static call => call.Step).ToArray(), "two calls, and no third");
+        CollectionAssert.AreEqual(new[] { "extraction" }, model.Calls.Select(static call => call.Step).ToArray(), "one call: the line that says 'hormis les cas prévus par la loi' is the rule by its own words");
+        using (var sent = JsonDocument.Parse(model.Calls[0].User))
+        {
+            var pinned = sent.RootElement.GetProperty("rule_line").GetString();
+            var line = sent.RootElement.GetProperty("lines").EnumerateArray().Single(candidate => candidate.GetProperty("id").GetString() == pinned);
+            Assert.AreEqual("Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.", line.GetProperty("text").GetString());
+            Assert.AreEqual(question, sent.RootElement.GetProperty("question").GetString(), "the model saw the masked question, the act's lines and nothing else of the reader");
+        }
+
+        StringAssert.Contains(model.Calls[0].System, "has already identified the line that states the general rule");
         CollectionAssert.AreEqual(new[] { "art_39", "art_22", "art_13" }, dossier.Quotes.Select(static quote => quote.Anchor).ToArray());
         CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeModelAssisted);
+        var lines = dossier.PlanLines.Select(static line => line.TemplateId).ToArray();
+        CollectionAssert.Contains(lines, V3AnswerTemplates.PlanBricksModelExtraction);
+        CollectionAssert.DoesNotContain(lines, V3AnswerTemplates.PlanBricksModelArbiter, "a step that did not run is not said to have run");
+        var bricks = Bricks(dossier);
+        Assert.AreEqual(1, bricks.GetProperty("model_calls").GetArrayLength());
+        var arbiter = bricks.GetProperty("activations").EnumerateArray().Single(static activation => activation.GetProperty("id").GetString() == "arbiter");
+        Assert.AreEqual((false, "code_lead_is_clear"), (arbiter.GetProperty("on").GetBoolean(), arbiter.GetProperty("reason").GetString()), "the record says what ran");
+        Assert.IsTrue(dossier.Blocks.OfType<V3ActionBlock>().Any(), "the cases the answer does not quote stay one step away");
+    }
+
+    [TestMethod]
+    public void WhenNoLineClearlyLeadsTheArbiterGivesEachCandidateARoleAndAReason()
+    {
+        const string question = "Dans quels cas l'assureur peut-il résilier le contrat ?";
+        var model = new BricksFixture.Model(static call =>
+        {
+            using var sent = JsonDocument.Parse(call.User);
+            if (call.Step == "arbiter")
+            {
+                var rows = sent.RootElement.GetProperty("candidates").EnumerateArray().Select(static candidate =>
+                {
+                    var line = candidate.GetProperty("line").GetString()!;
+                    var (role, reason) = line.StartsWith("L'assureur a le droit de résilier", StringComparison.Ordinal) || line.StartsWith("Si l'assureur apporte la preuve", StringComparison.Ordinal)
+                        ? ("primary", "states_case")
+                        : line.StartsWith("Hormis les cas", StringComparison.Ordinal) ? ("supporting", "states_rule") : ("tangential", "mentions_only");
+                    return (JsonNode)new JsonObject { ["id"] = candidate.GetProperty("id").GetString(), ["role"] = role, ["reason"] = reason };
+                }).ToArray();
+                return new JsonObject { ["candidates"] = new JsonArray(rows) }.ToJsonString();
+            }
+
+            var items = sent.RootElement.GetProperty("lines").EnumerateArray()
+                .Where(static line => line.GetProperty("text").GetString()!.StartsWith("L'assureur a le droit de résilier", StringComparison.Ordinal) || line.GetProperty("text").GetString()!.StartsWith("Si l'assureur apporte la preuve", StringComparison.Ordinal))
+                .Select(static line => (JsonNode)new JsonObject { ["line"] = line.GetProperty("id").GetString(), ["role"] = "item", ["value"] = string.Empty })
+                .ToArray();
+            return new JsonObject { ["found"] = true, ["complete"] = false, ["items"] = new JsonArray(items), ["caveats"] = new JsonArray() }.ToJsonString();
+        });
+        var dossier = Answered(BricksFixture.Ask(question, model));
+        CollectionAssert.AreEqual(new[] { "arbiter", "extraction" }, model.Calls.Select(static call => call.Step).ToArray(), "two calls, and no third");
+        CollectionAssert.AreEqual(new[] { "art_13", "art_22", "art_34" }, dossier.Quotes.Select(static quote => quote.Anchor).ToArray(), "one line per article, in the text's order");
         var lines = dossier.PlanLines.Select(static line => line.TemplateId).ToArray();
         CollectionAssert.Contains(lines, V3AnswerTemplates.PlanBricksModelArbiter);
         CollectionAssert.Contains(lines, V3AnswerTemplates.PlanBricksModelExtraction);
         var bricks = Bricks(dossier);
-        Assert.AreEqual(2, bricks.GetProperty("model_calls").GetArrayLength());
-        var first = bricks.GetProperty("candidates").EnumerateArray().First(static candidate => candidate.GetProperty("line").GetString() == "art_39#8");
-        Assert.AreEqual(("primary", "states_rule"), (first.GetProperty("role").GetString(), first.GetProperty("reason").GetString()), "the arbiter's role and reason live in the trace");
-        Assert.IsTrue(dossier.Blocks.OfType<V3ActionBlock>().Any(), "the cases the answer does not quote stay one step away");
-
-        // The model saw the masked question, the act's lines and nothing else of the reader.
-        foreach (var call in model.Calls)
-        {
-            using var sent = JsonDocument.Parse(call.User);
-            Assert.AreEqual(question, sent.RootElement.GetProperty("question").GetString());
-        }
+        var rule = bricks.GetProperty("candidates").EnumerateArray().First(static candidate => candidate.GetProperty("line").GetString() == "art_39#8");
+        Assert.AreEqual(("supporting", "states_rule"), (rule.GetProperty("role").GetString(), rule.GetProperty("reason").GetString()), "the arbiter's role and reason live in the trace");
+        CollectionAssert.Contains(Templates(dossier), V3AnswerTemplates.CaveatListFromSweep);
     }
 
     [TestMethod]
     public void AReplyThatFailsTheChecksIsAskedAgainOnceWithAnotherContextThenTheAnswerIsCodesOwn()
     {
         const string question = "l'assureur peut résilier le contrat de façon unilatérale ?";
-        var careful = CarefulModel();
-        var extractions = 0;
-        var model = new BricksFixture.Model(call =>
-        {
-            if (call.Step == "arbiter")
-            {
-                return careful.Complete(call, CancellationToken.None).Content;
-            }
-
-            extractions++;
-            return """{"found":true,"complete":true,"items":[{"line":"L99","role":"rule","value":""}],"caveats":[]}""";
-        });
+        var model = new BricksFixture.Model(static _ => """{"found":true,"complete":true,"items":[{"line":"L99","role":"rule","value":""}],"caveats":[]}""");
         var dossier = Answered(BricksFixture.Ask(question, model));
-        Assert.AreEqual(2, extractions, "one retry, and it changes something: the context");
-        Assert.AreNotEqual(model.Calls[1].User, model.Calls[2].User, "every retry should change something");
+        Assert.AreEqual(2, model.Calls.Count, "one retry, and no third call");
+        Assert.AreNotEqual(model.Calls[0].User, model.Calls[1].User, "every retry should change something: here, the context");
         var bricks = Bricks(dossier);
         Assert.IsTrue(bricks.GetProperty("passes").EnumerateArray().Any(static pass => pass.GetProperty("trigger").GetString() == "validator_rejected" && pass.GetProperty("outcome").GetString() == "line_was_not_sent"), "the pass is written down with what started it");
         CollectionAssert.Contains(bricks.GetProperty("answer").GetProperty("caveats").EnumerateArray().Select(static caveat => caveat.GetString()).ToArray(), "model_unavailable");
         CollectionAssert.Contains(dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), V3AnswerTemplates.PlanBricksModelUnavailable);
         Assert.AreEqual("Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.", dossier.Quotes.First().Text, "a typed 'not answered by the model' rather than a wrong value: the lines code found");
+    }
+
+    [TestMethod]
+    public void TheModelCannotMoveTheRuleCodeIdentified()
+    {
+        // On the live model, 2026-11-18: asked this question with "de façon unilatérale", it named the policyholder's yearly
+        // right (article 38) as "the rule". The line that says "hormis les cas prévus par la loi" is pinned, and a reply
+        // that names another is refused.
+        var extraction = V4Generation.ReadExtraction("""{"found":true,"complete":false,"items":[{"line":"L3","role":"rule","value":""},{"line":"L2","role":"case","value":""}],"caveats":[]}""")!;
+        Assert.IsNull(V4Generation.Validate(extraction, "rule", Sent, out var failed, pinnedRule: Sent[1]));
+        Assert.AreEqual("rule_line_is_not_the_one_code_identified", failed);
+        var kept = V4Generation.ReadExtraction("""{"found":true,"complete":false,"items":[{"line":"L2","role":"rule","value":""},{"line":"L3","role":"case","value":""}],"caveats":[]}""")!;
+        Assert.IsNotNull(V4Generation.Validate(kept, "rule", Sent, out _, pinnedRule: Sent[1]));
+    }
+
+    [TestMethod]
+    public void AMomentTheLawStatesInWordsIsQuotedAndNotRestated()
+    {
+        var dossier = Answered(BricksFixture.Ask("Quand la garantie d'un contrat d'assurance prend-elle effet ?"));
+        Assert.AreEqual("La garantie prend effet aux date et heure indiquées dans le contrat.", dossier.Quotes.First().Text);
+        Assert.AreEqual("art_37", dossier.Quotes.First().Anchor);
+        var templates = Templates(dossier);
+        CollectionAssert.Contains(templates, V3AnswerTemplates.AnswerPassages);
+        CollectionAssert.Contains(templates, V3AnswerTemplates.CaveatLeftToContract);
+        CollectionAssert.DoesNotContain(templates, V3AnswerTemplates.AnswerValueWords);
+        CollectionAssert.DoesNotContain(templates, V3AnswerTemplates.AbsenceNoAnswerInLines, "the line is the answer; it is not shown as a near miss");
+
+        var frame = Answered(BricksFixture.Ask("Que se passe-t-il en cas de non-paiement de la prime ?"));
+        CollectionAssert.DoesNotContain(Templates(frame), V3AnswerTemplates.NoteWordNotInAct, "a word of the question's own frame ('se passe') is not reported as missing from the law");
     }
 
     [TestMethod]

@@ -105,8 +105,15 @@ public static class V4Generation
         ["rule"] = """
             KIND: rule. Return one item with role "rule": the one line that states the general rule for the party the
             question names (may, may not, must). Then return, with role "case", the lines that state a case, an exception
-            or a condition of that rule: at most four, the most general first, one per case. Set complete=true only if no
-            line given states a further case.
+            or a condition of that rule: at most four, the most general first, each from a different article when
+            possible. Set complete=true only if no line given states a further case.
+            """,
+        ["rule_pinned"] = """
+            KIND: rule. Lex's code has already identified the line that states the general rule: the line named in
+            "rule_line". Return that line as the one item with role "rule". Then return, with role "case", the lines that
+            state a case, an exception or a condition of that rule for the party the question names: at most four, the
+            most general first, each from a different article when possible. Set complete=true only if no line given
+            states a further case.
             """,
         ["duration"] = """
             KIND: duration. Return, with role "value", the line on which the period asked is written, and in "value" the
@@ -125,7 +132,8 @@ public static class V4Generation
             """,
         ["list"] = """
             KIND: list. Return one item with role "item" per element of the list asked, each with its line, at most five,
-            in the order of the text. Set complete=true only if every element the lines hold is returned.
+            in the order of the text, each from a different article when possible. Set complete=true only if every element
+            the lines hold is returned.
             """,
         ["text"] = """
             KIND: passages. Return, with role "passage", the lines that answer the question, at most three, the most
@@ -253,7 +261,7 @@ public static class V4Generation
     /// appear travel with them: "This prevents the LLM from importing a generic notion when the document defines the term
     /// specifically." [11]
     /// </summary>
-    public static V4ModelCall ExtractionCall(V4QuestionRow row, string kind, V4ActTables tables, IReadOnlyList<V4Line> lines, IReadOnlyList<V4Definition> definitions, V4Dictionary dictionary)
+    public static V4ModelCall ExtractionCall(V4QuestionRow row, string kind, V4ActTables tables, IReadOnlyList<V4Line> lines, IReadOnlyList<V4Definition> definitions, V4Dictionary dictionary, V4Line? pinnedRule = null)
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(tables);
@@ -262,6 +270,12 @@ public static class V4Generation
         ArgumentNullException.ThrowIfNull(dictionary);
         var user = Describe(row, kind, dictionary);
         user["cite"] = "the column id of lines (L1, L2, ...)";
+        var pinned = pinnedRule is null ? -1 : lines.ToList().FindIndex(line => line.Id == pinnedRule.Id);
+        if (pinned >= 0)
+        {
+            user["rule_line"] = "L" + (pinned + 1).ToString(CultureInfo.InvariantCulture);
+        }
+
         user["lines"] = new JsonArray(lines.Select((line, at) =>
         {
             var article = tables.Article(line.Article)!;
@@ -280,7 +294,7 @@ public static class V4Generation
             ["text"] = Cut(string.Join(' ', Enumerable.Range(definition.FirstLine, definition.LastLine - definition.FirstLine + 1)
                 .Select(index => tables.Line(definition.Article + "#" + index.ToString(CultureInfo.InvariantCulture))?.Text ?? string.Empty)), 400),
         }).ToArray());
-        return new V4ModelCall("extraction", ExtractionBase + "\n" + FragmentFor(kind), user.ToJsonString(Relaxed), "lex_v4_extraction", ExtractionSchema, 700);
+        return new V4ModelCall("extraction", ExtractionBase + "\n" + FragmentFor(pinned >= 0 && kind == "rule" ? "rule_pinned" : kind), user.ToJsonString(Relaxed), "lex_v4_extraction", ExtractionSchema, 700);
     }
 
     private static string ExtractionSchema { get; } = new JsonObject
@@ -343,7 +357,7 @@ public static class V4Generation
     /// is of the kind asked; found and items agree; every item cites a line that was sent; a value is on the cited line and
     /// reads with the pattern of its type (ours); a rule's line has the form of a rule. "The LLM extracts; Python compares."
     /// </summary>
-    public static List<Checked>? Validate(V4Extraction extraction, string kind, IReadOnlyList<V4Line> sent, out string? failed)
+    public static List<Checked>? Validate(V4Extraction extraction, string kind, IReadOnlyList<V4Line> sent, out string? failed, V4Line? pinnedRule = null)
     {
         ArgumentNullException.ThrowIfNull(extraction);
         ArgumentNullException.ThrowIfNull(sent);
@@ -405,12 +419,13 @@ public static class V4Generation
                         var onLine = string.Join(' ', V4Text.Words(line.Folded.Substring(candidate!.Value.Start, candidate.Value.Length)).Select(static word => word.Text));
                         return onLine == folded || onLine.Contains(folded, StringComparison.Ordinal) || folded.Contains(onLine, StringComparison.Ordinal);
                     });
-                    if (match is null)
+                    if (match is null && kind != "date")
                     {
                         failed = "value_not_on_the_line";
                         return null;
                     }
 
+                    // A moment the law states in words ("aux date et heure indiquées dans le contrat") is quoted, and not restated.
                     value = match;
                 }
                 else if (kind != "date")
@@ -418,6 +433,11 @@ public static class V4Generation
                     failed = "value_missing";
                     return null;
                 }
+            }
+            else if (item.Role == "rule" && pinnedRule is not null && line.Id != pinnedRule.Id)
+            {
+                failed = "rule_line_is_not_the_one_code_identified";
+                return null;
             }
             else if (item.Role == "rule" && !V4Patterns.Confirms("rule", line.Folded))
             {

@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Text;
-
 namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 
 /// <summary>A word of a folded text: its characters and where they are, <c>[Start, End)</c>, in the text it was read from.</summary>
@@ -41,37 +38,25 @@ public static class V4Text
         _ => char.IsWhiteSpace(character) ? ' ' : char.ToLowerInvariant(character),
     };
 
+    // The base letter of every letter of U+00C0 to U+017F (Latin-1 Supplement and Latin Extended-A), in code point order: "é"
+    // gives "e", "ç" gives "c", "œ" gives "o". Written out, and not asked of string.Normalize: the API runs with
+    // InvariantGlobalization, where a normalisation decomposes nothing, and a fold that worked on a developer's machine
+    // and not on the server would find no line of the law.
+    private const string LatinBases =
+        "aaaaaaaceeeeiiiidnooooo\u00D7ouuuuytsaaaaaaaceeeeiiiidnooooo\u00F7ouuuuyty"
+        + "aaaaaaccccccccddddeeeeeeeeeegggggggghhhhiiiiiiiiiiiijjkkklllllll"
+        + "lllnnnnnnnnnoooooooorrrrrrssssssssttttttuuuuuuuuuuuuwwyyyzzzzzzs";
+
     private static char[] BuildTable()
     {
         var table = new char[0x250];
         for (var code = 0; code < table.Length; code++)
         {
             var character = (char)code;
-            if (character is '`' or '\u00B4')
-            {
-                table[code] = '\'';
-                continue;
-            }
-
-            if (char.IsWhiteSpace(character) || character == '\u00A0')
-            {
-                table[code] = ' ';
-                continue;
-            }
-
-            var folded = char.ToLowerInvariant(character);
-            if (char.IsLetter(folded) && folded > 0x7F)
-            {
-                // The base letter of an accented one ("é" gives "e"); a letter with no ASCII base ("œ", "ß") keeps itself.
-                var decomposed = folded.ToString().Normalize(NormalizationForm.FormD);
-                if (decomposed.Length > 1 && decomposed[0] < 0x80 && char.IsLetter(decomposed[0]) &&
-                    CharUnicodeInfo.GetUnicodeCategory(decomposed[1]) == UnicodeCategory.NonSpacingMark)
-                {
-                    folded = decomposed[0];
-                }
-            }
-
-            table[code] = folded;
+            table[code] = character is '`' or '\u00B4' ? '\''
+                : char.IsWhiteSpace(character) || character == '\u00A0' ? ' '
+                : code is >= 0xC0 and < 0x180 ? LatinBases[code - 0xC0]
+                : char.ToLowerInvariant(character);
         }
 
         return table;

@@ -211,7 +211,10 @@ public static class V4Bricks
                 draft.Route = "fact";
             }
 
-            foreach (var unmatched in row.Unmatched.Take(3))
+            // A word that qualifies what is asked (it comes after the concept: "résilier ... de façon unilatérale") and that
+            // the act never uses is said as such. A word before the concept is the question's own frame ("que se passe-t-il").
+            var asked = row.Concepts.Concat(row.Roles).Select(static read => read.Start).DefaultIfEmpty(int.MaxValue).Min();
+            foreach (var unmatched in row.Unmatched.Where(unmatched => unmatched.Start > asked).Take(3))
             {
                 if (V4Retrieval.LinesHolding(tables, row.Folded[unmatched.Start..unmatched.End]) == 0)
                 {
@@ -315,6 +318,25 @@ public static class V4Bricks
         if (valueKind)
         {
             var valued = shortlist.Where(static candidate => candidate.Detectors.Contains("keyword") && candidate.Values.Count > 0).ToList();
+            if (valued.Count == 0 && kind == "date")
+            {
+                // A moment the law states in words: the passages are the answer, and no value is restated.
+                draft.AnswerKind = "text";
+                draft.Found = true;
+                foreach (var candidate in shortlist.Take(3))
+                {
+                    draft.Items.Add(new Item(candidate.Line, candidate.Line, "passage", null));
+                }
+
+                if (shortlist.Take(3).Any(static candidate => V4Patterns.LeftToContract(candidate.Line.Folded)))
+                {
+                    draft.Caveats.Add("left_to_contract");
+                }
+
+                Offer(draft, shortlist);
+                return;
+            }
+
             if (valued.Count == 0)
             {
                 // The kind is kept, no value is given, and the line that says why is quoted: never a default value.
@@ -453,25 +475,50 @@ public static class V4Bricks
         var kind = decision.Kind == "definition" || decision.Kind == "reference" ? "text" : decision.Kind;
         var shortlist = retrieval.Shortlist(MaximumCandidates);
 
-        // Step 3, the arbiter: a role and a reason per candidate. "Why a method ranked a candidate matters." [7C]
-        var arbiter = Ask(draft, model, V4Generation.ArbiterCall(row, kind, tables, shortlist, dictionary), cancellationToken);
-        var roles = arbiter is null ? null : V4Generation.ReadArbiter(arbiter.Content, shortlist.Count);
-        if (roles is null)
+        // When code's own lead is clear, the arbiter is not asked ("call the model less", their fast path [9ter]): a rule
+        // line that states the general rule in its own words is pinned, and the extraction only points at its cases; the
+        // lines that hold the value asked, well ahead of the others, go straight to the extraction.
+        var pinnedRule = kind == "rule" && draft.AnswerKind == "rule" ? draft.Items.FirstOrDefault(static item => item.Role == "rule")?.First : null;
+        var valuedLead = kind is "duration" or "amount" && draft.AnswerKind == kind && draft.Items.Count is >= 1 and <= 3
+            ? shortlist.Where(candidate => draft.Items.Any(item => item.First.Id == candidate.Line.Id)).ToList()
+            : [];
+        var clearValues = valuedLead.Count > 0 &&
+            shortlist.Where(candidate => !valuedLead.Contains(candidate)).All(candidate => candidate.Score <= valuedLead.Min(static lead => lead.Score) - V4Retrieval.Margin);
+        List<V4Candidate> primaries;
+        List<V4Candidate> supporting;
+        if (pinnedRule is not null)
         {
-            draft.Caveats.Add("model_unavailable");
-            Downgrade(draft);
-            return;
+            primaries = shortlist.Where(candidate => candidate.Line.Id == pinnedRule.Id).ToList();
+            supporting = shortlist.Where(candidate => candidate.Line.Id != pinnedRule.Id && candidate.Detectors.Contains("keyword") && candidate.Detectors.Contains("type_pattern")).Take(12).ToList();
+        }
+        else if (clearValues)
+        {
+            primaries = valuedLead;
+            supporting = [];
+        }
+        else
+        {
+            // Step 3, the arbiter: a role and a reason per candidate. "Why a method ranked a candidate matters." [7C]
+            var arbiter = Ask(draft, model, V4Generation.ArbiterCall(row, kind, tables, shortlist, dictionary), cancellationToken);
+            var roles = arbiter is null ? null : V4Generation.ReadArbiter(arbiter.Content, shortlist.Count);
+            if (roles is null)
+            {
+                draft.Caveats.Add("model_unavailable");
+                Downgrade(draft);
+                return;
+            }
+
+            foreach (var entry in roles)
+            {
+                var candidate = shortlist[int.Parse(entry.Id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture) - 1];
+                candidate.Role = entry.Role;
+                candidate.Reason = entry.Reason;
+            }
+
+            primaries = shortlist.Where(static candidate => candidate.Role == "primary").Take(4).ToList();
+            supporting = shortlist.Where(static candidate => candidate.Role == "supporting").Take(8).ToList();
         }
 
-        foreach (var entry in roles)
-        {
-            var candidate = shortlist[int.Parse(entry.Id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture) - 1];
-            candidate.Role = entry.Role;
-            candidate.Reason = entry.Reason;
-        }
-
-        var primaries = shortlist.Where(static candidate => candidate.Role == "primary").Take(4).ToList();
-        var supporting = shortlist.Where(static candidate => candidate.Role == "supporting").Take(8).ToList();
         if (primaries.Count == 0)
         {
             // No candidate carries the answer: the nearest lines are shown as such, and nothing is restated.
@@ -534,14 +581,14 @@ public static class V4Bricks
                 draft.Passes.Add(new V4RecordPass(draft.Passes.Count + 1, "validator_rejected", "context_is_first_anchor_article", failed ?? "reply_not_of_the_form"));
             }
 
-            var reply = Ask(draft, model, V4Generation.ExtractionCall(row, kind, tables, lines, DefinitionsIn(lines), dictionary), cancellationToken);
+            var reply = Ask(draft, model, V4Generation.ExtractionCall(row, kind, tables, lines, DefinitionsIn(lines), dictionary, pinnedRule), cancellationToken);
             extraction = reply is null ? null : V4Generation.ReadExtraction(reply.Content);
             if (reply is null)
             {
                 break;
             }
 
-            items = extraction is null ? null : V4Generation.Validate(extraction, kind, lines, out failed);
+            items = extraction is null ? null : V4Generation.Validate(extraction, kind, lines, out failed, pinnedRule);
         }
 
         if (items is null || extraction is null)
@@ -568,10 +615,24 @@ public static class V4Bricks
             return;
         }
 
-        draft.AnswerKind = kind;
+        draft.AnswerKind = kind == "date" && items.All(static item => item.Value is null) ? "text" : kind;
         draft.Found = true;
         draft.Complete = extraction.Complete && kind != "rule";
-        draft.Items = items.Take(V3AssistantPipeline.MaximumQuotes).Select(static item => new Item(item.Line, item.Line, item.Role, item.Value)).ToList();
+
+        // One case per article: a second line of an article already quoted stays one step away, in the article itself.
+        var kept = new List<V4Generation.Checked>();
+        foreach (var item in items)
+        {
+            if (item.Role is "case" or "item" && kept.Any(other => other.Role == item.Role && other.Line.Article == item.Line.Article))
+            {
+                continue;
+            }
+
+            kept.Add(item);
+        }
+
+        draft.Items = kept.Take(V3AssistantPipeline.MaximumQuotes)
+            .Select(item => new Item(item.Line, item.Line, draft.AnswerKind == "text" ? "passage" : item.Role, item.Value)).ToList();
         if (kind == "rule" && draft.Items.Any(static item => item.Role == "case"))
         {
             draft.Caveats.Add("cases_from_sweep");
@@ -814,8 +875,23 @@ public static class V4Bricks
 
             writer.WriteEndArray();
             writer.WriteStartArray("activations");
-            foreach (var activation in decision?.Activations ?? [])
+            foreach (var planned in decision?.Activations ?? [])
             {
+                // What the record says ran is what ran: a model step the dispatcher allowed and the loop did not need is
+                // written off, with why.
+                var activation = planned;
+                if (planned.On && planned.Id is "arbiter" or "extraction" && !draft.Calls.Any(call => call.Step == planned.Id))
+                {
+                    activation = planned with
+                    {
+                        On = false,
+                        Reason = draft.Route == "fact" ? "one_line_clearly_leads"
+                            : planned.Id == "arbiter" && draft.Calls.Count > 0 ? "code_lead_is_clear"
+                            : draft.Absence is not null ? "nothing_to_rank"
+                            : "not_reached",
+                    };
+                }
+
                 writer.WriteStartObject();
                 writer.WriteString("id", activation.Id);
                 writer.WriteBoolean("on", activation.On);

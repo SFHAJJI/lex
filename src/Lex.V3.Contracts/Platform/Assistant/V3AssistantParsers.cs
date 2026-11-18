@@ -114,12 +114,13 @@ public static class V3AssistantParsers
             "le", "la", "les", "des", "du", "est", "une", "dans", "pour", "sur", "pas", "ne", "au", "aux", "cette", "ces", "mon",
             "ma", "mes", "quel", "quelle", "quels", "quelles", "comment", "pourquoi", "dit", "disait", "loi", "selon", "peut",
             "je", "il", "elle", "nous", "vous", "avec", "qui", "quoi", "et", "l'", "d'", "qu'", "que", "puis", "dois", "être",
+            "bonjour", "bonsoir", "salut", "merci",
         },
         [V3QuestionLanguage.English] = new(StringComparer.Ordinal)
         {
             "the", "is", "are", "was", "were", "what", "which", "who", "how", "does", "do", "did", "say", "says", "said", "law",
             "of", "in", "on", "at", "for", "to", "and", "or", "my", "can", "could", "should", "may", "this", "that", "these",
-            "from", "with", "between", "under", "about", "i", "be",
+            "from", "with", "between", "under", "about", "i", "be", "hello", "hi", "thanks", "thank",
         },
         [V3QuestionLanguage.German] = new(StringComparer.Ordinal)
         {
