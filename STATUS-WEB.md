@@ -34,10 +34,67 @@ freeze of 2026-11-14 on the engine, the planner prompt, the templates and the se
   existing pipeline runs: `evidence_bundle` steps for the articles to quote, each with the exact extract (offset and length
   in the stored text), and a typed record of how the answer was reached (in the trace). The composer, the quote binding,
   the disclosures, the gates and the replay are the existing ones; a quote of one line passes `QuoteBound` unchanged.
-- **Working checklist** (updated as slices land): [ ] bricks library and dictionary; [ ] plan/2, extracts, new wordings (EN,
-  FR); [ ] corpus adapter and the bricks planner in the API; [ ] the advice boundary narrowed (decision 4); [ ] model
-  calls: the question call, the arbiter, the extraction; the old planner retired; [ ] the web answer card, How it works, the
-  privacy notice checked; [ ] lex-eval: the insurance set and the ladder; [ ] release, gate, live.
+- **Working checklist** (updated as slices land): [x] bricks library and dictionary; [x] plan /2, extracts, new wordings (EN,
+  FR, the French reviewed by an independent AI reviewer); [x] corpus adapter and the bricks planner in the API; [x] the
+  advice boundary narrowed (decision 4); [x] model calls: the arbiter, the extraction; [ ] the question call in place of the
+  planner for the questions the bricks do not answer, and the old planner retired; [x] the dock's answer card; [ ] How it
+  works, the privacy notice and the Developers page rewritten for V4; [x] lex-eval: the insurance set (79 questions, each
+  expectation checked against the law's text); [ ] the 56 again, the ladder; [ ] release, gate, live.
+
+### Slice 1 (2026-11-18, `api/v4-bricks`): the bricks answer insurance questions; the planner keeps the rest
+
+**What is built** (`src/Lex.V3.Contracts/Platform/Assistant/Bricks/`, one file per brick; `docs/ANSWER-DOSSIER-1.md` §13 is
+the contract):
+
+- **B, the tables** (`V4ActTables`): an act's lines, each a position in the article's stored text, with the label, the
+  heading and the numbered point read from the publisher's typed pieces; the terms the act defines; the references it makes
+  in plain words; the build's counts. On the 1997 law (latest French version): 147 articles (one empty, none unbound), 913
+  lines, 144 headings, 30 definitions (the 21 terms of art. 1er and their variants), 92 references resolved, 8 not, 8 to
+  other acts. Built per version in memory by the mount (`V3CorpusMount.Bricks.cs`), from the state `evidence_bundle` itself
+  answers for the date, under its rights rule.
+- **D, the dictionary** (`insurance-dictionary.json`, 51 concepts, 6 of them roles; `corpus-index.json`, 5 acts, 5 EU acts by
+  name): the law's words are counted on the law at every build by a test (a "law" word with no line fails it); the readers'
+  words are proposals until a person validates them, and the file says so of itself.
+- **C, E, I, J, G, H:** the question's row by code (`V4QuestionParser`), the dispatcher (`V4Dispatcher.Decide`, one test per
+  rule), the detectors, the margin and the sweep (`V4Retrieval`), the two model calls and the answer validator
+  (`V4Generation`), the bounded loop that writes the plan /2 (`V4Bricks.Plan`), the composer of a bricks answer
+  (`V3AssistantPipeline.Bricks.cs`).
+- **The answers to Kezhan Shi's two questions of 2026-11-18**, on this PC against the local mount with the real model
+  (gpt-4.1-mini): "c'est quoi une personne lésé" is the one defining line of art. 1er, no model, under 2 s; "l'assureur
+  peut résilier le contrat de façon unilatérale ?" is the line of art. 39 ("Hormis les cas prévus par la loi, l'assureur
+  ne peut résilier le contrat."), then cases, one model call, about 4 s, and the note that "unilatérale" is nowhere in the
+  law.
+
+**Three things the live model run found that no unit test had** (each now has its test):
+
+1. The API runs with `InvariantGlobalization`, where `string.Normalize` decomposes nothing: the fold stripped no accent on
+   the server while it did in the tests. Every pattern written without accents met no line. The base letters are now a
+   table in the source (`V4Text.LatinBases`).
+2. Asked the second question, the model named the policyholder's yearly right (art. 38) as "the rule". A line that says
+   "hormis les cas prévus par la loi" is the general rule by its own words: code pins it, the model only points at its
+   cases, and a reply that names another rule line is refused.
+3. A line that states another party's right ("le preneur d'assurance a le droit de résilier") was given as a case of the
+   insurer's. A detector reads whose verb it is (`other_party`); such a line is left out of the cases.
+
+**Driver decisions (reversible), recorded here:**
+
+- The bricks stand in front of the existing planner: a question they do not answer (it cites an article, asks how the law
+  changed, names nothing of the insurance dictionary, or holds a word of social insurance) goes to the planner as before.
+  The planner's retirement is the next slice.
+- When code's own lead is clear the arbiter is not asked (a pinned rule; the lines that hold the value, well ahead): one
+  model call instead of two. The record says which steps ran.
+- A plan /2 may be 40 KiB (16 for /1 and 24 for the bricks record); /1 keeps its 16 KiB cap.
+- The planner's outer deadline is 14 s (it was 6 s for one call); each model call keeps its own 6 s.
+- `caveat.general_and_special` and `caveat.not_defined` were reworded after the French review found that both overstated
+  ("s'appliquent toutes deux"; "le texte ne définit pas").
+
+**Owner items this slice raises** (taken as recommended, on the owner's standing go; each is reversible):
+
+- The advice boundary: a question with "peut-on", "faut-il", "doit-on" and no role of the law named stays refused, as
+  before. Extending decision 4 to these impersonal forms is a legal call that was not made.
+- Public sentences changed: two new notices (`notice.no_model`, `notice.model_assisted`) and 54 other wordings; the list is
+  `V3AnswerTemplates.cs` under "The bricks (V4)". How it works, the privacy notice and the Developers page still describe
+  the planner alone; they are rewritten with the next slice, before anything is released.
 
 ## Release 14 is live on the owner's exception to the promotion gate (sole driver, 2026-11-16)
 
