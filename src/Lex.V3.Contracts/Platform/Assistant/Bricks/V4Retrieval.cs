@@ -8,7 +8,8 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 /// <param name="Role">The role of the law the question names beside the concept (the actor), or null.</param>
 /// <param name="Kind">The kind of answer expected: its pattern is one of the detectors.</param>
 /// <param name="UsedKeywords">The rows of the dictionary the question's own words matched (a reader's word that matched is swept too).</param>
-public sealed record V4Brief(IReadOnlyList<string> Concepts, string? Role, string Kind, IReadOnlyList<int> UsedKeywords);
+/// <param name="Literals">The question's own words that no table read, folded ("chaque", "annee"): found on a line, they count for it.</param>
+public sealed record V4Brief(IReadOnlyList<string> Concepts, string? Role, string Kind, IReadOnlyList<int> UsedKeywords, IReadOnlyList<string>? Literals = null);
 
 /// <summary>
 /// One candidate of the audit table (brick I): a line, the detectors that found it, the words that matched, its place in the
@@ -114,7 +115,27 @@ public sealed class V4RetrievalResult
             }
         }
 
-        return list;
+        // The first paragraph under a heading that names the concept is kept with its article, whatever its own score: it
+        // states what the others qualify ("La durée du contrat est fixée par les parties.").
+        foreach (var lead in Candidates.Where(static candidate => candidate.Detectors.Contains("article_lead")))
+        {
+            if (list.Contains(lead) || !list.Any(candidate => candidate.Article.Id == lead.Article.Id))
+            {
+                continue;
+            }
+
+            var last = list.FindLastIndex(candidate => candidate.Article.Id == lead.Article.Id);
+            if (list.Count(candidate => candidate.Article.Id == lead.Article.Id) >= 2)
+            {
+                list[last] = lead;
+            }
+            else if (list.Count < most)
+            {
+                list.Insert(last + 1, lead);
+            }
+        }
+
+        return list.OrderByDescending(static candidate => candidate.Score).ThenBy(static candidate => candidate.Article.Position).ThenBy(static candidate => candidate.Line.Index).ToList();
     }
 }
 
@@ -154,7 +175,56 @@ public static class V4Retrieval
             .ToList();
         var titled = titleArticles.ToHashSet(StringComparer.Ordinal);
 
+        // The heading that holds the very words the question used ("absence de bénéficiaire") names its article, not a
+        // neighbour's.
+        var usedKeys = lawKeys.Where(keyword => brief.UsedKeywords.Contains(keyword.Row)).ToList();
+        var named = tables.Articles
+            .Where(article => article.HeadingWords.Count > 0 && usedKeys.Any(keyword => keyword.Key.In(article.HeadingWords)))
+            .Select(static article => article.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // "Trust the TOC on exact title matches. The author wrote that title." [7C] A heading that is, word for word, the
+        // key the question used ("Absence de bénéficiaire", "Délai de prescription") is the article asked for.
+        var exact = tables.Articles
+            .Where(article => usedKeys.Any(keyword => keyword.Key.Length == article.HeadingWords.Count && keyword.Key.Occurrences(article.HeadingWords).Any(static occurrence => occurrence.First == 0)))
+            .Select(static article => article.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // A heading that also names another concept of the dictionary ("Résiliation après sinistre", "Mise en demeure et
+        // faculté de résiliation") is a special case of the one asked; the heading that names it alone is the general one.
+        var asked = concepts.Select(static concept => concept.Id).Append(brief.Role ?? string.Empty).ToHashSet(StringComparer.Ordinal);
+        var otherKeys = dictionary.Keywords.Where(keyword => keyword.Word == "law" && keyword.Key.Length >= 2 && !asked.Contains(keyword.Concept) && dictionary.Concept(keyword.Concept)!.Kind != "role").ToList();
+        var special = tables.Articles
+            .Where(article => titled.Contains(article.Id) && otherKeys.Any(keyword => keyword.Key.In(article.HeadingWords)) &&
+                !lawKeys.Any(keyword => keyword.Key.Length >= 2 && keyword.Key.In(article.HeadingWords)))
+            .Select(static article => article.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Two concepts asked together ("résilier" and "prime impayée") meet in the article that holds both.
+        var both = new HashSet<string>(StringComparer.Ordinal);
+        var bothInHeading = new HashSet<string>(StringComparer.Ordinal);
+        if (concepts.Count >= 2)
+        {
+            foreach (var article in tables.Articles)
+            {
+                var lines = tables.LinesOf(article).Where(static line => line.Kind != "label").ToList();
+                IEnumerable<V4Keyword> Keys(V4Concept concept) => dictionary.KeywordsOf(concept.Id, "law", "reader")
+                    .Where(keyword => keyword.Word == "law" || brief.UsedKeywords.Contains(keyword.Row));
+                if (concepts.All(concept => Keys(concept).Any(keyword => lines.Any(line => keyword.Key.In(line.Words)))))
+                {
+                    both.Add(article.Id);
+                }
+
+                // The heading itself names both ("Mise en demeure et faculté de résiliation"): the article is about them together.
+                if (article.HeadingWords.Count > 0 && concepts.All(concept => Keys(concept).Any(keyword => keyword.Key.In(article.HeadingWords))))
+                {
+                    bothInHeading.Add(article.Id);
+                }
+            }
+        }
+
         var unnamed = tables.References.Where(static reference => reference.Kind == "unnamed_cases").Select(static reference => reference.FromLine).ToHashSet(StringComparer.Ordinal);
+        var literals = (brief.Literals ?? []).Where(static word => word.Length >= 5).Select(V4Text.Stem).Distinct(StringComparer.Ordinal).ToList();
         var candidates = new List<V4Candidate>();
         var counts = new Dictionary<string, (int Lines, HashSet<string> Articles)>(StringComparer.Ordinal)
         {
@@ -179,6 +249,7 @@ public static class V4Retrieval
             }
 
             var inTitled = titled.Contains(article.Id);
+            var leadLine = tables.TextLinesOf(article).FirstOrDefault();
             foreach (var line in tables.TextLinesOf(article))
             {
                 var matched = search.Where(keyword => keyword.Key.In(line.Words)).ToList();
@@ -214,7 +285,30 @@ public static class V4Retrieval
                 if (inTitled)
                 {
                     detectors.Add("title");
-                    score += 2.0;
+                    score += exact.Contains(article.Id) ? 6.0 : named.Contains(article.Id) ? 4.0 : 2.0;
+                    if (special.Contains(article.Id) && !bothInHeading.Contains(article.Id))
+                    {
+                        detectors.Add("special_heading");
+                        score -= 1.5;
+                    }
+
+                    // The first paragraph under a heading that names the concept states the article's own rule.
+                    if (holds && ReferenceEquals(line, leadLine))
+                    {
+                        detectors.Add("article_lead");
+                        score += 1.5;
+                    }
+                }
+
+                if (holds && bothInHeading.Contains(article.Id))
+                {
+                    detectors.Add("concepts_together");
+                    score += 2.5;
+                }
+                else if (holds && both.Contains(article.Id))
+                {
+                    detectors.Add("concepts_in_article");
+                    score += 1.0;
                 }
 
                 if (holds && role)
@@ -253,6 +347,14 @@ public static class V4Retrieval
                     score += 1.5;
                 }
 
+                // The question's own literal words on the line ("chaque année"): direct keywords, beside the dictionary's.
+                var literal = holds ? literals.Count(stem => line.Words.Any(word => word.Text.Length >= 4 && V4Text.Stem(word.Text) == stem)) : 0;
+                if (literal > 0)
+                {
+                    detectors.Add("literal_words");
+                    score += 1.5 * Math.Min(literal, 2);
+                }
+
                 // The role is the subject of the rule's own verb, right before the concept ("l'assureur ne peut résilier"):
                 // the line answers "[role] peut [concept] ?" in its own words.
                 if (holds && role && brief.Kind is "rule" or "list" && DirectForm(line, roleKeys, matched))
@@ -268,10 +370,10 @@ public static class V4Retrieval
                 }
 
                 // A line that sends to "the cases provided by the law" states the general rule, by its own words.
-                if (holds && brief.Kind is "rule" or "list" && unnamed.Contains(line.Id))
+                if (holds && role && brief.Kind is "rule" or "list" && unnamed.Contains(line.Id))
                 {
                     detectors.Add("general_rule");
-                    score += 1.0;
+                    score += 3.0;
                 }
 
                 candidates.Add(new V4Candidate(line, article, detectors, matched.Select(static keyword => keyword.Row).ToList(), score, values));
@@ -420,6 +522,8 @@ public static class V4Retrieval
         ArgumentNullException.ThrowIfNull(words);
         var found = new List<(V4Definition, int, int)>();
         var taken = new bool[words.Count];
+
+        // A term of one word that is also a common word of questions ("compte", "prime") is read only at its own length.
         foreach (var definition in tables.Definitions.OrderByDescending(static definition => definition.TermFolded.Length))
         {
             var key = V4Key.Read(definition.TermFolded);

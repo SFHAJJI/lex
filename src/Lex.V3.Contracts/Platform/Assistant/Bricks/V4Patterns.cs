@@ -44,7 +44,7 @@ public static class V4Patterns
     private static readonly Regex ReferencePattern = new(@"(?<![\p{L}])articles?\s+\d", Options, Timeout);
 
     private static readonly Regex LeftToContractPattern = new(
-        @"(?:fixe|prevu|determine|stipule|convenu|indique)e?s?\s+(?:par|dans|au)\s+le\s+contrat|sauf convention contraire|a defaut de convention|sauf stipulation contraire",
+        @"(?:fixe|prevu|determine|stipule|convenu|indique)e?s?\s+(?:par|dans|au)\s+le\s+contrat|(?:fixe|determine|convenu)e?s?\s+par\s+les\s+parties|sauf convention contraire|a defaut de convention|sauf stipulation contraire",
         Options, Timeout);
 
     private static readonly Regex ConditionPattern = new(

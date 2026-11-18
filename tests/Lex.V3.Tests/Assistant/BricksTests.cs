@@ -343,7 +343,7 @@ public sealed class BricksTests
         Assert.AreEqual((30, 16), (counts["cooccurrence"].Lines, counts["cooccurrence"].Articles), "the concept and the actor on one line");
         Assert.IsFalse(counts["embeddings"].Ran);
         Assert.AreEqual("off_by_default", counts["embeddings"].SkippedBecause);
-        Assert.IsFalse(result.ClearLead, "a rule comes with its cases: no fast route");
+        Assert.IsTrue(result.Candidates[0].Score - result.Candidates[1].Score >= 1.0, "it leads: the line that sends to 'the cases provided by the law' is the general rule by its own words");
         var articles = result.Shortlist(14).Select(static candidate => candidate.Article.Id).Distinct().ToArray();
         foreach (var expected in new[] { "art_39", "art_22", "art_41", "art_13", "art_34" })
         {

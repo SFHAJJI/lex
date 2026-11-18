@@ -25,7 +25,7 @@
   "answer_shapes": ["single", "rule_with_cases", "several_by_scope", "list", "none"],
   "answer_types": [
     { "id": "definition", "shape": "single", "context": "line",
-      "cues_fr": ["c'est quoi", "c est quoi", "qu'est-ce qu", "qu'est ce qu", "qu est ce qu", "que signifie", "que veut dire", "que désigne", "qu'entend-on par", "on entend par", "définition", "définir", "definition", "ça veut dire quoi", "veut dire quoi", "qui est", "qui sont"],
+      "cues_fr": ["c'est quoi", "c est quoi", "qu'est-ce qu", "qu'est ce qu", "qu est ce qu", "que signifie", "que veut dire", "que désigne", "qu'entend-on par", "on entend par", "définition", "définir", "definition", "ça veut dire quoi", "veut dire quoi", "qui est", "qui sont", "que sont", "ce que sont", "ce qu'est", "qu'appelle-t-on"],
       "cues_en": ["what is", "what are", "what does", "definition", "define", "meaning of", "who is"] },
     { "id": "duration", "shape": "several_by_scope", "context": "paragraph",
       "cues_fr": ["quel délai", "quel est le délai", "quels délais", "dans quel délai", "sous quel délai", "combien de temps", "combien de jours", "combien de mois", "combien d'années", "quelle durée", "quelle est la durée", "en combien de temps", "délai de", "délai pour", "au bout de combien"],
@@ -43,9 +43,11 @@
       "cues_fr": ["quel article", "quels articles", "quelle loi", "quel texte", "où est-ce écrit", "où est écrit", "quelle disposition", "base légale"],
       "cues_en": ["which article", "which law", "which provision", "legal basis", "where is it written"] },
     { "id": "rule", "shape": "rule_with_cases", "context": "paragraph",
-      "cues_fr": ["peut-il", "peut-elle", "peut-on", "peuvent-ils", "peuvent-elles", "a-t-il le droit", "a-t-elle le droit", "a le droit", "ont le droit", "est-il possible", "est-ce possible", "possible de", "doit-il", "doit-elle", "doit-on", "doivent-ils", "faut-il", "est-il obligé", "est-il tenu", "obligatoire", "est-ce que", "peut", "peuvent", "doit", "doivent", "comment"],
-      "cues_en": ["can ", "may ", "is it possible", "does the", "do the", "must ", "has to", "have to", "is allowed", "is entitled", "is required", "how "] },
-    { "id": "text", "shape": "single", "context": "paragraph", "cues_fr": [], "cues_en": [] }
+      "cues_fr": ["peut-il", "peut-elle", "peut-on", "peuvent-ils", "peuvent-elles", "a-t-il le droit", "a-t-elle le droit", "a le droit", "ont le droit", "est-il possible", "est-ce possible", "possible de", "doit-il", "doit-elle", "doit-on", "doivent-ils", "faut-il", "est-il obligé", "est-il tenu", "obligatoire", "est-ce que", "peut", "peuvent", "doit", "doivent"],
+      "cues_en": ["can", "may", "is it possible", "does the", "do the", "must", "has to", "have to", "is allowed", "is entitled", "is required"] },
+    { "id": "text", "shape": "single", "context": "paragraph",
+      "cues_fr": ["comment", "de quelle manière", "de quelle façon", "sous quelle forme", "que prévoit", "que dit"],
+      "cues_en": ["how", "in what way", "what does the law say"] }
   ],
   "models": [
     { "step": "question", "model": "gpt-4.1-mini", "default": true },
@@ -133,7 +135,7 @@
     { "id": "non_paiement_prime", "kind": "concept", "label_fr": "défaut de paiement de la prime", "label_en": "non-payment of the premium",
       "definition": "what follows when the premium is not paid at its due date: formal notice, suspension of cover, termination",
       "home_acts": ["loi-1997-07-27-n10"], "usual_answer": ["rule", "duration"], "value_required": false, "complete": true,
-      "law_fr": ["défaut de paiement", "non-paiement", "mise en demeure", "suspension de la garantie", "remise en vigueur"],
+      "law_fr": ["défaut de paiement de la prime", "défaut de paiement d'une prime", "non-paiement de la prime", "défaut de paiement", "non-paiement", "mise en demeure", "suspension de la garantie", "remise en vigueur"],
       "reader_fr": ["impayé", "impayée", "prime impayée", "retard de paiement", "ne paie pas", "ne paye pas", "pas payé", "pas payer", "arrêter de payer", "ne plus payer", "oublié de payer"],
       "reader_en": ["non-payment", "unpaid premium", "fails to pay", "does not pay", "stop paying", "late payment"],
       "answer_fr": ["mise en demeure", "suspension", "trente jours", "dix jours"] },

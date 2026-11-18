@@ -113,7 +113,7 @@ public static class V4Bricks
             return new V4PlanOutcome(Write(input, row, notHeld, null, null, null, "today", ruleQuestion: false, proposed: "point", asked: string.Empty), 0, "route:not_held");
         }
 
-        var asksDefinition = row.Kinds.Any(static kind => kind.Kind == "definition");
+        var asksDefinition = row.Kinds.Any(static kind => kind.Kind == "definition") || (row.Kinds.Count == 0 && row.Concepts.Count == 0 && row.Words.Count <= 5);
         if (row.Concepts.Count == 0 && row.Acts.Count == 0 && !asksDefinition)
         {
             // A role alone ("l'assuré ...") names half the lines of the act: without a concept there is nothing to filter on.
@@ -146,7 +146,7 @@ public static class V4Bricks
                 continue;
             }
 
-            var defined = V4Retrieval.DefinedTerms(at.Tables, row.Words);
+            var defined = TermsOf(at.Tables, row, dictionary);
             if (scope.Tables is null || (asksDefinition && terms.Count == 0 && defined.Count > 0))
             {
                 scope = at;
@@ -170,7 +170,7 @@ public static class V4Bricks
         }
 
         var tables = scope.Tables;
-        if (row.Concepts.Count == 0 && row.Roles.Count == 0 && terms.Count == 0)
+        if (row.Concepts.Count == 0 && row.Roles.Count == 0 && !(asksDefinition && terms.Count > 0))
         {
             // An act is named, or a definition is asked, and nothing of the tables matched: Lex's own search answers.
             return new V4PlanOutcome(null, 0, "nothing_of_the_dictionary");
@@ -197,11 +197,13 @@ public static class V4Bricks
         {
             var concepts = row.Concepts.Count > 0 ? row.Concepts.Select(static read => read.Concept).ToList() : row.Roles.Select(static read => read.Concept).ToList();
             var role = row.Concepts.Count > 0 ? row.Roles.FirstOrDefault()?.Concept : null;
-            var brief = new V4Brief(concepts, role, decision.Kind, row.Concepts.Concat(row.Roles).Select(static read => read.Keyword).ToList());
+            var brief = new V4Brief(concepts, role, decision.Kind, row.Concepts.Concat(row.Roles).Select(static read => read.Keyword).ToList(),
+                row.Unmatched.Select(unmatched => row.Folded[unmatched.Start..unmatched.End]).ToList());
             retrieval = V4Retrieval.Run(brief, tables, dictionary);
             draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", retrieval.Candidates.Count == 0 ? "no_candidate" : "candidates_found"));
             AssembleByCode(draft, decision, retrieval, row, dictionary);
             var leftToContract = draft.Absence == "no_answer_in_lines" && draft.Caveats.Contains("left_to_contract");
+            var leftToParties = draft.Items.FirstOrDefault(static item => item.Role == "passage" && item.Value is null && V4Patterns.LeftToContract(item.First.Folded));
             if (decision.Route != "own_case" && model is not null && retrieval.Candidates.Count > 0 && !leftToContract && !(retrieval.ClearLead && decision.Kind is "duration" or "date" or "amount"))
             {
                 // Not reached when the law itself leaves the value to the contract ("dans le délai fixé par le contrat"): code
@@ -212,6 +214,21 @@ public static class V4Bricks
             {
                 // Route 5: one fact, clearly found. The margin ends the route here, with no model.
                 draft.Route = "fact";
+            }
+
+            // The line that leaves the matter to the parties stays first, whatever a model pointed at after it.
+            if (leftToParties is not null && draft.AnswerKind is "duration" or "amount" && !draft.Items.Any(item => item.First.Id == leftToParties.First.Id))
+            {
+                draft.Items.Insert(0, leftToParties);
+                if (draft.Items.Count > V3AssistantPipeline.MaximumQuotes)
+                {
+                    draft.Items.RemoveAt(draft.Items.Count - 1);
+                }
+
+                if (!draft.Caveats.Contains("left_to_contract"))
+                {
+                    draft.Caveats.Add("left_to_contract");
+                }
             }
 
             // A word that qualifies what is asked (it comes after the concept: "résilier ... de façon unilatérale") and that
@@ -249,13 +266,41 @@ public static class V4Bricks
 
     // ---- Route 4: a term the law defines ----------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The terms the act defines that the question names: by the question's own words outside the acts it names, and, for a
+    /// role or a concept the reader named by another word ("victime", "souscripteur"), by the law's word for it.
+    /// </summary>
+    private static List<(V4Definition Definition, int Start, int End)> TermsOf(V4ActTables tables, V4QuestionRow row, V4Dictionary dictionary)
+    {
+        var words = row.Words.Where(word => !row.Acts.Any(act => word.Start >= act.Start && word.End <= act.End)).ToList();
+        var terms = V4Retrieval.DefinedTerms(tables, words);
+        foreach (var read in row.Roles.Concat(row.Concepts))
+        {
+            if (terms.Any(term => term.Start < read.End && read.Start < term.End))
+            {
+                continue;
+            }
+
+            var concept = dictionary.Concept(read.Concept)!;
+            foreach (var keyword in new[] { concept.LabelFr }.Concat(dictionary.KeywordsOf(concept.Id, "law").Select(static keyword => keyword.Keyword)))
+            {
+                var keywordWords = V4Text.Words(V4Text.Fold(keyword));
+                var whole = V4Retrieval.DefinedTerms(tables, keywordWords).FirstOrDefault(term => V4Text.Words(term.Definition.TermFolded).Count == keywordWords.Count);
+                if (whole.Definition is not null)
+                {
+                    terms.Add((whole.Definition, read.Start, read.End));
+                    break;
+                }
+            }
+        }
+
+        return terms.OrderBy(static term => term.Start).ThenByDescending(static term => term.End - term.Start).ToList();
+    }
+
     private static void Define(Draft draft, V4ActTables tables, V4QuestionRow row, List<(V4Definition Definition, int Start, int End)> terms, V4Dictionary dictionary)
     {
-        // The term a role or a concept of the question names, else the longest term found.
-        var reads = row.Roles.Concat(row.Concepts).ToList();
-        var chosen = terms.OrderByDescending(term => reads.Any(read => read.Start < term.End && term.Start < read.End))
-            .ThenByDescending(static term => term.End - term.Start)
-            .First().Definition;
+        // The first term the question names: what stands right after "c'est quoi" is what is asked.
+        var chosen = terms[0].Definition;
         var article = tables.Article(chosen.Article)!;
         var first = tables.Lines[article.FirstLine + chosen.FirstLine];
         var last = tables.Lines[article.FirstLine + chosen.LastLine];
@@ -362,6 +407,16 @@ public static class V4Bricks
             var top = valued.Where(candidate => candidate.Score >= valued[0].Score - 0.5).Take(3).ToList();
             draft.AnswerKind = kind;
             draft.Found = true;
+
+            // The line that leaves the matter to the parties ("La durée du contrat est fixée par les parties.") comes first:
+            // it is why the values that follow are bounds and not the answer.
+            if (shortlist.FirstOrDefault(static candidate => candidate.Detectors.Contains("article_lead") && candidate.Values.Count == 0 && V4Patterns.LeftToContract(candidate.Line.Folded)) is { } left)
+            {
+                draft.Items.Add(new Item(left.Line, left.Line, "passage", null));
+                draft.Caveats.Add("left_to_contract");
+                top = top.Take(2).ToList();
+            }
+
             foreach (var candidate in top)
             {
                 draft.Items.Add(new Item(candidate.Line, candidate.Line, "value", candidate.Values.Count == 1 ? candidate.Values[0] : null));
@@ -379,7 +434,10 @@ public static class V4Bricks
         if (kind is "rule")
         {
             var lead = shortlist[0];
-            var sure = lead.Detectors.Contains("type_pattern") && (lead.Detectors.Contains("general_rule") || lead.Detectors.Contains("direct_form")) &&
+            // Code is sure of the rule's line when the line says so itself: it sends to "the cases provided by the law", the
+            // party asked about is the subject of its verb, or it is the first paragraph under the heading that names the
+            // concept; and it leads.
+            var sure = (lead.Detectors.Contains("general_rule") || lead.Detectors.Contains("direct_form") || lead.Detectors.Contains("article_lead")) &&
                 (shortlist.Count == 1 || lead.Score - shortlist[1].Score >= 1.0);
             draft.AnswerKind = sure ? "rule" : "candidates";
             draft.Found = true;
@@ -484,7 +542,7 @@ public static class V4Bricks
         // lines that hold the value asked, well ahead of the others, go straight to the extraction.
         var pinnedRule = kind == "rule" && draft.AnswerKind == "rule" ? draft.Items.FirstOrDefault(static item => item.Role == "rule")?.First : null;
         var valuedLead = kind is "duration" or "amount" && draft.AnswerKind == kind && draft.Items.Count is >= 1 and <= 3
-            ? shortlist.Where(candidate => draft.Items.Any(item => item.First.Id == candidate.Line.Id)).ToList()
+            ? shortlist.Where(candidate => draft.Items.Any(item => item.Role == "value" && item.First.Id == candidate.Line.Id)).ToList()
             : [];
         var clearValues = valuedLead.Count > 0 &&
             shortlist.Where(candidate => !valuedLead.Contains(candidate)).All(candidate => candidate.Score <= valuedLead.Min(static lead => lead.Score) - V4Retrieval.Margin);

@@ -305,7 +305,12 @@ public static class V4Boundary
         var folded = V4Text.Fold(text[start..end]);
         var words = V4Text.Words(folded);
         var dictionary = V4Dictionary.Insurance;
-        var firstCue = cues.Min(static cue => cue.Start) - start;
-        return dictionary.Lookup(words).Any(hit => dictionary.Concept(hit.Keyword.Concept)!.Kind == "role" && hit.Start < firstCue);
+        var first = cues.OrderBy(static cue => cue.Start).First();
+        var cueStart = first.Start - start;
+        var cueEnd = first.End - start;
+
+        // The role is the subject of the cue's verb: named before it ("L'assureur peut-il ..."), or right after an inverted
+        // one ("Que doit faire le preneur d'assurance ...").
+        return dictionary.Lookup(words).Any(hit => dictionary.Concept(hit.Keyword.Concept)!.Kind == "role" && (hit.Start < cueStart || (hit.Start >= cueEnd && hit.Start - cueEnd <= 16)));
     }
 }

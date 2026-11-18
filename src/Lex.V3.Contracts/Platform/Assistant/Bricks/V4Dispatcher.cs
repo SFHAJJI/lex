@@ -83,6 +83,12 @@ public static class V4Dispatcher
             return "definition";
         }
 
+        // A term alone ("personne lésée ?", "note de couverture") asks what it is, when the act defines it.
+        if (row.Kinds.Count == 0 && termDefined && row.Concepts.Count == 0 && row.Words.Count <= 5)
+        {
+            return "definition";
+        }
+
         return row.Concepts.Count > 0 ? dictionary.Concept(row.Concepts[0].Concept)!.UsualAnswer.FirstOrDefault() ?? "text" : "text";
     }
 

@@ -633,8 +633,10 @@ public sealed class V3AssistantMountTests
         Assert.AreEqual(2, planner.Inputs.Count);
         Assert.IsFalse(planner.Inputs[0].MaskedQuestion.Contains('@'), "the e-mail address is masked before any planner sees it");
         Assert.AreEqual(question.Length, planner.Inputs[0].MaskedQuestion.Length, "the mask keeps every offset");
+        // Today (V4, 2026-11-18) is the day in Luxembourg at the request, the same for every asker and printed in the answer:
+        // the bricks read the version of an act in force on it. It says nothing of who asks.
         CollectionAssert.AreEquivalent(
-            new[] { "AnswerLocale", "MaskedQuestion", "Operations", "References", "SearchLanguages" },
+            new[] { "AnswerLocale", "MaskedQuestion", "Operations", "References", "SearchLanguages", "Today" },
             typeof(V3PlannerInput).GetProperties().Select(static property => property.Name).ToArray(),
             "the planner's input holds no address, user agent, cookie or history");
     }
