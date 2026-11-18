@@ -18,6 +18,8 @@ import { askV3 } from '../scripts/v3-client.mjs';
 import { DOCK_EVENT, OPEN_EVENT, textHref } from '../scripts/text-address.mjs';
 import {
   answerDate,
+  bricksBody,
+  bricksOf,
   builtFoot,
   clarifyCandidates,
   dockExamples,
@@ -203,6 +205,52 @@ function Cite({ number, facts, copy }) {
   return fill(copy.dockCiteNoTitle, { number });
 }
 
+/**
+ * A bricks answer's body (V4): the server's sentences and the law's lines, in the answer's own order. The first line quoted
+ * is marked and named with its text's title; each other line is named by its article and heading, with a way to the whole
+ * article; the further articles are links to the text page.
+ */
+function BricksBody({ turn, copy, locale, onText }) {
+  const body = bricksBody(turn.dossier);
+  const lead = body.find((entry) => entry.type === 'quote') ?? null;
+  const opening = answerOpening(turn, locale);
+  return body.map((entry, at) => {
+    if (entry.type === 'line') return <p className="lx-dock-line" key={at}>{entry.text}</p>;
+    if (entry.type === 'value') return <p className="lx-dock-value" key={at}>{entry.text}</p>;
+    if (entry.type === 'remark') return <p className="lx-dock-remark" key={at}>{entry.text}</p>;
+    if (entry.type === 'more') {
+      return (
+        <p className="lx-dock-more" key={at}>
+          {entry.articles.map((article) => {
+            const href = textHref({ identifier: article.identifier, date: article.date, article: article.article }, locale);
+            const label = fill(copy.dockChoiceBare, { number: articleNumberOf(article.article) });
+            return href === null ? <span className="lx-dock-chip" key={article.article}>{label}</span> : <a className="lx-dock-chip" href={href} key={article.article}>{label}</a>;
+          })}
+        </p>
+      );
+    }
+    const quote = entry.quote;
+    const first = entry === lead;
+    const number = articleNumberOf(quote.anchor ?? '');
+    const href = textHref({ identifier: quote.work, date: entry.date, article: quote.anchor }, locale);
+    const lines = entry.lines.map((line, index) => <Fragment key={index}>{index === 0 ? null : <br />}{line}</Fragment>);
+    return (
+      <div className="lx-dock-extract" key={at} data-dock-extract={quote.anchor}>
+        <p className="lx-dock-quote" lang={tagOf(quote.language)} data-text-sha256={quote.article_text_sha256}>
+          {QUOTE_OPEN}{first ? <mark className="lx-dock-mark">{lines}</mark> : lines}{QUOTE_CLOSE}
+        </p>
+        <p className="lx-dock-cite">
+          {first
+            ? <Cite number={number} facts={turn.facts} copy={copy} />
+            : entry.heading === null ? fill(copy.dockCiteNoTitle, { number }) : `${fill(copy.dockChoice, { number, heading: entry.heading })}.`}
+          {' '}
+          {first ? <WholeArticle opening={opening} onText={onText} copy={copy} locale={locale} /> : href === null ? null : <a className="lx-dock-link" href={href}>{copy.dockWholeLink}</a>}
+        </p>
+      </div>
+    );
+  });
+}
+
 /** The answer card: the verdict label, its notes, the first sentence of the quote, the article by name, the strip. */
 function AnswerCard({ turn, copy, locale, onText, initialNotes = false }) {
   const [notesOpen, setNotesOpen] = useState(initialNotes);
@@ -232,16 +280,20 @@ function AnswerCard({ turn, copy, locale, onText, initialNotes = false }) {
           </ul>
         </div>
       )}
-      {first === null ? null : (
-        <p className="lx-dock-quote" lang={tagOf(quote.language)} data-text-sha256={quote.article_text_sha256}>
-          {QUOTE_OPEN}<mark className="lx-dock-mark">{first.sentence}</mark>{first.more ? ' […]' : ''}{QUOTE_CLOSE}
-        </p>
+      {bricksOf(turn.dossier) !== null ? <BricksBody turn={turn} copy={copy} locale={locale} onText={onText} /> : (
+        <>
+          {first === null ? null : (
+            <p className="lx-dock-quote" lang={tagOf(quote.language)} data-text-sha256={quote.article_text_sha256}>
+              {QUOTE_OPEN}<mark className="lx-dock-mark">{first.sentence}</mark>{first.more ? ' […]' : ''}{QUOTE_CLOSE}
+            </p>
+          )}
+          <p className="lx-dock-cite">
+            <Cite number={articleNumberOf(quote.anchor ?? '')} facts={turn.facts} copy={copy} />
+            {' '}
+            <WholeArticle opening={opening} onText={onText} copy={copy} locale={locale} />
+          </p>
+        </>
       )}
-      <p className="lx-dock-cite">
-        <Cite number={articleNumberOf(quote.anchor ?? '')} facts={turn.facts} copy={copy} />
-        {' '}
-        <WholeArticle opening={opening} onText={onText} copy={copy} locale={locale} />
-      </p>
       <Strip strip={turn.strip} locale={locale} />
     </article>
   );
@@ -273,7 +325,7 @@ function Built({ turn, copy, locale, initialPlan = false }) {
         ))}
       </ol>
       <p className="lx-dock-built-note">
-        {copy.dockPlanNote}{' '}
+        {bricksOf(dossier) === null ? copy.dockPlanNote : rows.some((row) => row.model) ? copy.dockBricksNote : copy.dockBricksNoModel}{' '}
         <button type="button" className="lx-dock-link" aria-expanded={planOpen} aria-controls={planId} onClick={() => setPlanOpen(!planOpen)} data-dock-see-plan="">
           {planOpen ? copy.dockHidePlan : copy.dockSeePlan}
         </button>
@@ -367,6 +419,17 @@ function Turn({ turn, copy, locale, onText, onAsk, onChoose, onFindByName, onFin
       <>
         {bubble}
         <AnswerCard turn={turn} copy={copy} locale={locale} onText={onText} initialNotes={initialNotes} />
+        <Built turn={turn} copy={copy} locale={locale} initialPlan={initialPlan} />
+      </>
+    );
+  }
+  if (turn.kind === 'said') {
+    return (
+      <>
+        {bubble}
+        <article className="lx-dock-card lx-dock-answer" data-dock-card="said" aria-label={copy.dockSaidLabel} lang={bubbleLang}>
+          <BricksBody turn={turn} copy={copy} locale={locale} onText={onText} />
+        </article>
         <Built turn={turn} copy={copy} locale={locale} initialPlan={initialPlan} />
       </>
     );

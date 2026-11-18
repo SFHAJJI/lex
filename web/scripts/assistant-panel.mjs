@@ -199,6 +199,42 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockComposerSome: '{count} quotes identical to the text',
     dockComposerNone: 'nothing quoted, every sentence from a template',
     dockPlanNote: 'The model plans; it never writes the answer.',
+    dockStageQuestion: 'Question',
+    dockStageRoute: 'Route',
+    dockStageRetrieval: 'Retrieval',
+    dockStageArbiter: 'Ranking',
+    dockStageExtraction: 'Extraction',
+    dockStageChecks: 'Checks',
+    dockQuestionNone: 'no term of the dictionary read',
+    dockQuestionOne: '1 term of the dictionary read; looking for {kind}',
+    dockQuestionSome: '{count} terms of the dictionary read; looking for {kind}',
+    dockKindDefinition: 'a definition',
+    dockKindRule: 'a rule',
+    dockKindDuration: 'a period',
+    dockKindDate: 'a date',
+    dockKindAmount: 'an amount',
+    dockKindList: 'a list',
+    dockKindReference: 'a provision',
+    dockKindText: 'passages',
+    dockRouteDefinition: 'a term the law defines: its line, no model',
+    dockRouteFact: 'one line clearly leads: no model',
+    dockRouteRule: 'a rule and its cases',
+    dockRouteList: 'a list: the whole text swept',
+    dockRouteOpen: 'passages found, then read',
+    dockRouteAbsence: 'nothing to quote: the sweep is shown',
+    dockRouteNotHeld: 'a text Lex does not hold',
+    dockRouteGreeting: 'not a question on the law',
+    dockRouteOwnCase: 'a personal case: refused, the law beside it',
+    dockRetrievalFound: 'the term is on {lines} lines, in {articles} articles; {kept} kept',
+    dockRetrievalNone: 'no line of the text holds the term',
+    dockRetrievalLine: 'the defining line, by its place in the text',
+    dockRetrievalSkipped: 'no text read',
+    dockArbiterLine: 'main: {primary}; supporting: {supporting}; set aside: {others}',
+    dockExtractionLine: 'lines pointed at: {count}, each checked in the text',
+    dockChecksLine: 'quotes identical to the text: {count}',
+    dockBricksNote: 'A model may rank passages and point at lines; it never writes the answer.',
+    dockBricksNoModel: 'No AI model was asked for this answer.',
+    dockSaidLabel: 'What Lex found',
     dockSeePlan: 'See the plan',
     dockHidePlan: 'Hide the plan',
     dockPlanHeading: 'The plan, as returned',
@@ -369,6 +405,42 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockComposerSome: '{count} citations identiques au texte',
     dockComposerNone: 'rien de cité, chaque phrase tirée d’une formule fixe',
     dockPlanNote: 'Le modèle planifie ; il n’écrit jamais la réponse.',
+    dockStageQuestion: 'Question',
+    dockStageRoute: 'Aiguillage',
+    dockStageRetrieval: 'Recherche',
+    dockStageArbiter: 'Classement',
+    dockStageExtraction: 'Extraction',
+    dockStageChecks: 'Contrôles',
+    dockQuestionNone: 'aucun terme du dictionnaire reconnu',
+    dockQuestionOne: '1 terme du dictionnaire reconnu\u00A0; réponse cherchée\u00A0: {kind}',
+    dockQuestionSome: '{count} termes du dictionnaire reconnus\u00A0; réponse cherchée\u00A0: {kind}',
+    dockKindDefinition: 'une définition',
+    dockKindRule: 'une règle',
+    dockKindDuration: 'un délai',
+    dockKindDate: 'une date',
+    dockKindAmount: 'un montant',
+    dockKindList: 'une liste',
+    dockKindReference: 'une disposition',
+    dockKindText: 'des passages',
+    dockRouteDefinition: 'terme défini par la loi\u00A0: sa ligne, sans modèle',
+    dockRouteFact: 'une ligne se détache nettement\u00A0: sans modèle',
+    dockRouteRule: 'une règle et ses cas',
+    dockRouteList: 'une liste\u00A0: tout le texte parcouru',
+    dockRouteOpen: 'passages trouvés, puis lus',
+    dockRouteAbsence: 'rien à citer\u00A0: le relevé est montré',
+    dockRouteNotHeld: 'un texte que Lex ne détient pas',
+    dockRouteGreeting: 'pas une question sur le droit',
+    dockRouteOwnCase: 'un cas personnel\u00A0: refusé, la loi à côté',
+    dockRetrievalFound: 'le terme figure sur {lines} lignes, dans {articles} articles\u00A0; {kept} retenues',
+    dockRetrievalNone: 'aucune ligne du texte ne contient le terme',
+    dockRetrievalLine: 'la ligne de définition, par sa place dans le texte',
+    dockRetrievalSkipped: 'aucun texte lu',
+    dockArbiterLine: 'principaux\u00A0: {primary}\u00A0; complémentaires\u00A0: {supporting}\u00A0; écartés\u00A0: {others}',
+    dockExtractionLine: 'lignes désignées\u00A0: {count}, chacune vérifiée dans le texte',
+    dockChecksLine: 'citations identiques au texte\u00A0: {count}',
+    dockBricksNote: 'Un modèle peut classer des passages et désigner des lignes\u00A0; il n’écrit jamais la réponse.',
+    dockBricksNoModel: 'Aucun modèle d’IA n’a été interrogé pour cette réponse.',
+    dockSaidLabel: 'Ce que Lex a trouvé',
     dockSeePlan: 'Voir le plan',
     dockHidePlan: 'Masquer le plan',
     dockPlanHeading: 'Le plan, tel que renvoyé',
@@ -671,9 +743,70 @@ export function dockTurnOf(asked, locale) {
 
 /** The kind of a checked answer: clarify, the advice boundary (a refuse), an answer when it quotes the law, else not found. */
 export function dossierKind(view) {
-  if (view.verdict === 'clarify') return 'clarify';
   if (view.verdict === 'refuse') return 'advice';
-  return view.parts.some((part) => part.blocks.some((block) => block.kind === 'quote')) ? 'answer' : 'notfound';
+  const quotes = view.parts.some((part) => part.blocks.some((block) => block.kind === 'quote'));
+  // A bricks answer (plan /2) that quotes nothing still says something in the server's own sentences (a sweep that proves
+  // an absence, a text Lex does not hold, a greeting): the dock shows those sentences, kind `said`.
+  if (isObject(view.trace?.plan?.bricks)) return quotes ? 'answer' : 'said';
+  if (view.verdict === 'clarify') return 'clarify';
+  return quotes ? 'answer' : 'notfound';
+}
+
+/** The bricks record of an answer (its trace's plan /2), or null for an answer the planner model planned. */
+export function bricksOf(dossier) {
+  const bricks = dossier?.trace?.plan?.bricks;
+  return isObject(bricks) ? bricks : null;
+}
+
+/** A quotation's lines: its text cut where a line of the law starts (`breaks`), each trimmed; one line when it has none. */
+export function quoteLines(quote) {
+  const text = typeof quote?.text === 'string' ? quote.text : '';
+  const breaks = Array.isArray(quote?.breaks) ? quote.breaks.filter((at) => Number.isInteger(at) && at > 0 && at < text.length) : [];
+  const lines = [];
+  let from = 0;
+  for (const at of [...breaks, text.length]) {
+    const line = text.slice(from, at).trim();
+    if (line.length > 0) lines.push(line);
+    from = at;
+  }
+  return Object.freeze(lines);
+}
+
+/**
+ * What a bricks answer says, in its own order, for the dock to draw: `line` (a sentence that introduces or concludes),
+ * `quote` (a line of the law, with its article's heading and date as its heading sentence carries them), `value` (the
+ * words written on the quoted line), `remark` (a caveat, a note on the reader's words, an official source) and `more`
+ * (further articles to read). Every text is the server's own sentence or the law's own words; nothing is composed here.
+ */
+export function bricksBody(dossier) {
+  const body = [];
+  let heading = null;
+  for (const block of (dossier?.parts ?? []).flatMap((part) => part.blocks ?? [])) {
+    if (block?.kind === 'claim') {
+      const id = String(block.template_id ?? '');
+      if (id === 'law.extract_heading' || id === 'law.quote_heading') {
+        heading = block;
+      } else if (id === 'answer.value_words') {
+        body.push(Object.freeze({ type: 'value', text: block.text }));
+      } else if (id.startsWith('caveat.') || id.startsWith('note.') || id === 'law.official_source' && heading === null && !body.some((entry) => entry.type === 'quote')) {
+        body.push(Object.freeze({ type: 'remark', text: block.text }));
+      } else if (!id.startsWith('law.') && !id.startsWith('boundary.')) {
+        body.push(Object.freeze({ type: 'line', text: block.text, template: id }));
+      }
+    } else if (block?.kind === 'quote') {
+      const fact = (name) => heading?.facts?.find((candidate) => candidate?.name === name)?.value ?? null;
+      body.push(Object.freeze({ type: 'quote', quote: block, lines: quoteLines(block), heading: fact('heading'), date: fact('date') }));
+      heading = null;
+    } else if (block?.kind === 'action' && block.operation_id === 'evidence_bundle' && typeof block.parameters?.article === 'string') {
+      const article = Object.freeze({ identifier: block.parameters.identifier, article: block.parameters.article, date: block.parameters.date ?? null });
+      const last = body.at(-1);
+      if (last?.type === 'more') last.articles.push(article);
+      else body.push({ type: 'more', articles: [article] });
+    } else if (block?.kind === 'handoff' && typeof block.claim?.text === 'string') {
+      body.push(Object.freeze({ type: 'remark', text: block.claim.text }));
+    }
+  }
+  return Object.freeze(body);
 }
 
 /** The quotation the answer card shows: the first in the interface's held language, else the first. Null when none. */
@@ -756,6 +889,8 @@ function executionLine(trace, copy) {
 export function stageRows(dossier, locale) {
   const copy = panelCopy(locale);
   const trace = dossier?.trace ?? {};
+  const bricks = bricksOf(dossier);
+  if (bricks !== null) return bricksStageRows(dossier, bricks, copy);
   const masked = maskedCount(trace.question ?? '');
   const quotes = Number.isInteger(dossier?.gates?.quotes)
     ? dossier.gates.quotes
@@ -769,6 +904,44 @@ export function stageRows(dossier, locale) {
     Object.freeze({ key: 'execution', name: copy.dockStageExecution, line: executionLine(trace, copy), model: false }),
     Object.freeze({ key: 'composer', name: copy.dockStageComposer, line: composer, model: false }),
   ]);
+}
+
+/**
+ * The stages of a bricks answer (V4), each read from the bricks record in the answer's trace: masking, the question's row,
+ * the route code chose, retrieval, then the two model steps only when a model was asked, and the checks. A stage is tagged
+ * `model` only when a model call is recorded for it.
+ */
+function bricksStageRows(dossier, bricks, copy) {
+  const masked = maskedCount(dossier?.trace?.question ?? '');
+  const masking = masked === 0 ? copy.dockMaskNone : masked === 1 ? copy.dockMaskOne : fill(copy.dockMaskSome, { count: masked });
+  const kinds = { definition: copy.dockKindDefinition, rule: copy.dockKindRule, duration: copy.dockKindDuration, date: copy.dockKindDate, amount: copy.dockKindAmount, list: copy.dockKindList, reference: copy.dockKindReference, text: copy.dockKindText };
+  const terms = (Array.isArray(bricks.concepts) ? bricks.concepts.length : 0) + (Array.isArray(bricks.roles) ? bricks.roles.length : 0);
+  const kind = kinds[bricks.kind] ?? copy.dockKindText;
+  const question = terms === 0 ? copy.dockQuestionNone : terms === 1 ? fill(copy.dockQuestionOne, { kind }) : fill(copy.dockQuestionSome, { count: terms, kind });
+  const routes = { definition: copy.dockRouteDefinition, fact: copy.dockRouteFact, rule: copy.dockRouteRule, list: copy.dockRouteList, open: copy.dockRouteOpen, absence: copy.dockRouteAbsence, not_held: copy.dockRouteNotHeld, greeting: copy.dockRouteGreeting, own_case: copy.dockRouteOwnCase };
+  const found = (Array.isArray(bricks.detectors) ? bricks.detectors : []).find((detector) => detector?.id === 'keyword');
+  const candidates = Array.isArray(bricks.candidates) ? bricks.candidates : [];
+  const retrieval = bricks.route === 'definition' ? copy.dockRetrievalLine
+    : typeof bricks.work !== 'string' || !Number.isInteger(bricks.lines) ? copy.dockRetrievalSkipped
+    : found === undefined || found.lines === 0 ? copy.dockRetrievalNone
+    : fill(copy.dockRetrievalFound, { lines: found.lines, articles: found.articles, kept: candidates.length });
+  const calls = (Array.isArray(bricks.model_calls) ? bricks.model_calls : []).map((call) => call?.step);
+  const quotes = Number.isInteger(dossier?.gates?.quotes) ? dossier.gates.quotes : 0;
+  const rows = [
+    { key: 'masking', name: copy.dockStageMasking, line: masking, model: false },
+    { key: 'question', name: copy.dockStageQuestion, line: question, model: calls.includes('question') },
+    { key: 'route', name: copy.dockStageRoute, line: routes[bricks.route] ?? copy.dockRouteOpen, model: false },
+    { key: 'retrieval', name: copy.dockStageRetrieval, line: retrieval, model: false },
+  ];
+  if (calls.includes('arbiter')) {
+    const count = (role) => candidates.filter((candidate) => candidate?.role === role).length;
+    rows.push({ key: 'arbiter', name: copy.dockStageArbiter, line: fill(copy.dockArbiterLine, { primary: count('primary'), supporting: count('supporting'), others: count('tangential') + count('discarded') }), model: true });
+  }
+  if (calls.includes('extraction')) {
+    rows.push({ key: 'extraction', name: copy.dockStageExtraction, line: fill(copy.dockExtractionLine, { count: Array.isArray(bricks.answer?.items) ? bricks.answer.items.length : 0 }), model: true });
+  }
+  rows.push({ key: 'checks', name: copy.dockStageChecks, line: quotes === 0 ? copy.dockComposerNone : fill(copy.dockChecksLine, { count: quotes }), model: false });
+  return Object.freeze(rows.map((row) => Object.freeze(row)));
 }
 
 /** A number of seconds or euros as the dock writes it in `locale` (1,6 in French, 1.6 in English). */

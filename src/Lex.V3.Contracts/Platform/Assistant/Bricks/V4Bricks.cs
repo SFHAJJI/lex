@@ -226,7 +226,9 @@ public static class V4Bricks
             var keyword = dictionary.Keyword(read.Keyword)!;
             var written = string.Join(' ', V4Text.Words(row.Folded[read.Start..read.End]).Select(static word => word.Text));
             var law = string.Join(' ', V4Text.Words(V4Text.Fold(dictionary.Concept(read.Concept)!.LabelFr)).Select(static word => word.Text));
-            var lawHasAWord = dictionary.KeywordsOf(read.Concept, "law").Any();
+            // "Le terme du texte est ..." is said only of a label that is itself a word of the text: a concept whose label
+            // groups several ("exclusions, dol et faute") has no one term to name.
+            var lawHasAWord = dictionary.KeywordsOf(read.Concept, "law").Any(candidate => candidate.Keyword == dictionary.Concept(read.Concept)!.LabelFr);
             if (lawHasAWord && written != law &&
                 (keyword.Word == "reader" || (keyword.Word == "law" && !keyword.Pattern && keyword.Keyword == dictionary.Concept(read.Concept)!.LabelFr)))
             {

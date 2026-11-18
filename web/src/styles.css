@@ -3943,6 +3943,16 @@ html[data-layout="v4"] .lx-dock-notes ul { margin: 0; padding: 0 0 0 16px; font-
 html[data-layout="v4"] .lx-dock-quote { margin: 0; font-family: var(--lx-serif); font-size: 18.5px; font-weight: 400; line-height: 1.42; color: var(--lx-ink); }
 html[data-layout="v4"] .lx-dock-mark { background: var(--lx-quote); color: inherit; padding: 1px 0; }
 html[data-layout="v4"] .lx-dock-cite { margin: 0; font-size: 13.5px; line-height: 1.4; }
+/* A bricks answer (V4): the server's sentences, each line of the law quoted with its own cite, the further articles as links. */
+html[data-layout="v4"] .lx-dock-line { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-value { margin: 0; font-size: 14.5px; line-height: 1.45; font-weight: 600; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-remark { margin: 0; font-size: 13px; line-height: 1.45; color: var(--lx-muted); overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-dock-extract { display: flex; flex-direction: column; gap: 5px; }
+html[data-layout="v4"] .lx-dock-extract + .lx-dock-extract { padding-top: 9px; border-top: 1px solid var(--lx-line-soft); }
+html[data-layout="v4"] .lx-dock-extract ~ .lx-dock-extract .lx-dock-quote { font-size: 16px; }
+html[data-layout="v4"] .lx-dock-more { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+html[data-layout="v4"] .lx-dock-chip { padding: 3px 9px; font-size: 13px; line-height: 1.4; color: var(--lx-ink); background: #FFFFFF; border: 1px solid var(--lx-field); border-radius: 999px; text-decoration: none; }
+html[data-layout="v4"] a.lx-dock-chip:hover { border-color: var(--lx-muted); }
 html[data-layout="v4"] .lx-dock-strip { display: flex; align-items: center; gap: 10px; padding-top: 9px; border-top: 1px solid var(--lx-line-soft); font-size: 13px; color: var(--lx-muted); }
 html[data-layout="v4"] .lx-dock-ticks { display: block; flex: 0 0 auto; max-width: 60%; }
 html[data-layout="v4"] .lx-dock-tick { fill: var(--lx-tick); }

@@ -34,10 +34,10 @@ public static class V4Text
 
     private static char FoldRare(char character) => character switch
     {
-        '‘' or '’' or 'ʼ' or '′' => '\'',
-        '‐' or '‑' or '‒' or '–' or '—' or '−' => '-',
-        ' ' or ' ' or ' ' or ' ' or ' ' or '　' => ' ',
-        '“' or '”' or '„' => '"',
+        '\u2018' or '\u2019' or '\u02BC' or '\u2032' => '\'',
+        '\u2010' or '\u2011' or '\u2012' or '\u2013' or '\u2014' or '\u2212' => '-',
+        '\u2009' or '\u200A' or '\u202F' or '\u2002' or '\u2003' or '\u3000' => ' ',
+        '\u201C' or '\u201D' or '\u201E' => '"',
         _ => char.IsWhiteSpace(character) ? ' ' : char.ToLowerInvariant(character),
     };
 
@@ -47,13 +47,13 @@ public static class V4Text
         for (var code = 0; code < table.Length; code++)
         {
             var character = (char)code;
-            if (character is '`' or '´')
+            if (character is '`' or '\u00B4')
             {
                 table[code] = '\'';
                 continue;
             }
 
-            if (char.IsWhiteSpace(character) || character == ' ')
+            if (char.IsWhiteSpace(character) || character == '\u00A0')
             {
                 table[code] = ' ';
                 continue;

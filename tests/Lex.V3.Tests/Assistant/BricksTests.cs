@@ -27,7 +27,7 @@ public sealed class BricksTests
     [TestMethod]
     public void TheMatchingCopyKeepsEveryOffsetAndFoldsOnlyWhatIsCompared()
     {
-        const string text = "L’assureur ne peut RÉSILIER le contrat : « hormis » les cas — prévus.";
+        const string text = "L’assureur ne peut RÉSILIER le contrat\u00A0: «\u202Fhormis\u202F» les cas — prévus.";
         var folded = V4Text.Fold(text);
         Assert.AreEqual(text.Length, folded.Length, "one unit for one unit");
         Assert.AreEqual("l'assureur ne peut resilier le contrat : « hormis » les cas - prevus.", folded);
@@ -520,7 +520,7 @@ public sealed class BricksTests
         var heading = dossier.Blocks.OfType<V3ClaimBlock>().Single(static block => block.Claim.TemplateId == V3AnswerTemplates.LawExtractHeading).Claim;
         Assert.AreEqual("Définitions", heading.Facts.Single(static fact => fact.Kind == V3AnswerSlotKind.LawWords).Value, "the article's own heading, verbatim");
         var note = dossier.Blocks.OfType<V3ClaimBlock>().Single(static block => block.Claim.TemplateId == V3AnswerTemplates.NoteLawTerm).Claim;
-        Assert.AreEqual("Vous avez écrit « personne lésé » ; le terme du texte est « personne lésée ».", note.Text);
+        Assert.AreEqual("Vous avez écrit «\u00A0personne lésé\u00A0»\u00A0; le terme du texte est «\u00A0personne lésée\u00A0».", note.Text);
         Assert.AreEqual(10, dossier.Blocks.OfType<V3ActionBlock>().Count(), "the articles that use the term are one step away");
         CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeNoModel);
         CollectionAssert.DoesNotContain(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeAssembledByModel, "no model planned anything");
@@ -678,7 +678,7 @@ public sealed class BricksTests
         var dossier = Answered(BricksFixture.Ask("Quel est le délai de prescription ?", model));
         Assert.AreEqual("Le délai de prescription de toute action dérivant du contrat d'assurance est de trois ans.", dossier.Quotes.Single().Text);
         var value = dossier.Blocks.OfType<V3ClaimBlock>().Single(static block => block.Claim.TemplateId == V3AnswerTemplates.AnswerValueWords).Claim;
-        Assert.AreEqual("Écrit sur cette ligne : « trois ans ».", value.Text);
+        Assert.AreEqual("Écrit sur cette ligne\u00A0: «\u00A0trois ans\u00A0».", value.Text);
         Assert.AreEqual(V3AnswerSlotKind.LawWords, value.Facts.Single().Kind);
     }
 
@@ -702,8 +702,8 @@ public sealed class BricksTests
         Assert.AreEqual(0, dossier.Quotes.Count());
         Assert.AreEqual(0, executor.Calls.Count, "nothing to read: the sweep is the answer");
         var claims = dossier.Blocks.OfType<V3ClaimBlock>().Select(static block => block.Claim).ToArray();
-        Assert.AreEqual("Lex a parcouru /lu-legilux/loi-1997-07-27-n10 (913 lignes, 147 articles), tel qu’il se lisait le 18 novembre 2026, à la recherche de ces termes :", claims[0].Text);
-        Assert.AreEqual("« franchise » : 0 lignes, dans 0 articles.", claims[1].Text);
+        Assert.AreEqual("Lex a parcouru le texte de /lu-legilux/loi-1997-07-27-n10 (lignes\u00A0: 913\u00A0; articles\u00A0: 147), tel qu’il se lisait le 18 novembre 2026, à la recherche de ces termes\u00A0:", claims[0].Text);
+        Assert.AreEqual("Lignes contenant «\u00A0franchise\u00A0»\u00A0: 0\u00A0; articles concernés\u00A0: 0.", claims[1].Text);
         Assert.AreEqual(V3AnswerTemplates.AbsenceTermsNowhere, claims[^1].TemplateId);
     }
 
@@ -743,7 +743,7 @@ public sealed class BricksTests
         var notHeld = Answered(BricksFixture.Ask("Que prévoit Solvabilité II sur les fonds propres ?"));
         Assert.AreEqual(V3AssistantVerdict.Point, notHeld.Verdict);
         var claim = notHeld.Blocks.OfType<V3ClaimBlock>().First().Claim;
-        Assert.AreEqual("Votre question nomme directive 2009/138/CE (Solvabilité II). Lex ne détient pas encore le texte de cet acte.", claim.Text);
+        Assert.AreEqual("Votre question nomme un acte\u00A0: directive 2009/138/CE (Solvabilité II). Lex ne détient pas encore le texte de cet acte.", claim.Text);
         Assert.IsTrue(notHeld.Blocks.OfType<V3ClaimBlock>().Any(static block => block.Claim.Text.Contains("https://eur-lex.europa.eu/eli/dir/2009/138/oj", StringComparison.Ordinal)));
     }
 

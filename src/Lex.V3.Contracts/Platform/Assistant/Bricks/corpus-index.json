@@ -33,7 +33,7 @@
     { "id": "solvency_ii", "celex": "32009L0138", "name_fr": "directive 2009/138/CE (Solvabilité II)", "name_en": "Directive 2009/138/EC (Solvency II)",
       "official": "https://eur-lex.europa.eu/eli/dir/2009/138/oj",
       "short_names": ["solvabilité ii", "solvabilité 2", "solvency ii", "solvency 2", "directive 2009/138", "2009/138/ce", "2009/138/ec"] },
-    { "id": "idd", "celex": "32016L0097", "name_fr": "directive (UE) 2016/97 sur la distribution d'assurances (DDA)", "name_en": "Directive (EU) 2016/97 on insurance distribution (IDD)",
+    { "id": "idd", "celex": "32016L0097", "name_fr": "directive (UE) 2016/97 sur la distribution d’assurances (DDA)", "name_en": "Directive (EU) 2016/97 on insurance distribution (IDD)",
       "official": "https://eur-lex.europa.eu/eli/dir/2016/97/oj",
       "short_names": ["directive sur la distribution d'assurances", "distribution d'assurances", "insurance distribution directive", "idd", "dda", "directive 2016/97", "2016/97"] },
     { "id": "priips", "celex": "32014R1286", "name_fr": "règlement (UE) n° 1286/2014 (PRIIPs)", "name_en": "Regulation (EU) No 1286/2014 (PRIIPs)",
