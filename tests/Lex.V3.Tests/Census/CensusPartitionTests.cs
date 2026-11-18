@@ -57,6 +57,9 @@ public sealed class CensusPartitionTests
         "Lex.V3.Contracts.Custody.CustodyBounds: stateful static, not a token registry",
         "Lex.V3.Contracts.Platform.LuxembourgCalendar: the EU summer-time rule's arithmetic and the two instants that bound it, not a token registry",
         "Lex.V3.Contracts.Platform.V3EnvelopeJson: stateful static, not a token registry",
+        "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Boundary: stateful static, not a token registry; it holds the compiled patterns of the reader's own case, which BricksTests pins by the questions they read",
+        "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Bricks: constant table, not a vocabulary; the three bounds of the loop",
+        "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Dispatcher: stateful static, not a token registry; it holds two compiled patterns, and the routes it answers are V4PlanRecord's closed list",
         "Lex.V3.Contracts.PreviewContractLimits: constant table, not a vocabulary",
         "Lex.V3.Contracts.PreviewDocumentCanonicalizer: stateful static, not a token registry",
         "Lex.V3.Contracts.Source.Absence.AbsenceKey: stateful static, not a token registry",
@@ -122,14 +125,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            662, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            678, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             286, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            224, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            232, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
-            99, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(54, Declined.Length, "declined");
+            104, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+        Assert.AreEqual(57, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>
