@@ -45,6 +45,50 @@ public static class V4Dispatcher
         @"(?<![\p{L}])(?:modifi\w*|change\w*|changement\w*|evolu\w*|historique|versions?|difference\w*|compar\w*|avant et apres|amend\w*|changed|history|differ\w*|abroge\w*|repealed)(?![\p{L}])",
         Options, Timeout);
 
+    // The number an article is cited by: "l'article 39", "art. 62-3", "article 1er", "article 15 bis".
+    internal const string ArticleNumber = @"(?<number>1er|premier|\d{1,4}(?:-\d{1,3})?(?:\s?(?:bis|ter|quater|quinquies|sexies|septies|octies|nonies|decies))?)";
+
+    private static readonly Regex CitedNumberPattern = new(@"(?<![\p{L}])art(?:icle|\.)?\s*" + ArticleNumber + @"(?![\p{L}\d-])", Options, Timeout);
+
+    // Several articles ("les articles 38 et 39", "art. 12 à 15", "l'article 5, 6 ou 7"), or a part of one ("l'article 39,
+    // 2e alinéa"): not one whole article to open.
+    private static readonly Regex SeveralPattern = new(@"(?<![\p{L}])art(?:icle|\.)?s\s|\d\s*(?:et|a|ou|,)\s*\d", Options, Timeout);
+
+    /// <summary>
+    /// The number of the one article the question cites, in the form the tables compare ("39", "62-3", "1", "15bis"); null
+    /// when it cites none, several, or one in a form code does not read (then the question call describes it).
+    /// </summary>
+    public static string? CitedArticle(V4QuestionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        var cited = CitedNumberPattern.Matches(row.Folded).Select(static match => Canonical(match.Groups["number"].Value)).Distinct(StringComparer.Ordinal).ToList();
+        return cited.Count == 1 && !SeveralPattern.IsMatch(row.Folded) ? cited[0] : null;
+    }
+
+    /// <summary>An article's number as the tables compare it: "1er" and "premier" are 1, and "15 bis" is "15bis".</summary>
+    internal static string Canonical(string number) =>
+        number is "1er" or "premier" ? "1" : number.Replace(" ", string.Empty, StringComparison.Ordinal);
+
+    // A date that is part of an act's name ("loi du 10 août 1991", "règlement grand-ducal du 8 octobre 2014"): not the date
+    // to read the law on.
+    private static readonly Regex NamesAnActPattern = new(
+        @"(?:loi|reglement(?: grand-ducal| ministeriel)?|arrete(?: grand-ducal| ministeriel)?|directive|decision|ordonnance|convention|law|act|regulation)(?: modifiee| coordonnee)? (?:du|of) $",
+        Options, Timeout);
+
+    /// <summary>
+    /// The dates a question asks to read the law on: the dates it writes, without those that are part of an act's name
+    /// (inside a name the corpus index reads, or right after "loi du", "règlement grand-ducal du").
+    /// </summary>
+    public static List<V3ParsedDate> ReadingDates(V4QuestionRow row, IReadOnlyList<V3ParsedDate> dates)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(dates);
+        return dates
+            .Where(date => !row.Acts.Any(act => date.Start >= act.Start && date.End <= act.End))
+            .Where(date => date.Start > row.Folded.Length || !NamesAnActPattern.IsMatch(row.Folded[Math.Max(0, date.Start - 48)..Math.Min(date.Start, row.Folded.Length)]))
+            .ToList();
+    }
+
     /// <summary>Whether the question cites an article or an identifier (route 2: Lex's reference reader).</summary>
     public static bool CitesArticle(V4QuestionRow row)
     {

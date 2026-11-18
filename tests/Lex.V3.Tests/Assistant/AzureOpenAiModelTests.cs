@@ -73,10 +73,10 @@ public sealed class AzureOpenAiModelTests
             {
                 ["asks"] = "article_or_act_cited",
                 ["own_case"] = false,
-                ["span"] = new JsonArray(0, masked.Length),
-                ["citation"] = new JsonArray(start, end),
-                ["act"] = new JsonArray(-1, -1),
-                ["words"] = new JsonArray(-1, -1),
+                ["part"] = string.Empty,
+                ["citation"] = masked[start..end],
+                ["act"] = string.Empty,
+                ["words"] = string.Empty,
                 ["language"] = "fra",
                 ["date"] = "today",
                 ["range"] = string.Empty,
@@ -114,9 +114,9 @@ public sealed class AzureOpenAiModelTests
         Assert.IsTrue(format.GetProperty("json_schema").GetProperty("strict").GetBoolean());
         using var user = JsonDocument.Parse(messages[1].GetProperty("content").GetString()!);
         CollectionAssert.AreEquivalent(
-            new[] { "question", "question_length", "words", "references", "search_languages", "concepts" },
+            new[] { "question", "references", "search_languages", "concepts" },
             user.RootElement.EnumerateObject().Select(static member => member.Name).ToArray(),
-            "R33: of the reader, only the masked question; beside it, where its words and dates stand and lists Lex holds");
+            "R33: of the reader, only the masked question; beside it, the names of the dates it writes and lists Lex holds");
         var masked = user.RootElement.GetProperty("question").GetString()!;
         foreach (var identifier in new[] { address, "LU28", "621 123 456", "19900101123" })
         {
@@ -124,12 +124,9 @@ public sealed class AzureOpenAiModelTests
         }
 
         StringAssert.Contains(masked, "que dit l'article 1er de la loi du 10 août 1991", "the law's words are sent");
-        Assert.AreEqual(masked.Length, user.RootElement.GetProperty("question_length").GetInt32());
-        foreach (var word in user.RootElement.GetProperty("words").EnumerateArray())
+        foreach (var reference in user.RootElement.GetProperty("references").EnumerateArray())
         {
-            var (start, end) = (word.GetProperty("start").GetInt32(), word.GetProperty("end").GetInt32());
-            Assert.AreEqual(masked[start..end], word.GetProperty("w").GetString(), "each word is the question's own run at its own positions");
-            Assert.IsFalse(word.GetProperty("w").GetString()!.Contains('•'), "no masked run is offered as a word");
+            StringAssert.Contains(masked, reference.GetProperty("words").GetString()!, "a reference is said with the question's own words for it");
         }
 
         Assert.AreEqual(question.Length, masked.Length);
@@ -226,19 +223,6 @@ public sealed class AzureOpenAiModelTests
             using var document = JsonDocument.Parse(json);
             Assert.AreEqual("refused", document.RootElement.GetProperty("trace").GetProperty("plan").GetProperty("bricks").GetProperty("question_call").GetString(), why);
         }
-    }
-
-    [TestMethod]
-    public void TheWordsAreTheQuestionsRunsBetweenWhiteSpaceAtTheirUtf16PositionsWithoutMaskedRuns()
-    {
-        CollectionAssert.AreEqual(
-            new[] { ("Que", 0, 3), ("dit", 4, 7), ("l'article", 8, 17), ("1er", 18, 21), ("août", 23, 27) },
-            V4QuestionCall.WordsOf("Que dit l'article 1er  août ••• ").ToArray(),
-            "two spaces, a trailing space and a masked run");
-        Assert.AreEqual(0, V4QuestionCall.WordsOf("   ").Count);
-        var astral = "art. 𝟙 x";
-        var words = V4QuestionCall.WordsOf(astral);
-        Assert.AreEqual((astral[5..7], 5, 7), words[1], "positions count UTF-16 units, a surrogate pair is two");
     }
 
     [TestMethod]

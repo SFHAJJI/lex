@@ -20,6 +20,7 @@ import {
   answerDate,
   bricksBody,
   bricksOf,
+  builtNote,
   builtFoot,
   clarifyCandidates,
   dockExamples,
@@ -325,7 +326,7 @@ function Built({ turn, copy, locale, initialPlan = false }) {
         ))}
       </ol>
       <p className="lx-dock-built-note">
-        {bricksOf(dossier) === null ? copy.dockPlanNote : rows.some((row) => row.model) ? copy.dockBricksNote : copy.dockBricksNoModel}{' '}
+        {builtNote(dossier, rows, locale)}{' '}
         <button type="button" className="lx-dock-link" aria-expanded={planOpen} aria-controls={planId} onClick={() => setPlanOpen(!planOpen)} data-dock-see-plan="">
           {planOpen ? copy.dockHidePlan : copy.dockSeePlan}
         </button>

@@ -234,6 +234,20 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockChecksLine: 'quotes identical to the text: {count}',
     dockBricksNote: 'A model may rank passages and point at lines; it never writes the answer.',
     dockBricksNoModel: 'No AI model was asked for this answer.',
+    dockDescribedNote: 'A model describes the question; code chooses what to run and writes the answer.',
+    dockNoModelUsed: 'No AI model took part in this answer.',
+    dockQuestionDescribed: 'described by an AI model: {asks}',
+    dockQuestionByCode: 'read by code alone: your words are searched as written',
+    dockAsksCited: 'an article or an act is cited',
+    dockAsksSubject: 'words on a subject',
+    dockAsksVersions: 'the versions of an act',
+    dockAsksRecord: 'the record of an act',
+    dockAsksOnDate: 'an act on a date',
+    dockAsksCompared: 'an act compared between two dates',
+    dockAsksPeriod: 'what changed in a period',
+    dockAsksIdentifier: 'an exact identifier',
+    dockAsksNothing: 'nothing to look up',
+    dockAsksAnd: '; ',
     dockSaidLabel: 'What Lex found',
     dockSeePlan: 'See the plan',
     dockHidePlan: 'Hide the plan',
@@ -440,6 +454,20 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockChecksLine: 'citations identiques au texte\u00A0: {count}',
     dockBricksNote: 'Un modèle peut classer des passages et désigner des lignes\u00A0; il n’écrit jamais la réponse.',
     dockBricksNoModel: 'Aucun modèle d’IA n’a été interrogé pour cette réponse.',
+    dockDescribedNote: 'Un modèle décrit la question\u00A0; le code choisit quoi exécuter et écrit la réponse.',
+    dockNoModelUsed: 'Aucun modèle d’IA n’a contribué à cette réponse.',
+    dockQuestionDescribed: 'décrite par un modèle d’IA\u00A0: {asks}',
+    dockQuestionByCode: 'lue par le code seul\u00A0: vos mots sont cherchés tels quels',
+    dockAsksCited: 'un article ou un acte est cité',
+    dockAsksSubject: 'des mots sur un sujet',
+    dockAsksVersions: 'les versions d’un acte',
+    dockAsksRecord: 'la fiche d’un acte',
+    dockAsksOnDate: 'un acte à une date',
+    dockAsksCompared: 'un acte comparé entre deux dates',
+    dockAsksPeriod: 'ce qui a changé sur une période',
+    dockAsksIdentifier: 'un identifiant exact',
+    dockAsksNothing: 'rien à chercher',
+    dockAsksAnd: '\u00A0; ',
     dockSaidLabel: 'Ce que Lex a trouvé',
     dockSeePlan: 'Voir le plan',
     dockHidePlan: 'Masquer le plan',
@@ -747,15 +775,41 @@ export function dossierKind(view) {
   const quotes = view.parts.some((part) => part.blocks.some((block) => block.kind === 'quote'));
   // A bricks answer (plan /2) that quotes nothing still says something in the server's own sentences (a sweep that proves
   // an absence, a text Lex does not hold, a greeting): the dock shows those sentences, kind `said`.
-  if (isObject(view.trace?.plan?.bricks)) return quotes ? 'answer' : 'said';
+  if (isObject(view.trace?.plan?.bricks) && view.trace.plan.bricks.route !== 'operations') return quotes ? 'answer' : 'said';
   if (view.verdict === 'clarify') return 'clarify';
   return quotes ? 'answer' : 'notfound';
 }
 
-/** The bricks record of an answer (its trace's plan /2), or null for an answer the planner model planned. */
+/**
+ * The bricks record of an answer the tables gave (its trace's plan /2), or null for an answer of operations: one a model
+ * described and code mapped to operations (`questionCallOf`), or one from before the bricks, which a model planned.
+ */
 export function bricksOf(dossier) {
   const bricks = dossier?.trace?.plan?.bricks;
-  return isObject(bricks) ? bricks : null;
+  return isObject(bricks) && bricks.route !== 'operations' ? bricks : null;
+}
+
+/**
+ * For an answer of operations under plan /2: how the question was read, `{ outcome, asks }`. `outcome` is `described` when
+ * a model described the question (then `asks` holds what it said each part asks), else why code read it alone
+ * (`not_wired`, `failed`, `refused`). Null for a bricks answer and for an answer from before the bricks.
+ */
+export function questionCallOf(dossier) {
+  const bricks = dossier?.trace?.plan?.bricks;
+  if (!isObject(bricks) || bricks.route !== 'operations') return null;
+  const asks = (Array.isArray(bricks.described) ? bricks.described : []).map((part) => part?.asks).filter((value) => typeof value === 'string');
+  const outcome = ['described', 'not_wired', 'failed', 'refused'].includes(bricks.question_call) ? bricks.question_call : 'not_wired';
+  return Object.freeze({ outcome, asks: Object.freeze(outcome === 'described' ? asks : []) });
+}
+
+/** The sentence under the stages: what a model did for this answer, in one line. */
+export function builtNote(dossier, rows, locale) {
+  const copy = panelCopy(locale);
+  const call = questionCallOf(dossier);
+  if (bricksOf(dossier) === null && call === null) return copy.dockPlanNote;
+  if (rows.some((row) => row.model && row.key !== 'question')) return copy.dockBricksNote;
+  if (rows.some((row) => row.model)) return copy.dockDescribedNote;
+  return call === null || call.outcome === 'not_wired' ? copy.dockBricksNoModel : copy.dockNoModelUsed;
 }
 
 /** A quotation's lines: its text cut where a line of the law starts (`breaks`), each trimmed; one line when it has none. */
@@ -897,9 +951,29 @@ export function stageRows(dossier, locale) {
     : (dossier?.parts ?? []).flatMap((part) => part.blocks ?? []).filter((block) => block?.kind === 'quote').length;
   const masking = masked === 0 ? copy.dockMaskNone : masked === 1 ? copy.dockMaskOne : fill(copy.dockMaskSome, { count: masked });
   const composer = quotes === 0 ? copy.dockComposerNone : quotes === 1 ? copy.dockComposerOne : fill(copy.dockComposerSome, { count: quotes });
+  // Under plan /2 a model describes the question and code chooses the operations; before the bricks a model planned them.
+  const call = questionCallOf(dossier);
+  const asked = {
+    article_or_act_cited: copy.dockAsksCited, words_on_a_subject: copy.dockAsksSubject, versions_of_an_act: copy.dockAsksVersions,
+    record_of_an_act: copy.dockAsksRecord, act_on_a_date: copy.dockAsksOnDate, two_dates_compared: copy.dockAsksCompared,
+    changes_in_a_period: copy.dockAsksPeriod, exact_identifier: copy.dockAsksIdentifier, nothing_to_look_up: copy.dockAsksNothing,
+  };
+  const planning = call === null
+    ? [Object.freeze({ key: 'planner', name: copy.dockStagePlanner, line: planLine(trace, copy), model: true })]
+    : [
+      Object.freeze({
+        key: 'question',
+        name: copy.dockStageQuestion,
+        line: call.outcome === 'described' && call.asks.length > 0
+          ? fill(copy.dockQuestionDescribed, { asks: call.asks.map((asks) => asked[asks] ?? copy.dockAsksSubject).join(copy.dockAsksAnd) })
+          : copy.dockQuestionByCode,
+        model: call.outcome === 'described' && call.asks.length > 0,
+      }),
+      Object.freeze({ key: 'route', name: copy.dockStageRoute, line: planLine(trace, copy), model: false }),
+    ];
   return Object.freeze([
     Object.freeze({ key: 'masking', name: copy.dockStageMasking, line: masking, model: false }),
-    Object.freeze({ key: 'planner', name: copy.dockStagePlanner, line: planLine(trace, copy), model: true }),
+    ...planning,
     Object.freeze({ key: 'validator', name: copy.dockStageValidator, line: copy.dockValidatorAccepted, model: false }),
     Object.freeze({ key: 'execution', name: copy.dockStageExecution, line: executionLine(trace, copy), model: false }),
     Object.freeze({ key: 'composer', name: copy.dockStageComposer, line: composer, model: false }),

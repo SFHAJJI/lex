@@ -819,7 +819,7 @@ public sealed class BricksTests
     }
 
     [TestMethod]
-    [DataRow("Que dit l'article 39 de la loi sur le contrat d'assurance ?", "cites_article")]
+    [DataRow("Que dit l'article 39 de la loi du 10 août 1991 ?", "cites_article")]
     [DataRow("Qu'est-ce qui a changé dans la loi sur le contrat d'assurance en 2025 ?", "asks_change")]
     [DataRow("Quelle est la durée maximale de la période d'essai ?", "nothing_of_the_dictionary")]
     [DataRow("Quelle est la cotisation d'assurance maladie à la CNS ?", "other_domain")]
@@ -963,28 +963,18 @@ public sealed class BricksTests
         string language = "fra",
         string actRef = "")
     {
-        JsonArray Span(string? text)
-        {
-            if (text is null)
-            {
-                return new JsonArray(-1, -1);
-            }
-
-            var at = question.IndexOf(text, StringComparison.Ordinal);
-            Assert.IsTrue(at >= 0, text);
-            return new JsonArray(at, at + text.Length);
-        }
-
+        // The description copies words of the question; code finds where they stand.
+        _ = question;
         return new JsonObject
         {
             ["parts"] = new JsonArray(new JsonObject
             {
                 ["asks"] = asks,
                 ["own_case"] = ownCase,
-                ["span"] = new JsonArray(0, question.Length),
-                ["citation"] = Span(citation),
-                ["act"] = Span(act),
-                ["words"] = Span(words),
+                ["part"] = string.Empty,
+                ["citation"] = citation ?? string.Empty,
+                ["act"] = act ?? string.Empty,
+                ["words"] = words ?? string.Empty,
                 ["language"] = language,
                 ["date"] = date,
                 ["range"] = range,
@@ -1017,12 +1007,25 @@ public sealed class BricksTests
         var plan = Mapped(cited, Described("article_or_act_cited", cited, citation: "l'article 12 de la loi du 4 avril 2019"));
         Assert.AreEqual("search", plan.Steps.Single().OperationId);
         Assert.AreEqual(new V3PlanSpan(8, 46), plan.Steps[0].Arguments["query"].Span, "the citation stays a span of the question: it is never rewritten");
-        Assert.AreEqual(V3ArgumentSourceKind.Today, plan.Steps[0].Arguments["date"].Kind, "the date in an act's name is not the date to read it on");
+        Assert.IsFalse(plan.Steps[0].Arguments.ContainsKey("date"), "a search reads a date only when the question asks one; the date in an act's name is not one");
         var followUp = plan.FollowUps.Single();
+        Assert.AreEqual(V3ArgumentSourceKind.Today, followUp.Arguments["date"].Kind, "the article is read as of today");
         Assert.AreEqual(("evidence_bundle", V3FollowUpCondition.OnSingleArticle), (followUp.OperationId, followUp.Condition!.Value));
         Assert.AreEqual(V3ResultPick.SoleArticle, followUp.Arguments["article"].Pick);
         Assert.AreEqual(("operations", "operations"), (plan.Bricks!.Route, plan.Bricks.Kind));
         CollectionAssert.AreEqual(new[] { "question" }, plan.Bricks.ModelSteps.ToArray());
+
+        // Two rules of code make a citation whole: the article and the act given apart are one citation, and a date inside
+        // an act's name never ends it.
+        const string titled = "Que dit l'article 1er de la loi du 7 décembre 2015 sur le secteur des assurances ?";
+        string Query(string question, V3AssistantPlan mapped) => question[mapped.Steps[0].Arguments["query"].Span!.Start..mapped.Steps[0].Arguments["query"].Span!.End];
+        Assert.AreEqual("l'article 1er de la loi du 7 décembre 2015 sur le secteur des assurances",
+            Query(titled, Mapped(titled, Described("article_or_act_cited", titled, citation: "l'article 1er de la loi du 7 décembre 2015"))));
+        Assert.AreEqual("l'article 1er de la loi du 7 décembre 2015 sur le secteur des assurances",
+            Query(titled, Mapped(titled, Described("article_or_act_cited", titled, citation: "l'article 1er", act: "loi du 7 décembre 2015 sur le secteur des assurances"))));
+        const string dated = "Que disait l'article 5 de la loi du 4 avril 2019 au 1er janvier 2020 ?";
+        Assert.AreEqual("l'article 5 de la loi du 4 avril 2019",
+            Query(dated, Mapped(dated, Described("article_or_act_cited", dated, citation: "l'article 5 de la loi du 4 avril 2019", date: "d2"))), "what follows the date is not a title");
 
         const string subject = "Que dit le RGPD sur le droit à l'effacement ?";
         var within = Mapped(subject, Described("words_on_a_subject", subject, act: "RGPD", words: "droit à l'effacement"));
@@ -1034,8 +1037,8 @@ public sealed class BricksTests
         Assert.AreEqual("timeline", Mapped(versions, Described("versions_of_an_act", versions, act: "loi du 27 juillet 1997 sur le contrat d'assurance")).Steps.Single().OperationId);
         Assert.AreEqual("dossier", Mapped(versions, Described("record_of_an_act", versions, act: "loi du 27 juillet 1997 sur le contrat d'assurance")).Steps.Single().OperationId);
 
-        const string dated = "Le Code du travail au 1er janvier 2020";
-        var asOf = Mapped(dated, Described("act_on_a_date", dated, act: "Code du travail", date: "d1")).Steps.Single();
+        const string onDate = "Le Code du travail au 1er janvier 2020";
+        var asOf = Mapped(onDate, Described("act_on_a_date", onDate, act: "Code du travail", date: "d1")).Steps.Single();
         Assert.AreEqual(("as_of", V3ArgumentSourceKind.Reference), (asOf.OperationId, asOf.Arguments["date"].Kind));
 
         const string compared = "Qu'est-ce qui a changé dans le Code du travail entre le 1er janvier 2020 et le 1er janvier 2021 ?";
@@ -1052,7 +1055,9 @@ public sealed class BricksTests
         var bare = Mapped(compared, Described("two_dates_compared", compared, act: "Code du travail"));
         Assert.AreEqual("search", bare.Steps.Single().OperationId, "no range, no comparison");
         var invented = Mapped(compared, Described("two_dates_compared", compared, act: "Code du travail", range: "r7", date: "d9"));
-        Assert.AreEqual(("search", V3ArgumentSourceKind.Today), (invented.Steps.Single().OperationId, invented.Steps[0].Arguments["date"].Kind), "a reference the question does not hold is no reference");
+        Assert.AreEqual(("search", false), (invented.Steps.Single().OperationId, invented.Steps[0].Arguments.ContainsKey("date")), "a reference the question does not hold is no reference");
+        var onADate = Mapped(dated, Described("words_on_a_subject", dated, words: "l'article 5 de la loi du 4 avril 2019", date: "d2"));
+        Assert.AreEqual(("d2", "d2"), (onADate.Steps[0].Arguments["date"].Ref, onADate.FollowUps[0].Arguments["date"].Ref), "a date the question asks is read by the search and by what follows it");
         var own = Mapped(cited, Described("article_or_act_cited", cited, citation: "l'article 12 de la loi du 4 avril 2019", ownCase: true));
         Assert.AreEqual(V3AssistantVerdict.Refuse, own.Parts.Single().ProposedVerdict);
         var nothing = Mapped(cited, Described("nothing_to_look_up", cited));
@@ -1089,11 +1094,40 @@ public sealed class BricksTests
         Assert.IsNull(V4QuestionCall.Read(Described("evidence_bundle", question), question, Dictionary), "a kind outside the list: a model cannot name an operation");
         Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, language: "lat"), question, Dictionary));
         Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, concept: "a concept of its own"), question, Dictionary), "a concept is one of the dictionary's");
-        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, date: "tomorrow, perhaps"), question, Dictionary), "a date is a reference's name");
-        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, actRef: "/lu-legilux/an-act-of-its-choice"), question, Dictionary), "an act is the reader's words or a chip's name");
-        var beyond = JsonNode.Parse(Described("article_or_act_cited", question))!;
-        beyond["parts"]![0]!["citation"] = new JsonArray(8, 4000);
-        Assert.IsNull(V4QuestionCall.Read(beyond.ToJsonString(), question, Dictionary), "a span outside the question");
+        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, concept: "assureur"), question, Dictionary), "a role is no concept to choose");
+        var typed = JsonNode.Parse(Described("article_or_act_cited", question))!;
+        typed["parts"]![0]!["citation"] = new JsonArray(8, 46);
+        Assert.IsNull(V4QuestionCall.Read(typed.ToJsonString(), question, Dictionary), "a member of another type");
+        var lacking = JsonNode.Parse(Described("article_or_act_cited", question))!;
+        lacking["parts"]![0]!.AsObject().Remove("own_case");
+        Assert.IsNull(V4QuestionCall.Read(lacking.ToJsonString(), question, Dictionary), "a member missing");
+
+        // Inside the form, what cannot be used is read as absent: nothing of the model's is used in its place.
+        var read = V4QuestionCall.Read(
+            Described("article_or_act_cited", question, citation: "the article twelve of the 2019 act", act: "LOI DU 4 AVRIL 2019", words: "  l’article 12  ", date: "tomorrow, perhaps", range: "r1 or so", actRef: "/lu-legilux/an-act-of-its-choice"),
+            question,
+            Dictionary)!.Single();
+        Assert.IsNull(read.Citation, "words the question does not hold name no span");
+        Assert.AreEqual("loi du 4 avril 2019", question[read.Act!.Value.Start..read.Act.Value.End], "capitals are compared as the dictionary compares them; the span is the reader's own words");
+        Assert.AreEqual("l'article 12", question[read.Words!.Value.Start..read.Words.Value.End], "the typographic apostrophe is the straight one");
+        Assert.AreEqual(("today", string.Empty, string.Empty), (read.Date, read.Range, read.ActRef), "a date, a range or a chip that is no reference's name is none");
+        Assert.IsNull(V4QuestionCall.Locate("Écrire à ••••••••••• pour le contrat", "à ••••••••••• pour"), "a masked run is never pointed at");
+
+        // Two parts are two runs of the question, in order and apart.
+        const string two = "Que dit l'article 12 de la loi du 4 avril 2019 et que dit l'article 5 du RGPD ?";
+        var both = JsonNode.Parse(Described("article_or_act_cited", two, citation: "l'article 12 de la loi du 4 avril 2019"))!;
+        var second = both["parts"]![0]!.DeepClone();
+        both["parts"]![0]!["part"] = "Que dit l'article 12 de la loi du 4 avril 2019";
+        second["part"] = "que dit l'article 5 du RGPD ?";
+        second["citation"] = "l'article 5 du RGPD";
+        both["parts"]!.AsArray().Add(second);
+        var parts = V4QuestionCall.Read(both.ToJsonString(), two, Dictionary)!;
+        Assert.AreEqual((0, 46, 50), (parts[0].Span.Start, parts[0].Span.End, parts[1].Span.Start));
+        var planned = Mapped(two, both.ToJsonString());
+        CollectionAssert.AreEqual(new[] { "search", "search" }, planned.Steps.Select(static step => step.OperationId).ToArray());
+        Assert.AreEqual(2, planned.FollowUps.Count);
+        both["parts"]![1]!["part"] = "que dit l'article 12";
+        Assert.IsNull(V4QuestionCall.Read(both.ToJsonString(), two, Dictionary), "the second part is not before the end of the first");
         var three = JsonNode.Parse(Described("article_or_act_cited", question))!;
         three["parts"]!.AsArray().Add(three["parts"]![0]!.DeepClone());
         three["parts"]!.AsArray().Add(three["parts"]![0]!.DeepClone());
@@ -1125,17 +1159,17 @@ public sealed class BricksTests
 
         using var sent = JsonDocument.Parse(call.User);
         CollectionAssert.AreEquivalent(
-            new[] { "question", "question_length", "words", "references", "search_languages", "concepts" },
+            new[] { "question", "references", "search_languages", "concepts" },
             sent.RootElement.EnumerateObject().Select(static member => member.Name).ToArray(),
-            "what leaves the server: the masked question, its words and references, the search languages and the dictionary's concepts");
+            "what leaves the server: the masked question, its references, the search languages and the dictionary's concepts");
         Assert.IsTrue(sent.RootElement.GetProperty("concepts").EnumerateArray().All(static concept => concept.GetProperty("id").GetString() != "assureur"), "a role is no concept to choose");
     }
 
     [TestMethod]
     public void ACitedArticleIsDescribedByTheModelAndRunByCode()
     {
-        const string question = "Que dit l'article 39 de la loi sur le contrat d'assurance ?";
-        var model = new BricksFixture.Model(_ => Described("article_or_act_cited", question, citation: "l'article 39 de la loi sur le contrat d'assurance"));
+        const string question = "Que dit l'article 39 de la loi du 10 août 1991 ?";
+        var model = new BricksFixture.Model(_ => Described("article_or_act_cited", question, citation: "l'article 39 de la loi du 10 août 1991"));
         var executor = new BricksFixture.Executor { SearchOpens = "art_39" };
         var dossier = Answered(BricksFixture.Ask(question, model, executor: executor));
         CollectionAssert.AreEqual(new[] { "question" }, model.Calls.Select(static call => call.Step).ToArray(), "one call, in place of the planner's");
@@ -1182,9 +1216,77 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void ACitedArticleOfAnActTheIndexNamesIsOpenedByCodeWithNoModelAndNoSearch()
+    {
+        var never = new BricksFixture.Model(static _ => throw new InvalidOperationException("no model is asked for a citation code reads"));
+        foreach (var (question, article, date) in new[]
+                 {
+                     ("Que dit l'article 39 de la loi sur le contrat d'assurance ?", "art_39", BricksFixture.Today),
+                     ("Que dit l'article 39 de la loi du 27 juillet 1997 sur le contrat d'assurance ?", "art_39", BricksFixture.Today),
+                     ("Article 1er de la loi sur le contrat d'assurance", "art_1er", BricksFixture.Today),
+                     ("art. 62-3 LCA", "art_62-3", BricksFixture.Today),
+                     ("Que prévoit l'article 15-1 de la loi sur le contrat d'assurance ?", "article_15-1", BricksFixture.Today),
+                     ("Que disait l'article 39 de la loi du 27 juillet 1997 sur le contrat d'assurance au 1er juin 2012 ?", "art_39", "2012-06-01"),
+                 })
+        {
+            var executor = new BricksFixture.Executor();
+            var dossier = Answered(BricksFixture.Ask(question, never, executor: executor));
+            var call = executor.Calls.Single();
+            Assert.AreEqual("evidence_bundle", call.Operation, question);
+            using var parameters = JsonDocument.Parse(call.Parameters);
+            Assert.AreEqual((BricksFixture.Address, article, date),
+                (parameters.RootElement.GetProperty("identifier").GetString(), parameters.RootElement.GetProperty("article").GetString(), parameters.RootElement.GetProperty("date").GetString()), question);
+            Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict, question);
+            Assert.AreEqual((article, 0), (dossier.Quotes.Single().Anchor, dossier.Quotes.Single().Offset), "the article is read whole, from its start");
+            CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeNoModel, question);
+            var bricks = Bricks(dossier);
+            Assert.AreEqual(("operations", "cited", 0), (bricks.GetProperty("route").GetString(), bricks.GetProperty("question_call").GetString(), bricks.GetProperty("model_calls").GetArrayLength()), question);
+            Assert.AreEqual(0, never.Calls.Count, question);
+        }
+
+        // What code does not read alone goes to the question call: several articles, an article the act does not hold, an
+        // act the index does not name, a question on how the article changed.
+        foreach (var question in new[]
+                 {
+                     "Que disent les articles 38 et 39 de la loi sur le contrat d'assurance ?",
+                     "Que dit l'article 39, 2e alinéa de la loi sur le contrat d'assurance ?",
+                     "Que dit l'article 999 de la loi sur le contrat d'assurance ?",
+                     "Que dit l'article 39 du Code civil ?",
+                     "Qu'est-ce qui a changé à l'article 39 de la loi sur le contrat d'assurance ?",
+                 })
+        {
+            var intake = V3AssistantParsers.Intake(question)!;
+            var outcome = V4Bricks.Plan(new V4PlanInput(intake.Masked, V3AnswerLocale.Fr, BricksFixture.Today, V3AssistantParsers.DatesIn(intake.Masked), [], ["fra"]), new BricksFixture.Corpus(), null, CancellationToken.None);
+            StringAssert.EndsWith(outcome.Reason, "+question_not_wired", question);
+        }
+
+        Assert.AreEqual("39", V4Dispatcher.CitedArticle(Row("l'article 39 de la loi")));
+        Assert.AreEqual("1", V4Dispatcher.CitedArticle(Row("l'article premier")));
+        Assert.AreEqual("15bis", V4Dispatcher.CitedArticle(Row("art. 15 bis")));
+        Assert.IsNull(V4Dispatcher.CitedArticle(Row("les articles 3 et 4")));
+        Assert.AreEqual("art_100-1", BricksFixture.Tables.ArticleByNumber("100-1")!.Id);
+        Assert.IsNull(BricksFixture.Tables.ArticleByNumber("999"));
+    }
+
+    [TestMethod]
+    public void ADateInsideAnActsNameIsNotTheDateToReadTheLawOn()
+    {
+        var corpus = new BricksFixture.Corpus();
+        var dossier = Answered(BricksFixture.Ask("Selon la loi du 27 juillet 1997 sur le contrat d'assurance, l'assureur peut-il résilier le contrat ?", corpus: corpus));
+        CollectionAssert.Contains(corpus.Asked, BricksFixture.Work + "@" + BricksFixture.Today, "read today, not on the day the act is dated");
+        Assert.IsFalse(corpus.Asked.Any(static asked => asked.EndsWith("@1997-07-27", StringComparison.Ordinal)));
+        Assert.AreEqual("today", Bricks(dossier).GetProperty("date").GetString());
+
+        var row = Row("Que dit la loi du 10 août 1991 au 1er janvier 2020 ?");
+        var dates = V3AssistantParsers.DatesIn(row.Question);
+        Assert.AreEqual(2, dates.Count);
+        Assert.AreEqual("2020-01-01", V4Dispatcher.ReadingDates(row, dates).Single().Iso, "an act the index does not name is still named by its date");
+    }
+
+    [TestMethod]
     public void ADescriptionThatDoesNotFitItsFormIsNotRepairedAndCodeSearchesTheReadersWords()
     {
-        const string question = "Que dit l'article 39 de la loi sur le contrat d'assurance ?";
+        const string question = "Que dit l'article 39 de la loi du 10 août 1991 ?";
         foreach (var (model, outcome) in new (BricksFixture.Model, string)[]
         {
             (new BricksFixture.Model(static _ => "search for it, then read the article"), "refused"),
@@ -1196,11 +1298,45 @@ public sealed class BricksTests
             Assert.AreEqual(1, model.Calls.Count, "asked once: nothing is repaired, nothing is asked again");
             CollectionAssert.AreEqual(new[] { "search", "evidence_bundle" }, executor.Calls.Select(static call => call.Operation).ToArray());
             using var parameters = JsonDocument.Parse(executor.Calls[0].Parameters);
-            Assert.AreEqual("Que dit l'article 39 de la loi sur le contrat d'assurance", parameters.RootElement.GetProperty("query").GetString());
+            Assert.AreEqual("Que dit l'article 39 de la loi du 10 août 1991", parameters.RootElement.GetProperty("query").GetString());
             Assert.AreEqual(outcome, Bricks(dossier).GetProperty("question_call").GetString());
             CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeNoModel, "nothing of a model is in this answer");
             CollectionAssert.DoesNotContain(dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), V3AnswerTemplates.PlanBricksModelQuestion);
         }
+    }
+
+    /// <summary>
+    /// The answers the web's tests draw (<c>web/test/bricks-answers.json</c>) are the engine's own, made here over the
+    /// fixture on its fixed day. A change of a sentence or of the record's shape fails this test until the file is written
+    /// again: run it once with <c>LEX_WRITE_WEB_SAMPLES=1</c>.
+    /// </summary>
+    [TestMethod]
+    public void TheAnswersTheWebsTestsDrawAreTheEnginesOwn()
+    {
+        const string cited = "Que dit l'article 39 de la loi du 10 août 1991 ?";
+        var samples = new JsonObject();
+        foreach (var (name, question) in new[]
+                 {
+                     ("definition", "c'est quoi une personne lésé"), ("rule", "l'assureur peut résilier le contrat de façon unilatérale ?"),
+                     ("absence", "C'est quoi la franchise ?"), ("several", "Quel est le délai de rétractation ?"),
+                     ("refusal", "Mon assureur peut-il résilier mon contrat ?"), ("greeting", "Bonjour"),
+                     ("searched", "Quelle est la durée maximale de la période d'essai ?"),
+                     ("cited", "Que dit l'article 39 de la loi sur le contrat d'assurance ?"),
+                 })
+        {
+            samples[name] = JsonNode.Parse(Answered(BricksFixture.Ask(question)).ToUtf8());
+        }
+
+        var model = new BricksFixture.Model(_ => Described("article_or_act_cited", cited, citation: "l'article 39 de la loi du 10 août 1991"));
+        samples["described"] = JsonNode.Parse(Answered(BricksFixture.Ask(cited, model, executor: new BricksFixture.Executor { SearchOpens = "art_39" })).ToUtf8());
+        var json = samples.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) + "\n";
+        var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "web", "test", "bricks-answers.json");
+        if (Environment.GetEnvironmentVariable("LEX_WRITE_WEB_SAMPLES") == "1")
+        {
+            File.WriteAllText(path, json);
+        }
+
+        Assert.AreEqual(json, File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal), "web/test/bricks-answers.json is not what the engine answers today: run this test once with LEX_WRITE_WEB_SAMPLES=1");
     }
 
     [TestMethod]

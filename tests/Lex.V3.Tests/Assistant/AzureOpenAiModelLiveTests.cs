@@ -33,11 +33,24 @@ public sealed class AzureOpenAiModelLiveTests
     {
         using var model = Live();
         var failures = new List<string>();
+        // An article of an act the corpus index names and the corpus holds is opened by code: no model, no search.
+        foreach (var question in new[]
+                 {
+                     "Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+                     "Que dit l’article 1er de la loi du 27 juillet 1997 sur le contrat d’assurance ?",
+                 })
+        {
+            var (_, _, operations) = SearchStep(model, question);
+            if (!operations.SequenceEqual(["evidence_bundle"]))
+            {
+                failures.Add($"{question} -> {string.Join(",", operations)}");
+            }
+        }
+
         foreach (var (question, mustHold) in new[]
                  {
-                     ("Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance ?", "sur le contrat d'assurance"),
-                     ("Que dit l’article 1er de la loi du 27 juillet 1997 sur le contrat d’assurance ?", "sur le contrat d’assurance"),
                      ("Que dit l'article 1er de la loi du 7 décembre 2015 sur le secteur des assurances ?", "sur le secteur des assurances"),
+                     ("Que dit l'article 3 de la loi du 19 décembre 2002 concernant le registre de commerce et des sociétés ?", "concernant le registre de commerce et des sociétés"),
                      ("Que dit l'article 100-1 de la loi du 10 août 1915 concernant les sociétés commerciales ?", "concernant les sociétés commerciales"),
                  })
         {

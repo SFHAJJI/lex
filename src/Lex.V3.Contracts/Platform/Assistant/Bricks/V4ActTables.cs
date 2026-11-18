@@ -104,8 +104,12 @@ public sealed class V4ActTables
 
     private static readonly HashSet<string> OrdinalSuffixes = new(StringComparer.Ordinal) { "er", "re", "ere", "e", "eme", "nd", "nde", "de" };
 
+    private static readonly Regex NumberInLabel = new(@"^\s*art(?:icle|\.)?\s*" + V4Dispatcher.ArticleNumber + @"(?![\p{L}\d-])", Options, Timeout);
+    private static readonly Regex NumberInId = new(@"^art(?:icle)?_" + V4Dispatcher.ArticleNumber + "$", Options, Timeout);
+
     private readonly Dictionary<string, int> _articleIndex;
     private readonly Dictionary<string, V4Line> _lineById;
+    private readonly Lazy<Dictionary<string, V4Article?>> _articleByNumber;
 
     private V4ActTables(
         string work,
@@ -129,6 +133,28 @@ public sealed class V4ActTables
         Summary = summary;
         _articleIndex = articles.Select(static (article, index) => (article.Id, index)).ToDictionary(static pair => pair.Id, static pair => pair.index, StringComparer.Ordinal);
         _lineById = lines.ToDictionary(static line => line.Id, StringComparer.Ordinal);
+        _articleByNumber = new Lazy<Dictionary<string, V4Article?>>(() =>
+        {
+            // By the number its own label writes ("Art. 39.", "Article 15-1"), else the number in its identifier; a number
+            // two articles share (an annex's own numbering) names neither.
+            var byNumber = new Dictionary<string, V4Article?>(StringComparer.Ordinal);
+            foreach (var article in Articles)
+            {
+                var read = article.Label is { } label ? NumberInLabel.Match(V4Text.Fold(label)) : Match.Empty;
+                if (!read.Success)
+                {
+                    read = NumberInId.Match(article.Id);
+                }
+
+                if (read.Success)
+                {
+                    var number = V4Dispatcher.Canonical(read.Groups["number"].Value);
+                    byNumber[number] = byNumber.ContainsKey(number) ? null : article;
+                }
+            }
+
+            return byNumber;
+        });
     }
 
     /// <summary>The act's address on this site ("/lu-legilux/loi-1997-07-27-n10").</summary>
@@ -153,6 +179,9 @@ public sealed class V4ActTables
     public V4ParsingSummary Summary { get; }
 
     public V4Article? Article(string id) => _articleIndex.TryGetValue(id, out var index) ? Articles[index] : null;
+
+    /// <summary>The one article of this number ("39", "62-3", "1" for the first, "15bis"), or null when the act holds none or several.</summary>
+    public V4Article? ArticleByNumber(string number) => _articleByNumber.Value.GetValueOrDefault(number);
 
     public V4Line? Line(string id) => _lineById.GetValueOrDefault(id);
 

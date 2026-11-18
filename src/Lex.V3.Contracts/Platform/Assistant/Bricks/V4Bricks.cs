@@ -120,18 +120,30 @@ public static class V4Bricks
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
         // words the dictionary lacks. Then the tables answer, as for any question.
-        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0, OwnCase: false } described] && dictionary.Concept(described.Concept) is { } concept)
+        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { } concept)
         {
+            // The advice boundary of a question the tables answer is code's (decision 4(i)): its cues, and the marks of a
+            // case of the reader's own. What the model says of it counts only with such a mark in the question ("mon
+            // contrat", "je"): then the part is refused, with the law beside it.
+            var ownCase = described.OwnCase && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0;
             var span = described.Words ?? described.Span;
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
             if (keyword is not null && !question.AsSpan(span.Start, span.End - span.Start).Contains('•'))
             {
-                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, (call, reply, model.ModelId));
+                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, (call, reply, model.ModelId), ownCase);
                 if (reached.PlanJson is not null)
                 {
                     return reached;
                 }
             }
+        }
+
+        // An act as it stood on a date quotes nothing. When the question's own words ask what a text says or provides
+        // (a cue of the dictionary: "que prévoit", "que dit", "quel est le délai"), code searches the words the description
+        // points at, on the date asked, whatever kind the description gave it (2026-11-13: such a question got no quotation).
+        if (row.Kinds.Count > 0)
+        {
+            parts = parts.Select(static part => part.Asks == "act_on_a_date" ? part with { Asks = "words_on_a_subject", Words = part.Words ?? part.Act, Act = null } : part).ToList();
         }
 
         return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", (call, reply, model.ModelId)), reply.CostMicroEuros, "route:operations");
@@ -147,14 +159,15 @@ public static class V4Bricks
         IV4Corpus corpus,
         IV4Model? model,
         CancellationToken cancellationToken,
-        (V4ModelCall Call, V4ModelReply Reply, string Model)? prior)
+        (V4ModelCall Call, V4ModelReply Reply, string Model)? prior,
+        bool ownCase = false)
     {
         var dictionary = V4Dictionary.Insurance;
         var index = V4CorpusIndex.Insurance;
         var question = input.MaskedQuestion;
         var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
         var ruleQuestion = cues.Count > 0 && V4Boundary.RuleQuestion(question, 0, question.Length, cues);
-        var application = cues.Count > 0 && !ruleQuestion;
+        var application = (cues.Count > 0 && !ruleQuestion) || ownCase;
 
         // Route 0: not a legal question. "which deserves a direct reply and no pipeline at all" [13]
         if (row.Greeting)
@@ -169,12 +182,16 @@ public static class V4Bricks
             return new V4PlanOutcome(null, 0, "other_domain");
         }
 
+        // The dates to read the law on: a date inside an act's name ("loi du 27 juillet 1997") is not one of them.
+        var reading = V4Dispatcher.ReadingDates(row, input.Dates);
+        var asksChange = V4Dispatcher.AsksChange(row, reading.Count);
         if (V4Dispatcher.CitesArticle(row))
         {
-            return new V4PlanOutcome(null, 0, "cites_article");
+            // One article of an act the index names, on one date: code opens it, with no model and no search.
+            return (asksChange ? null : Cited(input, row, corpus, reading)) ?? new V4PlanOutcome(null, 0, "cites_article");
         }
 
-        if (V4Dispatcher.AsksChange(row, input.Dates.Count))
+        if (asksChange)
         {
             return new V4PlanOutcome(null, 0, "asks_change");
         }
@@ -198,8 +215,8 @@ public static class V4Bricks
             return new V4PlanOutcome(null, 0, "nothing_of_the_dictionary");
         }
 
-        var dateRef = input.Dates.Count == 1 ? input.Dates[0].Ref : "today";
-        var date = input.Dates.Count == 1 ? input.Dates[0].Iso : input.Today;
+        var dateRef = reading.Count == 1 ? reading[0].Ref : "today";
+        var date = reading.Count == 1 ? reading[0].Iso : input.Today;
 
         // Scope (step 5): the act the reader names; else the concept's home act; else, for a definition, the first act of the
         // domain that defines a term of the question.
@@ -353,6 +370,33 @@ public static class V4Bricks
         var proposed = application ? "refuse" : draft.AnswerKind is "absence" && draft.Absence is "words_not_found" ? "clarify" : "answer";
         var json = Write(input, row, draft, tables, retrieval, decision, dateRef, ruleQuestion, proposed, decision.Kind, tables.Work, notes);
         return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route);
+    }
+
+    // ---- Route 2, by the tables: one article of an act the index names -----------------------------------------------------
+
+    /// <summary>
+    /// The plan that opens the one article a question cites, when code can name both ends itself: the act by a name of the
+    /// corpus index, the article by its number in the act's own table, the date as today or the one date asked. Null when
+    /// any of the three is not read (another act, several articles, an article the version does not hold): the question
+    /// call then describes the question, as for every citation code does not read.
+    /// </summary>
+    private static V4PlanOutcome? Cited(V4PlanInput input, V4QuestionRow row, IV4Corpus corpus, List<V3ParsedDate> reading)
+    {
+        var works = row.Acts.Where(static act => act.Work is not null).Select(static act => act.Work!).Distinct(StringComparer.Ordinal).ToList();
+        if (works.Count != 1 || row.Acts.Any(static act => act.EuAct is not null) || reading.Count > 1 || V4Dispatcher.CitedArticle(row) is not { } number)
+        {
+            return null;
+        }
+
+        var at = corpus.Act(works[0], reading.Count == 1 ? reading[0].Iso : input.Today);
+        if (at.Tables?.ArticleByNumber(number) is not { } article)
+        {
+            return null;
+        }
+
+        var planner = new V3PlannerInput(input.MaskedQuestion, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
+        var json = V4QuestionCall.CitedPlanJson(planner, at.Tables.Work, article.Id, reading.Count == 1 ? reading[0].Ref : "today", at.Tables.Language);
+        return new V4PlanOutcome(json, 0, "route:operations+cited");
     }
 
     // ---- Route 4: a term the law defines ----------------------------------------------------------------------------------

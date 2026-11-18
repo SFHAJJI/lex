@@ -334,6 +334,29 @@ internal sealed class V3AssistantRuntime
                     Increment("refusal:" + (Lex.V3.Contracts.Platform.V3OperationRegistry.Reviewed.DeclaresRefusal(code!) ? code : "other"));
                 }
 
+                // The bricks' own counts (the owner's decision 5 of 2026-11-18): the route code chose, the concepts of the
+                // dictionary a question was read as, the way an answer was "not found", and the steps a model was asked
+                // for. Every key is a token of the record's closed lists or an identifier of the dictionary; the reader's
+                // words are in none of them. They say where the dictionary lacks a word (a question no concept read).
+                if (answered.Dossier.Trace.Plan.Bricks is { } bricks)
+                {
+                    Increment("route:" + bricks.Route);
+                    foreach (var concept in bricks.Concepts.Concat(bricks.Roles).Select(static read => read.Concept).Distinct(StringComparer.Ordinal))
+                    {
+                        Increment("concept:" + concept);
+                    }
+
+                    if (bricks.Absence is { } absence)
+                    {
+                        Increment("absence:" + absence);
+                    }
+
+                    foreach (var step in bricks.ModelSteps.Distinct(StringComparer.Ordinal))
+                    {
+                        Increment("model_step:" + (step is "question" or "arbiter" or "extraction" ? step : "other"));
+                    }
+                }
+
                 break;
             case V3AskPresented presented:
                 Increment("presentation:" + Lex.V3.Contracts.ContractWire.NameOf(presented.Result));

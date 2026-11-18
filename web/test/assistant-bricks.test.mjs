@@ -1,7 +1,8 @@
 // The dock's reading of a bricks answer (V4, plan /2), held to answers the engine itself made: `bricks-answers.json` holds
-// six dossiers the pipeline answered over the test corpus of the law of 27 July 1997 on the insurance contract, with no
-// model, on 18/11/2026 (a definition, a rule and its cases, an absence shown by its sweep, two answers by scope, a refusal
-// with the law beside it, a greeting). What is checked: every word drawn is the server's sentence or the law's own; one line
+// eight dossiers the pipeline answered over the test corpus of the law of 27 July 1997 on the insurance contract, on
+// 18/11/2026 (a definition, a rule and its cases, an absence shown by its sweep, two answers by scope, a refusal with the
+// law beside it, a greeting; then two answers of operations: a cited article a scripted model described, and a question
+// code searched alone). A .NET test (BricksTests) fails when the file is not what the engine answers. What is checked: every word drawn is the server's sentence or the law's own; one line
 // of the law is quoted, not the whole article; the stages are the bricks', tagged "AI model" only when a call is recorded.
 
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { ASSISTANT_PANEL_COPY, bricksBody, bricksOf, dockTurnOf, quoteLines, stageRows, validateDossier } from '../scripts/assistant-panel.mjs';
+import { ASSISTANT_PANEL_COPY, bricksBody, bricksOf, builtNote, dockTurnOf, questionCallOf, quoteLines, stageRows, validateDossier } from '../scripts/assistant-panel.mjs';
 import { bundle } from '../scripts/react-build.mjs';
 
 const answers = JSON.parse(readFileSync(new URL('./bricks-answers.json', import.meta.url), 'utf8'));
@@ -29,12 +30,55 @@ async function dock() {
 }
 
 test('every sample is an answer_dossier/1 the panel accepts, and carries the bricks record in its trace', () => {
+  const operations = ['searched', 'described'];
   for (const [name, dossier] of Object.entries(answers)) {
     assert.doesNotThrow(() => validateDossier(dossier), name);
-    assert.equal(bricksOf(dossier)?.version, 'lex-v4-bricks/1', name);
+    assert.equal(dossier.trace.plan.bricks.version, 'lex-v4-bricks/1', name);
     assert.equal(dossier.trace.plan.schema, 'lex-v3-assistant-plan/2', name);
+    // An answer of the tables has the bricks' layout; an answer of operations reads as every answer of operations does.
+    assert.equal(bricksOf(dossier) === null, operations.includes(name), name);
+    assert.equal(questionCallOf(dossier) !== null, operations.includes(name), name);
   }
   assert.equal(bricksOf({ trace: { plan: { schema: 'lex-v3-assistant-plan/1' } } }), null, 'an answer the planner model planned has none');
+  assert.equal(questionCallOf({ trace: { plan: { schema: 'lex-v3-assistant-plan/1' } } }), null);
+});
+
+test('an answer of operations says who read the question: a model described it, or code searched the words alone', async () => {
+  assert.deepEqual(questionCallOf(answers.described), { outcome: 'described', asks: ['article_or_act_cited'] });
+  assert.deepEqual(questionCallOf(answers.searched), { outcome: 'not_wired', asks: [] });
+  assert.equal(dockTurnOf(asked(answers.described), 'fr').kind, 'answer', 'the cited article is quoted');
+  assert.equal(dockTurnOf(asked(answers.searched), 'fr').kind, 'notfound', 'a search that finds nothing is the card of a search');
+
+  const described = stageRows(answers.described, 'fr');
+  assert.deepEqual(described.map((row) => row.key), ['masking', 'question', 'route', 'validator', 'execution', 'composer']);
+  assert.deepEqual(described.filter((row) => row.model).map((row) => row.key), ['question'], 'the one model step, and it is not a planner');
+  assert.equal(described[1].line, 'décrite par un modèle d’IA : un article ou un acte est cité');
+  assert.equal(described[2].line, 'chercher, puis lire l’article');
+  assert.equal(builtNote(answers.described, described, 'fr'), FR.dockDescribedNote);
+  assert.equal(builtNote(answers.described, described, 'en'), EN.dockDescribedNote);
+
+  const searched = stageRows(answers.searched, 'en');
+  assert.ok(searched.every((row) => row.model === false), 'no model took part');
+  assert.equal(searched[1].line, EN.dockQuestionByCode);
+  assert.equal(builtNote(answers.searched, searched, 'en'), EN.dockBricksNoModel);
+  const failed = structuredClone(answers.searched);
+  failed.trace.plan.bricks.question_call = 'failed';
+  assert.equal(builtNote(failed, stageRows(failed, 'en'), 'en'), EN.dockNoModelUsed, 'a model that was asked and gave nothing is not "no model was asked"');
+
+  // A tables answer whose only model step is the question call says the model described, not that it ranked passages.
+  const reached = structuredClone(answers.rule);
+  reached.trace.plan.bricks.model_calls = [{ step: 'question' }];
+  assert.equal(builtNote(reached, stageRows(reached, 'en'), 'en'), EN.dockDescribedNote);
+  assert.equal(builtNote(answers.rule, stageRows(answers.rule, 'en'), 'en'), EN.dockBricksNoModel);
+
+  const { DockView } = await dock();
+  const turn = { id: 't3', kind: 'answer', question: "Que dit l'article 39 de la loi sur le contrat d'assurance ?", dossier: answers.described, servingCommit: null, seconds: 1.2 };
+  const markup = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: turn }));
+  assert.ok(markup.includes(FR.dockDescribedNote), 'the work says what the model did');
+  assert.ok(!markup.includes(FR.dockPlanNote), 'and never that a model planned');
+  assert.match(markup, /data-stage="question"[\s\S]*?data-stage-by="model"/u);
+  assert.match(markup, /data-stage="route"[\s\S]*?data-stage-by="code"/u);
+  assert.ok(!markup.includes('data-stage="planner"'), 'no planner stage');
 });
 
 test('a bricks answer that quotes is an answer; one that quotes nothing says its own sentences; a refuse stays the advice boundary', () => {
@@ -142,7 +186,7 @@ test('the dock draws a bricks answer: the lead line marked, each case with its a
 });
 
 test('the dock\'s new words are in both copy tables', () => {
-  for (const key of Object.keys(EN).filter((name) => /^dock(Stage(Question|Route|Retrieval|Arbiter|Extraction|Checks)|Question|Kind|Route|Retrieval|Arbiter|Extraction|Checks|Bricks|Said)/u.test(name))) {
+  for (const key of Object.keys(EN).filter((name) => /^dock(Stage(Question|Route|Retrieval|Arbiter|Extraction|Checks)|Question|Kind|Route|Retrieval|Arbiter|Extraction|Checks|Bricks|Said|Asks|Described|NoModel)/u.test(name))) {
     assert.equal(typeof FR[key], 'string', key);
     assert.ok(FR[key].length > 0 && EN[key].length > 0, key);
   }
