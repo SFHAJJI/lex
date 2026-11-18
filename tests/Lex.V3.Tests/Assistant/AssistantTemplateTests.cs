@@ -21,7 +21,7 @@ public sealed class AssistantTemplateTests
     [TestMethod]
     public void EveryTemplateHasItsFrenchAndItsEnglishAndNothingElse()
     {
-        Assert.AreEqual(136, V3AnswerTemplates.Ids.Count, "the set's size; a new sentence is a reviewed change to the set");
+        Assert.AreEqual(137, V3AnswerTemplates.Ids.Count, "the set's size; a new sentence is a reviewed change to the set");
         Assert.AreEqual(V3AnswerTemplates.Ids.Count * 2, V3AnswerTemplates.All.Count);
         foreach (var id in V3AnswerTemplates.Ids)
         {

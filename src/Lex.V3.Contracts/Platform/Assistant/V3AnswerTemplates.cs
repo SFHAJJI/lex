@@ -364,6 +364,7 @@ public static partial class V3AnswerTemplates
     // say "not found", and the plan lines of the route.
     public const string NoticeNoModel = "notice.no_model";
     public const string NoticeModelAssisted = "notice.model_assisted";
+    public const string NoticeModelDescribed = "notice.model_described";
     public const string PlanBricksTerm = "plan.bricks.term";
     public const string PlanBricksKindDefinition = "plan.bricks.kind.definition";
     public const string PlanBricksKindRule = "plan.bricks.kind.rule";
@@ -527,6 +528,7 @@ public static partial class V3AnswerTemplates
         // day, and the English follows what that review found (a count of one, two overstatements).
         (NoticeNoModel, "No AI model took part in this answer: Lex's code read your question, searched the text it holds and wrote every sentence from fixed wording; the quotations are the published text.", BricksDraft, []),
         (NoticeModelAssisted, "An AI model helped find the passages: among the lines Lex's code gave it, it marked those that answer your question. It wrote no sentence of this answer: Lex's code checked each line it marked and wrote every sentence from fixed wording; the quotations are the published text.", BricksDraft, []),
+        (NoticeModelDescribed, "An AI model described your question: what it asks for, and which of your words name an act, an article or a subject. Lex's code chose what to run from that description, ran it and wrote every sentence from fixed wording; the quotations are the published text.", BricksDraft, []),
         (PlanBricksTerm, "Lex read your words “{words}” as the term “{term}” of its insurance vocabulary.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan), ("term", V3AnswerSlotKind.DictionaryTerm)]),
         (PlanBricksKindDefinition, "Kind of answer looked for: a definition.", BricksDraft, []),
         (PlanBricksKindRule, "Kind of answer looked for: a rule, with its conditions and exceptions.", BricksDraft, []),

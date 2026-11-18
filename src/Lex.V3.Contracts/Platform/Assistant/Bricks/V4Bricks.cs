@@ -22,7 +22,13 @@ public interface IV4Corpus
 }
 
 /// <summary>What the bricks are given: the masked question, the answer's locale, today in Luxembourg and the dates the parser read.</summary>
-public sealed record V4PlanInput(string MaskedQuestion, V3AnswerLocale Locale, string Today, IReadOnlyList<V3ParsedDate> Dates);
+public sealed record V4PlanInput(
+    string MaskedQuestion,
+    V3AnswerLocale Locale,
+    string Today,
+    IReadOnlyList<V3ParsedDate> Dates,
+    IReadOnlyList<V3PlannerReference>? References = null,
+    IReadOnlyList<string>? SearchLanguages = null);
 
 /// <summary>
 /// What the bricks answer: a plan /2, or none with the reason (a question the bricks do not answer: it cites an article,
@@ -71,9 +77,81 @@ public static class V4Bricks
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(corpus);
         var dictionary = V4Dictionary.Insurance;
+        var question = input.MaskedQuestion;
+
+        // Steps 1 to 5 of question parsing are code; the tables answer what they read.
+        var row = V4QuestionParser.Parse(question, input.Locale, dictionary, V4CorpusIndex.Insurance);
+        var own = ByTheTables(input, row, corpus, model, cancellationToken, prior: null);
+        if (own.PlanJson is not null)
+        {
+            return own;
+        }
+
+        // Step 6, the question call, only when the row is incomplete: a model describes the question, from closed lists and
+        // spans of the reader's own words. It names no operation; code maps what it says to operations by a fixed table.
+        var planner = new V3PlannerInput(question, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
+
+        // With no description from a model (none is wired, the call failed, its reply left its closed form), nothing is
+        // repaired and nothing is asked again: code searches the reader's own words, and the answer says no model took part.
+        V4PlanOutcome ReadByCode(string outcome, long cost) =>
+            new(V4QuestionCall.PlanJson(planner, V4QuestionCall.ByCode(planner, row), outcome, null), cost, own.Reason + "+question_" + outcome);
+
+        if (model is null)
+        {
+            return ReadByCode("not_wired", 0);
+        }
+
+        var call = V4QuestionCall.Call(planner, dictionary);
+        V4ModelReply reply;
+        try
+        {
+            reply = model.Complete(call, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return ReadByCode("failed", 0);
+        }
+
+        var parts = V4QuestionCall.Read(reply.Content, question, dictionary);
+        if (parts is null)
+        {
+            return ReadByCode("refused", reply.CostMicroEuros);
+        }
+
+        // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
+        // words the dictionary lacks. Then the tables answer, as for any question.
+        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0, OwnCase: false } described] && dictionary.Concept(described.Concept) is { } concept)
+        {
+            var span = described.Words ?? described.Span;
+            var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
+            if (keyword is not null && !question.AsSpan(span.Start, span.End - span.Start).Contains('•'))
+            {
+                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, (call, reply, model.ModelId));
+                if (reached.PlanJson is not null)
+                {
+                    return reached;
+                }
+            }
+        }
+
+        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", (call, reply, model.ModelId)), reply.CostMicroEuros, "route:operations");
+    }
+
+    /// <summary>
+    /// What the tables answer of a parsed row: a plan /2, or none with the reason (the question cites an article, asks how the
+    /// law changed, holds a word of another domain, or names nothing the dictionary and the acts' own terms read).
+    /// </summary>
+    private static V4PlanOutcome ByTheTables(
+        V4PlanInput input,
+        V4QuestionRow row,
+        IV4Corpus corpus,
+        IV4Model? model,
+        CancellationToken cancellationToken,
+        (V4ModelCall Call, V4ModelReply Reply, string Model)? prior)
+    {
+        var dictionary = V4Dictionary.Insurance;
         var index = V4CorpusIndex.Insurance;
         var question = input.MaskedQuestion;
-        var row = V4QuestionParser.Parse(question, input.Locale, dictionary, index);
         var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
         var ruleQuestion = cues.Count > 0 && V4Boundary.RuleQuestion(question, 0, question.Length, cues);
         var application = cues.Count > 0 && !ruleQuestion;
@@ -179,6 +257,19 @@ public static class V4Bricks
         var decision = V4Dispatcher.Decide(
             new V4DispatchInput(row, application, EuActNotHeld: false, tables is not null, tables is { Summary.Headings: > 0 }, terms.Count > 0, model is not null), dictionary);
         var draft = new Draft { Route = decision.Route, AnswerKind = decision.Kind };
+        if (prior is { } asked)
+        {
+            // The question call that reached the concept is part of this answer's record and of its cost.
+            draft.Cost += asked.Reply.CostMicroEuros;
+            draft.Calls.Add((
+                asked.Call.Step,
+                asked.Model,
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(asked.Call.System + "\n" + asked.Call.User)))[..16],
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(asked.Reply.Content))),
+                asked.Reply.InputTokens,
+                asked.Reply.OutputTokens));
+        }
+
         V4RetrievalResult? retrieval = null;
         var notes = new List<V4AnswerNote>();
         if (tables is null)
@@ -233,8 +324,8 @@ public static class V4Bricks
 
             // A word that qualifies what is asked (it comes after the concept: "résilier ... de façon unilatérale") and that
             // the act never uses is said as such. A word before the concept is the question's own frame ("que se passe-t-il").
-            var asked = row.Concepts.Concat(row.Roles).Select(static read => read.Start).DefaultIfEmpty(int.MaxValue).Min();
-            foreach (var unmatched in row.Unmatched.Where(unmatched => unmatched.Start > asked).Take(3))
+            var askedAt = row.Concepts.Concat(row.Roles).Select(static read => read.Start).DefaultIfEmpty(int.MaxValue).Min();
+            foreach (var unmatched in row.Unmatched.Where(unmatched => unmatched.Start > askedAt).Take(3))
             {
                 if (V4Retrieval.LinesHolding(tables, row.Folded[unmatched.Start..unmatched.End]) == 0)
                 {

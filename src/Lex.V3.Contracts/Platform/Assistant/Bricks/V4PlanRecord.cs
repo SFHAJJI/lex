@@ -40,11 +40,11 @@ public sealed class V4PlanRecord
 
     /// <summary>The routes of the dispatcher (brick E).</summary>
     public static readonly IReadOnlyList<string> Routes =
-        ["greeting", "own_case", "definition", "fact", "rule", "list", "open", "absence", "not_held", "clarify"];
+        ["greeting", "own_case", "definition", "fact", "rule", "list", "open", "absence", "not_held", "clarify", "operations"];
 
     /// <summary>The kinds an answer can be of: the kinds of the dictionary, and the two ends that are not an answer of a kind.</summary>
     public static readonly IReadOnlyList<string> AnswerKinds =
-        ["definition", "rule", "duration", "date", "amount", "list", "reference", "text", "candidates", "absence", "greeting", "not_held"];
+        ["definition", "rule", "duration", "date", "amount", "list", "reference", "text", "candidates", "absence", "greeting", "not_held", "operations"];
 
     public static readonly IReadOnlyList<string> ItemRoles = ["definition", "rule", "case", "value", "item", "passage", "nearest"];
 

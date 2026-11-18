@@ -337,7 +337,25 @@ public static partial class V3AssistantPipeline
             notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticePreview, locale));
         }
 
-        notices.Add(V3AnswerClaim.Bind(record.ModelSteps.Count == 0 ? V3AnswerTemplates.NoticeNoModel : V3AnswerTemplates.NoticeModelAssisted, locale));
+        // What a model did, as it was: it described the question (it named the concept the reader's words are about), it
+        // marked lines among those code gave it, both, or nothing.
+        var described = record.ModelSteps.Contains("question");
+        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "extraction");
+        if (described)
+        {
+            notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeModelDescribed, locale));
+        }
+
+        if (assisted)
+        {
+            notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeModelAssisted, locale));
+        }
+
+        if (!described && !assisted)
+        {
+            notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeNoModel, locale));
+        }
+
         notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeNotLegalAdvice, locale));
 
         var parts = new[] { new V3DossierPart(part.PartId, part.Span, application, cues, verdict, blocks) };

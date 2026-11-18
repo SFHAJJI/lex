@@ -77,6 +77,13 @@ public sealed class V4QuestionRow
     /// <summary>The words that carry meaning and that no table read: kept, reported, never used to block.</summary>
     public IReadOnlyList<V4Span> Unmatched { get; }
 
+    /// <summary>The row with a concept more: the one the question call chose among the dictionary's, for words the lookup did not read.</summary>
+    public V4QuestionRow With(V4RowConcept concept)
+    {
+        ArgumentNullException.ThrowIfNull(concept);
+        return new V4QuestionRow(Question, Folded, [.. Words], Language, Greeting, OtherDomain, [.. Concepts, concept], [.. Roles], [.. Acts], [.. Kinds], [.. Unmatched]);
+    }
+
     /// <summary>Whether the row holds what retrieval needs without a model: a concept, a role with a definition cue, or an act.</summary>
     public bool Searchable => Concepts.Count > 0 || Roles.Count > 0 || Acts.Count > 0;
 }

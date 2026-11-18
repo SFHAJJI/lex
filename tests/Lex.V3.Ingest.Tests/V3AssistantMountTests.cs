@@ -450,11 +450,11 @@ public sealed class V3AssistantMountTests
         Assert.IsTrue(V3AssistantPipeline.Replay(elsewhere.ToJsonString(), mount.AssistantStepsOn, mount.AssistantEnvironmentAt(ClockB)).SnapshotMismatch);
     }
 
-    // ---- The gates over the real planner: opt-in, never in CI ----------------------------------------------------------
+    // ---- The gates over the real model: opt-in, never in CI ----------------------------------------------------------
 
     /// <summary>
-    /// The machine gates over the real planner (the owner's order of 2026-10-28), only when <c>LEX_ASSISTANT_GATES_LIVE</c> is
-    /// exactly <c>1</c> and the deployment's variables are set (AzureOpenAiAssistantPlanner); otherwise inconclusive, so CI
+    /// The machine gates over the real model (the owner's order of 2026-10-28), only when <c>LEX_ASSISTANT_GATES_LIVE</c> is
+    /// exactly <c>1</c> and the deployment's variables are set (AzureOpenAiModel); otherwise inconclusive, so CI
     /// never calls a model. Each drafted case runs five times (R40). The report gives quote fidelity, non-template sentences,
     /// trace replay, latency p95 and cost per answer, and goes to <c>LEX_ASSISTANT_GATES_REPORT</c> or the temporary folder,
     /// never inside the repository. Over <c>LEX_ASSISTANT_GATES_MOUNT</c> (a mount directory) when set, else the fixture.
@@ -468,7 +468,7 @@ public sealed class V3AssistantMountTests
             Assert.Inconclusive("LEX_ASSISTANT_GATES_LIVE is not 1: the live gates call a model, and run only when asked to.");
         }
 
-        using var planner = AzureOpenAiAssistantPlanner.FromEnvironment(System.Environment.GetEnvironmentVariable)
+        using var model = AzureOpenAiModel.FromEnvironment(System.Environment.GetEnvironmentVariable)
             ?? throw new AssertInconclusiveException("The deployment's variables are not set (LEX_ASSISTANT_ENDPOINT, _DEPLOYMENT, _API_VERSION, _KEY).");
         var report = System.Environment.GetEnvironmentVariable("LEX_ASSISTANT_GATES_REPORT") is { Length: > 0 } named
             ? Path.GetFullPath(named)
@@ -486,7 +486,7 @@ public sealed class V3AssistantMountTests
         try
         {
             using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None) ?? throw new AssertFailedException("the mount did not open");
-            var runtime = On(planner);
+            var runtime = On(new Lex.V3.Contracts.Platform.Assistant.Bricks.V4BricksPlanner(mount.BricksCorpus(static () => DateTimeOffset.UtcNow), model));
             mount.UseAssistant(runtime);
             const int Runs = 5;
             var cases = Cases();
@@ -537,9 +537,9 @@ public sealed class V3AssistantMountTests
             var costPerAsk = runtime.SpentMicroEuros / Math.Max(1.0, cases.Length * Runs) / 1_000_000.0;
             var fidelity = quotes == 0 ? "no quotation" : $"{1.0 - ((double)quoteFailures / quotes):0.000} ({quoteFailures} failures in {quotes} quotations)";
             var text = new StringBuilder()
-                .AppendLine("# The assistant's machine gates over the real planner")
+                .AppendLine("# The assistant's machine gates over the real model")
                 .AppendLine()
-                .AppendLine($"{DraftedLabel}. Planner: {planner.PlannerId}. Mount: {(fixture is null ? directory : "the test fixture")}. {Runs} runs per case, {DateTimeOffset.UtcNow:u}.")
+                .AppendLine($"{DraftedLabel}. Planner: {runtime.Planner!.PlannerId}. Mount: {(fixture is null ? directory : "the test fixture")}. {Runs} runs per case, {DateTimeOffset.UtcNow:u}.")
                 .AppendLine()
                 .AppendLine($"- Quote fidelity: {fidelity}; gate 1.0.")
                 .AppendLine($"- Non-template sentences: {nonTemplate}; gate 0.")

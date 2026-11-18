@@ -1,44 +1,44 @@
 using System.Globalization;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Lex.V3.Contracts.Platform.Assistant;
 using Lex.V3.Contracts.Platform.Assistant.Bricks;
 
 namespace Lex.V3.Api;
 
 /// <summary>
-/// The planner over an Azure OpenAI chat-completions deployment (the owner's order of 2026-10-28, for a demonstration): it
-/// sends the masked question and the opaque references, asks for a plan under strict structured outputs
-/// (<see cref="V3AssistantPlanWire.Schema"/>), and answers the plan and what the call cost. It plans only (R31): the validator
-/// judges what it answers, with no repair, and code writes every sentence.
+/// The model the bricks ask (V4), over an Azure OpenAI chat-completions deployment (the owner's order of 2026-10-28, for a
+/// demonstration). It plans nothing and writes no sentence a reader sees: each call is one step of the bricks (the question
+/// call, the arbiter, the extraction), with that step's fixed instruction, its typed input, and the closed form its reply
+/// is held to under strict structured outputs. Code reads every reply against that form, with no repair, decides what to
+/// run and writes every sentence.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Configuration</b>, from the environment only, read once at start (<see cref="FromEnvironment"/>):
 /// <c>LEX_ASSISTANT_ENDPOINT</c> (<c>https://&lt;resource&gt;.openai.azure.com</c>), <c>LEX_ASSISTANT_DEPLOYMENT</c>,
 /// <c>LEX_ASSISTANT_API_VERSION</c>, and the key <c>LEX_ASSISTANT_KEY</c>, set from a Container Apps secret. With no
-/// endpoint there is no planner, and ask answers the switched-off card. The key is held in memory, sent only as the
+/// endpoint there is no model, and ask answers the switched-off card. The key is held in memory, sent only as the
 /// <c>api-key</c> header of the call, and never written, logged or echoed: no exception message of this type carries it.
 /// </para>
 /// <para>
 /// <b>What leaves the server</b> (R33): the question after code masks obvious identifiers (e-mail addresses, phone numbers,
-/// IBANs, identity numbers), the answer locale, the opaque references, the search languages and the operation list. Never an
-/// address, a user agent, a cookie, an earlier question or anything of the request's headers: the planner is never handed
-/// them (<see cref="V3PlannerInput"/>). This is the one outbound call the public process makes, and only when the switch is on
-/// (PublicRequestRecordingTests pins it to this file).
+/// IBANs, identity numbers), and beside it only what Lex itself holds: where the question's words and dates stand, the
+/// languages the indexes search, concepts of the dictionary, and lines of published law. Never an address, a user agent,
+/// a cookie, an earlier question or anything of the request's headers: the bricks are never handed them
+/// (<see cref="Lex.V3.Contracts.Platform.Assistant.V3PlannerInput"/>). This is the one outbound call the public process
+/// makes, and only when the switch is on (PublicRequestRecordingTests pins it to this file).
 /// </para>
 /// <para>
 /// <b>Time and money</b> (R40): the call has <see cref="Timeout"/>; a timeout, an HTTP error (a 429 included), a refusal by
-/// the model or an answer cut short throws, and ask answers the switched-off card. The cost is the response's own
+/// the model or an answer cut short throws, and the bricks go on with what code found. The cost is the response's own
 /// <c>usage</c> at the configured prices per million tokens (<c>LEX_ASSISTANT_EUR_PER_MILLION_INPUT</c>,
 /// <c>LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT</c>; driver defaults until the deployment's price list is read), counted toward
 /// the per-answer ceiling and the monthly cap; a response with no usage is counted at the ceiling.
 /// </para>
 /// </remarks>
-internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model, IDisposable
+internal sealed class AzureOpenAiModel : IV4Model, IDisposable
 {
     internal const string EndpointVariable = "LEX_ASSISTANT_ENDPOINT";
     internal const string DeploymentVariable = "LEX_ASSISTANT_DEPLOYMENT";
@@ -50,15 +50,10 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
     /// <summary>The call's deadline (about 6 s, inside R40's 10 s to the full answer).</summary>
     internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(6);
 
-    /// <summary>The most tokens the plan may take: a plan is short, and a longer answer is cut short and refused.</summary>
-    internal const int MaximumCompletionTokens = 1200;
-
     /// <summary>Driver defaults, in euros per million tokens, until the deployment's own price list is read (TODO for the driver).</summary>
     internal const double DefaultInputPrice = 5.0;
 
     internal const double DefaultOutputPrice = 20.0;
-
-    internal const string PromptResource = "Lex.V3.Api.AssistantPlannerPrompt.md";
 
     private readonly HttpClient _client;
     private readonly Uri _completions;
@@ -67,7 +62,7 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
     private readonly double _outputPrice;
     private readonly TimeSpan _timeout;
 
-    internal AzureOpenAiAssistantPlanner(
+    internal AzureOpenAiModel(
         Uri endpoint,
         string deployment,
         string apiVersion,
@@ -95,17 +90,15 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
         _timeout = timeout ?? Timeout;
         _client = new HttpClient(handler, disposeHandler: true) { Timeout = _timeout };
         _client.DefaultRequestHeaders.Add("api-key", _key);
-        PlannerId = $"azure-openai/{deployment}/prompt-{PromptSha256[..12]}";
         ModelId = new string(deployment.Select(static character => char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_' ? character : '-').ToArray());
     }
 
-    /// <summary>The model the bricks ask (V4): the deployment's name, as a token a trace can carry.</summary>
+    /// <summary>The deployment's name, as a token a trace can carry.</summary>
     public string ModelId { get; }
 
     /// <summary>
-    /// One call of the bricks (the arbiter, the extraction): the step's fixed instruction, its typed input, and the closed
-    /// form its reply is held to under strict structured outputs. The same deployment, the same key, the same deadline and
-    /// the same prices as the planner's call; what leaves the server is the masked question and lines of published law.
+    /// One call of the bricks: the step's fixed instruction, its typed input, and the closed form its reply is held to
+    /// under strict structured outputs, at temperature 0. Any failure throws.
     /// </summary>
     public V4ModelReply Complete(V4ModelCall call, CancellationToken cancellationToken)
     {
@@ -128,24 +121,18 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
             ["max_completion_tokens"] = call.MaximumTokens,
             ["temperature"] = 0,
         };
-        var (content, cost, input, output) = Send(body.ToJsonString(), cancellationToken);
-        return new V4ModelReply(content, cost, input, output);
-    }
 
-    /// <summary>Sends one chat-completions request and answers its content, its cost and its token counts; any failure throws.</summary>
-    private (string Content, long Cost, int InputTokens, int OutputTokens) Send(string body, CancellationToken cancellationToken)
-    {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(_timeout);
         using var request = new HttpRequestMessage(HttpMethod.Post, _completions)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
         };
         using var response = _client.Send(request, HttpCompletionOption.ResponseContentRead, deadline.Token);
         if (response.StatusCode != HttpStatusCode.OK)
         {
             // The status alone: never the response's text, which could echo the request.
-            throw new InvalidOperationException($"The planner's provider answered HTTP {((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)}.");
+            throw new InvalidOperationException($"The model's provider answered HTTP {((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)}.");
         }
 
         using var stream = response.Content.ReadAsStream(deadline.Token);
@@ -154,29 +141,29 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
         var choice = root.GetProperty("choices")[0];
         if (choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String && finish.GetString() != "stop")
         {
-            throw new InvalidOperationException("The planner's answer was cut short or filtered.");
+            throw new InvalidOperationException("The model's answer was cut short or filtered.");
         }
 
         var message = choice.GetProperty("message");
         if (message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.String)
         {
-            throw new InvalidOperationException("The planner's model refused to plan.");
+            throw new InvalidOperationException("The model refused the call.");
         }
 
-        var content = message.GetProperty("content").GetString() ?? throw new InvalidOperationException("The planner answered no content.");
+        var content = message.GetProperty("content").GetString() ?? throw new InvalidOperationException("The model answered no content.");
         var tokens = root.TryGetProperty("usage", out var usage) &&
             usage.TryGetProperty("prompt_tokens", out var prompt) && prompt.TryGetInt32(out var input) &&
             usage.TryGetProperty("completion_tokens", out var completion) && completion.TryGetInt32(out var output)
                 ? (input, output)
                 : (0, 0);
-        return (content, CostOf(root), tokens.Item1, tokens.Item2);
+        return new V4ModelReply(content, CostOf(root), tokens.Item1, tokens.Item2);
     }
 
     /// <summary>
-    /// The planner the environment names, or null when it names no endpoint, deployment, version or key: then there is no
-    /// planner, and the assistant stays off whatever its switch says.
+    /// The model the environment names, or null when it names no endpoint, deployment, version or key: then there is no
+    /// model, and the assistant stays off whatever its switch says.
     /// </summary>
-    internal static AzureOpenAiAssistantPlanner? FromEnvironment(Func<string, string?> variable)
+    internal static AzureOpenAiModel? FromEnvironment(Func<string, string?> variable)
     {
         ArgumentNullException.ThrowIfNull(variable);
         var endpoint = variable(EndpointVariable);
@@ -189,7 +176,7 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
             return null;
         }
 
-        return new AzureOpenAiAssistantPlanner(
+        return new AzureOpenAiModel(
             uri,
             deployment,
             apiVersion,
@@ -201,102 +188,6 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
 
     private static double Price(string? value, double fallback) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var price) && price > 0 ? price : fallback;
-
-    public string PlannerId { get; }
-
-    /// <summary>The versioned system prompt (<c>assistant-planner-prompt.md</c>), committed and embedded.</summary>
-    internal static string Prompt { get; } = ReadPrompt();
-
-    internal static string PromptSha256 { get; } = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Prompt)));
-
-    /// <summary>The request body for an input: the system prompt, the input as JSON, and the plan's strict schema.</summary>
-    internal static string RequestBody(V3PlannerInput input)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-        var user = new JsonObject
-        {
-            ["question"] = input.MaskedQuestion,
-            ["question_length"] = input.MaskedQuestion.Length,
-            ["words"] = new JsonArray(WordsOf(input.MaskedQuestion).Select(static word => (JsonNode)new JsonObject
-            {
-                ["w"] = word.Text,
-                ["start"] = word.Start,
-                ["end"] = word.End,
-            }).ToArray()),
-            ["answer_locale"] = Lex.V3.Contracts.ContractWire.NameOf(input.AnswerLocale),
-            ["references"] = new JsonArray(input.References.Select(static reference => (JsonNode)new JsonObject
-            {
-                ["ref"] = reference.Ref,
-                ["kind"] = reference.Kind,
-                ["start"] = reference.Start,
-                ["end"] = reference.End,
-            }).ToArray()),
-            ["search_languages"] = new JsonArray(input.SearchLanguages.Select(static language => (JsonNode)language).ToArray()),
-            ["operations"] = new JsonArray(input.Operations.Select(static operation => (JsonNode)operation).ToArray()),
-        };
-        var body = new JsonObject
-        {
-            ["messages"] = new JsonArray(
-                new JsonObject { ["role"] = "system", ["content"] = Prompt },
-                new JsonObject { ["role"] = "user", ["content"] = user.ToJsonString() }),
-            ["response_format"] = new JsonObject
-            {
-                ["type"] = "json_schema",
-                ["json_schema"] = new JsonObject
-                {
-                    ["name"] = V3AssistantPlanWire.SchemaName,
-                    ["strict"] = true,
-                    ["schema"] = V3AssistantPlanWire.Schema(),
-                },
-            },
-            ["max_completion_tokens"] = MaximumCompletionTokens,
-            ["temperature"] = 0,
-        };
-        return body.ToJsonString();
-    }
-
-    /// <summary>
-    /// The question's words as code finds them, each a run of characters between white space with its start and end in
-    /// UTF-16 units, so the model takes every span from them rather than counting positions (a model counts them poorly, and
-    /// the validator refuses a span outside the question). A run holding a mask character is left out: the model never
-    /// refers to a masked run. Nothing is added to what leaves the server: these are the masked question's own words.
-    /// </summary>
-    internal static IReadOnlyList<(string Text, int Start, int End)> WordsOf(string question)
-    {
-        ArgumentNullException.ThrowIfNull(question);
-        var words = new List<(string Text, int Start, int End)>();
-        var at = 0;
-        while (at < question.Length)
-        {
-            while (at < question.Length && char.IsWhiteSpace(question[at]))
-            {
-                at++;
-            }
-
-            var start = at;
-            while (at < question.Length && !char.IsWhiteSpace(question[at]))
-            {
-                at++;
-            }
-
-            if (at > start && question.AsSpan(start, at - start).IndexOf(MaskCharacter) < 0)
-            {
-                words.Add((question[start..at], start, at));
-            }
-        }
-
-        return words;
-    }
-
-    /// <summary>The character the masking writes over an identifier (the prompt names it).</summary>
-    internal const char MaskCharacter = '•';
-
-    public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-        var (content, cost, _, _) = Send(RequestBody(input), cancellationToken);
-        return new V3PlannerOutput(V3AssistantPlanWire.ToPlanJson(content), cost);
-    }
 
     /// <summary>The call's cost in micro-euros, from the response's usage; at the per-answer ceiling when it states none.</summary>
     internal long CostOf(JsonElement response)
@@ -312,12 +203,4 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model,
     }
 
     public void Dispose() => _client.Dispose();
-
-    private static string ReadPrompt()
-    {
-        using var stream = typeof(AzureOpenAiAssistantPlanner).Assembly.GetManifestResourceStream(PromptResource)
-            ?? throw new InvalidOperationException("The assistant planner's prompt is not embedded.");
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        return reader.ReadToEnd();
-    }
 }

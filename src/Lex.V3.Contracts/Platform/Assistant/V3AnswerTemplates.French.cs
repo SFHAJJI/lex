@@ -100,6 +100,7 @@ public static partial class V3AnswerTemplates
         ["verdict.refuse"] = ("Hors de ce que fait ce service", FrenchReviewed),
         ["verdict.split"] = ("Deux questions", FrenchReviewed),
         ["notice.no_model"] = ("Aucun modèle d’IA n’a participé à cette réponse\u00A0: le code de Lex a lu votre question, cherché dans le texte qu’il détient et écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", BricksFrenchReviewed),
+        ["notice.model_described"] = ("Un modèle d’IA a décrit votre question\u00A0: ce qu’elle demande, et lesquels de vos mots désignent un acte, un article ou un sujet. Le code de Lex a choisi les opérations à exécuter à partir de cette description, les a exécutées et a écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", BricksFrenchReviewed),
         ["notice.model_assisted"] = ("Un modèle d’IA a aidé à trouver les passages\u00A0: parmi les lignes que le code de Lex lui a fournies, il a désigné celles qui répondent à votre question. Il n’a écrit aucune phrase de cette réponse\u00A0: le code de Lex a vérifié chaque ligne désignée et écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", BricksFrenchReviewed),
         ["plan.bricks.term"] = ("Lex a lu vos mots «\u00A0{words}\u00A0» comme le terme «\u00A0{term}\u00A0» de son vocabulaire de l’assurance.", BricksFrenchReviewed),
         ["plan.bricks.kind.definition"] = ("Réponse cherchée\u00A0: une définition.", BricksFrenchReviewed),

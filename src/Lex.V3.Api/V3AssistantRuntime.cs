@@ -53,7 +53,7 @@ internal sealed class V3AssistantRuntime
     /// <summary>
     /// How long the planner may take in all before the answer is the switched-off card. The bricks (V4) may ask a model
     /// twice in a row, or three times after a refused reply, each call under its own deadline of about 6 s
-    /// (<see cref="AzureOpenAiAssistantPlanner.Timeout"/>); a model that is slow leaves the answer code found, so this outer
+    /// (<see cref="AzureOpenAiModel.Timeout"/>); a model that is slow leaves the answer code found, so this outer
     /// bound is reached only when the provider hangs on every call.
     /// </summary>
     internal static readonly TimeSpan PlannerDeadline = TimeSpan.FromSeconds(14);

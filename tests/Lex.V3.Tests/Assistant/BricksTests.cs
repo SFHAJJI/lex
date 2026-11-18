@@ -818,31 +818,32 @@ public sealed class BricksTests
         Assert.IsTrue(notHeld.Blocks.OfType<V3ClaimBlock>().Any(static block => block.Claim.Text.Contains("https://eur-lex.europa.eu/eli/dir/2009/138/oj", StringComparison.Ordinal)));
     }
 
-    private sealed class NamedPlanner(string json) : IAssistantPlanner
-    {
-        public int Asked { get; private set; }
-
-        public string PlannerId => "fallback-test-planner/1";
-
-        public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)
-        {
-            Asked++;
-            return new V3PlannerOutput(json, 0);
-        }
-    }
-
     [TestMethod]
-    [DataRow("Que dit l'article 39 de la loi sur le contrat d'assurance ?")]
-    [DataRow("Qu'est-ce qui a changé dans la loi sur le contrat d'assurance en 2025 ?")]
-    [DataRow("Quelle est la durée maximale de la période d'essai ?")]
-    [DataRow("Quelle est la cotisation d'assurance maladie à la CNS ?")]
-    public void AQuestionTheBricksDoNotAnswerGoesToThePlannerThatAnsweredItBefore(string question)
+    [DataRow("Que dit l'article 39 de la loi sur le contrat d'assurance ?", "cites_article")]
+    [DataRow("Qu'est-ce qui a changé dans la loi sur le contrat d'assurance en 2025 ?", "asks_change")]
+    [DataRow("Quelle est la durée maximale de la période d'essai ?", "nothing_of_the_dictionary")]
+    [DataRow("Quelle est la cotisation d'assurance maladie à la CNS ?", "other_domain")]
+    public void WhatTheTablesDoNotAnswerIsSearchedByCodeWhenNoModelDescribesIt(string question, string reason)
     {
-        var fallback = new NamedPlanner("not a plan");
-        var outcome = BricksFixture.Ask(question, fallback: fallback);
-        Assert.AreEqual(1, fallback.Asked);
-        Assert.AreEqual(V3AskOutcomeReason.PlanRefused, outcome.Reason, "and what that planner answers is validated as before");
-        Assert.AreEqual(V3AskOutcomeReason.PlannerFailed, BricksFixture.Ask(question).Reason, "with no other planner the question is not answered");
+        var intake = V3AssistantParsers.Intake(question)!;
+        var outcome = V4Bricks.Plan(new V4PlanInput(intake.Masked, V3AnswerLocale.Fr, BricksFixture.Today, V3AssistantParsers.DatesIn(intake.Masked), [], ["fra"]), new BricksFixture.Corpus(), null, CancellationToken.None);
+        Assert.AreEqual(reason + "+question_not_wired", outcome.Reason);
+        Assert.AreEqual(0, outcome.CostMicroEuros);
+
+        var executor = new BricksFixture.Executor();
+        var dossier = Answered(BricksFixture.Ask(question, executor: executor));
+        var search = executor.Calls.Single();
+        Assert.AreEqual("search", search.Operation, "one search, and nothing else: the search found no one article");
+        using var parameters = JsonDocument.Parse(search.Parameters);
+        Assert.AreEqual(question.TrimEnd('?', ' '), parameters.RootElement.GetProperty("query").GetString(), "the reader's own words, as written");
+        Assert.AreEqual(V3AssistantVerdict.Point, dossier.Verdict);
+        var notices = dossier.Notices.Select(static notice => notice.TemplateId).ToArray();
+        CollectionAssert.Contains(notices, V3AnswerTemplates.NoticeNoModel);
+        CollectionAssert.DoesNotContain(notices, V3AnswerTemplates.NoticeModelDescribed);
+        CollectionAssert.DoesNotContain(notices, V3AnswerTemplates.NoticeAssembledByModel, "no model plans any more");
+        CollectionAssert.DoesNotContain(dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), V3AnswerTemplates.PlanBricksModelQuestion);
+        var bricks = Bricks(dossier);
+        Assert.AreEqual(("operations", "not_wired", 0), (bricks.GetProperty("route").GetString(), bricks.GetProperty("question_call").GetString(), bricks.GetProperty("model_calls").GetArrayLength()));
     }
 
     [TestMethod]
@@ -875,7 +876,7 @@ public sealed class BricksTests
         var intake = V3AssistantParsers.Intake(question)!;
         var dates = V3AssistantParsers.DatesIn(intake.Text);
         var context = new V3PlanContext(intake, dates, V3AssistantParsers.RangesIn(intake.Text, dates), [], ["fra"]);
-        var json = new V4BricksPlanner(new BricksFixture.Corpus(), model, null).Plan(new V3PlannerInput(intake.Masked, V3AnswerLocale.Fr, context.References(), ["fra"], BricksFixture.Today), CancellationToken.None).PlanJson;
+        var json = new V4BricksPlanner(new BricksFixture.Corpus(), model).Plan(new V3PlannerInput(intake.Masked, V3AnswerLocale.Fr, context.References(), ["fra"], BricksFixture.Today), CancellationToken.None).PlanJson;
         return (json, context);
     }
 
@@ -947,16 +948,271 @@ public sealed class BricksTests
             new V3AnswerFact("lines", V3AnswerSlotKind.Count, "beaucoup"), new V3AnswerFact("articles", V3AnswerSlotKind.Count, "3")), "a count is digits");
     }
 
+    // ---- Brick C, step 6: the question call, in place of the planner ---------------------------------------------------------
+
+    private static string Described(
+        string asks,
+        string question,
+        string? citation = null,
+        string? act = null,
+        string? words = null,
+        bool ownCase = false,
+        string date = "today",
+        string range = "",
+        string concept = "",
+        string language = "fra",
+        string actRef = "")
+    {
+        JsonArray Span(string? text)
+        {
+            if (text is null)
+            {
+                return new JsonArray(-1, -1);
+            }
+
+            var at = question.IndexOf(text, StringComparison.Ordinal);
+            Assert.IsTrue(at >= 0, text);
+            return new JsonArray(at, at + text.Length);
+        }
+
+        return new JsonObject
+        {
+            ["parts"] = new JsonArray(new JsonObject
+            {
+                ["asks"] = asks,
+                ["own_case"] = ownCase,
+                ["span"] = new JsonArray(0, question.Length),
+                ["citation"] = Span(citation),
+                ["act"] = Span(act),
+                ["words"] = Span(words),
+                ["language"] = language,
+                ["date"] = date,
+                ["range"] = range,
+                ["act_ref"] = actRef,
+                ["concept"] = concept,
+            }),
+        }.ToJsonString();
+    }
+
+    /// <summary>The plan code writes from a description, validated as the pipeline validates every plan.</summary>
+    private static V3AssistantPlan Mapped(string question, string description, params V3ContextChip[] chips)
+    {
+        var intake = V3AssistantParsers.Intake(question)!;
+        var dates = V3AssistantParsers.DatesIn(intake.Text);
+        var context = new V3PlanContext(intake, dates, V3AssistantParsers.RangesIn(intake.Text, dates), chips, ["fra", "eng"]);
+        var input = new V3PlannerInput(intake.Masked, V3AnswerLocale.Fr, context.References(), ["fra", "eng"], BricksFixture.Today);
+        var parts = V4QuestionCall.Read(description, intake.Masked, Dictionary);
+        Assert.IsNotNull(parts, "the description is of its form");
+        var json = V4QuestionCall.PlanJson(input, parts, "described", (V4QuestionCall.Call(input, Dictionary), new V4ModelReply(description, 900, 800, 60), "scripted-model"));
+        var validation = V3AssistantPlanValidator.Validate(json, context);
+        Assert.IsTrue(validation.Admitted, validation.Detail);
+        Assert.AreEqual(json, validation.Plan!.CanonicalJson, "the canonical bytes are the bytes written");
+        return validation.Plan!;
+    }
+
+    [TestMethod]
+    public void WhatTheModelSaysAPartAsksIsMappedToOperationsByCodeOneRuleEach()
+    {
+        const string cited = "Que dit l'article 12 de la loi du 4 avril 2019 ?";
+        var plan = Mapped(cited, Described("article_or_act_cited", cited, citation: "l'article 12 de la loi du 4 avril 2019"));
+        Assert.AreEqual("search", plan.Steps.Single().OperationId);
+        Assert.AreEqual(new V3PlanSpan(8, 46), plan.Steps[0].Arguments["query"].Span, "the citation stays a span of the question: it is never rewritten");
+        Assert.AreEqual(V3ArgumentSourceKind.Today, plan.Steps[0].Arguments["date"].Kind, "the date in an act's name is not the date to read it on");
+        var followUp = plan.FollowUps.Single();
+        Assert.AreEqual(("evidence_bundle", V3FollowUpCondition.OnSingleArticle), (followUp.OperationId, followUp.Condition!.Value));
+        Assert.AreEqual(V3ResultPick.SoleArticle, followUp.Arguments["article"].Pick);
+        Assert.AreEqual(("operations", "operations"), (plan.Bricks!.Route, plan.Bricks.Kind));
+        CollectionAssert.AreEqual(new[] { "question" }, plan.Bricks.ModelSteps.ToArray());
+
+        const string subject = "Que dit le RGPD sur le droit à l'effacement ?";
+        var within = Mapped(subject, Described("words_on_a_subject", subject, act: "RGPD", words: "droit à l'effacement"));
+        Assert.AreEqual("search", within.Steps.Single().OperationId);
+        Assert.AreEqual(V3ArgumentSourceKind.Span, within.Steps[0].Arguments["identifier"].Kind, "the act the question names is where the words are searched");
+        Assert.AreEqual(1, within.FollowUps.Count);
+
+        const string versions = "Quelles versions de la loi du 27 juillet 1997 sur le contrat d'assurance existent ?";
+        Assert.AreEqual("timeline", Mapped(versions, Described("versions_of_an_act", versions, act: "loi du 27 juillet 1997 sur le contrat d'assurance")).Steps.Single().OperationId);
+        Assert.AreEqual("dossier", Mapped(versions, Described("record_of_an_act", versions, act: "loi du 27 juillet 1997 sur le contrat d'assurance")).Steps.Single().OperationId);
+
+        const string dated = "Le Code du travail au 1er janvier 2020";
+        var asOf = Mapped(dated, Described("act_on_a_date", dated, act: "Code du travail", date: "d1")).Steps.Single();
+        Assert.AreEqual(("as_of", V3ArgumentSourceKind.Reference), (asOf.OperationId, asOf.Arguments["date"].Kind));
+
+        const string compared = "Qu'est-ce qui a changé dans le Code du travail entre le 1er janvier 2020 et le 1er janvier 2021 ?";
+        var diff = Mapped(compared, Described("two_dates_compared", compared, act: "Code du travail", range: "r1")).Steps.Single();
+        Assert.AreEqual(("diff", "r1.from", "r1.to"), (diff.OperationId, diff.Arguments["date_from"].Ref, diff.Arguments["date_to"].Ref));
+        Assert.AreEqual("diff", Mapped(compared, Described("two_dates_compared", compared, act: "Code du travail", range: "r1.from")).Steps.Single().OperationId, "an end of the range names the range");
+        Assert.AreEqual("changes_in_period", Mapped(compared, Described("changes_in_a_period", compared, range: "r1")).Steps.Single().OperationId);
+
+        const string identifier = "32016R0679";
+        Assert.AreEqual("resolve", Mapped(identifier, Described("exact_identifier", identifier, citation: identifier)).Steps.Single().OperationId);
+
+        // A kind that lacks what it needs falls to a search of what it has; a part on the reader's own case is proposed refused;
+        // a part with nothing to look up runs nothing.
+        var bare = Mapped(compared, Described("two_dates_compared", compared, act: "Code du travail"));
+        Assert.AreEqual("search", bare.Steps.Single().OperationId, "no range, no comparison");
+        var invented = Mapped(compared, Described("two_dates_compared", compared, act: "Code du travail", range: "r7", date: "d9"));
+        Assert.AreEqual(("search", V3ArgumentSourceKind.Today), (invented.Steps.Single().OperationId, invented.Steps[0].Arguments["date"].Kind), "a reference the question does not hold is no reference");
+        var own = Mapped(cited, Described("article_or_act_cited", cited, citation: "l'article 12 de la loi du 4 avril 2019", ownCase: true));
+        Assert.AreEqual(V3AssistantVerdict.Refuse, own.Parts.Single().ProposedVerdict);
+        var nothing = Mapped(cited, Described("nothing_to_look_up", cited));
+        Assert.AreEqual((0, V3AssistantVerdict.Point), (nothing.Steps.Count, nothing.Parts.Single().ProposedVerdict));
+        var german = Mapped(subject, Described("words_on_a_subject", subject, words: "droit à l'effacement", language: "deu"));
+        Assert.AreEqual("fra", german.Steps[0].Arguments["language"].Choice, "a language this mount does not search is not chosen");
+    }
+
+    [TestMethod]
+    public void AFollowUpQuestionReadsTheActOfTheLastAnswerByItsChipAndAMaskedRunIsNeverAnArgument()
+    {
+        const string next = "Et l'article 40 ?";
+        var chip = new V3ContextChip("work", BricksFixture.Address);
+        var plan = Mapped(next, Described("article_or_act_cited", next, citation: "l'article 40", actRef: "c1"), chip);
+        var search = plan.Steps.Single();
+        Assert.AreEqual(("search", V3ArgumentSourceKind.Reference, "c1"), (search.OperationId, search.Arguments["identifier"].Kind, search.Arguments["identifier"].Ref));
+        Assert.AreEqual("timeline", Mapped("Quelles en sont les versions ?", Described("versions_of_an_act", "Quelles en sont les versions ?", actRef: "c1"), chip).Steps.Single().OperationId);
+        Assert.AreEqual("search", Mapped(next, Described("versions_of_an_act", next, actRef: "c1")).Steps.Single().OperationId, "a chip the question does not carry names no act");
+
+        const string masked = "Écrire à jean.dupont@example.org pour la période d'essai ?";
+        var intake = V3AssistantParsers.Intake(masked)!;
+        Assert.AreNotEqual(masked, intake.Masked, "the intake masks the address");
+        var words = Mapped(masked, Described("words_on_a_subject", masked, words: masked[..^2])).Steps.Single();
+        var query = words.Arguments["query"].Span!;
+        Assert.AreEqual("pour la période d'essai", masked[query.Start..query.End], "the longest run of the reader's words off the mask");
+    }
+
+    [TestMethod]
+    public void ADescriptionOutsideItsClosedFormIsNoDescription()
+    {
+        const string question = "Que dit l'article 12 de la loi du 4 avril 2019 ?";
+        Assert.IsNotNull(V4QuestionCall.Read(Described("article_or_act_cited", question, citation: "l'article 12"), question, Dictionary));
+        Assert.IsNull(V4QuestionCall.Read("run the search operation on article 12", question, Dictionary));
+        Assert.IsNull(V4QuestionCall.Read(Described("evidence_bundle", question), question, Dictionary), "a kind outside the list: a model cannot name an operation");
+        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, language: "lat"), question, Dictionary));
+        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, concept: "a concept of its own"), question, Dictionary), "a concept is one of the dictionary's");
+        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, date: "tomorrow, perhaps"), question, Dictionary), "a date is a reference's name");
+        Assert.IsNull(V4QuestionCall.Read(Described("article_or_act_cited", question, actRef: "/lu-legilux/an-act-of-its-choice"), question, Dictionary), "an act is the reader's words or a chip's name");
+        var beyond = JsonNode.Parse(Described("article_or_act_cited", question))!;
+        beyond["parts"]![0]!["citation"] = new JsonArray(8, 4000);
+        Assert.IsNull(V4QuestionCall.Read(beyond.ToJsonString(), question, Dictionary), "a span outside the question");
+        var three = JsonNode.Parse(Described("article_or_act_cited", question))!;
+        three["parts"]!.AsArray().Add(three["parts"]![0]!.DeepClone());
+        three["parts"]!.AsArray().Add(three["parts"]![0]!.DeepClone());
+        Assert.IsNull(V4QuestionCall.Read(three.ToJsonString(), question, Dictionary), "one part or two");
+    }
+
+    [TestMethod]
+    public void NoInstructionAndNoFormLetsAModelNameAnOperation()
+    {
+        var input = new V3PlannerInput("Que dit l'article 12 de la loi du 4 avril 2019 ?", V3AnswerLocale.Fr, [], ["fra"], BricksFixture.Today);
+        var call = V4QuestionCall.Call(input, Dictionary);
+        StringAssert.StartsWith(call.System, "lex-v4-question-prompt/1");
+        StringAssert.Contains(call.System, "you choose no operation");
+        Assert.AreEqual("question", call.Step);
+        foreach (var operation in V3AssistantPlanValidator.AllowedOperations)
+        {
+            Assert.IsFalse(V4QuestionCall.Asks.Contains(operation), $"'{operation}' is not something a model may answer");
+            Assert.IsFalse(call.SchemaJson.Contains("\"" + operation + "\"", StringComparison.Ordinal), operation);
+            if (operation.Contains('_', StringComparison.Ordinal))
+            {
+                Assert.IsFalse(call.System.Contains(operation, StringComparison.Ordinal), $"the instruction names no operation ({operation})");
+            }
+        }
+
+        foreach (var instruction in new[] { V4QuestionCall.Prompt, V4Generation.ArbiterPrompt, V4Generation.ExtractionBase })
+        {
+            Assert.IsFalse(instruction.Contains("operation_id", StringComparison.Ordinal) || instruction.Contains("follow_up", StringComparison.Ordinal), "no instruction speaks the plan's grammar");
+        }
+
+        using var sent = JsonDocument.Parse(call.User);
+        CollectionAssert.AreEquivalent(
+            new[] { "question", "question_length", "words", "references", "search_languages", "concepts" },
+            sent.RootElement.EnumerateObject().Select(static member => member.Name).ToArray(),
+            "what leaves the server: the masked question, its words and references, the search languages and the dictionary's concepts");
+        Assert.IsTrue(sent.RootElement.GetProperty("concepts").EnumerateArray().All(static concept => concept.GetProperty("id").GetString() != "assureur"), "a role is no concept to choose");
+    }
+
+    [TestMethod]
+    public void ACitedArticleIsDescribedByTheModelAndRunByCode()
+    {
+        const string question = "Que dit l'article 39 de la loi sur le contrat d'assurance ?";
+        var model = new BricksFixture.Model(_ => Described("article_or_act_cited", question, citation: "l'article 39 de la loi sur le contrat d'assurance"));
+        var executor = new BricksFixture.Executor { SearchOpens = "art_39" };
+        var dossier = Answered(BricksFixture.Ask(question, model, executor: executor));
+        CollectionAssert.AreEqual(new[] { "question" }, model.Calls.Select(static call => call.Step).ToArray(), "one call, in place of the planner's");
+        CollectionAssert.AreEqual(new[] { "search", "evidence_bundle" }, executor.Calls.Select(static call => call.Operation).ToArray());
+        Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict);
+        Assert.AreEqual("art_39", dossier.Quotes.Single().Anchor);
+        Assert.AreEqual(0, dossier.Quotes.Single().Offset, "a cited article is read whole, as before");
+        var notices = dossier.Notices.Select(static notice => notice.TemplateId).ToArray();
+        CollectionAssert.Contains(notices, V3AnswerTemplates.NoticeModelDescribed);
+        CollectionAssert.DoesNotContain(notices, V3AnswerTemplates.NoticeAssembledByModel, "no model planned");
+        CollectionAssert.DoesNotContain(notices, V3AnswerTemplates.NoticeNoModel);
+        CollectionAssert.Contains(dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), V3AnswerTemplates.PlanBricksModelQuestion);
+        var bricks = Bricks(dossier);
+        Assert.AreEqual(("operations", "described"), (bricks.GetProperty("route").GetString(), bricks.GetProperty("question_call").GetString()));
+        Assert.AreEqual("article_or_act_cited", bricks.GetProperty("described")[0].GetProperty("asks").GetString(), "what the model said the question asks is in the trace");
+
+        // A replay asks no model and gives the same bytes.
+        using var document = JsonDocument.Parse(dossier.ToUtf8());
+        var replayed = V3AssistantPipeline.Replay(document.RootElement.GetProperty("trace").GetRawText(), _ => new BricksFixture.Executor { SearchOpens = "art_39" }.Run, BricksFixture.Environment);
+        CollectionAssert.AreEqual(dossier.ToUtf8(), Answered(replayed.Outcome!).ToUtf8());
+    }
+
+    [TestMethod]
+    public void AReadersWordsTheDictionaryLacksReachAConceptThroughTheModelAndThenTheTablesAnswer()
+    {
+        const string question = "Et si l'acheteur de la police ne règle plus rien ?";
+        Assert.AreEqual(0, Row(question).Concepts.Count, "the lookup reads nothing here");
+        var model = new BricksFixture.Model(call => call.Step == "question"
+            ? Described("words_on_a_subject", question, words: "ne règle plus rien", concept: "non_paiement_prime")
+            : throw new HttpRequestException("only the question call answers in this test"));
+        var executor = new BricksFixture.Executor();
+        var dossier = Answered(BricksFixture.Ask(question, model, executor: executor));
+        Assert.AreEqual("question", model.Calls[0].Step);
+        Assert.IsTrue(executor.Calls.All(static call => call.Operation == "evidence_bundle"), "the tables answer: lines of the act, no search");
+        var bricks = Bricks(dossier);
+        var concept = bricks.GetProperty("concepts")[0];
+        Assert.AreEqual(("non_paiement_prime", "model"), (concept.GetProperty("id").GetString(), concept.GetProperty("source").GetString()), "the concept and who read it");
+        Assert.AreEqual("question", bricks.GetProperty("model_calls")[0].GetProperty("step").GetString());
+        Assert.IsTrue(dossier.Quotes.Any(), "the lines are found by the law's own words for the concept, never by the model's");
+        var notices = dossier.Notices.Select(static notice => notice.TemplateId).ToArray();
+        CollectionAssert.Contains(notices, V3AnswerTemplates.NoticeModelDescribed, "the model named the subject, and the answer says so");
+        CollectionAssert.DoesNotContain(notices, V3AnswerTemplates.NoticeNoModel);
+        CollectionAssert.Contains(dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), V3AnswerTemplates.PlanBricksModelQuestion);
+    }
+
+    [TestMethod]
+    public void ADescriptionThatDoesNotFitItsFormIsNotRepairedAndCodeSearchesTheReadersWords()
+    {
+        const string question = "Que dit l'article 39 de la loi sur le contrat d'assurance ?";
+        foreach (var (model, outcome) in new (BricksFixture.Model, string)[]
+        {
+            (new BricksFixture.Model(static _ => "search for it, then read the article"), "refused"),
+            (new BricksFixture.Model(static _ => throw new HttpRequestException("the provider answered HTTP 429")), "failed"),
+        })
+        {
+            var executor = new BricksFixture.Executor { SearchOpens = "art_39" };
+            var dossier = Answered(BricksFixture.Ask(question, model, executor: executor));
+            Assert.AreEqual(1, model.Calls.Count, "asked once: nothing is repaired, nothing is asked again");
+            CollectionAssert.AreEqual(new[] { "search", "evidence_bundle" }, executor.Calls.Select(static call => call.Operation).ToArray());
+            using var parameters = JsonDocument.Parse(executor.Calls[0].Parameters);
+            Assert.AreEqual("Que dit l'article 39 de la loi sur le contrat d'assurance", parameters.RootElement.GetProperty("query").GetString());
+            Assert.AreEqual(outcome, Bricks(dossier).GetProperty("question_call").GetString());
+            CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeNoModel, "nothing of a model is in this answer");
+            CollectionAssert.DoesNotContain(dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), V3AnswerTemplates.PlanBricksModelQuestion);
+        }
+    }
+
     [TestMethod]
     public void TheBricksPlannerNamesItselfByEverythingThatDecidesAnAnswer()
     {
-        var alone = new V4BricksPlanner(new BricksFixture.Corpus(), null, null).PlannerId;
-        var withModel = new V4BricksPlanner(new BricksFixture.Corpus(), CarefulModel(), null).PlannerId;
-        var withFallback = new V4BricksPlanner(new BricksFixture.Corpus(), null, new NamedPlanner("{}")).PlannerId;
+        var alone = new V4BricksPlanner(new BricksFixture.Corpus(), null).PlannerId;
+        var withModel = new V4BricksPlanner(new BricksFixture.Corpus(), CarefulModel()).PlannerId;
         StringAssert.Matches(alone, new System.Text.RegularExpressions.Regex("^lex-v4-bricks/code-only/prompt-[0-9a-f]{12}$"));
         StringAssert.StartsWith(withModel, "lex-v4-bricks/scripted-model/prompt-");
-        Assert.AreNotEqual(alone, withFallback, "another fallback planner is another planner");
+        Assert.AreEqual(alone[^12..], withModel[^12..], "the digest is of the instructions, the dictionary and the corpus index; the model is named beside it");
         Assert.AreEqual(64, V4Generation.PromptsSha256.Length);
+        Assert.AreEqual(64, V4QuestionCall.PromptSha256.Length);
         Assert.IsTrue(Encoding.UTF8.GetByteCount(V4Generation.ArbiterPrompt) > 500);
     }
 }

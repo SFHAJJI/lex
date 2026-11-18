@@ -73,10 +73,16 @@ internal static class BricksFixture
         }
     }
 
-    /// <summary>The steps of a plan as the mount runs them: <c>evidence_bundle</c> of one article of the fixture's act.</summary>
+    /// <summary>
+    /// The steps of a plan as the mount runs them: <c>evidence_bundle</c> of one article of the fixture's act, a search, and
+    /// the record of an act for the other operations.
+    /// </summary>
     internal sealed class Executor
     {
         public List<(string Operation, string Parameters)> Calls { get; } = [];
+
+        /// <summary>The article a search opens (its words are a citation), or null when a search finds nothing.</summary>
+        public string? SearchOpens { get; init; }
 
         /// <summary>Text to serve in place of an article's own (an article the index would hold with another wording).</summary>
         public Dictionary<string, string> Replaced { get; } = new(StringComparer.Ordinal);
@@ -85,6 +91,26 @@ internal static class BricksFixture
         {
             Calls.Add((operationId, parametersJson));
             using var parameters = JsonDocument.Parse(parametersJson);
+            if (operationId == "search")
+            {
+                // No hit; or, as the exact-reference phase does when the words are a citation, one article of the fixture's act.
+                var found = SearchOpens is null
+                    ? JsonSerializer.SerializeToElement(new { publisher = "lu-legilux", hits = Array.Empty<object>() })
+                    : JsonSerializer.SerializeToElement(new
+                    {
+                        publisher = "lu-legilux",
+                        hits = Array.Empty<object>(),
+                        reference = new { phase = "exact_reference", outcome = "opens", opens = new { publisher = "lu-legilux", work = Work, article_id = SearchOpens } },
+                    });
+                return new V3StepOutcome(operationId, parametersJson, "search_results", "answer", found, null, null);
+            }
+
+            if (operationId != "evidence_bundle")
+            {
+                var record = JsonSerializer.SerializeToElement(new { requested_identifier = parameters.RootElement.TryGetProperty("identifier", out var named) ? named.GetString() : null, publisher = "lu-legilux" });
+                return new V3StepOutcome(operationId, parametersJson, "work_record", "answer", record, null, null);
+            }
+
             var article = parameters.RootElement.GetProperty("article").GetString()!;
             var (text, sha) = Loaded.Value.Articles[article];
             if (Replaced.TryGetValue(article, out var other))
@@ -131,10 +157,10 @@ internal static class BricksFixture
     internal static readonly V3AssistantEnvironment Environment = new(Today, "corpus-0123456789abcdef", new string('b', 64), ["fra"]);
 
     /// <summary>An answer of the pipeline over the fixture, with the bricks as its planner.</summary>
-    internal static V3AskOutcome Ask(string question, IV4Model? model = null, IAssistantPlanner? fallback = null, Executor? executor = null, Corpus? corpus = null) =>
+    internal static V3AskOutcome Ask(string question, IV4Model? model = null, Executor? executor = null, Corpus? corpus = null) =>
         V3AssistantPipeline.Answer(
             new V3AssistantRequest(question),
-            new V4BricksPlanner(corpus ?? new Corpus(), model, fallback),
+            new V4BricksPlanner(corpus ?? new Corpus(), model),
             (executor ?? new Executor()).Run,
             Environment,
             CancellationToken.None);

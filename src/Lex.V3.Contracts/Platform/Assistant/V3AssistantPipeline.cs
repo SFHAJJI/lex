@@ -286,7 +286,9 @@ public static partial class V3AssistantPipeline
                     item.Outcome.RefusalCode,
                     item.Outcome.ResultSha256)).ToArray());
 
-        var dossier = plan.Bricks is null
+        // A plan /2 of route "operations" is the question call's description mapped to operations by code: the same
+        // operations, composed as before; a bricks answer has its own layout.
+        var dossier = plan.Bricks is null || plan.Bricks.Kind == "operations"
             ? Compose(plan, context, locale, executed, environment, trace)
             : ComposeBricks(plan, context, locale, executed, environment, trace);
         if (dossier is null)
@@ -743,10 +745,21 @@ public static partial class V3AssistantPipeline
             notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticePreview, locale));
         }
 
-        notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeAssembledByModel, locale));
+        // What a model did is said as it was: it planned (a plan /1, from before the bricks); it described the question and
+        // code chose the operations (V4); or it gave no description, and code searched the reader's own words.
+        var described = plan.Bricks?.ModelSteps.Contains("question") ?? false;
+        notices.Add(V3AnswerClaim.Bind(
+            plan.Bricks is null ? V3AnswerTemplates.NoticeAssembledByModel : described ? V3AnswerTemplates.NoticeModelDescribed : V3AnswerTemplates.NoticeNoModel,
+            locale));
         notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeNotLegalAdvice, locale));
 
-        return new V3AnswerDossier(overall, locale, label.Claim, notices, PlanLines(plan, question, locale, executed, environment.Today), parts, trace);
+        var lines = PlanLines(plan, question, locale, executed, environment.Today);
+        if (described)
+        {
+            lines.Insert(1, V3AnswerClaim.Bind(V3AnswerTemplates.PlanBricksModelQuestion, locale));
+        }
+
+        return new V3AnswerDossier(overall, locale, label.Claim, notices, lines, parts, trace);
     }
 
     /// <summary>
