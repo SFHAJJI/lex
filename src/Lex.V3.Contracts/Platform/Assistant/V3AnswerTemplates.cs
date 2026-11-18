@@ -54,6 +54,21 @@ public enum V3AnswerSlotKind
     /// <summary>The name of a handoff registry entry, written verbatim.</summary>
     [JsonStringEnumMemberName("entry_name")]
     EntryName = 10,
+
+    /// <summary>A whole number code counted (lines, articles), written in digits.</summary>
+    [JsonStringEnumMemberName("count")]
+    Count = 11,
+
+    /// <summary>
+    /// Words of the law itself, verbatim: an article's heading, a value written on a quoted line. The gates hold them to the
+    /// text a step of the answer answered (<see cref="V3AnswerGates.LawWordsBound"/>), character for character.
+    /// </summary>
+    [JsonStringEnumMemberName("law_words")]
+    LawWords = 12,
+
+    /// <summary>A term the build's dictionary or corpus index writes (a concept's label, a keyword, an act's name), verbatim: a closed, reviewed list.</summary>
+    [JsonStringEnumMemberName("dictionary_term")]
+    DictionaryTerm = 13,
 }
 
 /// <summary>Who stands behind a template's wording: a master the specification ships, or a draft, with its review if any.</summary>
@@ -345,7 +360,70 @@ public static partial class V3AnswerTemplates
     public const string ActionReadStateEu = "action.read_state_eu";
     public const string NoticePreview = "notice.preview";
 
+    // The bricks' sentences (V4, 2026-11-18): what the answer is made of, the notes on the reader's words, the four ways to
+    // say "not found", and the plan lines of the route.
+    public const string NoticeNoModel = "notice.no_model";
+    public const string NoticeModelAssisted = "notice.model_assisted";
+    public const string PlanBricksTerm = "plan.bricks.term";
+    public const string PlanBricksKindDefinition = "plan.bricks.kind.definition";
+    public const string PlanBricksKindRule = "plan.bricks.kind.rule";
+    public const string PlanBricksKindDuration = "plan.bricks.kind.duration";
+    public const string PlanBricksKindDate = "plan.bricks.kind.date";
+    public const string PlanBricksKindAmount = "plan.bricks.kind.amount";
+    public const string PlanBricksKindList = "plan.bricks.kind.list";
+    public const string PlanBricksKindReference = "plan.bricks.kind.reference";
+    public const string PlanBricksKindText = "plan.bricks.kind.text";
+    public const string PlanBricksScope = "plan.bricks.scope";
+    public const string PlanBricksRuleQuestion = "plan.bricks.rule_question";
+    public const string PlanBricksDetectorTitle = "plan.bricks.detector.title";
+    public const string PlanBricksDetectorKeyword = "plan.bricks.detector.keyword";
+    public const string PlanBricksDetectorCooccurrence = "plan.bricks.detector.cooccurrence";
+    public const string PlanBricksDetectorTypePattern = "plan.bricks.detector.type_pattern";
+    public const string PlanBricksRouteDefinition = "plan.bricks.route.definition";
+    public const string PlanBricksRouteFact = "plan.bricks.route.fact";
+    public const string PlanBricksModelNone = "plan.bricks.model.none";
+    public const string PlanBricksModelQuestion = "plan.bricks.model.question";
+    public const string PlanBricksModelArbiter = "plan.bricks.model.arbiter";
+    public const string PlanBricksModelExtraction = "plan.bricks.model.extraction";
+    public const string PlanBricksModelUnavailable = "plan.bricks.model.unavailable";
+    public const string PlanBricksPassSweepCases = "plan.bricks.pass.sweep_cases";
+    public const string PlanBricksPassWider = "plan.bricks.pass.wider_context";
+    public const string PlanBricksPassRetry = "plan.bricks.pass.retry";
+    public const string AnswerDefinition = "answer.definition";
+    public const string AnswerRule = "answer.rule";
+    public const string AnswerRuleCases = "answer.rule_cases";
+    public const string AnswerValue = "answer.value";
+    public const string AnswerValueWords = "answer.value_words";
+    public const string AnswerSeveral = "answer.several";
+    public const string AnswerList = "answer.list";
+    public const string AnswerPassages = "answer.passages";
+    public const string AnswerCandidates = "answer.candidates";
+    public const string AnswerMoreArticles = "answer.more_articles";
+    public const string AnswerTermUsage = "answer.term_usage";
+    public const string LawExtractHeading = "law.extract_heading";
+    public const string CaveatConditionsApply = "caveat.conditions_apply";
+    public const string CaveatLeftToContract = "caveat.left_to_contract";
+    public const string CaveatCasesFromSweep = "caveat.cases_from_sweep";
+    public const string CaveatListFromSweep = "caveat.list_from_sweep";
+    public const string CaveatGeneralAndSpecial = "caveat.general_and_special";
+    public const string CaveatNotDefined = "caveat.not_defined";
+    public const string CaveatVocabularyIncomplete = "caveat.vocabulary_incomplete";
+    public const string NoteLawTerm = "note.law_term";
+    public const string NoteWordNotInAct = "note.word_not_in_act";
+    public const string AbsenceSweepHeading = "absence.sweep_heading";
+    public const string AbsenceTermCount = "absence.term_count";
+    public const string AbsenceTermsNowhere = "absence.terms_nowhere";
+    public const string AbsenceWordsNotFound = "absence.words_not_found";
+    public const string AbsenceNoAnswerInLines = "absence.no_answer_in_lines";
+    public const string AbsenceActNotHeld = "absence.act_not_held";
+    public const string AbsenceTextNotHeld = "absence.text_not_held";
+    public const string DirectGreeting = "direct.greeting";
+
     private static readonly V3TemplateProvenance EnglishDraft = new(null, AgentDraft, null, null, false);
+
+    private const string BricksAgentDraft = "an agent (Claude), 2026-11-18";
+
+    private static readonly V3TemplateProvenance BricksDraft = new(null, BricksAgentDraft, null, null, false);
 
     private static V3TemplateProvenance Master(string ruling) => new(ruling, null, null, null, false);
 
@@ -445,6 +523,63 @@ public static partial class V3AnswerTemplates
         (ActionReadStateEu, "Read the wording of {work} dated {date}", EnglishDraft, [("work", V3AnswerSlotKind.IdentifierText), ("date", V3AnswerSlotKind.CalendarDate)]),
         // The preview line (the owner's order of 2026-10-28): on every answer while the people's reviews are not done.
         (NoticePreview, "Preview: not yet reviewed by a lawyer or by independent annotators.", EnglishDraft, []),
+        // The bricks (V4). Drafted by an agent on 2026-11-18; not yet reviewed, in either language.
+        (NoticeNoModel, "No AI model took part in this answer: Lex's code read your question, searched the text it holds and wrote every sentence from fixed wording; the quotations are the published text.", BricksDraft, []),
+        (NoticeModelAssisted, "An AI model helped find the passages: among the lines Lex's code gave it, it marked those that answer. It wrote no sentence of this answer: Lex's code checked each line it marked and wrote every sentence from fixed wording; the quotations are the published text.", BricksDraft, []),
+        (PlanBricksTerm, "Lex read your words “{words}” as the term “{term}” of its insurance vocabulary.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan), ("term", V3AnswerSlotKind.DictionaryTerm)]),
+        (PlanBricksKindDefinition, "Kind of answer looked for: a definition.", BricksDraft, []),
+        (PlanBricksKindRule, "Kind of answer looked for: a rule, with its conditions and exceptions.", BricksDraft, []),
+        (PlanBricksKindDuration, "Kind of answer looked for: a period of time.", BricksDraft, []),
+        (PlanBricksKindDate, "Kind of answer looked for: a date or a moment.", BricksDraft, []),
+        (PlanBricksKindAmount, "Kind of answer looked for: an amount or a rate.", BricksDraft, []),
+        (PlanBricksKindList, "Kind of answer looked for: a list.", BricksDraft, []),
+        (PlanBricksKindReference, "Kind of answer looked for: the provision that says it.", BricksDraft, []),
+        (PlanBricksKindText, "Kind of answer looked for: the passages that deal with it.", BricksDraft, []),
+        (PlanBricksScope, "Text read: {work}, as it stood on {date} ({articles} articles, {lines} lines).", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress), ("date", V3AnswerSlotKind.CalendarDate), ("articles", V3AnswerSlotKind.Count), ("lines", V3AnswerSlotKind.Count)]),
+        (PlanBricksRuleQuestion, "Your question asks what the rule is, with no fact of a personal case: Lex quotes the rule and does not say whether it applies to a situation.", BricksDraft, []),
+        (PlanBricksDetectorTitle, "Articles whose heading holds the term: {articles}.", BricksDraft, [("articles", V3AnswerSlotKind.Count)]),
+        (PlanBricksDetectorKeyword, "Lines that hold a form of the term: {lines}, in {articles} articles.", BricksDraft, [("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
+        (PlanBricksDetectorCooccurrence, "Lines where the term stands with the party named or with a value: {lines}, in {articles} articles.", BricksDraft, [("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
+        (PlanBricksDetectorTypePattern, "Lines that also have the form of the answer looked for: {lines}, in {articles} articles.", BricksDraft, [("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
+        (PlanBricksRouteDefinition, "The text defines this term: Lex read the line that defines it.", BricksDraft, []),
+        (PlanBricksRouteFact, "One line clearly leads and has the form of the answer: Lex quotes it without asking a model.", BricksDraft, []),
+        (PlanBricksModelNone, "No AI model was asked.", BricksDraft, []),
+        (PlanBricksModelQuestion, "An AI model described your question (the kind of answer, the terms). It chose no operation.", BricksDraft, []),
+        (PlanBricksModelArbiter, "An AI model gave each passage found a role (main, supporting, set aside). It could add none and write no text.", BricksDraft, []),
+        (PlanBricksModelExtraction, "An AI model marked, among the lines given to it, those that answer. Lex's code checked each one against the text before showing it.", BricksDraft, []),
+        (PlanBricksModelUnavailable, "The AI model that ranks the passages gave no usable answer: Lex shows the passages its code found, in its code's order.", BricksDraft, []),
+        (PlanBricksPassSweepCases, "The rule refers to the cases the law provides without naming them: Lex swept the whole text for them.", BricksDraft, []),
+        (PlanBricksPassWider, "A first reading gave a partial answer: Lex read the whole article again.", BricksDraft, []),
+        (PlanBricksPassRetry, "A first answer of the model did not pass Lex's checks: Lex asked again with the lines of the best passage only.", BricksDraft, []),
+        (AnswerDefinition, "The text defines this term. The line that defines it:", BricksDraft, []),
+        (AnswerRule, "The rule, in the text's own words:", BricksDraft, []),
+        (AnswerRuleCases, "Cases the text provides, found in this text:", BricksDraft, []),
+        (AnswerValue, "The text states it as follows:", BricksDraft, []),
+        (AnswerValueWords, "Written on this line: “{value}”.", BricksDraft, [("value", V3AnswerSlotKind.LawWords)]),
+        (AnswerSeveral, "This text gives more than one answer, depending on the case. Each is quoted with its article:", BricksDraft, []),
+        (AnswerList, "What Lex found in this text:", BricksDraft, []),
+        (AnswerPassages, "The passages of this text that deal with your question:", BricksDraft, []),
+        (AnswerCandidates, "Lex found these passages and did not rank them further. The closest:", BricksDraft, []),
+        (AnswerMoreArticles, "Other articles of this text where the term appears:", BricksDraft, []),
+        (AnswerTermUsage, "This text uses the term on {lines} lines, in {articles} articles.", BricksDraft, [("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
+        (LawExtractHeading, "{work}, article {anchor}, “{heading}”, as it read on {date}", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress), ("anchor", V3AnswerSlotKind.Anchor), ("heading", V3AnswerSlotKind.LawWords), ("date", V3AnswerSlotKind.CalendarDate)]),
+        (CaveatConditionsApply, "Conditions apply: they are in the lines quoted.", BricksDraft, []),
+        (CaveatLeftToContract, "On this point the text refers to the contract: it sets no value of its own.", BricksDraft, []),
+        (CaveatCasesFromSweep, "This list comes from a sweep of the text for the term's words; a case worded differently may be missing.", BricksDraft, []),
+        (CaveatListFromSweep, "This list comes from a sweep of the text; an element worded differently may be missing.", BricksDraft, []),
+        (CaveatGeneralAndSpecial, "A general rule and a special rule both apply; both are quoted.", BricksDraft, []),
+        (CaveatNotDefined, "The text does not define this term; these are the passages that use it.", BricksDraft, []),
+        (CaveatVocabularyIncomplete, "Lex's vocabulary on this subject is not complete: a passage worded differently may exist.", BricksDraft, []),
+        (NoteLawTerm, "You wrote “{words}”; the text's word is “{term}”.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan), ("term", V3AnswerSlotKind.DictionaryTerm)]),
+        (NoteWordNotInAct, "The word “{words}” of your question appears nowhere in this text.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan)]),
+        (AbsenceSweepHeading, "Lex swept {work} ({lines} lines, {articles} articles), as it stood on {date}, for these terms:", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress), ("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count), ("date", V3AnswerSlotKind.CalendarDate)]),
+        (AbsenceTermCount, "“{term}”: {lines} lines, in {articles} articles.", BricksDraft, [("term", V3AnswerSlotKind.DictionaryTerm), ("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
+        (AbsenceTermsNowhere, "None of these terms appears in this text. This says what this text contains, not what a contract provides.", BricksDraft, []),
+        (AbsenceWordsNotFound, "Lex did not find these words in this text, and its vocabulary on this subject is not complete: this does not show that the text is silent.", BricksDraft, []),
+        (AbsenceNoAnswerInLines, "Lex found lines on this subject, but none gives an answer of the kind asked. The closest:", BricksDraft, []),
+        (AbsenceActNotHeld, "Your question names {name}. Lex does not hold the text of this act yet.", BricksDraft, [("name", V3AnswerSlotKind.DictionaryTerm)]),
+        (AbsenceTextNotHeld, "Lex holds the record of {work} but no text of it that it can show for this date.", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress)]),
+        (DirectGreeting, "Hello. Ask a question about a Luxembourg or EU legal text that Lex holds; Lex answers by quoting the text.", BricksDraft, []),
     ];
 
     private static readonly Dictionary<(string, V3AnswerLocale), V3AnswerTemplate> ByIdValue = BuildAll();
@@ -504,8 +639,14 @@ public static partial class V3AnswerTemplates
             V3AnswerSlotKind.Uri => IsUri(value) ? value : throw new ArgumentException("A uri is an absolute http(s) address or a path of this site.", nameof(value)),
             V3AnswerSlotKind.LanguageCode => LanguageName(value, locale),
             V3AnswerSlotKind.RefusalCode => V3OperationRegistry.Reviewed.DeclaresRefusal(value) ? value : throw new ArgumentException("Not a code of the closed refusal registry.", nameof(value)),
-            V3AnswerSlotKind.WorkAddress or V3AnswerSlotKind.QuestionSpan or V3AnswerSlotKind.IdentifierText or V3AnswerSlotKind.EntryName =>
+            V3AnswerSlotKind.WorkAddress or V3AnswerSlotKind.QuestionSpan or V3AnswerSlotKind.IdentifierText or V3AnswerSlotKind.EntryName or V3AnswerSlotKind.LawWords =>
                 string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("A verbatim value is not blank.", nameof(value)) : value,
+            V3AnswerSlotKind.Count => value.Length is >= 1 and <= 9 && value.All(char.IsAsciiDigit) && (value.Length == 1 || value[0] != '0')
+                ? value
+                : throw new ArgumentException("A count is a whole number in digits.", nameof(value)),
+            V3AnswerSlotKind.DictionaryTerm => Bricks.V4Dictionary.Insurance.IsTerm(value) || Bricks.V4CorpusIndex.Insurance.IsName(value)
+                ? value
+                : throw new ArgumentException("Not a term of the build's dictionary or corpus index.", nameof(value)),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not an answer slot kind."),
         };
     }

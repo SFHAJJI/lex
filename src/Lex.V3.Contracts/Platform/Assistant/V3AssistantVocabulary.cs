@@ -200,6 +200,13 @@ public enum V3ArgumentSourceKind
     /// <summary>Today in Luxembourg at the request (R13), printed in the answer and written into the trace.</summary>
     [JsonStringEnumMemberName("today")]
     Today = 5,
+
+    /// <summary>
+    /// An address of the mounted corpus that code read from its own tables (plan /2, the bricks): an act's address on this
+    /// site, or an article's identifier. Its form is closed (letters, digits and a few signs), so it carries no prose either.
+    /// </summary>
+    [JsonStringEnumMemberName("corpus")]
+    Corpus = 6,
 }
 
 /// <summary>Why a planner's output was not admitted as a plan. Every one is answered with the switched-off card.</summary>

@@ -66,7 +66,54 @@ public static class V3AnswerGates
         return bytes.Length <= V3AnswerDossier.MaximumBytes
             && NonTemplateStrings(bytes) == 0
             && dossier.Quotes.All(quote => QuoteBound(quote, outcomes))
+            && LawWordsBound(dossier, outcomes)
             && DisclosureComplete(dossier);
+    }
+
+    /// <summary>
+    /// Whether every fact of kind <see cref="V3AnswerSlotKind.LawWords"/> in a sentence of the answer (an article's heading,
+    /// a value written on a quoted line) is, character for character, inside an article text one of the answer's steps
+    /// answered. A sentence can so carry the law's own words and no others.
+    /// </summary>
+    public static bool LawWordsBound(V3AnswerDossier dossier, IReadOnlyDictionary<string, V3StepOutcome> outcomes)
+    {
+        ArgumentNullException.ThrowIfNull(dossier);
+        ArgumentNullException.ThrowIfNull(outcomes);
+        var words = dossier.Claims.SelectMany(static claim => claim.Facts).Where(static fact => fact.Kind == V3AnswerSlotKind.LawWords).Select(static fact => fact.Value).Distinct(StringComparer.Ordinal).ToArray();
+        if (words.Length == 0)
+        {
+            return true;
+        }
+
+        var texts = new List<string>();
+        foreach (var outcome in outcomes.Values)
+        {
+            if (outcome.Refused || outcome.Result is not { } result)
+            {
+                continue;
+            }
+
+            foreach (var name in new[] { "states", "wordings" })
+            {
+                if (!result.TryGetProperty(name, out var containers) || containers.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var container in containers.EnumerateArray())
+                {
+                    if (container.TryGetProperty("articles", out var articles) && articles.ValueKind == JsonValueKind.Array)
+                    {
+                        texts.AddRange(articles.EnumerateArray()
+                            .Select(static article => article.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String ? text.GetString() : null)
+                            .Where(static text => text is not null)
+                            .Select(static text => text!));
+                    }
+                }
+            }
+        }
+
+        return words.All(value => texts.Any(text => text.Contains(value, StringComparison.Ordinal)));
     }
 
     /// <summary>

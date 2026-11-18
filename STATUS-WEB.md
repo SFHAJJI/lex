@@ -4,6 +4,41 @@ Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## V4, the bricks: the owner's go of 2026-11-18 (sole driver, in progress)
+
+`api/v4-bricks`. The plan is `C:\lex-v3\V4-PLAN-2026-11-18.md` (the surgical changes in every brick, as Kezhan and Angela Shi
+would build Lex, insurance first; the reading notes are in `C:\lex-v3\v4-reading-notes`). **The owner's words, 2026-11-18:**
+"Decisions that are yours go with what u recommend and i agree everything u said ... dont stop until i see a complete clean
+deployed version implementing everything u just said u have all the authentication u need green light go". That lifts the
+freeze of 2026-11-14 on the engine, the planner prompt, the templates and the search, and is the owner's yes to going live.
+
+- **The seven decisions, as recommended and accepted:** (1) the owner confirms the first dictionary rows (most are the law's
+  own words), a person who knows insurance law is named later; (2) where the bricks run: see the driver decision below; (3)
+  the quick fix of 2026-11-18 is not merged (parked at `web/ranked-selection`, commit 5fb49e6a, the evaluation's baseline);
+  (4) a question whose subject is a role of the law (assureur, preneur) with no marker of the reader's own case is a question
+  on the rule and is answered by quoting it (this narrows R15's person-blind cues, the owner's legal call), and a rule is
+  shown as the law's own sentence, never as a model's yes or no; (5) nothing of a question is kept: only concept names,
+  the law's words found or not, the route and counts may be counted; (6) the EU insurance texts not held (Solvency II, IDD,
+  PRIIPs, the motor directive, distance marketing) need a publisher run, authorised after the retrieval step; until then
+  an answer names them as not held; (7) going live through the release pipeline.
+- **Driver decision (reversible), departing from decision 2 as recommended:** the plan recommended a Python service beside
+  the app. The release image is built by the .NET tool chain on a pinned chiseled base (no shell, no package manager),
+  verified layer by layer, signed and backed up as one image; a second runtime means a second signed image, a sidecar in
+  the template and new release checks. So the bricks are built inside the present app, in the same shape (one folder per
+  brick, typed rows between them, a dispatcher in code); the plan named this as the alternative that changes no hosting.
+  Python stays where it is, in the evaluation harness (lex-eval). The owner is told in the brief.
+- **Design, in short** (`src/Lex.V3.Contracts/Platform/Assistant/Bricks/`): the bricks stand behind the one model seam
+  (`IAssistantPlanner`): question parsing (code: normalise, anchors, dictionary, cues, scope), the dispatcher (code), retrieval
+  (code detectors on the outline and the lines of the deep-tier acts, a sweep; one model call that gives each candidate a
+  role), extraction (one model call: line ids and typed values) and its validator (code). They answer with a plan the
+  existing pipeline runs: `evidence_bundle` steps for the articles to quote, each with the exact extract (offset and length
+  in the stored text), and a typed record of how the answer was reached (in the trace). The composer, the quote binding,
+  the disclosures, the gates and the replay are the existing ones; a quote of one line passes `QuoteBound` unchanged.
+- **Working checklist** (updated as slices land): [ ] bricks library and dictionary; [ ] plan/2, extracts, new wordings (EN,
+  FR); [ ] corpus adapter and the bricks planner in the API; [ ] the advice boundary narrowed (decision 4); [ ] model
+  calls: the question call, the arbiter, the extraction; the old planner retired; [ ] the web answer card, How it works, the
+  privacy notice checked; [ ] lex-eval: the insurance set and the ladder; [ ] release, gate, live.
+
 ## Release 14 is live on the owner's exception to the promotion gate (sole driver, 2026-11-16)
 
 - **Release 14** (`v3-20261115T183640Z-b117b3fba166`, built on Azure from #1062's b117b3fb; revision

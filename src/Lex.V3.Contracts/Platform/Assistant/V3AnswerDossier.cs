@@ -83,7 +83,8 @@ public sealed record V3Quote(
     string? ArticleValidFrom,
     bool Corrigendum,
     bool Derogation,
-    bool PreApplication);
+    bool PreApplication,
+    IReadOnlyList<int>? Breaks = null);
 
 /// <summary>A quotation block.</summary>
 public sealed class V3QuoteBlock(V3Quote quote) : V3DossierBlock
@@ -116,6 +117,18 @@ public sealed class V3QuoteBlock(V3Quote quote) : V3DossierBlock
         writer.WriteString("article_permalink", Quote.ArticlePermalink);
         writer.WriteString("official_source", Quote.OfficialSource);
         writer.WriteString("journal_officiel", Quote.JournalOfficiel);
+        if (Quote.Breaks is { Count: > 0 } breaks)
+        {
+            // Where, inside the quotation, a line of the law starts (an extract of several lines): a reader breaks there.
+            writer.WriteStartArray("breaks");
+            foreach (var at in breaks)
+            {
+                writer.WriteNumberValue(at);
+            }
+
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
     }
 }
@@ -400,6 +413,17 @@ public sealed class V3AnswerDossier
     public IEnumerable<V3DossierBlock> Blocks => Parts.SelectMany(static part => part.Blocks);
 
     public IEnumerable<V3Quote> Quotes => Blocks.OfType<V3QuoteBlock>().Select(static block => block.Quote);
+
+    /// <summary>Every sentence of the answer that is a template filled by code: the label, the notices, the plan lines and the blocks' own.</summary>
+    public IEnumerable<V3AnswerClaim> Claims => new[] { Label }.Concat(Notices).Concat(PlanLines).Concat(Blocks.Select(static block => block switch
+    {
+        V3ClaimBlock claim => claim.Claim,
+        V3RefusalBlock refusal => refusal.Claim,
+        V3ActionBlock action => action.Claim,
+        V3HandoffBlock handoff => handoff.Claim,
+        V3DisclosureBlock disclosure => disclosure.Claim,
+        _ => null,
+    }).Where(static claim => claim is not null).Select(static claim => claim!));
 
     /// <summary>The canonical bytes: UTF-8, members in the contract's order, no indentation, non-ASCII letters unescaped.</summary>
     public byte[] ToUtf8()

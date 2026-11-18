@@ -112,7 +112,7 @@ public sealed record V3ReplayResult(V3AskOutcome? Outcome, bool SnapshotMismatch
 /// execution through the existing operations, at most two follow-ups, the verdict computed by code, the composer, and the
 /// gates in the code path. Nothing is written anywhere: the answer and its trace are returned to the caller (R32).
 /// </summary>
-public static class V3AssistantPipeline
+public static partial class V3AssistantPipeline
 {
     /// <summary>The most quotations one answer carries (R45(f)).</summary>
     public const int MaximumQuotes = 5;
@@ -161,7 +161,7 @@ public static class V3AssistantPipeline
         V3PlannerOutput output;
         try
         {
-            output = planner.Plan(new V3PlannerInput(intake.Masked, locale.Value, context.References(), environment.SearchLanguages), cancellationToken)
+            output = planner.Plan(new V3PlannerInput(intake.Masked, locale.Value, context.References(), environment.SearchLanguages, environment.Today), cancellationToken)
                 ?? throw new InvalidOperationException("The planner answered nothing.");
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
@@ -286,7 +286,15 @@ public static class V3AssistantPipeline
                     item.Outcome.RefusalCode,
                     item.Outcome.ResultSha256)).ToArray());
 
-        var dossier = Compose(plan, context, locale, executed, environment, trace);
+        var dossier = plan.Bricks is null
+            ? Compose(plan, context, locale, executed, environment, trace)
+            : ComposeBricks(plan, context, locale, executed, environment, trace);
+        if (dossier is null)
+        {
+            // A bricks plan whose extracts are not the text the steps answered is not composed: it fails closed, as a gate does.
+            return null;
+        }
+
         return V3AnswerGates.Check(dossier, executed.Where(static item => item.Outcome is not null).ToDictionary(static item => item.Step.StepId, static item => item.Outcome!, StringComparer.Ordinal))
             ? dossier
             : null;
@@ -335,6 +343,10 @@ public static class V3AssistantPipeline
                     value = today;
                     kind = V3AnswerSlotKind.CalendarDate;
                     usedToday = true;
+                    break;
+                case V3ArgumentSourceKind.Corpus:
+                    value = source.Corpus!;
+                    kind = name == "identifier" ? V3AnswerSlotKind.IdentifierText : V3AnswerSlotKind.Anchor;
                     break;
                 default:
                     throw new InvalidOperationException("Not an argument source.");
@@ -620,7 +632,7 @@ public static class V3AssistantPipeline
             part =>
             {
                 var cues = V3AssistantParsers.ApplicationCues(question, part.Span.Start, part.Span.End);
-                return (Cues: cues, Application: cues.Count > 0 || part.ProposedVerdict == V3AssistantVerdict.Refuse);
+                return (Cues: cues, Application: AsksApplication(question, part, cues));
             },
             StringComparer.Ordinal);
         var whole = applications.Values.All(static value => value.Application);
@@ -737,6 +749,14 @@ public static class V3AssistantPipeline
         return new V3AnswerDossier(overall, locale, label.Claim, notices, PlanLines(plan, question, locale, executed, environment.Today), parts, trace);
     }
 
+    /// <summary>
+    /// Whether a part asks to apply the law (R15): it holds a function cue, unless it is a question on the rule (the owner's
+    /// decision of 2026-11-18: a role of the law is its subject and nothing marks a case of the reader's own); or the
+    /// planner proposed to refuse it.
+    /// </summary>
+    internal static bool AsksApplication(string question, V3PlanPart part, IReadOnlyList<V3ApplicationCue> cues) =>
+        (cues.Count > 0 && !Bricks.V4Boundary.RuleQuestion(question, part.Span.Start, part.Span.End, cues)) || part.ProposedVerdict == V3AssistantVerdict.Refuse;
+
     private static V3ClaimBlock Claim(string templateId, V3AnswerLocale locale, params V3AnswerFact[] facts) =>
         new(V3AnswerClaim.Bind(templateId, locale, facts));
 
@@ -744,14 +764,20 @@ public static class V3AssistantPipeline
 
     private static V3AnswerFact Fact(string name, V3AnswerSlotKind kind, string value) => new(name, kind, value);
 
-    private static IEnumerable<V3DossierBlock> QuoteBlocks(V3Quote quote, string askedDate, V3AnswerLocale locale)
+    private static IEnumerable<V3DossierBlock> QuoteBlocks(V3Quote quote, string askedDate, V3AnswerLocale locale, string? heading = null)
     {
         var europe = quote.Publisher == "eu-eurlex";
         var original = europe && quote.StateKind == "original_wording";
-        yield return Claim(V3AnswerTemplates.LawQuoteHeading, locale,
-            Fact("work", V3AnswerSlotKind.WorkAddress, quote.Work), Fact("anchor", V3AnswerSlotKind.Anchor, quote.Anchor), Date("date", askedDate));
+        yield return heading is null
+            ? Claim(V3AnswerTemplates.LawQuoteHeading, locale,
+                Fact("work", V3AnswerSlotKind.WorkAddress, quote.Work), Fact("anchor", V3AnswerSlotKind.Anchor, quote.Anchor), Date("date", askedDate))
+            : Claim(V3AnswerTemplates.LawExtractHeading, locale,
+                Fact("work", V3AnswerSlotKind.WorkAddress, quote.Work), Fact("anchor", V3AnswerSlotKind.Anchor, quote.Anchor),
+                Fact("heading", V3AnswerSlotKind.LawWords, heading), Date("date", askedDate));
         yield return new V3QuoteBlock(quote);
-        if (quote.Shortened)
+
+        // An extract is a line of the article by design: its heading names the article, and its permalink opens it whole.
+        if (quote.Shortened && heading is null && quote.Offset == 0)
         {
             yield return Claim(V3AnswerTemplates.LawQuoteShortened, locale, Fact("uri", V3AnswerSlotKind.Uri, quote.ArticlePermalink));
         }

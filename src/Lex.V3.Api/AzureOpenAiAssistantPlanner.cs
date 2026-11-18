@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts.Platform.Assistant;
+using Lex.V3.Contracts.Platform.Assistant.Bricks;
 
 namespace Lex.V3.Api;
 
@@ -37,7 +38,7 @@ namespace Lex.V3.Api;
 /// the per-answer ceiling and the monthly cap; a response with no usage is counted at the ceiling.
 /// </para>
 /// </remarks>
-internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IDisposable
+internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IV4Model, IDisposable
 {
     internal const string EndpointVariable = "LEX_ASSISTANT_ENDPOINT";
     internal const string DeploymentVariable = "LEX_ASSISTANT_DEPLOYMENT";
@@ -95,6 +96,80 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IDisposab
         _client = new HttpClient(handler, disposeHandler: true) { Timeout = _timeout };
         _client.DefaultRequestHeaders.Add("api-key", _key);
         PlannerId = $"azure-openai/{deployment}/prompt-{PromptSha256[..12]}";
+        ModelId = new string(deployment.Select(static character => char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_' ? character : '-').ToArray());
+    }
+
+    /// <summary>The model the bricks ask (V4): the deployment's name, as a token a trace can carry.</summary>
+    public string ModelId { get; }
+
+    /// <summary>
+    /// One call of the bricks (the arbiter, the extraction): the step's fixed instruction, its typed input, and the closed
+    /// form its reply is held to under strict structured outputs. The same deployment, the same key, the same deadline and
+    /// the same prices as the planner's call; what leaves the server is the masked question and lines of published law.
+    /// </summary>
+    public V4ModelReply Complete(V4ModelCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var body = new JsonObject
+        {
+            ["messages"] = new JsonArray(
+                new JsonObject { ["role"] = "system", ["content"] = call.System },
+                new JsonObject { ["role"] = "user", ["content"] = call.User }),
+            ["response_format"] = new JsonObject
+            {
+                ["type"] = "json_schema",
+                ["json_schema"] = new JsonObject
+                {
+                    ["name"] = call.SchemaName,
+                    ["strict"] = true,
+                    ["schema"] = JsonNode.Parse(call.SchemaJson),
+                },
+            },
+            ["max_completion_tokens"] = call.MaximumTokens,
+            ["temperature"] = 0,
+        };
+        var (content, cost, input, output) = Send(body.ToJsonString(), cancellationToken);
+        return new V4ModelReply(content, cost, input, output);
+    }
+
+    /// <summary>Sends one chat-completions request and answers its content, its cost and its token counts; any failure throws.</summary>
+    private (string Content, long Cost, int InputTokens, int OutputTokens) Send(string body, CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(_timeout);
+        using var request = new HttpRequestMessage(HttpMethod.Post, _completions)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        using var response = _client.Send(request, HttpCompletionOption.ResponseContentRead, deadline.Token);
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            // The status alone: never the response's text, which could echo the request.
+            throw new InvalidOperationException($"The planner's provider answered HTTP {((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)}.");
+        }
+
+        using var stream = response.Content.ReadAsStream(deadline.Token);
+        using var document = JsonDocument.Parse(stream, new JsonDocumentOptions { MaxDepth = 64 });
+        var root = document.RootElement;
+        var choice = root.GetProperty("choices")[0];
+        if (choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String && finish.GetString() != "stop")
+        {
+            throw new InvalidOperationException("The planner's answer was cut short or filtered.");
+        }
+
+        var message = choice.GetProperty("message");
+        if (message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.String)
+        {
+            throw new InvalidOperationException("The planner's model refused to plan.");
+        }
+
+        var content = message.GetProperty("content").GetString() ?? throw new InvalidOperationException("The planner answered no content.");
+        var tokens = root.TryGetProperty("usage", out var usage) &&
+            usage.TryGetProperty("prompt_tokens", out var prompt) && prompt.TryGetInt32(out var input) &&
+            usage.TryGetProperty("completion_tokens", out var completion) && completion.TryGetInt32(out var output)
+                ? (input, output)
+                : (0, 0);
+        return (content, CostOf(root), tokens.Item1, tokens.Item2);
     }
 
     /// <summary>
@@ -219,36 +294,8 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IDisposab
     public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(_timeout);
-        using var request = new HttpRequestMessage(HttpMethod.Post, _completions)
-        {
-            Content = new StringContent(RequestBody(input), Encoding.UTF8, "application/json"),
-        };
-        using var response = _client.Send(request, HttpCompletionOption.ResponseContentRead, deadline.Token);
-        if (response.StatusCode != HttpStatusCode.OK)
-        {
-            // The status alone: never the response's text, which could echo the request.
-            throw new InvalidOperationException($"The planner's provider answered HTTP {((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)}.");
-        }
-
-        using var stream = response.Content.ReadAsStream(deadline.Token);
-        using var document = JsonDocument.Parse(stream, new JsonDocumentOptions { MaxDepth = 64 });
-        var root = document.RootElement;
-        var choice = root.GetProperty("choices")[0];
-        if (choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String && finish.GetString() != "stop")
-        {
-            throw new InvalidOperationException("The planner's answer was cut short or filtered.");
-        }
-
-        var message = choice.GetProperty("message");
-        if (message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.String)
-        {
-            throw new InvalidOperationException("The planner's model refused to plan.");
-        }
-
-        var content = message.GetProperty("content").GetString() ?? throw new InvalidOperationException("The planner answered no content.");
-        return new V3PlannerOutput(V3AssistantPlanWire.ToPlanJson(content), CostOf(root));
+        var (content, cost, _, _) = Send(RequestBody(input), cancellationToken);
+        return new V3PlannerOutput(V3AssistantPlanWire.ToPlanJson(content), cost);
     }
 
     /// <summary>The call's cost in micro-euros, from the response's usage; at the per-answer ceiling when it states none.</summary>
