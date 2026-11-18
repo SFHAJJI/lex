@@ -201,8 +201,11 @@ public static class V4Bricks
             retrieval = V4Retrieval.Run(brief, tables, dictionary);
             draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", retrieval.Candidates.Count == 0 ? "no_candidate" : "candidates_found"));
             AssembleByCode(draft, decision, retrieval, row, dictionary);
-            if (decision.Route != "own_case" && model is not null && retrieval.Candidates.Count > 0 && !(retrieval.ClearLead && decision.Kind is "duration" or "date" or "amount"))
+            var leftToContract = draft.Absence == "no_answer_in_lines" && draft.Caveats.Contains("left_to_contract");
+            if (decision.Route != "own_case" && model is not null && retrieval.Candidates.Count > 0 && !leftToContract && !(retrieval.ClearLead && decision.Kind is "duration" or "date" or "amount"))
             {
+                // Not reached when the law itself leaves the value to the contract ("dans le délai fixé par le contrat"): code
+                // read it on the line, and no model can find a number that is not there.
                 Refine(draft, decision, retrieval, row, tables, dictionary, model, cancellationToken);
             }
             else if (decision.Route != "own_case" && retrieval.ClearLead && decision.Kind is "duration" or "date" or "amount" && draft.Items.Count == 1)
@@ -382,7 +385,8 @@ public static class V4Bricks
             draft.Found = true;
             draft.Items.Add(new Item(lead.Line, lead.Line, sure ? "rule" : "passage", null));
             var cases = shortlist.Skip(1)
-                .Where(candidate => candidate.Detectors.Contains("keyword") && candidate.Detectors.Contains("type_pattern") && (row.Roles.Count == 0 || candidate.Detectors.Contains("cooccurrence")))
+                .Where(candidate => candidate.Detectors.Contains("keyword") && candidate.Detectors.Contains("type_pattern") && !candidate.Detectors.Contains("other_party") &&
+                    (row.Roles.Count == 0 || candidate.Detectors.Contains("cooccurrence")))
                 .GroupBy(static candidate => candidate.Article.Id).Select(static group => group.First())
                 .Take(sure ? 4 : 2)
                 .ToList();
@@ -489,7 +493,8 @@ public static class V4Bricks
         if (pinnedRule is not null)
         {
             primaries = shortlist.Where(candidate => candidate.Line.Id == pinnedRule.Id).ToList();
-            supporting = shortlist.Where(candidate => candidate.Line.Id != pinnedRule.Id && candidate.Detectors.Contains("keyword") && candidate.Detectors.Contains("type_pattern")).Take(12).ToList();
+            supporting = shortlist.Where(candidate => candidate.Line.Id != pinnedRule.Id && candidate.Detectors.Contains("keyword") && candidate.Detectors.Contains("type_pattern") &&
+                !candidate.Detectors.Contains("other_party")).Take(12).ToList();
         }
         else if (clearValues)
         {
@@ -619,7 +624,9 @@ public static class V4Bricks
         draft.Found = true;
         draft.Complete = extraction.Complete && kind != "rule";
 
-        // One case per article: a second line of an article already quoted stays one step away, in the article itself.
+        // One case per article: a second line of an article already quoted stays one step away, in the article itself. A
+        // case the model pointed at that states another party's right is not a case of the rule asked, and is left out.
+        var found = retrieval.Candidates.ToDictionary(static candidate => candidate.Line.Id, StringComparer.Ordinal);
         var kept = new List<V4Generation.Checked>();
         foreach (var item in items)
         {
@@ -628,7 +635,19 @@ public static class V4Bricks
                 continue;
             }
 
+            if (item.Role == "case" && found.TryGetValue(item.Line.Id, out var candidate) && candidate.Detectors.Contains("other_party"))
+            {
+                continue;
+            }
+
             kept.Add(item);
+        }
+
+        if (draft.AnswerKind == "text")
+        {
+            // Passages are shown in the order code's own detectors give them: the line under the matching heading first.
+            kept = kept.OrderByDescending(item => found.TryGetValue(item.Line.Id, out var scored) ? scored.Score : 0)
+                .ThenBy(item => tables.Article(item.Line.Article)!.Position).ThenBy(static item => item.Line.Index).ToList();
         }
 
         draft.Items = kept.Take(V3AssistantPipeline.MaximumQuotes)
@@ -647,7 +666,7 @@ public static class V4Bricks
             draft.Passes.RemoveAll(static pass => pass.Trigger == "unnamed_cases");
         }
 
-        if (kind is "duration" or "date" or "amount" && draft.Items.Count > 1)
+        if (kind is "duration" or "amount" && draft.Items.Count > 1)
         {
             draft.Caveats.Add("several_by_scope");
         }

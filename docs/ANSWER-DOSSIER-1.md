@@ -361,3 +361,67 @@ Then the switch-on release, on its exact tuple:
 - quote fidelity 1.0, zero non-template sentences and byte-identical replay;
 - the budget gate: p95 3 s to the verdict and 10 s to the full answer;
 - R39's grader reported and never gating.
+
+## 13. The bricks (V4, 2026-11-18): `lex-v3-assistant-plan/2` and `lex-v4-bricks/1`
+
+The owner's go of 2026-11-18 (STATUS-WEB.md). The design is `C:\lex-v3\V4-PLAN-2026-11-18.md`: Lex laid on the bricks of
+Kezhan and Angela Shi's series, insurance first. This section is the contract of what was built; everything above it
+still holds for an answer the planner model plans (§12).
+
+**Where the bricks stand.** Behind the one seam, `IAssistantPlanner` (`V4BricksPlanner`, `Bricks/`). Code reads the
+question into a typed row (`V4QuestionParser`: the matching copy, the dictionary lookup, the acts named, the cues for the
+kind of answer), decides the route (`V4Dispatcher.Decide`), finds lines of the law by filters on two tables
+(`V4Retrieval` over `V4ActTables`), and writes a plan /2. A model is asked only to give each candidate it was given a
+role (the arbiter) and to point at lines it was given (the extraction); code checks every reply before use
+(`V4Generation.Validate`). A question the bricks do not answer (it cites an article, asks how the law changed, or names
+nothing of the insurance dictionary) goes to the planner of §12, unchanged.
+
+**The tables** (`Bricks/`, all code, no model):
+
+| Table | Source | What it holds |
+|---|---|---|
+| `insurance-dictionary.json` (`lex-v4-dictionary/1`) | committed, reviewed by a person | concepts, their keywords (the law's word, a reader's word, how the law answers), the kinds of answer and their cues |
+| `corpus-index.json` (`lex-v4-corpus-index/1`) | committed | the acts of the domain in the order a router tries them, the names people give them, a summary line each, the words of another domain, the EU acts of the domain by name |
+| `V4ActTables` | built from the index's typed pieces, per version, in memory | the outline (label, heading), the lines (each a position in the article's stored text), the terms the act defines, the references it makes in plain words, and the build's counts |
+
+**Plan /2.** A plan /1's members, and beside them:
+
+- an argument source `{"corpus": "..."}`: an act's address or an article's identifier that code read in its own tables,
+  admitted only for `identifier` and `article` of an `evidence_bundle` step, and only in a closed form;
+- on such a step, `text_sha256` (the digest of the article text the lines were cut from), `extracts` (at most five,
+  each `{offset, length, role, breaks?}` in that text) and `heading` (where the article's own heading is in it);
+- the root member `bricks`, the record below. A plan /2 may run no operation (a greeting, an act not held) and at most six.
+
+A plan /1 keeps its bytes. No model writes a plan /2.
+
+**The bricks record** travels in the plan, so in the trace: how the question was read (`concepts`, `roles`, `kind`,
+`unmatched`, `rule_question`), the route and its reason, the activations with theirs, what each detector found
+(`detectors`), the candidates with their detectors and, when the arbiter ran, its role and reason (`candidates`), the
+sweep, the passes of the loop, the model calls (step, model, digests of what was sent and answered, token counts) and
+the answer (`kind`, `found`, `complete`, `items`, `values`, `caveats`, `notes`, `more`, `usage`, `absence`). It holds
+tokens, numbers and positions only: a string with a space in it is refused, so no sentence can be carried in it. It is
+read as untrusted (a replay hands one in): its form first, then every value against its closed list, the question's
+bounds and the plan's own steps (`V4PlanRecord.Read`).
+
+**The answer.** The composer (`ComposeBricks`) lays out fixed wordings and quotations from the record. A quotation is an
+extract: the exact characters at a position of the article's stored text, with that text's digest, which is what
+`QuoteBound` checks, unchanged. An extract whose step answered another text than the one it was cut from is not composed
+(the answer fails closed). A value is restated only as the words written on a quoted line. No yes and no no is written.
+
+**Three slot kinds more:** `count` (digits), `law_words` (the law's own words: an article's heading, a value on a quoted
+line), `dictionary_term` (a term the build's dictionary or corpus index writes). **One gate more:** `LawWordsBound`: every
+`law_words` fact is, character for character, in an article text a step of the answer answered. The other gates are
+unchanged.
+
+**The advice boundary (R15), narrowed by the owner's decision of 2026-11-18.** A part that holds a function cue is still
+refused, unless it is a question on the rule (`V4Boundary.RuleQuestion`): a role of the law (assureur, preneur
+d'assurance, ...) is named before the first cue, every cue is of the two functions a rule can be asked in, nothing marks
+a case of the reader's own (je, mon, ma, mes, nous, notre, "dans mon cas"), and no number states a fact of a situation.
+"L'assureur peut-il résilier le contrat ?" is answered by quoting the rule; "Mon assureur peut-il résilier mon contrat ?"
+is refused as before, with the law beside it. The answer says which it did (`plan.bricks.rule_question`).
+
+**The notices.** An answer of the bricks says what a model did: `notice.no_model` when none was asked,
+`notice.model_assisted` when one ranked or pointed. `notice.assembled_by_model` stays on an answer the planner of §12 plans.
+
+**What leaves the server** is still the masked question, and now lines of published law with it (the candidates, the
+context), to the same deployment under the same key and deadline. Nothing of a question is stored.

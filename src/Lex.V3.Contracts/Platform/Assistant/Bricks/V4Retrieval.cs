@@ -138,6 +138,11 @@ public static class V4Retrieval
         var search = concepts.SelectMany(concept => dictionary.KeywordsOf(concept.Id, "law", "reader")).ToList();
         var answerWords = concepts.SelectMany(concept => dictionary.KeywordsOf(concept.Id, "answer")).ToList();
         var roleKeys = brief.Role is null ? [] : dictionary.KeywordsOf(brief.Role, "law").ToList();
+
+        // The other parties the law names: a line whose own verb has one of them as its subject states that party's right.
+        var otherRoleKeys = brief.Role is null
+            ? []
+            : dictionary.Concepts.Where(concept => concept.Kind == "role" && concept.Id != brief.Role).SelectMany(concept => dictionary.KeywordsOf(concept.Id, "law")).ToList();
         var valueRequired = concepts.Any(static concept => concept.ValueRequired);
         var valueKind = brief.Kind is "duration" or "date" or "amount";
 
@@ -255,6 +260,12 @@ public static class V4Retrieval
                     detectors.Add("direct_form");
                     score += 1.5;
                 }
+                else if (holds && brief.Kind is "rule" or "list" && otherRoleKeys.Count > 0 && DirectForm(line, otherRoleKeys, matched))
+                {
+                    // "le preneur d'assurance a le droit de résilier": the rule of another party than the one asked about.
+                    detectors.Add("other_party");
+                    score -= 2.0;
+                }
 
                 // A line that sends to "the cases provided by the law" states the general rule, by its own words.
                 if (holds && brief.Kind is "rule" or "list" && unnamed.Contains(line.Id))
@@ -301,7 +312,10 @@ public static class V4Retrieval
         return new V4RetrievalResult(tables, candidates, detectorCounts, Sweep(brief, tables, dictionary), titleArticles, clear);
     }
 
-    private static readonly HashSet<string> Modals = new(StringComparer.Ordinal) { "peut", "peuvent", "doit", "doivent", "a", "ont", "ne", "n", "pas", "le", "droit", "de" };
+    private static readonly HashSet<string> Modals = new(StringComparer.Ordinal)
+    {
+        "peut", "peuvent", "doit", "doivent", "a", "ont", "ne", "n", "pas", "le", "la", "droit", "de", "du", "dispose", "disposent", "faculte", "est", "sont", "tenu", "tenus", "libre",
+    };
 
     /// <summary>Whether, on a line, the role is followed within a few words by a modal and then by the concept's own word.</summary>
     private static bool DirectForm(V4Line line, List<V4Keyword> roleKeys, List<V4Keyword> matched)
@@ -313,9 +327,9 @@ public static class V4Retrieval
                 var after = first + count;
                 var modal = false;
                 var at = after;
-                while (at < Math.Min(after + 5, line.Words.Count) && Modals.Contains(line.Words[at].Text))
+                while (at < Math.Min(after + 6, line.Words.Count) && Modals.Contains(line.Words[at].Text))
                 {
-                    modal |= line.Words[at].Text is "peut" or "peuvent" or "doit" or "doivent" or "droit";
+                    modal |= line.Words[at].Text is "peut" or "peuvent" or "doit" or "doivent" or "droit" or "faculte" or "tenu" or "tenus" or "libre";
                     at++;
                 }
 
