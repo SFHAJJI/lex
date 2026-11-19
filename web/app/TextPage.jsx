@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { askV3 } from '../scripts/v3-client.mjs';
 import { CHROME_LOCALE, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { DOCK_EVENT, OPEN_EVENT, textHref, textStateOf } from '../scripts/text-address.mjs';
+import { DOCK_EVENT, MARK_EVENT, OPEN_EVENT, quotedParagraphs, textHref, textStateOf } from '../scripts/text-address.mjs';
 import {
   alignParagraphs, articleNumberOf, articleParts, axisGeometry, changeIndex, comparable, ownTitleOf, sameVisibleWording, versionAt, versionsOf,
 } from '../scripts/text-page.mjs';
@@ -162,10 +162,10 @@ function Axis({ versions, today, width, read, compare, pending, onMark }) {
   );
 }
 
-/** The paragraphs of an article, numbered points apart, the answer's article highlighted whole. */
-function Paragraphs({ parts }) {
+/** The paragraphs of an article, numbered points apart; the ones an answer quotes are marked (`marked`, their indexes). */
+function Paragraphs({ parts, marked = [] }) {
   return parts.paragraphs.map((paragraph, index) => (
-    <div className="lx-para" key={index}>
+    <div className={marked.includes(index) ? 'lx-para lx-para-quoted' : 'lx-para'} data-quoted={marked.includes(index) ? '' : undefined} key={index}>
       <span className="lx-para-marker">{paragraph.marker ?? ''}</span>
       <p>{paragraph.text}</p>
     </div>
@@ -192,8 +192,10 @@ function SourceAndCitation({ article, version }) {
 }
 
 /** One article in reading mode: the margin (number, strip, sentence, links) and the body (heading, paragraphs). */
-export function ReadArticle({ entry, article, parts, versions, changedDates, identifier, highlighted, version, onCompareOn }) {
+export function ReadArticle({ entry, article, parts, versions, changedDates, identifier, highlighted, version, onCompareOn, quotes = null }) {
   const copy = liveChrome().text;
+  // The lines an answer quotes are marked alone; with none met in the paragraphs, the article opened is marked whole.
+  const marked = article && parts && quotes ? quotedParagraphs(parts.paragraphs, quotes) : [];
   const number = entry.number;
   // The versions that changed it are read after first paint (the pairwise diffs): until then, none is said.
   const last = (changedDates ?? []).at(-1) ?? null;
@@ -203,7 +205,7 @@ export function ReadArticle({ entry, article, parts, versions, changedDates, ide
     if (last === null) sentence = fill(copy.sameAll, { count: grouped(versions.length), date: numericDate(versions[0].date) });
   }
   return (
-    <article className={highlighted ? 'lx-article lx-article-highlighted' : 'lx-article'} id={`article-${entry.id}`} data-article={entry.id} aria-labelledby={`article-${entry.id}-number`}>
+    <article className={highlighted && marked.length === 0 ? 'lx-article lx-article-highlighted' : 'lx-article'} id={`article-${entry.id}`} data-article={entry.id} aria-labelledby={`article-${entry.id}-number`}>
       <div className="lx-margin">
         <span className="lx-margin-number" id={`article-${entry.id}-number`}>{fill(copy.articleShort, { number })}</span>
         <Strip versions={versions} changedDates={changedDates ?? []} />
@@ -217,7 +219,7 @@ export function ReadArticle({ entry, article, parts, versions, changedDates, ide
       </div>
       <div className="lx-article-body" lang={article?.language === 'eng' ? 'en' : 'fr'}>
         {parts?.heading ? <h2>{parts.heading}</h2> : null}
-        {article && parts ? <Paragraphs parts={parts} /> : entry.textHeld === false ? <p className="lx-without-text">{copy.withoutText}</p> : <p className="lx-skeleton" aria-hidden="true" />}
+        {article && parts ? <Paragraphs parts={parts} marked={marked} /> : entry.textHeld === false ? <p className="lx-without-text">{copy.withoutText}</p> : <p className="lx-skeleton" aria-hidden="true" />}
       </div>
     </article>
   );
@@ -352,6 +354,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   const [width, setWidth] = useState(900);
   const [copied, setCopied] = useState(false);
   const [highlight, setHighlight] = useState(null);
+  const [marks, setMarks] = useState(null);
   const [typed, setTyped] = useState(null);
   const [diffsTried, setDiffsTried] = useState(false);
   const axisBox = useRef(null);
@@ -524,6 +527,17 @@ export function TextPage({ contract, fetchImpl, now = null }) {
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, [text, go]);
 
+  // The lines the answer in sight quotes (`lex:mark`), kept whatever text is open: they are read against this text's
+  // identifier when its articles are drawn.
+  useEffect(() => {
+    const onMark = (event) => {
+      const detail = event.detail ?? {};
+      setMarks(typeof detail.identifier === 'string' && Array.isArray(detail.marks) && detail.marks.length > 0 ? { identifier: detail.identifier, marks: detail.marks } : null);
+    };
+    window.addEventListener(MARK_EVENT, onMark);
+    return () => window.removeEventListener(MARK_EVENT, onMark);
+  }, []);
+
   // An article asked for by the address is highlighted when the assistant opened it (`highlight=1` is not written: the
   // dock's own event says it); "Find in this law" from the dock focuses the field.
   useEffect(() => {
@@ -552,6 +566,23 @@ export function TextPage({ contract, fetchImpl, now = null }) {
       if (column !== null) column.scrollTop += element.getBoundingClientRect().top - column.getBoundingClientRect().top - 8;
       scrolled.current = `${versionKey}:${address.article}`;
     }
+  });
+
+  // The quoted line of the article asked for is brought into view once it is drawn (a long article's line may be far below
+  // its heading), once per answer and article.
+  const shownMark = useRef(null);
+  useEffect(() => {
+    if (compare !== null || address?.article == null || marks === null || text === null || marks.identifier !== text.identifier) return;
+    const key = `${versionKey}:${address.article}:${marks.marks.map((mark) => mark.article + mark.text.length).join(',')}`;
+    if (shownMark.current === key || scrolled.current !== `${versionKey}:${address.article}`) return;
+    const line = document.getElementById(`article-${address.article}`)?.querySelector('[data-quoted]') ?? null;
+    if (line === null) return;
+    const column = line.closest('.lx-reading');
+    if (column !== null) {
+      const top = line.getBoundingClientRect().top - column.getBoundingClientRect().top;
+      if (top < 0 || top > column.clientHeight * 0.6) column.scrollTop += top - 72;
+    }
+    shownMark.current = key;
   });
 
   const index = useMemo(() => changeIndex(diffs), [diffs]);
@@ -816,6 +847,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
                     changedDates={isEurope ? [] : diffsDone || index.has(entry.id) ? index.get(entry.id) ?? [] : null}
                     identifier={text.identifier}
                     highlighted={highlight === entry.id}
+                    quotes={marks !== null && marks.identifier === text.identifier ? marks.marks.filter((mark) => mark.article === entry.id).map((mark) => mark.text) : null}
                     version={readVersion}
                     onCompareOn={(from, to, id) => go({ from, to, article: id, date: null })}
                   />

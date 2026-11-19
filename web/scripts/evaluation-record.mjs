@@ -3,10 +3,10 @@
 
 export const EVALUATION_RECORD = Object.freeze({
   "dev": {
-    "run": "20261119-v4-final-dev",
-    "runId": "52a93d8c0cbe467785f531d6d208f4a7",
+    "run": "20261119-r15-gate",
+    "runId": "9c18d4a6c44d411cb6645dc82c457e8d",
     "date": "2026-11-19",
-    "servingCommit": "5e02ec30c1bd5250404430d7728f3e86c4e34dce",
+    "servingCommit": "405abff0d2263fd817538c302b8936e5bcc73e17",
     "plannerId": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
     "modelDeployment": "gpt-4.1-mini",
     "cases": 56,
@@ -16,13 +16,13 @@ export const EVALUATION_RECORD = Object.freeze({
     "wronglyRefused": 1,
     "rightBehaviour": 9,
     "wrongBehaviour": 0,
-    "quotes": 64,
+    "quotes": 63,
     "quoteVerifiedRate": 1,
     "replaySameVerdict": 1,
-    "replaySamePlan": 0.82,
-    "p50": 2.116708000015933,
-    "p95": 4.255861899931915,
-    "costEur": 0.00193831,
+    "replaySamePlan": 0.84,
+    "p50": 0.9500303499517031,
+    "p95": 2.4864255998982117,
+    "costEur": 0.0019372540000000002,
     "questions": [
       {
         "id": "lu-code-civil-art1",

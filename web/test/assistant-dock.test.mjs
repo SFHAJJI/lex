@@ -246,6 +246,10 @@ test('how this answer was built: five stages from the trace, the AI model on the
   assert.deepEqual(french, ['rien à masquer', 'chercher, puis lire l’article', 'plan accepté, rien de réparé', 'art. 44 lu au 15/11/2026', 'citation identique au texte']);
   assert.equal(builtFoot(1.6, 0.0010916, 'fr'), '1,6 s, environ 0,001 €');
   assert.equal(builtFoot(null, 0.0010916, 'en'), 'about €0.001');
+  // An answer no model was asked for prints its time alone: it cost no model call.
+  assert.equal(builtFoot(0.2, 0.0010916, 'fr', false), '0,2 s');
+  assert.equal(builtFoot(0.2, 0.0010916, 'en', false), '0.2 s');
+  assert.equal(builtFoot(null, 0.0010916, 'en', false), '');
 });
 
 // --- The states of section 6 ------------------------------------------------------------------------------------------------

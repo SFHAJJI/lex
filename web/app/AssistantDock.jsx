@@ -15,13 +15,17 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { CHROME_LOCALE } from '../scripts/live-chrome.mjs';
 import { askV3 } from '../scripts/v3-client.mjs';
-import { DOCK_EVENT, OPEN_EVENT, textHref } from '../scripts/text-address.mjs';
+import { DOCK_EVENT, MARK_EVENT, OPEN_EVENT, marksOf, textHref } from '../scripts/text-address.mjs';
 import {
   answerDate,
   bricksBody,
   bricksOf,
+  actTitleAt,
+  aroundAddress,
+  bricksWork,
   builtNote,
   builtFoot,
+  modelWasAsked,
   clarifyCandidates,
   dockExamples,
   dockTurnOf,
@@ -216,7 +220,15 @@ function BricksBody({ turn, copy, locale, onText }) {
   const lead = body.find((entry) => entry.type === 'quote') ?? null;
   const opening = answerOpening(turn, locale);
   return body.map((entry, at) => {
-    if (entry.type === 'line') return <p className="lx-dock-line" key={at}>{entry.text}</p>;
+    if (entry.type === 'line') {
+      // A sentence that names the act by its address says its title once the title is read (an absence's sweep).
+      const around = turn.workTitle?.title ? aroundAddress(entry.text, bricksWork(turn.dossier)) : null;
+      return (
+        <p className="lx-dock-line" key={at}>
+          {around === null ? entry.text : <>{around[0]}{QUOTE_OPEN}<span lang={tagOf(turn.workTitle.language)}>{turn.workTitle.title}</span>{QUOTE_CLOSE}{around[1]}</>}
+        </p>
+      );
+    }
     if (entry.type === 'value') return <p className="lx-dock-value" key={at}>{entry.text}</p>;
     if (entry.type === 'remark') return <p className="lx-dock-remark" key={at}>{entry.text}</p>;
     if (entry.type === 'more') {
@@ -314,7 +326,7 @@ function Built({ turn, copy, locale, initialPlan = false }) {
     <section className="lx-dock-card lx-dock-built" aria-labelledby={headingId} data-dock-built="">
       <div className="lx-dock-built-head">
         <h3 className="lx-dock-built-title" id={headingId}>{copy.dockBuilt}</h3>
-        <span className="lx-dock-built-foot" data-dock-cost="">{builtFoot(turn.seconds ?? null, AVERAGE_COST, locale)}</span>
+        <span className="lx-dock-built-foot" data-dock-cost="">{builtFoot(turn.seconds ?? null, AVERAGE_COST, locale, modelWasAsked(dossier, rows))}</span>
       </div>
       <ol className="lx-dock-rows">
         {rows.map((row) => (
@@ -693,12 +705,29 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
         ? articleVersions({ identifier: where.identifier, article: where.article, language: where.language }, doFetch).catch(() => null)
         : Promise.resolve(shown.strip);
       Promise.all([facts, strip]).then(([factsRead, stripRead]) => update(shown.id, shown.kind === 'answer' ? { facts: factsRead, strip: stripRead } : { strip: stripRead }));
+    } else if (shown.kind === 'answer' && where === null && shown.workTitle === undefined && bricksWork(shown.dossier) !== null) {
+      // An answer that quotes nothing and names the act it read: the act's title, asked once.
+      fetching.current.add(shown.id);
+      actTitleAt(bricksWork(shown.dossier), doFetch).then((workTitle) => update(shown.id, { workTitle }));
     } else if (shown.kind === 'clarify' && shown.choices === undefined) {
       fetching.current.add(shown.id);
       Promise.all(clarifyCandidates(shown.dossier).map((candidate) => articleFacts(candidate, doFetch).catch(() => null)))
         .then((choices) => update(shown.id, { choices }));
     }
   }, [shown, locale, update]);
+
+  // The lines the answer in sight quotes are said to the page (`lex:mark`): a text page marks those paragraphs, in place of
+  // the whole article. Said again once the page's own script has had time to listen, as the dock's fold is.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const where = shown?.kind === 'answer' ? answerOpening(shown, locale) : null;
+    const quotes = where === null ? [] : (shown.dossier?.parts ?? []).flatMap((part) => part.blocks ?? []).filter((block) => block?.kind === 'quote');
+    const detail = where === null ? { identifier: null, marks: [] } : { identifier: where.identifier, marks: marksOf(quotes, where.identifier) };
+    const say = () => window.dispatchEvent(new CustomEvent(MARK_EVENT, { detail }));
+    say();
+    const later = [setTimeout(say, 800), setTimeout(say, 2500)];
+    return () => later.forEach(clearTimeout);
+  }, [shown?.id, shown?.kind, locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opens a text at an article: a text page standing at it opens it in place (it cancels `lex:open`); otherwise the page goes
   // to the text's address (a law's address, a date and an article id: never a word the reader typed), the conversation kept

@@ -5,7 +5,8 @@ export const REGISTRY_RECORD = Object.freeze({
   "mlflow_version": "3.18.0",
   "model": "lex-assistant",
   "aliases": {
-    "champion": 7
+    "champion": 11,
+    "serving": 11
   },
   "versions": [
     {
@@ -218,9 +219,7 @@ export const REGISTRY_RECORD = Object.freeze({
         "snapshot_id": "corpus-b2c3c1ba55bdda9a",
         "gates": "passed"
       },
-      "aliases": [
-        "champion"
-      ],
+      "aliases": [],
       "params": {
         "dataset": "lex-assistant-v2.jsonl",
         "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
@@ -247,9 +246,175 @@ export const REGISTRY_RECORD = Object.freeze({
         "summary.md",
         "traces.jsonl"
       ]
+    },
+    {
+      "version": 8,
+      "created": "2026-11-15T11:50:27Z",
+      "source": "models:/m-a99e629c62cc47939cdf5ac1f83446f5",
+      "run_id": "e7505b06cc724db9aaa5b9730b3699f9",
+      "run_name": "38c1a47b-278b2dce",
+      "tags": {
+        "serving_commit": "38c1a47bac9af8ff055568523eb228b0b9f7066a",
+        "planner_id": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "passed"
+      },
+      "aliases": [],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://ca-lex-v3--v3-20261115t092447z-38c1a47bac9a-d5f4861f.whitemushroom-ff26ef2a.francecentral.azurecontainerapps.io"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.4642857142857143,
+        "citation_accuracy": 0.3617021276595745,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 0.9642857142857143,
+        "replay_same_plan_rate": 0.7111111111111111,
+        "latency_p50_s": 1.4991818999696989,
+        "latency_p95_s": 1.8608310000272468,
+        "outcome_right_article": 17,
+        "outcome_wrong_article": 0,
+        "outcome_not_found": 25,
+        "outcome_wrongly_refused": 5,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.0010963533333333334
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
+    },
+    {
+      "version": 9,
+      "created": "2026-11-16T06:13:18Z",
+      "source": "models:/m-77a942c291ce4bd2b7af0075e5de9a27",
+      "run_id": "a2d9ee9f4f254198aace909bb72044a9",
+      "run_name": "b117b3fb-278b2dce",
+      "tags": {
+        "serving_commit": "b117b3fba166f5e84b8ac30f7e025de06b778ef6",
+        "planner_id": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "failed"
+      },
+      "aliases": [],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://ca-lex-v3--v3-20261115t183640z-b117b3fba166-19f24051.whitemushroom-ff26ef2a.francecentral.azurecontainerapps.io"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.4642857142857143,
+        "citation_accuracy": 0.3191489361702128,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 0.9642857142857143,
+        "replay_same_plan_rate": 0.6136363636363636,
+        "latency_p50_s": 1.7382933999761008,
+        "latency_p95_s": 6.252351400034968,
+        "outcome_right_article": 15,
+        "outcome_wrong_article": 1,
+        "outcome_not_found": 26,
+        "outcome_wrongly_refused": 5,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.0010942113636363637
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
+    },
+    {
+      "version": 10,
+      "created": "2026-11-16T07:16:13Z",
+      "source": "models:/m-c58aae9e6a704511a421f4f0bfb027f0",
+      "run_id": "a0ef26620f184245880cc44646e640b2",
+      "run_name": "b117b3fb-278b2dce",
+      "tags": {
+        "serving_commit": "b117b3fba166f5e84b8ac30f7e025de06b778ef6",
+        "planner_id": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "failed",
+        "serving": "false",
+        "owner_exception": "2026-11-16: the owner put Release 14 live although its promotion gate failed twice on ins-cover-start-fr (art_57); the live Release 13, same engine, gave art_57 in 2 of 3 tries at the same time; the release changes the front end only"
+      },
+      "aliases": [],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://ca-lex-v3--v3-20261115t183640z-b117b3fba166-19f24051.whitemushroom-ff26ef2a.francecentral.azurecontainerapps.io"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.48214285714285715,
+        "citation_accuracy": 0.3617021276595745,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 0.9821428571428571,
+        "replay_same_plan_rate": 0.6444444444444445,
+        "latency_p50_s": 1.8698710499738809,
+        "latency_p95_s": 5.20790430001216,
+        "outcome_right_article": 17,
+        "outcome_wrong_article": 1,
+        "outcome_not_found": 24,
+        "outcome_wrongly_refused": 5,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.001095451111111111
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
+    },
+    {
+      "version": 11,
+      "created": "2026-11-19T04:27:23Z",
+      "source": "models:/m-17745f8f4a6546b098bf7d9016fab26b",
+      "run_id": "9c18d4a6c44d411cb6645dc82c457e8d",
+      "run_name": "405abff0-278b2dce",
+      "tags": {
+        "serving_commit": "405abff0d2263fd817538c302b8936e5bcc73e17",
+        "planner_id": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "passed",
+        "serving": "true"
+      },
+      "aliases": [
+        "champion",
+        "serving"
+      ],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://ca-lex-v3--v3-20261119t030608z-405abff0d226-ee052a13.whitemushroom-ff26ef2a.francecentral.azurecontainerapps.io"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.8035714285714286,
+        "citation_accuracy": 0.7659574468085106,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 1,
+        "replay_same_plan_rate": 0.84,
+        "latency_p50_s": 0.9500303499517031,
+        "latency_p95_s": 2.4864255998982117,
+        "outcome_right_article": 36,
+        "outcome_wrong_article": 0,
+        "outcome_not_found": 10,
+        "outcome_wrongly_refused": 1,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.0019372540000000002
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
     }
   ],
   "experiment": "lex-assistant",
-  "runs_logged": 23,
-  "exported": "2026-11-15T09:09:46Z"
+  "runs_logged": 30,
+  "exported": "2026-11-19T05:00:11Z"
 });
