@@ -273,6 +273,30 @@ public static class V4Generation
             """,
     };
 
+    // ---- The answer check (V4Bricks.CheckAnswer): its instruction and its form. Their digest is apart from PromptsSha256,
+    // so that the planner's identity is the one it was while the check is switched off.
+
+    /// <summary>The check's instruction, as measured on 2026-11-19. Its digest is part of the planner's identity when the check is on.</summary>
+    public const string AnswerCheckPrompt =
+        "You check whether one article of law answers a reader's question. Use only the article given. answer_found is true only if the article states the rule that answers the question as asked: the same subject, the same situation, the same kind of person or contract. It is false if the article is about a neighbouring subject, another situation or another party, if it only shares words with the question, or if the answer would have to be guessed. complete_answer_found is true only if the question can be answered from this article alone. First write the reason in at most 25 words, then the two booleans.";
+
+    internal static string AnswerCheckSchema { get; } = new JsonObject
+    {
+        ["type"] = "object",
+        ["additionalProperties"] = false,
+        ["required"] = new JsonArray("reason", "answer_found", "complete_answer_found"),
+        ["properties"] = new JsonObject
+        {
+            ["reason"] = new JsonObject { ["type"] = "string" },
+            ["answer_found"] = new JsonObject { ["type"] = "boolean" },
+            ["complete_answer_found"] = new JsonObject { ["type"] = "boolean" },
+        },
+    }.ToJsonString();
+
+    /// <summary>The digest of the check's instruction and form.</summary>
+    public static string AnswerCheckSha256 { get; } =
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(AnswerCheckPrompt + "\n" + AnswerCheckSchema)));
+
     /// <summary>The digest of the instructions this build sends, for the planner's identity: a changed prompt is a changed planner.</summary>
     public static string PromptsSha256 { get; } = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
         ArbiterPrompt + "\n" + OutlinePrompt + "\n" + ExtractionBase + "\n" + string.Join("\n", Fragments.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => pair.Key + ":" + pair.Value)))));

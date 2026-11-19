@@ -86,7 +86,9 @@ if (!maintenance)
                     corpusMount.BricksCorpus(static () => DateTimeOffset.UtcNow),
                     deployment,
                     // The wider reading (the owner's order of 2026-11-19): LEX_V3_EVERY_LAW exactly `on`, read once here.
-                    everyLaw: string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.EveryLawVariable), "on", StringComparison.Ordinal)),
+                    everyLaw: string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.EveryLawVariable), "on", StringComparison.Ordinal),
+                    // The answer check (the owner's order of 2026-11-19): LEX_V3_ANSWER_CHECK exactly `on`, read once here.
+                    answerCheck: string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.AnswerCheckVariable), "on", StringComparison.Ordinal)),
             Environment.GetEnvironmentVariable(V3AssistantRuntime.PreviewVariable)));
     }
     catch (Exception exception)

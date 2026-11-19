@@ -73,6 +73,13 @@ param assistant object = {}
 ])
 param everyLaw string = 'on'
 
+@description('The assistant\'s answer check (the owner\'s order of 2026-11-19), read by the API at startup as LEX_V3_ANSWER_CHECK: on (an answer the assistant asserts is read once more by the model against the first article it quotes, and shown as candidates when the check rejects it) or off (the assistant answers as it did before). Set only where the assistant is on.')
+@allowed([
+  'on'
+  'off'
+])
+param answerCheck string = 'on'
+
 @description('True for the release\'s maintenance revision (deploy.ps1 -Maintenance; R60, R108, R115): the same image with LEX_V3_MAINTENANCE=on, serving only the maintenance page, deployed with no traffic beside the live revision, which keeps 100 per cent.')
 param maintenance bool = false
 
@@ -120,6 +127,11 @@ var assistantEnvironment = assistantOn
       {
         name: 'LEX_V3_EVERY_LAW'
         value: everyLaw
+      }
+      // The answer check: only the exact value `on` turns it on (V3AssistantRuntime.AnswerCheckVariable).
+      {
+        name: 'LEX_V3_ANSWER_CHECK'
+        value: answerCheck
       }
       {
         name: 'LEX_ASSISTANT_ENDPOINT'

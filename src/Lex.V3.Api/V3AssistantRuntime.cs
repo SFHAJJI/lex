@@ -51,6 +51,13 @@ internal sealed class V3AssistantRuntime
     /// </summary>
     internal const string EveryLawVariable = "LEX_V3_EVERY_LAW";
 
+    /// <summary>
+    /// The switch of the answer check (the owner's order of 2026-11-19): exactly <c>on</c>, and an answer the plan asserts
+    /// is read once more by the model against the first article it quotes; rejected, it is shown as candidates. Anything
+    /// else, or unset, and the assistant answers as it did.
+    /// </summary>
+    internal const string AnswerCheckVariable = "LEX_V3_ANSWER_CHECK";
+
     /// <summary>The per-answer cost ceiling, in micro-euros (0.25 EUR since the owner lifted the budget on 2026-11-19, so that a larger model's answer is not thrown away; it was 0.03): a planner that reports more is not used (R40).</summary>
     internal const long PerAnswerCeilingMicroEuros = 250_000;
 

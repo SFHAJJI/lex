@@ -401,7 +401,8 @@ public static partial class V3AssistantPipeline
         // What a model did, as it was: it described the question (it named the concept the reader's words are about), it
         // marked lines among those code gave it, both, or nothing.
         var described = record.ModelSteps.Contains("question");
-        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "outline" or "extraction");
+        // The answer check read the first article quoted against the question: a model took part, and the answer says so.
+        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "outline" or "extraction" or "check");
         if (described)
         {
             notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeModelDescribed, locale));

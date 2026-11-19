@@ -124,8 +124,9 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation: ArbiterReasons=11, "
-                    + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const ArbiterPrompt, "
-                    + "const ExtractionBase, const OutlinePrompt, static property ArbiterSchema, "
+                    + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const AnswerCheckPrompt, const ArbiterPrompt, "
+                    + "const ExtractionBase, const OutlinePrompt, static property AnswerCheckSchema, "
+                    + "static property AnswerCheckSha256, static property ArbiterSchema, "
                     + "static property ExtractionSchema, static property OutlineSchema, "
                     + "static property PromptsSha256",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Patterns: const Number, "
