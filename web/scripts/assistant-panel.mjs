@@ -265,6 +265,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockChoicesPending: 'Reading the titles…',
     dockAdvice: 'Lex shows the text of the law; it does not say what applies to your situation.',
     dockAdviceExample: 'A question it can answer:',
+    dockAdviceLaw: 'What the text says on this subject, quoted as it reads:',
     dockOff: 'The assistant is switched off. The texts, their versions and compare keep working: they use no model.',
     dockCouldNot: 'The assistant could not answer this question: its planner failed, its plan was refused, or this month’s spending cap is reached. The texts, their versions and compare keep working: they use no model.',
 });
@@ -487,6 +488,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockChoicesPending: 'Lecture des titres…',
     dockAdvice: 'Lex montre le texte de la loi ; il ne dit pas ce qui s’applique à votre situation.',
     dockAdviceExample: 'Une question à laquelle il peut répondre :',
+    dockAdviceLaw: 'Ce que dit le texte sur ce sujet, cité tel qu’il se lit :',
     dockOff: 'L’assistant est désactivé. Les textes, leurs versions et la comparaison fonctionnent toujours : ils n’utilisent aucun modèle.',
     dockCouldNot: 'L’assistant n’a pas pu répondre à cette question : son planificateur a échoué, son plan a été refusé ou le plafond de dépenses du mois est atteint. Les textes, leurs versions et la comparaison fonctionnent toujours : ils n’utilisent aucun modèle.',
 });
@@ -608,6 +610,21 @@ async function actDossierAt(address, fetchImpl) {
   });
   const envelope = await response.json();
   return readDossier(envelope?.result?.value);
+}
+
+/**
+ * The act whose title a card still has to read: a bricks answer that names the act it read and opens no text (`said`, an
+ * absence's sweep, quotes nothing; `opening` is then null). Null once the title is read, and for any other turn.
+ */
+export function workTitleToRead(turn, opening) {
+  if (turn === null || turn === undefined || (turn.kind !== 'said' && turn.kind !== 'answer')) return null;
+  if (opening !== null || turn.workTitle !== undefined) return null;
+  return bricksWork(turn.dossier);
+}
+
+/** The law's lines a refused answer holds beside its refusal (the bricks' descriptive maximum): its quotations, in order. */
+export function linesBeside(dossier) {
+  return bricksOf(dossier) === null ? Object.freeze([]) : Object.freeze(bricksBody(dossier).filter((entry) => entry.type === 'quote'));
 }
 
 /** The own title of one Luxembourg act, by its address (its dossier, asked once): `{ title, language }`, or null. */

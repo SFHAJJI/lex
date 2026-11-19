@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { ASSISTANT_PANEL_COPY, actTitleAt, aroundAddress, bricksBody, bricksOf, bricksWork, builtNote, dockTurnOf, modelWasAsked, questionCallOf, quoteLines, stageRows, validateDossier } from '../scripts/assistant-panel.mjs';
+import { ASSISTANT_PANEL_COPY, actTitleAt, aroundAddress, bricksBody, bricksOf, bricksWork, builtNote, dockTurnOf, linesBeside, modelWasAsked, questionCallOf, quoteLines, stageRows, validateDossier, workTitleToRead } from '../scripts/assistant-panel.mjs';
 import { BRICKS_ANSWERS } from '../scripts/bricks-answers-record.mjs';
 import { bundle } from '../scripts/react-build.mjs';
 
@@ -201,9 +201,38 @@ test('the dock draws a bricks answer: the lead line marked, each case with its a
   assert.match(absence, /data-dock-card="said"/u);
   assert.match(absence, /Aucun de ces termes ne figure dans ce texte\./u);
   assert.ok(!absence.includes(FR.dockNotFound), 'an absence proved by a sweep is not the card of a search that found nothing');
+
+  // The absence names the act it read by its address until the act's title is read; then the title stands in its place.
+  // (Release 16's candidate: the title was never asked for, the card being of the kind `said`, not `answer`.)
+  const address = bricksWork(answers.absence);
+  assert.equal(workTitleToRead(said, null), address, 'a card that quotes nothing asks for the title of the act it read');
+  assert.equal(workTitleToRead({ ...said, workTitle: null }, null), null, 'asked once: a title that could not be read is not asked again');
+  assert.equal(workTitleToRead({ ...said, kind: 'advice' }, null), null);
+  assert.equal(workTitleToRead(said, { identifier: address, article: 'art_1er' }), null, 'an answer that opens a text names it by its quotation');
+  assert.ok(absence.includes(address), 'with no title read, the server\'s sentence stands as it is');
+  const titled = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...said, workTitle: { title: 'Loi du 27 juillet 1997 sur le contrat d\'assurance', language: 'fra' } } }));
+  assert.ok(!titled.includes(address), 'the address is no longer in sight');
+  assert.match(titled, /Lex a parcouru le texte de «[^<]*<span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance<\/span>/u);
+
+  // A refusal shows the law's lines its answer holds beside it (the plan's dispatcher, route 1: "Lex's refusal with the law
+  // shown beside it"): the lines alone, each with its article and a way to it, none marked as an answer to the reader's case.
+  const beside = linesBeside(answers.refusal);
+  assert.ok(beside.length > 0, 'the engine\'s refusal holds lines of the law');
+  const refused = dockTurnOf(asked(answers.refusal), 'fr');
+  const card = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...refused, id: 't3', question: 'Mon assureur peut-il résilier mon contrat ?' } }));
+  assert.match(card, /data-dock-card="advice"/u);
+  assert.ok(card.includes(FR.dockAdvice), 'the refusal\'s own sentence first');
+  assert.ok(card.indexOf(FR.dockAdvice) < card.indexOf(FR.dockAdviceLaw) && card.indexOf(FR.dockAdviceLaw) < card.indexOf(FR.dockAdviceExample), 'then the lines, then a question it can answer');
+  for (const entry of beside) assert.ok(card.includes(`data-dock-extract="${entry.quote.anchor}"`), entry.quote.anchor);
+  assert.ok(!/data-dock-beside[\s\S]*lx-dock-mark[\s\S]*data-dock-built/u.test(card), 'no line is marked as the answer');
+  assert.ok(!card.includes(FR.dockWholeOpen), 'no text was opened for a refusal: the card does not say one is');
+  // A refusal that holds no line (the operations path, a plan /1) keeps its card as it was.
+  assert.equal(linesBeside(answers.described).length, 0);
+  assert.equal(linesBeside(null).length, 0);
 });
 
 test('the dock\'s new words are in both copy tables', () => {
+  assert.ok(typeof EN.dockAdviceLaw === 'string' && typeof FR.dockAdviceLaw === 'string' && EN.dockAdviceLaw !== FR.dockAdviceLaw);
   for (const key of Object.keys(EN).filter((name) => /^dock(Stage(Question|Route|Retrieval|Arbiter|Extraction|Checks)|Question|Kind|Route|Retrieval|Arbiter|Extraction|Checks|Bricks|Said|Asks|Described|NoModel)/u.test(name))) {
     assert.equal(typeof FR[key], 'string', key);
     assert.ok(FR[key].length > 0 && EN[key].length > 0, key);

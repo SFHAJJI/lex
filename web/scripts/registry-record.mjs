@@ -5,8 +5,8 @@ export const REGISTRY_RECORD = Object.freeze({
   "mlflow_version": "3.18.0",
   "model": "lex-assistant",
   "aliases": {
-    "champion": 11,
-    "serving": 11
+    "champion": 12,
+    "serving": 12
   },
   "versions": [
     {
@@ -380,12 +380,9 @@ export const REGISTRY_RECORD = Object.freeze({
         "planner_id": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
         "snapshot_id": "corpus-b2c3c1ba55bdda9a",
         "gates": "passed",
-        "serving": "true"
+        "serving": "false"
       },
-      "aliases": [
-        "champion",
-        "serving"
-      ],
+      "aliases": [],
       "params": {
         "dataset": "lex-assistant-v2.jsonl",
         "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
@@ -412,9 +409,53 @@ export const REGISTRY_RECORD = Object.freeze({
         "summary.md",
         "traces.jsonl"
       ]
+    },
+    {
+      "version": 12,
+      "created": "2026-11-19T06:46:59Z",
+      "source": "models:/m-d8813b62dc7a4cc39841eb84127fbbed",
+      "run_id": "7ed7e96e34ed4460aee4d98eddf7aa72",
+      "run_name": "0af7de23-278b2dce",
+      "tags": {
+        "serving_commit": "0af7de23ab559fecb7dcaf19340c9b143c76b928",
+        "planner_id": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
+        "snapshot_id": "corpus-b2c3c1ba55bdda9a",
+        "gates": "passed",
+        "serving": "true"
+      },
+      "aliases": [
+        "champion",
+        "serving"
+      ],
+      "params": {
+        "dataset": "lex-assistant-v2.jsonl",
+        "dataset_sha256": "278b2dcee9ffff45181fcfd6c4fef39b1fc3852afc2c7a7fb67d06b4a2e8efcc",
+        "base_url": "https://ca-lex-v3--v3-20261119t050837z-0af7de23ab55-9ed049f6.whitemushroom-ff26ef2a.francecentral.azurecontainerapps.io"
+      },
+      "metrics": {
+        "cases": 56,
+        "verdict_accuracy": 0.8035714285714286,
+        "citation_accuracy": 0.7659574468085106,
+        "quote_verified_rate": 1,
+        "replay_same_verdict_rate": 1,
+        "replay_same_plan_rate": 0.86,
+        "latency_p50_s": 1.0500214500934817,
+        "latency_p95_s": 3.7745232000015676,
+        "outcome_right_article": 36,
+        "outcome_wrong_article": 0,
+        "outcome_not_found": 10,
+        "outcome_wrongly_refused": 1,
+        "outcome_right_behaviour": 9,
+        "cost_eur_per_question_estimate": 0.001941446
+      },
+      "artifacts": [
+        "results.jsonl",
+        "summary.md",
+        "traces.jsonl"
+      ]
     }
   ],
   "experiment": "lex-assistant",
-  "runs_logged": 30,
-  "exported": "2026-11-19T05:00:11Z"
+  "runs_logged": 31,
+  "exported": "2026-11-19T06:48:20Z"
 });
