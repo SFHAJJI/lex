@@ -749,7 +749,7 @@ public sealed class V4LawIndex
             var marks = new List<string>();
             foreach (var (_, _, surface) in marked)
             {
-                if (marks.Count < 10 && !marks.Contains(surface, StringComparer.Ordinal))
+                if (marks.Count < 8 && !marks.Contains(surface, StringComparer.Ordinal))
                 {
                     marks.Add(surface);
                 }
@@ -762,7 +762,7 @@ public sealed class V4LawIndex
                 {
                     if (Lead(Flat(line.Text)) is { Length: >= 25 } lead)
                     {
-                        starts = Window(lead, 0);
+                        starts = Window(lead, 0, 72);
                         break;
                     }
                 }
@@ -873,8 +873,28 @@ public sealed class V4LawIndex
         return extended;
     }
 
+    /// <summary>
+    /// The same articles with a longer line shown of each (an article with a heading keeps it, and its text follows): where
+    /// few articles are given, each can show more of what it says, and the article that answers is easier to tell.
+    /// </summary>
+    public List<V4OutlineArticle> Longer(V4ActTables tables, IReadOnlyList<V4OutlineArticle> entries, IReadOnlyList<string> questionTokens, int length)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(questionTokens);
+        var asked = new HashSet<string>(questionTokens, StringComparer.Ordinal);
+        var longer = new List<V4OutlineArticle>(entries.Count);
+        foreach (var entry in entries)
+        {
+            var text = Around(tables, entry.Article, asked, length);
+            longer.Add(new V4OutlineArticle(entry.Article, string.IsNullOrWhiteSpace(entry.Article.Heading) ? text : entry.Article.Heading + " : " + text));
+        }
+
+        return longer;
+    }
+
     /// <summary>The text of an article around the first word of the question it holds, about <see cref="BriefLength"/> characters; else its first words.</summary>
-    private string Around(V4ActTables tables, V4Article article, HashSet<string> asked)
+    private string Around(V4ActTables tables, V4Article article, HashSet<string> asked, int length = BriefLength)
     {
         string? first = null;
         string? any = null;
@@ -891,12 +911,12 @@ public sealed class V4LawIndex
             {
                 if (asked.Contains(token))
                 {
-                    return Window(text, start);
+                    return Window(text, start, length);
                 }
             }
         }
 
-        return (first ?? any) is { } shown ? Window(shown, 0) : string.Empty;
+        return (first ?? any) is { } shown ? Window(shown, 0, length) : string.Empty;
     }
 
     // The mark of an amending act that the publisher's text carries before an article's own words ("L. 4 juin 2020 ) Le
@@ -944,26 +964,26 @@ public sealed class V4LawIndex
         }
     }
 
-    private static string Window(string text, int match)
+    private static string Window(string text, int match, int length = BriefLength)
     {
-        if (text.Length <= BriefLength)
+        if (text.Length <= length)
         {
             return text;
         }
 
         // About a third of the window before the word, cut at a space; the rest after it.
-        var start = Math.Max(0, Math.Min(match - 36, text.Length - BriefLength));
+        var start = Math.Max(0, Math.Min(match - 36, text.Length - length));
         if (start > 0)
         {
             var space = text.IndexOf(' ', start);
             start = space >= 0 && space < match ? space + 1 : match;
         }
 
-        var end = Math.Min(text.Length, start + BriefLength);
+        var end = Math.Min(text.Length, start + length);
         if (end < text.Length)
         {
             var space = text.LastIndexOf(' ', end - 1, end - start);
-            if (space > start + (BriefLength / 2))
+            if (space > start + (length / 2))
             {
                 end = space;
             }

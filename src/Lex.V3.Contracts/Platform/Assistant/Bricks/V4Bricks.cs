@@ -102,6 +102,9 @@ public static partial class V4Bricks
         public long Cost;
         public bool Firm;
 
+        /// <summary>How the last model call that gave no reply failed, in one token (timed_out, http_429, http_error, cut_short, refused, failed).</summary>
+        public string? Failure;
+
         /// <summary>The date of the version read when it is the latest held and does not cover the date asked.</summary>
         public string? LatestHeld;
 
@@ -1048,7 +1051,14 @@ public static partial class V4Bricks
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            // A model that fails or times out leaves the answer code found; the loop never crashes on it.
+            // A model that fails or times out leaves the answer code found; the loop never crashes on it. How it failed is
+            // kept in one token, for the record of a reading that ends on nothing.
+            draft.Failure = exception is OperationCanceledException or TimeoutException ? "timed_out"
+                : exception.Message.Contains("HTTP 429", StringComparison.Ordinal) ? "http_429"
+                : exception.Message.Contains("HTTP", StringComparison.Ordinal) ? "http_error"
+                : exception.Message.Contains("cut short", StringComparison.Ordinal) ? "cut_short"
+                : exception.Message.Contains("refused", StringComparison.Ordinal) ? "refused"
+                : "failed";
             return null;
         }
     }

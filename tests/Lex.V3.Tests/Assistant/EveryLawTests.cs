@@ -187,7 +187,7 @@ public sealed class EveryLawTests
         {
             using var sent = JsonDocument.Parse(call.User);
             var named = sent.RootElement.GetProperty("acts").EnumerateArray().SelectMany(static act => act.GetProperty("articles").EnumerateArray())
-                .Where(article => article.GetProperty("heading").GetString() == heading)
+                .Where(article => article.GetProperty("heading").GetString() is { } shown && (shown == heading || shown.StartsWith(heading, StringComparison.Ordinal)))
                 .Select(static article => (JsonNode)article.GetProperty("id").GetString()!).ToArray();
             return new JsonObject { ["articles"] = new JsonArray(named) }.ToJsonString();
         });
@@ -461,12 +461,13 @@ public sealed class EveryLawTests
             Assert.IsTrue(given.Any(static heading => heading.Contains("garde des enfants", StringComparison.Ordinal)), "and the articles that hold the question's words");
         }
 
-        // A reply that names a part that was not given is not used: the act is then read by the question's words alone,
-        // and what the parts call gave is in the trace of the first answer.
+        // A part that was not given is dropped: the act is then read by the question's words alone, and what the parts
+        // call gave is in the trace of the first answer.
         var inventing = new BricksFixture.Model(static call => call.Step == "sections" ? """{"sections":["S31"]}""" : "{}", static _ => """{"articles":[]}""");
         var unanswered = Answered(Ask(question, inventing, everyLaw: true));
-        Assert.AreEqual("every_law_outline_names_nothing+sections_unreadable", Bricks(unanswered).GetProperty("wider").GetString());
-        Assert.IsNull(V4Generation.ReadSections("""{"sections":["S31"]}""", 30, 4));
+        Assert.AreEqual("every_law_outline_names_nothing+sections_named_nothing", Bricks(unanswered).GetProperty("wider").GetString());
+        Assert.AreEqual(0, V4Generation.ReadSections("""{"sections":["S31"]}""", 30, 4)!.Count);
+        Assert.IsNull(V4Generation.ReadSections("""{"parts":["S1"]}""", 30, 4), "a reply that is not of the form");
         CollectionAssert.AreEqual(new[] { 2, 0 }, V4Generation.ReadSections("""{"sections":["S3","S1","S3"]}""", 30, 4));
 
         // The answer replays to its bytes, with no planner and no model.
@@ -491,8 +492,8 @@ public sealed class EveryLawTests
                  {
                      (naming, "every_law_outline_names_nothing"),
                      (pointing, "every_law_reading_found_nothing"),
-                     (inventing, "every_law_outline_unreadable"),
-                     (failing, "every_law_outline_unreadable"),
+                     (inventing, "every_law_outline_names_nothing"),
+                     (failing, "every_law_outline_call_failed"),
                  })
         {
             var dossier = Answered(Ask(question, model, everyLaw: true));

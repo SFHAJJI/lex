@@ -41,6 +41,12 @@ public static partial class V4Bricks
     /// <summary>The most acts read on a weak route: the acts the router kept and the general codes beside them.</summary>
     internal const int EveryLawWeakActs = 5;
 
+    /// <summary>About how many characters of articles one outline call shows in all.</summary>
+    internal const int EveryLawBriefCharacters = 24000;
+
+    /// <summary>How many articles of the act read code adds to those the model named: the best of the rest by the question's words.</summary>
+    internal const int EveryLawReadBeside = 3;
+
     /// <summary>The most lines one outline call holds.</summary>
     internal const int EveryLawLines = 400;
 
@@ -194,9 +200,21 @@ public static partial class V4Bricks
             return "every_law_not_legislation";
         }
 
-        if (QuotedWordsPattern.IsMatch(row.Question))
+        // Words the reader quotes are a search of those words when little else is asked ("Que dit la loi sur « bail
+        // commercial » ?"). A full question that sets one word in quotation marks ("qu'est-ce qui compte comme « jour » pour
+        // la chasse ?") is a question, and is read.
+        if (QuotedWordsPattern.Match(row.Question) is { Success: true } quotedWords)
         {
-            return "every_law_words_quoted";
+            var beside = 0;
+            foreach (var word in row.Unmatched)
+            {
+                beside += word.End <= quotedWords.Index || word.Start >= quotedWords.Index + quotedWords.Length ? 1 : 0;
+            }
+
+            if (beside <= 1)
+            {
+                return "every_law_words_quoted";
+            }
         }
 
         var kept = laws.Route(row.Question);
@@ -417,9 +435,9 @@ public static partial class V4Bricks
         {
             var most = Math.Min(8, EveryLawSectionsNamed * withParts.Count);
             var (parts, partIds) = V4Generation.SectionCall(question, withParts, most);
-            var answered = Ask(draft, model, parts, cancellationToken);
+            var answered = AskTwice(draft, model, parts, cancellationToken);
             var chosen = answered is null ? null : V4Generation.ReadSections(answered.Content, partIds.Count, most);
-            sectioned = chosen is null ? "+sections_unreadable" : chosen.Count == 0 ? "+sections_named_nothing" : "+sections_named";
+            sectioned = answered is null ? "+sections_call_" + (draft.Failure ?? "failed") : chosen is null ? "+sections_unreadable" : chosen.Count == 0 ? "+sections_named_nothing" : "+sections_named";
             foreach (var pick in chosen ?? [])
             {
                 var (act, section) = partIds[pick];
@@ -492,13 +510,30 @@ public static partial class V4Bricks
             return new V4PlanOutcome(null, draft.Cost, "every_law_no_act_held" + sectioned);
         }
 
+        // Where few articles are given, each shows more of what it says: about EveryLawBriefCharacters in all, between the
+        // usual line and four hundred characters an article.
+        var given1 = 0;
+        foreach (var act in held)
+        {
+            given1 += act.Articles.Count;
+        }
+
+        var length = Math.Clamp(EveryLawBriefCharacters / Math.Max(1, given1), V4LawIndex.BriefLength, 400);
+        if (length > V4LawIndex.BriefLength)
+        {
+            for (var at = 0; at < held.Count; at++)
+            {
+                held[at] = (held[at].Title, held[at].Tables, laws.Longer(held[at].Tables, held[at].Articles, tokens, length));
+            }
+        }
+
         // Step 1: the model names articles of the closed list, by ids it was given.
-        var (outline, ids) = V4Generation.OutlineCallOf(question, held);
-        var named1 = Ask(draft, model, outline, cancellationToken);
-        var picks = named1 is null ? null : V4Generation.ReadOutline(named1.Content, ids.Count);
+        var (outline, ids) = V4Generation.OutlineCallOf(question, held, wider: true);
+        var named1 = AskTwice(draft, model, outline, cancellationToken);
+        var picks = named1 is null ? null : V4Generation.ReadOutline(named1.Content, ids.Count, lenient: true);
         if (picks is null || picks.Count == 0)
         {
-            return new V4PlanOutcome(null, draft.Cost, (cancellationToken.IsCancellationRequested ? "every_law_deadline" : picks is null ? "every_law_outline_unreadable" : "every_law_outline_names_nothing") + sectioned);
+            return new V4PlanOutcome(null, draft.Cost, (cancellationToken.IsCancellationRequested ? "every_law_deadline" : named1 is null ? "every_law_outline_call_" + (draft.Failure ?? "failed") : picks is null ? "every_law_outline_unreadable" : "every_law_outline_names_nothing") + sectioned);
         }
 
         // One act answers: the act of the first article named; the articles named of another act are left.
@@ -558,6 +593,18 @@ public static partial class V4Bricks
             }
         }
 
+        // And, beside the articles the model named, the articles of that act that best hold the question's words (the
+        // deterministic union again: a model that names one article and misses leaves the reading with nothing).
+        var besideRead = 0;
+        foreach (var entry in laws.Prefilter(scope, tokens, EveryLawReadBeside + articlesRead.Count, Nameable))
+        {
+            if (besideRead < EveryLawReadBeside && !Holds(articlesRead, entry.Article.Id))
+            {
+                articlesRead.Add(entry.Article);
+                besideRead++;
+            }
+        }
+
         var lines = new List<V4Line>();
         foreach (var article in articlesRead)
         {
@@ -577,12 +624,30 @@ public static partial class V4Bricks
 
         // Step 2: the extraction points at the lines that answer, among those lines only; code checks each.
         draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", "every_law_read"));
-        var reply = Ask(draft, model, V4Generation.ExtractionCall(row, "text", scope, lines, [], dictionary), cancellationToken);
+        var reply = AskTwice(draft, model, V4Generation.ExtractionCall(row, "text", scope, lines, [], dictionary), cancellationToken);
         var extraction = reply is null ? null : V4Generation.ReadExtraction(reply.Content);
-        var items = extraction is null ? null : V4Generation.Validate(extraction, "text", lines, out _);
+
+        // Everything this reading shows is a candidate, so a reply is not refused whole for one slip of form: code keeps
+        // the lines it was given that the reply points at, each once, three at most, and drops the rest (a fourth line, a
+        // line that was not sent, a role of another kind, a `found` that disagrees with the items).
+        List<V4Generation.Checked>? items = null;
+        if (extraction is not null)
+        {
+            items = [];
+            foreach (var item in extraction.Items)
+            {
+                if (items.Count < 3 && item.Line.Length >= 2 && item.Line[0] == 'L' &&
+                    int.TryParse(item.Line.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number) &&
+                    number >= 1 && number <= lines.Count && !items.Exists(kept => kept.Line.Id == lines[number - 1].Id))
+                {
+                    items.Add(new V4Generation.Checked(lines[number - 1], "passage", null));
+                }
+            }
+        }
+
         if (items is null || items.Count == 0)
         {
-            return new V4PlanOutcome(null, draft.Cost, (cancellationToken.IsCancellationRequested ? "every_law_deadline" : items is null ? "every_law_reading_refused" : "every_law_reading_found_nothing") + sectioned);
+            return new V4PlanOutcome(null, draft.Cost, (cancellationToken.IsCancellationRequested ? "every_law_deadline" : reply is null ? "every_law_reading_call_" + (draft.Failure ?? "failed") : items is null ? "every_law_reading_unreadable" : "every_law_reading_found_nothing") + sectioned);
         }
 
         // One passage per article, the most direct first, as the model gave them.
@@ -598,7 +663,7 @@ public static partial class V4Bricks
 
         draft.Found = true;
         draft.LatestHeld = latest.TryGetValue(scope, out var heldOn) ? heldOn : null;
-        draft.Caveats = [.. extraction!.Caveats];
+        draft.Caveats = [.. extraction!.Caveats.Where(static caveat => V4Generation.ModelCaveats.Contains(caveat))];
         foreach (var article in articlesRead)
         {
             if (!quoted.Contains(article.Id, StringComparer.Ordinal) && !draft.More.Contains(article.Id, StringComparer.Ordinal) && draft.More.Count < V3AssistantPipeline.MaximumCandidates)
@@ -619,6 +684,38 @@ public static partial class V4Bricks
 
         var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, "answer", "text", scope.Work, []);
         return new V4PlanOutcome(AsCandidates(json), draft.Cost, "route:every_law" + sectioned, Articles: quoted);
+    }
+
+    /// <summary>
+    /// A call of the wider reading, asked a second time when the provider did not answer the first (a limit of requests, an
+    /// error of its own, no reply in time): the reading is three calls long, and one that is lost loses the whole answer.
+    /// </summary>
+    private static V4ModelReply? AskTwice(Draft draft, IV4Model model, V4ModelCall call, CancellationToken cancellationToken)
+    {
+        var reply = Ask(draft, model, call, cancellationToken);
+        if (reply is not null || cancellationToken.IsCancellationRequested || draft.Failure is not ("http_429" or "http_error" or "timed_out"))
+        {
+            return reply;
+        }
+
+        // A wait, which the deadline cuts: three seconds, then six, for a limit of requests (the provider counts tokens a
+        // minute, and this reading sends many); a short one for an error or a lost reply, asked once more.
+        foreach (var wait in draft.Failure == "http_429" ? new[] { 3000, 6000 } : [400])
+        {
+            cancellationToken.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(wait));
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            reply = Ask(draft, model, call, cancellationToken);
+            if (reply is not null || draft.Failure is not ("http_429" or "http_error" or "timed_out"))
+            {
+                return reply;
+            }
+        }
+
+        return reply;
     }
 
     private static bool Holds(List<V4Article> articles, string id)

@@ -61,8 +61,8 @@ internal sealed class V3AssistantRuntime
     /// <summary>The per-answer cost ceiling, in micro-euros (0.25 EUR since the owner lifted the budget on 2026-11-19, so that a larger model's answer is not thrown away; it was 0.03): a planner that reports more is not used (R40).</summary>
     internal const long PerAnswerCeilingMicroEuros = 250_000;
 
-    /// <summary>The monthly spend cap, in micro-euros (300 EUR since the owner lifted the budget on 2026-11-19; it was 20, O22's recommended answer).</summary>
-    internal const long MonthlyCapMicroEuros = 300_000_000;
+    /// <summary>The monthly spend cap, in micro-euros (5,000 EUR since the owner lifted the budget on 2026-11-19; it was 20, O22's recommended answer).</summary>
+    internal const long MonthlyCapMicroEuros = 5_000_000_000;
 
     /// <summary>
     /// How long the planner may take in all before the answer is the switched-off card. The bricks (V4) may ask a model

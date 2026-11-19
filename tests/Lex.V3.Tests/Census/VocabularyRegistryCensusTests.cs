@@ -125,7 +125,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const SchemaId",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation: ArbiterReasons=11, "
                     + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const AnswerCheckPrompt, const ArbiterPrompt, "
-                    + "const ExtractionBase, const OutlinePrompt, const SectionPrompt, "
+                    + "const ExtractionBase, const OutlineNoteWider, const OutlinePrompt, const SectionPrompt, "
                     + "static property AnswerCheckSchema, "
                     + "static property AnswerCheckSha256, static property ArbiterSchema, "
                     + "static property ExtractionSchema, static property OutlineSchema, "

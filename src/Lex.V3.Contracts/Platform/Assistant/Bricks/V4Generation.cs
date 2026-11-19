@@ -141,7 +141,7 @@ public static class V4Generation
     /// <see cref="OutlineCall"/>, each act by its title and by the articles a pre-filter kept of it, each with the line
     /// shown of it (its heading, else its text around a word of the question). The second value gives each id's article back.
     /// </summary>
-    public static (V4ModelCall Call, List<(V4ActTables Tables, V4Article Article)> Ids) OutlineCallOf(string question, IReadOnlyList<(string Title, V4ActTables Tables, IReadOnlyList<V4OutlineArticle> Articles)> acts)
+    public static (V4ModelCall Call, List<(V4ActTables Tables, V4Article Article)> Ids) OutlineCallOf(string question, IReadOnlyList<(string Title, V4ActTables Tables, IReadOnlyList<V4OutlineArticle> Articles)> acts, bool wider = false)
     {
         ArgumentNullException.ThrowIfNull(question);
         ArgumentNullException.ThrowIfNull(acts);
@@ -159,7 +159,15 @@ public static class V4Generation
             given.Add(new JsonObject { ["act"] = title, ["articles"] = articles });
         }
 
-        var user = new JsonObject { ["question"] = question, ["acts"] = given };
+        var user = new JsonObject { ["question"] = question };
+        if (wider)
+        {
+            // Said with the list, not in the instruction the insurance reading shares: what is found here is only shown as
+            // candidates, so several articles that may hold the rule are worth more than the one best guess.
+            user["note"] = OutlineNoteWider;
+        }
+
+        user["acts"] = given;
         return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
     }
 
@@ -167,6 +175,11 @@ public static class V4Generation
     // reader goes down a table of contents ("hierarchical retrieval by table of contents" [7quater]). The mount holds no
     // heading of a book, a title or a chapter, so each part is shown by the range of its articles, by how its first
     // article begins and by the words that mark it among the other parts (V4LawIndex.Sections).
+
+    /// <summary>What the wider reading says with its list of articles (in the call's own data; the instruction is the outline's).</summary>
+    public const string OutlineNoteWider =
+        "The acts are in French; the question may be in another language or in everyday words. Each article is shown by its heading or by an extract of its text. " +
+        "Name every article that may state the rule asked, up to six, the most likely first; when two or three could, name them all.";
 
     /// <summary>The instruction of the parts call. Its digest is part of the planner's identity when the wider reading is on.</summary>
     public const string SectionPrompt = """
@@ -179,6 +192,8 @@ public static class V4Generation
           ("virer" is "licenciement", "caution" is "garantie locative"), and of where a code would put that rule.
         - A question worded for a person's own case is routed like the general question behind it. You never say what
           applies to that person.
+        - When two or three parts could hold the rule, name them all (at most "at_most"); a part named for nothing costs
+          little, a part missed loses the answer. The question may be in English: the acts are in French.
         - If no part given can hold the answer, return no part. Never guess from outside what is shown.
         """;
 
@@ -226,13 +241,13 @@ public static class V4Generation
         }
 
         var user = new JsonObject { ["question"] = question, ["at_most"] = most, ["acts"] = given };
-        return (new V4ModelCall("sections", SectionPrompt, user.ToJsonString(Relaxed), "lex_v4_sections", SectionSchema, 80), ids);
+        return (new V4ModelCall("sections", SectionPrompt, user.ToJsonString(Relaxed), "lex_v4_sections", SectionSchema, 200), ids);
     }
 
     /// <summary>
     /// Reads the parts call's reply: the places (from zero) of the parts it names among the <paramref name="given"/>, each
-    /// once, in its order, at most <paramref name="most"/>. Null when the reply is not of the form or names an id that was
-    /// not given: nothing of it is kept.
+    /// once, in its order, at most <paramref name="most"/>; an id that was not given is dropped. Null when the reply is not
+    /// of the form.
     /// </summary>
     public static List<int>? ReadSections(string content, int given, int most)
     {
@@ -250,7 +265,8 @@ public static class V4Generation
                 var id = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
                 if (id is null || id.Length < 2 || id[0] != 'S' || !int.TryParse(id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > given)
                 {
-                    return null;
+                    // An id that was not given is dropped; the parts that were given are kept.
+                    continue;
                 }
 
                 if (!picks.Contains(number - 1) && picks.Count < most)
@@ -283,7 +299,7 @@ public static class V4Generation
     /// each once, in its order, at most <see cref="MaximumOutlinePicks"/>. Null when the reply is not of the form or names
     /// an id that was not given: nothing of it is kept.
     /// </summary>
-    public static List<int>? ReadOutline(string content, int given)
+    public static List<int>? ReadOutline(string content, int given, bool lenient = false)
     {
         try
         {
@@ -299,6 +315,13 @@ public static class V4Generation
                 var id = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
                 if (id is null || id.Length < 2 || id[0] != 'A' || !int.TryParse(id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > given)
                 {
+                    // Where everything shown is a candidate (the wider reading), an id that was not given is dropped and
+                    // the ids that were given are kept.
+                    if (lenient)
+                    {
+                        continue;
+                    }
+
                     return null;
                 }
 
