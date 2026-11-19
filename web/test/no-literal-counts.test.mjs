@@ -91,8 +91,8 @@ const NUMBERS_ALLOWED = Object.freeze({
   // releases. Every count on the page is a run's, the registry's or the coverage answer's, filled in its placeholder.
   "evidence.apiDocumented": ["3", "1"],
   "evidence.apiOpenApi": ["3", "1"],
-  "evidence.card.cost.text": ["20"],
-  "evidence.supLimits": ["20"],
+  "evidence.card.cost.text": ["300"],
+  "evidence.supLimits": ["300"],
   "evidence.safeguards.mask": ["30"],
   "evidence.improvement.first": ["11", "11", "13", "11", "1", "5"],
   "evidence.improvement.incident": ["13", "11", "70", "44", "14", "11"],

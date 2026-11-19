@@ -2102,7 +2102,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       ai: Object.freeze({ title: 'L’IA dans Lex', text: '{model} sur le service Azure OpenAI de Microsoft, zone de données de l’UE. Il décrit une question ou désigne des lignes de loi que le code a trouvées ; il n’écrit jamais une phrase que le lecteur lit. Certaines réponses n’utilisent aucun modèle.' }),
       oversight: Object.freeze({ title: 'Contrôle humain', text: 'Une personne approuve chaque mise en ligne. Chaque changement passe les tests et la relecture d’un second modèle d’IA.' }),
       quality: Object.freeze({ title: 'Qualité', text: '{right} bons articles et {wrong} faux sur {cases} questions de test ; {heldoutRight} des {heldoutCases} questions inédites reçoivent le bon article.' }),
-      cost: Object.freeze({ title: 'Coût', text: 'Environ {cost} € par question ; le modèle est plafonné à 20 € par mois dans le code.' }),
+      cost: Object.freeze({ title: 'Coût', text: 'Environ {cost} € par question ; le modèle est plafonné à 300 € par mois dans le code.' }),
     }),
     architectureHeading: 'Architecture',
     questionLane: 'Une question',
@@ -2155,7 +2155,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     supAvailabilityLink: 'La surveillance',
     supNightly: 'Qualité des réponses, chaque nuit : les {cases} questions de test posées au site en ligne. Un article faux ou une régression ouvre un incident.',
     supNightlyLink: 'Le contrôle de nuit',
-    supLimits: 'Coût et abus : le modèle plafonné à 20 € par mois dans le code ; au plus {perMinute} requêtes par minute et {inFlight} à la fois par adresse ; un bandeau quand l’index est ancien.',
+    supLimits: 'Coût et abus : le modèle plafonné à 300 € par mois dans le code ; au plus {perMinute} requêtes par minute et {inFlight} à la fois par adresse ; un bandeau quand l’index est ancien.',
     improvementHeading: 'Amélioration continue',
     improvement: Object.freeze({
       first: 'Du 11/11 au 13/11 : bons verdicts sur le premier jeu de test de {firstPercent} % à {fifthPercent} %, en trois versions du prompt et de la recherche (versions 1 à 5 du registre).',

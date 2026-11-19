@@ -47,8 +47,8 @@ internal sealed class AzureOpenAiModel : IV4Model, IDisposable
     internal const string InputPriceVariable = "LEX_ASSISTANT_EUR_PER_MILLION_INPUT";
     internal const string OutputPriceVariable = "LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT";
 
-    /// <summary>The call's deadline (about 6 s, inside R40's 10 s to the full answer).</summary>
-    internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(6);
+    /// <summary>The call's deadline (12 s since 2026-11-19, so that a larger and slower model's reply is not thrown away; it was 6 s).</summary>
+    internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(12);
 
     /// <summary>Driver defaults, in euros per million tokens, until the deployment's own price list is read (TODO for the driver).</summary>
     internal const double DefaultInputPrice = 5.0;

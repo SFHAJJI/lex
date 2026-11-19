@@ -51,19 +51,19 @@ internal sealed class V3AssistantRuntime
     /// </summary>
     internal const string EveryLawVariable = "LEX_V3_EVERY_LAW";
 
-    /// <summary>The per-answer cost ceiling, in micro-euros (0.03 EUR, the owner's order of 2026-11-19; it was 0.02): a planner that reports more is not used (R40).</summary>
-    internal const long PerAnswerCeilingMicroEuros = 30_000;
+    /// <summary>The per-answer cost ceiling, in micro-euros (0.25 EUR since the owner lifted the budget on 2026-11-19, so that a larger model's answer is not thrown away; it was 0.03): a planner that reports more is not used (R40).</summary>
+    internal const long PerAnswerCeilingMicroEuros = 250_000;
 
-    /// <summary>The monthly spend cap, in micro-euros (20 EUR, O22's recommended answer; the owner decides it).</summary>
-    internal const long MonthlyCapMicroEuros = 20_000_000;
+    /// <summary>The monthly spend cap, in micro-euros (300 EUR since the owner lifted the budget on 2026-11-19; it was 20, O22's recommended answer).</summary>
+    internal const long MonthlyCapMicroEuros = 300_000_000;
 
     /// <summary>
     /// How long the planner may take in all before the answer is the switched-off card. The bricks (V4) may ask a model
-    /// twice in a row, or three times after a refused reply, each call under its own deadline of about 6 s
+    /// twice in a row, or three times after a refused reply, each call under its own deadline of about 12 s
     /// (<see cref="AzureOpenAiModel.Timeout"/>); a model that is slow leaves the answer code found, so this outer
     /// bound is reached only when the provider hangs on every call.
     /// </summary>
-    internal static readonly TimeSpan PlannerDeadline = TimeSpan.FromSeconds(14);
+    internal static readonly TimeSpan PlannerDeadline = TimeSpan.FromSeconds(28);
 
     private static readonly AsyncLocal<UInt128?> CurrentClient = new();
 
