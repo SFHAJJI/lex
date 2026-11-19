@@ -146,40 +146,44 @@ public static partial class V3AssistantPipeline
             return null;
         }
 
-        IEnumerable<V3DossierBlock> Shown(V4AnswerItem item)
+        // Both build a list (no iterator): an iterator here is a class the compiler names by an ordinal that differs between
+        // a Debug and a Release build, and the census of the ways a block is made names such a class.
+        List<V3DossierBlock> Shown(V4AnswerItem item)
         {
             var quote = quotes[(item.Step, item.Extract)];
-            foreach (var block in QuoteBlocks(quote, date, locale, headings[item.Step]))
-            {
-                yield return block;
-            }
+            var shown = new List<V3DossierBlock>(QuoteBlocks(quote, date, locale, headings[item.Step]));
 
             // A value is restated only as the exact words written on the quoted line.
             foreach (var value in record.Values.Where(value => value.Step == item.Step && value.Offset >= quote.Offset && value.Offset + value.Length <= quote.Offset + quote.Length))
             {
-                yield return Claim(V3AnswerTemplates.AnswerValueWords, locale,
-                    Fact("value", V3AnswerSlotKind.LawWords, texts[value.Step].Substring(value.Offset, value.Length)));
+                shown.Add(Claim(V3AnswerTemplates.AnswerValueWords, locale,
+                    Fact("value", V3AnswerSlotKind.LawWords, texts[value.Step].Substring(value.Offset, value.Length))));
             }
+
+            return shown;
         }
 
-        IEnumerable<V3DossierBlock> SweepLines()
+        List<V3DossierBlock> SweepLines()
         {
+            var swept = new List<V3DossierBlock>();
             if (record.Work is null)
             {
-                yield break;
+                return swept;
             }
 
-            yield return Claim(V3AnswerTemplates.AbsenceSweepHeading, locale,
-                Fact("work", V3AnswerSlotKind.WorkAddress, record.Work), Count("lines", record.Lines), Count("articles", record.Articles), Date("date", date));
+            swept.Add(Claim(V3AnswerTemplates.AbsenceSweepHeading, locale,
+                Fact("work", V3AnswerSlotKind.WorkAddress, record.Work), Count("lines", record.Lines), Count("articles", record.Articles), Date("date", date)));
             foreach (var row in record.Sweep.Take(12))
             {
                 var keyword = dictionary.Keyword(row.Keyword)!;
                 if (!keyword.Pattern)
                 {
-                    yield return Claim(V3AnswerTemplates.AbsenceTermCount, locale,
-                        Fact("term", V3AnswerSlotKind.DictionaryTerm, keyword.Keyword), Count("lines", row.Lines), Count("articles", row.Articles));
+                    swept.Add(Claim(V3AnswerTemplates.AbsenceTermCount, locale,
+                        Fact("term", V3AnswerSlotKind.DictionaryTerm, keyword.Keyword), Count("lines", row.Lines), Count("articles", row.Articles)));
                 }
             }
+
+            return swept;
         }
 
         var blocks = new List<V3DossierBlock>();
