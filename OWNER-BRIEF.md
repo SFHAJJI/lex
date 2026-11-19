@@ -1,14 +1,14 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-19 at 12:24 UTC by the driver. The driver updates this file in the first pull request of each day and
+Updated 2026-11-19 at 15:28 UTC by the driver. The driver updates this file in the first pull request of each day and
 whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in STATUS-WEB.md and
 STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where Lex stands
 
-- Live: Release 17 since 11:52 UTC (a refusal shows the law's lines beside it). Its answers are this morning's.
-- Your brief "make it work" is built step by step in your order, measured after each step on your 80 checked
-  questions and your 40 questions with no article. Not live: Release 18 is being built and waits for your word.
+- Live: Release 18 since about 15:27 UTC, on your word. Release 17 is switched off and kept for a rollback.
+- Your brief "make it work", built step by step in your order and measured after each step on your 80 checked
+  questions and your 40 questions with no article. On the live release: 47 right, 0 wrong, and 34 of 40.
 
 | Step | Right | Wrong | Not found | Refused | The 40 |
 |---|---|---|---|---|---|
@@ -32,7 +32,7 @@ STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
-- Go live with Release 18 (ready around 15:30 UTC with its screenshots): yes or no.
+- The one measurement on the 77 hold-out questions, never opened: say when.
 - The stronger model for the second reading (step 5): create it, or tell me to. It costs about five times more.
 - Answers about Lex itself ("Qui es-tu ?", "Quel modèle utilises-tu ?"): 0 of 6. They are public claims: your wording.
-- A model-written summary sentence; the monthly cap (20 EUR); the hold-out (77 questions, not opened).
+- A model-written summary sentence; the monthly cap (20 EUR).

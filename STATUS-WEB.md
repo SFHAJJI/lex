@@ -49,7 +49,24 @@ live without his word. The hold-out rows are not read.
   passed (36 right of 56, 0 wrong), MLflow version 13 `champion` and `serving`, Release 16 deactivated and kept. Its
   backup is still to run: the image file was removed from this PC for disk space before it (a note beside the release
   folder says how to download it again).
-- **Release 18** (this branch at c39c23a1) is being built; it goes to a candidate address and waits for the owner's word.
+- **Release 18** (`v3-20261119T124726Z-a07cf1887ce3`, built and signed on Azure from a07cf188, #1067's head; revision
+  `ca-lex-v3--v3-20261119t124726z-a07cf1887ce3-369a66d9`) is live since about 15:27 UTC on the owner's word ("Yes go
+  live"). At its own address before that: the 80 gave 47 right, 0 wrong, 30 not found (15 candidates), 3 refused, and
+  the 40 gave 34; the gate passed twice (with `-NoPromote`, then the promotion: 36 right of 56, 0 wrong, every quotation
+  verified); two-address PASS; screenshots `ops/screens-r18` (56 pages, none in the other language; "Mon assureur
+  peut-il résilier mon contrat ?" answered with article 39 and its cases); backup verified (14 objects); MLflow version
+  14 `champion` and `serving`. Release 17 is deactivated and kept for rollback, and was backed up the same afternoon
+  (the image downloaded again for it).
+- **#1067's review** on its final state (Codex, a07cf188): MERGE, no material finding; CI green on the five checks.
+- **The hold-out, measured once** on the owner's word ("Measure the hold out"), on the live Release 18, 2026-11-19 about
+  15:45 UTC (`run_holdout.py`, rules fixed before any answer was read; nothing tuned on it): of 35 questions whose article
+  was verified, 15 right, 2 wrong, 17 not found (6 candidates), 1 refused; of 16 with no article expected, 6 right; of
+  26 whose article is not verified, 3 answered from the expected law, 2 from another law, 2 answered with no law
+  labelled, 19 not found. The wrong ones: "Puis-je assurer le même bien chez deux assureurs ?" (article 53 for 55), "Qui
+  est le bénéficiaire d'une assurance-vie si rien n'est précisé ?" (article 1 for 107); from another law: the product
+  information document, transfers of data outside the Union. On the `tune` set the same release gives 47 of 80 right,
+  0 wrong, and 34 of 40: the rules of the day fit the questions they were written from better than unseen ones. The
+  hold-out is used up; a new unseen set is needed for the next measurement.
 
 ## The owner's brief "make it work": an ordinary question gets its article (sole driver, 2026-11-19)
 
