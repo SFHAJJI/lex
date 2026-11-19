@@ -56,6 +56,15 @@ public static class V3AssistantParsers
         new(@"(?<![\d\-/.])\d{11,13}(?![\d\-/.])", Options, Timeout),
         // A Luxembourg phone number written in three groups of three.
         new(@"(?<![\d\-])\d{3} \d{3} \d{3}(?![\d\-])", Options, Timeout),
+        // A birth date the reader gives ("né le 12 mars 1985", "date de naissance : 12/03/1985", "born on 12 March 1985").
+        new(@"(?<=(?i:\bn[ée]e?s?\s+le\s+|\bdate\s+de\s+naissance\s*:?\s*|\bborn\s+on\s+|\bdate\s+of\s+birth\s*:?\s*))" +
+            @"(?:\d{1,2}(?:er)?\s+(?i:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}|\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
+            Options, Timeout),
+        // A policy, contract, claim or client number ("police n° 123456", "policy number AB-1234").
+        new(@"(?<=(?i:\b(?:police|contrat|dossier|sinistre|client|policy|claim|contract|account)\s+(?:n[°ºo]\.?|num[ée]ro|number|no\.?)(?:\s+(?:is|est))?\s*:?\s*))[A-Za-z0-9][A-Za-z0-9\-/.]{3,}(?<![.])",
+            Options, Timeout),
+        // A name the reader gives ("je m'appelle Jean Dupont", "my name is Jane Doe").
+        new(@"(?<=(?i:\bje\s+m['’]appelle\s+|\bmon\s+nom\s+est\s+|\bmy\s+name\s+is\s+))\p{Lu}[\p{L}'’\-]+(?:\s+\p{Lu}[\p{L}'’\-]+){0,2}", Options, Timeout),
     ];
 
     /// <summary>

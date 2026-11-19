@@ -1947,6 +1947,57 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void ABirthDateAPolicyNumberAndANameAreMaskedAndTheBirthDateIsNoDateToReadTheLawOn()
+    {
+        // The reader's set of 2026-11-19 (K168): "né le 12 mars 1985" was read as the date to read the law on, and the 1997
+        // law did not exist then. The label asks for the name, the birth date and the number to be masked.
+        const string question = "Je m'appelle Jean Dupont, né le 12 mars 1985, police n° 123456 : puis-je résilier ?";
+        var intake = V3AssistantParsers.Intake(question)!;
+        foreach (var given in new[] { "Jean Dupont", "12 mars 1985", "123456" })
+        {
+            Assert.IsFalse(intake.Masked.Contains(given, StringComparison.Ordinal), given);
+        }
+
+        Assert.AreEqual(0, V3AssistantParsers.DatesIn(intake.Masked).Count, "no date is left to read the law on");
+        Assert.AreNotEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question)).Verdict, "a general question: answered");
+
+        foreach (var (given, kept) in new[]
+                 {
+                     ("Date de naissance : 12/03/1985. Puis-je résilier ?", "12/03/1985"),
+                     ("My name is Jane Doe and my policy number is AB-1234: can I cancel?", "AB-1234"),
+                     ("Contrat n° 77-4521, quel est le délai de préavis ?", "77-4521"),
+                 })
+        {
+            Assert.IsFalse(V3AssistantParsers.Intake(given)!.Masked.Contains(kept, StringComparison.Ordinal), given);
+        }
+
+        // An ordinary question keeps its words and its dates.
+        foreach (var plain in new[] { "Que prévoit l'article 39 de la loi du 27 juillet 1997 ?", "Quel était le délai au 1er janvier 2020 ?", "Le contrat d'assurance doit-il être écrit ?" })
+        {
+            Assert.AreEqual(plain, V3AssistantParsers.Intake(plain)!.Masked, plain);
+        }
+    }
+
+    [TestMethod]
+    public void TheBurdenOfProofIsReadByTheDictionary()
+    {
+        // The reader's set of 2026-11-19 (K022): "qui doit prouver quoi en cas de sinistre ?" got the declaration of the
+        // claim (article 26), the only article the dictionary's "sinistre" led to.
+        var row = Row("Qui doit prouver quoi en cas de sinistre ?");
+        Assert.IsTrue(row.Concepts.Any(static read => read.Concept == "charge_preuve"));
+
+        // Article 15 holds the proof and the claim; the tables still rank the declaration of the claim first (its heading
+        // names "sinistre"). Code is not sure of an answer that quotes none of the articles holding both subjects: the lines
+        // are shown as candidates, and nothing is asserted (the owner's point 1).
+        var dossier = Answered(BricksFixture.Ask("Qui doit prouver quoi en cas de sinistre ?"));
+        Assert.AreEqual("candidates", Bricks(dossier).GetProperty("answer").GetProperty("kind").GetString());
+        CollectionAssert.Contains(Templates(dossier), V3AnswerTemplates.AnswerCandidates);
+
+        // A question of one subject keeps its answer.
+        Assert.AreNotEqual("candidates", Bricks(Answered(BricksFixture.Ask("Quel est le délai de prescription ?"))).GetProperty("answer").GetProperty("kind").GetString());
+    }
+
+    [TestMethod]
     public void ADateInsideAnActsNameIsNotTheDateToReadTheLawOn()
     {
         var corpus = new BricksFixture.Corpus();

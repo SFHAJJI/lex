@@ -202,7 +202,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const VerdictClarify, const VerdictPoint, const VerdictRefuse, "
                     + "const VerdictSplit, static property Sha256",
                 "Lex.V3.Contracts.Platform.Assistant.V3AssistantParsers: CuePatterns=9, "
-                    + "EnglishMonths=12, FrenchMonths=12, IdentifierPatterns=6, LanguageWords=5, "
+                    + "EnglishMonths=12, FrenchMonths=12, IdentifierPatterns=9, LanguageWords=5, "
                     + "RangeConnectors=13",
                 "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline: ClarifyCodes=2",
                 "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanValidator: ChoiceOnly=1, "

@@ -41,6 +41,12 @@ public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string
 {
     /// <summary>The first line the tables' answer quotes, with the act it is of: what a second reading that differs also quotes.</summary>
     internal (string Work, V4Line Line)? Lead { get; init; }
+
+    /// <summary>
+    /// The tables' answer quotes only articles that hold one of the question's subjects, where an article of the act holds
+    /// them all: code is not sure of it, and no agreement asserts it (the owner's point 1).
+    /// </summary>
+    internal bool Partial { get; init; }
 }
 
 /// <summary>
@@ -179,6 +185,18 @@ public static partial class V4Bricks
                 var wider = agree && (read.Articles ?? []).Any(article => !own.Articles!.Contains(article, StringComparer.Ordinal));
                 if (agree && !wider)
                 {
+                    // The tables could only give candidates and the second reading lands on their first article: the two
+                    // readings agree, and that article's lines, as the second reading read them, are asserted.
+                    if (own.Partial)
+                    {
+                        return own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+outline_agrees+partial" };
+                    }
+
+                    if (KindOf(own.PlanJson!) == "candidates" && KindOf(read.PlanJson) != "candidates")
+                    {
+                        return read with { CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0), Reason = read.Reason + "+confirms_candidates" };
+                    }
+
                     return own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+outline_agrees" };
                 }
 
@@ -563,13 +581,27 @@ public static partial class V4Bricks
 
         var proposed = application && !general ? "refuse" : draft.AnswerKind is "absence" && draft.Absence is "words_not_found" ? "clarify" : "answer";
         var json = Write(input, row, draft, tables, retrieval, decision, dateRef, ruleQuestion, proposed, decision.Kind, tables.Work, notes);
+
+        // Two subjects or more, an article of the act that holds them all, and an answer that quotes none of those articles:
+        // code is not sure, and the lines are shown as candidates (the owner's point 1 of 2026-11-19).
+        var holdingAll = retrieval is null
+            ? []
+            : retrieval.Candidates.Where(static candidate => candidate.Detectors.Contains("concepts_in_article") || candidate.Detectors.Contains("concepts_together"))
+                .Select(static candidate => candidate.Line.Article).ToHashSet(StringComparer.Ordinal);
+        var partial = proposed == "answer" && row.Concepts.Select(static read => read.Concept).Distinct(StringComparer.Ordinal).Count() >= 2 && holdingAll.Count > 0 &&
+            draft.Items.Count > 0 && !draft.Items.Any(item => holdingAll.Contains(item.First.Article));
+        if (partial)
+        {
+            json = AsCandidates(json);
+        }
         // What code is sure of by the law's own words: the line that defines the term asked, the rule that says of itself
         // that it is the general one, the one value clearly ahead, and a word of a complete row that the act never uses.
         var firm = (draft.Route == "definition" && draft.AnswerKind == "definition") || draft.Route == "fact" || draft.Firm ||
             (draft.AnswerKind == "absence" && draft.Absence == "terms_nowhere");
-        return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route, firm, draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList())
+        return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route + (partial ? "+partial" : string.Empty), firm && !partial, draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList())
         {
             Lead = draft.Items.Count > 0 && draft.AnswerKind != "absence" ? (tables.Work, draft.Items[0].First) : null,
+            Partial = partial,
         };
     }
 
@@ -579,6 +611,10 @@ public static partial class V4Bricks
     /// that gives them as the answer, every line as a passage, and no value restated. A refusal, an absence, a greeting
     /// and a plan of Lex's own operations are returned as they are.
     /// </summary>
+    /// <summary>The kind of answer a plan /2 of the bricks gives, or null.</summary>
+    internal static string? KindOf(string planJson) =>
+        JsonNode.Parse(planJson)?["bricks"]?["answer"]?["kind"]?.GetValue<string>();
+
     internal static string AsCandidates(string planJson)
     {
         ArgumentNullException.ThrowIfNull(planJson);
