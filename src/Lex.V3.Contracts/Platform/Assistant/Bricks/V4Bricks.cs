@@ -354,6 +354,15 @@ public static partial class V4Bricks
             return new V4PlanOutcome(Write(input, row, oneWord, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:clarify", Firm: true);
         }
 
+        // A follow-up with no earlier answer to refer to ("Donne-moi l'article complet", "Tu es sûr ?", "Et avant 2013 ?"):
+        // Lex asks for the question in full, and reads nothing. With an earlier answer (a context chip), Lex's own
+        // operations read it in that answer's act, as before.
+        if ((input.References?.Count ?? 0) == 0 && V4Dispatcher.AsksOfAnEarlierAnswer(row))
+        {
+            var noContext = new Draft { Route = "clarify", AnswerKind = "greeting", Caveats = ["refers_to_earlier"] };
+            return new V4PlanOutcome(Write(input, row, noContext, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:clarify_no_context", Firm: true);
+        }
+
         // Routes 2 and 3 are Lex's own: a cited article goes to the reference reader, a change over time to diff and its kin.
         if (row.OtherDomain)
         {

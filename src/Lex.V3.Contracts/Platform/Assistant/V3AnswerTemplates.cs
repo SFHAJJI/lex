@@ -425,6 +425,7 @@ public static partial class V3AnswerTemplates
     public const string DirectGreeting = "direct.greeting";
     public const string AbsenceArticleNotHeld = "absence.article_not_held";
     public const string ClarifyOneWord = "clarify.one_word";
+    public const string ClarifyNoContext = "clarify.no_context";
 
     private static readonly V3TemplateProvenance EnglishDraft = new(null, AgentDraft, null, null, false);
 
@@ -594,6 +595,7 @@ public static partial class V3AnswerTemplates
         (AbsenceTextNotHeld, "Lex holds the record of {work} but no text of it that it can show for this date.", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress)]),
         (DirectGreeting, "Hello. Ask a question about a Luxembourg or EU legal text that Lex holds; Lex answers by quoting the text.", BricksDraft, []),
         (AbsenceArticleNotHeld, "Article {anchor} exists but Lex does not hold its text.", BricksDraft, [("anchor", V3AnswerSlotKind.Anchor)]),
+        (ClarifyNoContext, "Lex cannot tell what your question refers to. Ask it in full, naming the text or the subject: Lex answers by quoting the text.", BricksDraft, []),
         (ClarifyOneWord, "One word alone does not tell Lex what you want to know. Ask a full question: Lex answers by quoting the text.", BricksDraft, []),
     ];
 

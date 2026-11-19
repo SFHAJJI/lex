@@ -86,6 +86,28 @@ public static class V4Dispatcher
 
     private static readonly Regex UnsaidPattern = new(@"\b(?:ca|cela|ceci)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
 
+    // A follow-up that only an earlier answer gives a meaning to: "et ...", "pourquoi", "tu es sûr", "en anglais", "ce n'est
+    // pas ce que j'ai demandé", "l'article complet" or "le texte officiel" with nothing named, "me le résumer".
+    private static readonly Regex ShortFollowUp = new(@"^\s*(?:et|pourquoi|why|and)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    private static readonly Regex EarlierAnswer = new(
+        @"^\s*(?:tu es sur|vous etes sur|t'es sur|en anglais|en francais|in english|in french|ce n'est pas|c'est faux|are you sure)\b" +
+        @"|\b(?:l'article|le texte|la loi|cet article|ce texte|cette loi|le paragraphe|the article|this article|the text|this text)\b(?!\s*(?:\d|du\b|de la\b|de l'|des\b|sur\b|n[°o]|no\b|of\b|on\b))" +
+        @"|\b(?:me|nous)\s+(?:le|la|les)\s+(?:resumer|expliquer|traduire|montrer|donner|redonner)\b|\b(?:resume|resumez|explique|expliquez|traduis|traduisez)-(?:le|la|les)\b",
+        RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>
+    /// Whether the question is a follow-up that only an earlier answer gives a meaning to: it names no act, no subject of
+    /// the dictionary and no article, and reads as "et …", "pourquoi", "tu es sûr", "en anglais", "l'article complet".
+    /// </summary>
+    public static bool AsksOfAnEarlierAnswer(V4QuestionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        // "Et …", "Pourquoi …" only when short: "Et si l'acheteur de la police ne règle plus rien ?" is a question.
+        return row.Acts.Count == 0 && row.Concepts.Count == 0 && !CitesArticle(row) &&
+            (EarlierAnswer.IsMatch(row.Folded) || (ShortFollowUp.IsMatch(row.Folded) && row.Words.Count <= 4));
+    }
+
     /// <summary>Whether the folded question asks for an opinion or a choice between offers.</summary>
     public static bool AsksAnOpinion(string folded) => OpinionPattern.IsMatch(folded);
 

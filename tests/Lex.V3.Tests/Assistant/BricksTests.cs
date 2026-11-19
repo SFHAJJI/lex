@@ -1998,6 +1998,31 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void AFollowUpWithNoEarlierAnswerIsAskedToBePutInFull()
+    {
+        // The reader's set of 2026-11-19, the use_context questions asked alone: the model's description of them varied
+        // from run to run. Code reads them, and Lex asks for the question in full.
+        foreach (var question in new[] { "Donne-moi l'article complet", "Peux-tu me le résumer en une phrase ?", "Tu es sûr ?", "Montre-moi le texte officiel", "Ce n'est pas ce que j'ai demandé", "En anglais s'il te plaît", "Et avant 2013 ?" })
+        {
+            var never = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked for a follow-up code reads"));
+            var executor = new BricksFixture.Executor();
+            var dossier = Answered(BricksFixture.Ask(question, never, executor: executor));
+            Assert.AreEqual(V3AssistantVerdict.Clarify, dossier.Verdict, question);
+            Assert.AreEqual(V3AnswerTemplates.ClarifyNoContext, Templates(dossier).Single(), question);
+            Assert.AreEqual((0, 0, 0), (executor.Calls.Count, never.Calls.Count, never.Outlines.Count), question);
+        }
+
+        Assert.AreEqual("Lex ne voit pas à quoi se rapporte votre question. Posez-la en entier, en nommant le texte ou le sujet\u00A0: Lex répond en citant le texte.",
+            V3AnswerClaim.Bind(V3AnswerTemplates.ClarifyNoContext, V3AnswerLocale.Fr).Text);
+
+        // A question that names its subject is not one.
+        foreach (var question in new[] { "Que dit le texte de la loi sur le contrat d'assurance sur la résiliation ?", "Et si je ne paie pas ma prime ?", "Pourquoi l'assureur peut-il résilier le contrat ?", "Que dit l'article 44 de la loi sur le contrat d'assurance ?" })
+        {
+            Assert.IsFalse(V4Dispatcher.AsksOfAnEarlierAnswer(Row(question)), question);
+        }
+    }
+
+    [TestMethod]
     public void ADateInsideAnActsNameIsNotTheDateToReadTheLawOn()
     {
         var corpus = new BricksFixture.Corpus();

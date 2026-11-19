@@ -217,7 +217,7 @@ public static partial class V3AssistantPipeline
 
         var blocks = new List<V3DossierBlock>();
         V3AssistantVerdict verdict;
-        if (application && !general)
+        if (application && !general && record.Kind != "greeting")
         {
             // The descriptive maximum (S4-A05): the law the bricks found, verbatim and dated, beside the refusal; nothing else.
             verdict = V3AssistantVerdict.Refuse;
@@ -230,7 +230,11 @@ public static partial class V3AssistantPipeline
         else if (record.Kind == "greeting")
         {
             verdict = V3AssistantVerdict.Clarify;
-            blocks.Add(Claim(record.Route == "clarify" ? V3AnswerTemplates.ClarifyOneWord : V3AnswerTemplates.DirectGreeting, locale));
+            blocks.Add(Claim(
+                record.Route != "clarify" ? V3AnswerTemplates.DirectGreeting
+                : record.AnswerCaveats.Contains("refers_to_earlier") ? V3AnswerTemplates.ClarifyNoContext
+                : V3AnswerTemplates.ClarifyOneWord,
+                locale));
         }
         else if (record.Kind == "not_held")
         {

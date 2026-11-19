@@ -164,6 +164,7 @@ public static partial class V3AnswerTemplates
         ["absence.act_not_held"] = ("Votre question nomme un acte\u00A0: {name}. Lex ne détient pas encore le texte de cet acte.", BricksFrenchReviewed),
         ["absence.text_not_held"] = ("Lex détient la notice de {work}, mais aucun texte qu’il puisse en montrer à cette date.", BricksFrenchReviewed),
         ["absence.article_not_held"] = ("L’article {anchor} existe mais Lex n’en détient pas le texte.", BricksFrenchReviewedLater),
+        ["clarify.no_context"] = ("Lex ne voit pas à quoi se rapporte votre question. Posez-la en entier, en nommant le texte ou le sujet\u00A0: Lex répond en citant le texte.", BricksFrenchReviewedLater),
         ["clarify.one_word"] = ("Un mot seul ne dit pas à Lex ce que vous voulez savoir. Posez une question complète\u00A0: Lex répond en citant le texte.", BricksFrenchReviewedLater),
         ["direct.greeting"] = ("Bonjour. Posez une question sur un texte de droit luxembourgeois ou européen que Lex détient\u00A0; Lex répond en citant le texte.", BricksFrenchReviewed),
     };

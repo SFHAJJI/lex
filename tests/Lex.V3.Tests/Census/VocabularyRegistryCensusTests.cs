@@ -137,9 +137,9 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval: Modals=22",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Text: Table=592, const LatinBases",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerGates: ConsolidatedKinds=3",
-                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=286, "
-                    + "Definitions=143, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=286, "
-                    + "Ids=143, LanguageCodes=4, const AbsenceActNotHeld, "
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=288, "
+                    + "Definitions=144, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=288, "
+                    + "Ids=144, LanguageCodes=4, const AbsenceActNotHeld, "
                     + "const AbsenceArticleNotHeld, const AbsenceNoAnswerInLines, "
                     + "const AbsenceSweepHeading, const AbsenceTermCount, const AbsenceTermsNowhere, "
                     + "const AbsenceTextNotHeld, const AbsenceWordsNotFound, const ActionCandidate, "
@@ -154,8 +154,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const CaveatConditionsApply, const CaveatGeneralAndSpecial, "
                     + "const CaveatLeftToContract, const CaveatListFromSweep, "
                     + "const CaveatNotDefined, const CaveatNotYourCase, "
-                    + "const CaveatVocabularyIncomplete, const ClarifyOneWord, "
-                    + "const ClarifyWhichAct, const ClarifyWhichArticle, "
+                    + "const CaveatVocabularyIncomplete, const ClarifyNoContext, "
+                    + "const ClarifyOneWord, const ClarifyWhichAct, const ClarifyWhichArticle, "
                     + "const ClarifyWhichArticleOfAct, const ClarifyWhichIdentifier, "
                     + "const ClarifyWhichState, const ClarifyWhichWordingEu, const DirectGreeting, "
                     + "const DisclosureAuthenticityEu, const DisclosureAuthenticityEuOriginal, "

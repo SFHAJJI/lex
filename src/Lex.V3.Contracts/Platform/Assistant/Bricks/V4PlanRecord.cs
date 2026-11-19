@@ -50,7 +50,7 @@ public sealed class V4PlanRecord
 
     /// <summary>The caveats an answer can carry: a closed list of codes, each with its fixed wording (ours: no model sentence is shown).</summary>
     public static readonly IReadOnlyList<string> Caveats =
-        ["conditions_apply", "left_to_contract", "cases_from_sweep", "general_and_special", "model_unavailable", "not_defined", "vocabulary_incomplete", "several_by_scope", "list_from_sweep", "not_your_case"];
+        ["conditions_apply", "left_to_contract", "cases_from_sweep", "general_and_special", "model_unavailable", "not_defined", "vocabulary_incomplete", "several_by_scope", "list_from_sweep", "not_your_case", "refers_to_earlier"];
 
     /// <summary>The ways an answer is "not found" (brick I, four in place of one).</summary>
     public static readonly IReadOnlyList<string> Absences = ["terms_nowhere", "words_not_found", "no_answer_in_lines", "act_not_held", "text_not_held", "article_not_held"];
