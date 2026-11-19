@@ -678,10 +678,11 @@ test("How it works' first screen follows the recorded answer through its own sta
   assert.equal((main.match(/class="lx-how-tag">/g) ?? []).length, rows.filter((row) => !row.model).length, "the others are code");
   assert.deepEqual(rows.filter((row) => row.model).map((row) => row.key), value.trace.plan.bricks.model_calls.map((call) => call.step));
   for (const row of rows.slice(1)) {
-    assert.ok(main.includes(escaped(row.line.split("\n")[0])), `${row.key}: its own line`);
+    // The last stage shows the gates' own counts (below) in place of its one line.
+    if (row.key !== "checks" && row.key !== "composer") assert.ok(main.includes(escaped(row.line)), `${row.key}: its own line`);
     assert.ok(main.includes(escaped(copy.stageTexts[row.key])), `${row.key}: what the stage is`);
   }
-  assert.ok(!main.includes("Planner") || !main.slice(0, main.indexOf('class="lx-how-more"')).includes("Planner"), "no planner stage: no model plans");
+  assert.ok(!main.slice(0, main.indexOf('class="lx-how-more"')).includes("Planner"), "no planner stage: no model plans");
   const stages = howAnswerStages(HOW_ANSWER_RECORD, "en");
   assert.deepEqual(stages.rows, rows);
   assert.ok(main.includes(`quotes: ${value.gates.quotes}, identical`) && main.includes(`sentences outside templates: ${value.gates.non_template_strings}`) && main.includes(`notes shown with the quote: ${value.gates.disclosures}`));

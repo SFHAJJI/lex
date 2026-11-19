@@ -387,6 +387,7 @@ public static partial class V3AnswerTemplates
     public const string PlanBricksModelArbiter = "plan.bricks.model.arbiter";
     public const string PlanBricksModelExtraction = "plan.bricks.model.extraction";
     public const string PlanBricksModelUnavailable = "plan.bricks.model.unavailable";
+    public const string PlanBricksModelQuestionUnavailable = "plan.bricks.model.question_unavailable";
     public const string PlanBricksPassSweepCases = "plan.bricks.pass.sweep_cases";
     public const string PlanBricksPassWider = "plan.bricks.pass.wider_context";
     public const string PlanBricksPassRetry = "plan.bricks.pass.retry";
@@ -551,6 +552,7 @@ public static partial class V3AnswerTemplates
         (PlanBricksModelArbiter, "An AI model gave each passage found a role (main, supporting, set aside). It could add no passage and write no text.", BricksDraft, []),
         (PlanBricksModelExtraction, "An AI model marked, among the lines given to it, those that answer your question. Lex's code checked each one against the text before showing it.", BricksDraft, []),
         (PlanBricksModelUnavailable, "The AI model that ranks the passages gave no usable answer: Lex shows the passages its code found, in the order that code set.", BricksDraft, []),
+        (PlanBricksModelQuestionUnavailable, "An AI model was asked to describe your question and gave no usable answer: Lex's code searched your own words.", BricksDraft, []),
         (PlanBricksPassSweepCases, "The rule refers to the cases the law provides without naming them: Lex swept the whole text for them.", BricksDraft, []),
         (PlanBricksPassWider, "A first reading gave a partial answer: Lex read the whole article again.", BricksDraft, []),
         (PlanBricksPassRetry, "A first answer of the AI model was refused by Lex's checks: Lex asked again with the lines of the best passage only.", BricksDraft, []),

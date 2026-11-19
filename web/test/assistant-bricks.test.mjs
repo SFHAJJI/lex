@@ -1,4 +1,4 @@
-// The dock's reading of a bricks answer (V4, plan /2), held to answers the engine itself made: `bricks-answers.json` holds
+// The dock's reading of a bricks answer (V4, plan /2), held to answers the engine itself made: `bricks-answers-record.mjs` holds
 // nine dossiers the pipeline answered over the test corpus of the law of 27 July 1997 on the insurance contract, on
 // 18/11/2026 (a definition, a rule and its cases, an absence shown by its sweep, two answers by scope, a refusal with the
 // law beside it, a greeting; then three answers of operations: a cited article of a law the index names, opened by code;
@@ -6,16 +6,16 @@
 // of the law is quoted, not the whole article; the stages are the bricks', tagged "AI model" only when a call is recorded.
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ASSISTANT_PANEL_COPY, bricksBody, bricksOf, builtNote, dockTurnOf, questionCallOf, quoteLines, stageRows, validateDossier } from '../scripts/assistant-panel.mjs';
+import { BRICKS_ANSWERS } from '../scripts/bricks-answers-record.mjs';
 import { bundle } from '../scripts/react-build.mjs';
 
-const answers = JSON.parse(readFileSync(new URL('./bricks-answers.json', import.meta.url), 'utf8'));
+const answers = structuredClone(BRICKS_ANSWERS);
 const EN = ASSISTANT_PANEL_COPY.en;
 const FR = ASSISTANT_PANEL_COPY.fr;
 
@@ -170,6 +170,11 @@ test('the stages are the bricks\', each read from the trace, and none is tagged 
   const called = stageRows(withModel, 'en');
   assert.deepEqual(called.filter((row) => row.model).map((row) => row.key), ['arbiter', 'extraction']);
   assert.equal(called.find((row) => row.key === 'arbiter').line, 'main: 1; supporting: 1; set aside: 0');
+  // The extraction's line counts the lines the model pointed at; a line code added to them is not the model's.
+  assert.equal(called.find((row) => row.key === 'extraction').line, 'lines pointed at: 5, each checked in the text');
+  withModel.trace.plan.bricks.answer.items[3].by = 'code';
+  withModel.trace.plan.bricks.answer.items[4].by = 'code';
+  assert.equal(stageRows(withModel, 'en').find((row) => row.key === 'extraction').line, 'lines pointed at: 3, each checked in the text');
 });
 
 test('the dock draws a bricks answer: the lead line marked, each case with its article and heading, the further articles as links', async () => {

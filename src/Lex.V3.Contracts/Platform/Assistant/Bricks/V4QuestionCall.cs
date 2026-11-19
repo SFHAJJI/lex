@@ -305,10 +305,11 @@ public static class V4QuestionCall
     /// <param name="work">The act's address on this site.</param>
     /// <param name="article">The article's identifier in the publisher's text.</param>
     /// <param name="dateRef">"today", or the reference of the date the question asks to read the law on.</param>
-    public static string CitedPlanJson(V3PlannerInput input, string work, string article, string dateRef, string language)
+    /// <param name="ownCase">The question is a person's own case: the part is proposed refused, and the article is shown beside the refusal.</param>
+    public static string CitedPlanJson(V3PlannerInput input, string work, string article, string dateRef, string language, bool ownCase = false)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var part = new V4DescribedPart("article_or_act_cited", false, new V4Span(0, input.MaskedQuestion.Length), null, null, null, language, dateRef, string.Empty, string.Empty);
+        var part = new V4DescribedPart("article_or_act_cited", ownCase, new V4Span(0, input.MaskedQuestion.Length), null, null, null, language, dateRef, string.Empty, string.Empty);
         var step = new JsonObject
         {
             ["step_id"] = "s1",
@@ -324,7 +325,7 @@ public static class V4QuestionCall
         return new JsonObject
         {
             ["schema"] = V3AssistantPlanValidator.Schema2,
-            ["parts"] = new JsonArray(new JsonObject { ["part_id"] = "p1", ["span"] = new JsonArray(0, input.MaskedQuestion.Length), ["proposed_verdict"] = "answer" }),
+            ["parts"] = new JsonArray(new JsonObject { ["part_id"] = "p1", ["span"] = new JsonArray(0, input.MaskedQuestion.Length), ["proposed_verdict"] = ownCase ? "refuse" : "answer" }),
             ["steps"] = new JsonArray(step),
             ["follow_ups"] = new JsonArray(),
             ["bricks"] = Record([part], "cited", null),

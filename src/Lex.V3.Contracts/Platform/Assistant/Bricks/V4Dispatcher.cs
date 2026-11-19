@@ -89,6 +89,65 @@ public static class V4Dispatcher
             .ToList();
     }
 
+    // An act named by a code's name ("Code civil", "Code du travail") or by an EU instrument's number ("règlement (UE)
+    // 2022/2554", "directive 2016/97"): none of them is an act of the insurance index unless the index reads the name.
+    private static readonly Regex OtherActPattern = new(
+        @"(?<![\p{L}])code\s+(?:civil|penal|du\s+travail|de\s+commerce|de\s+la\s+consommation|de\s+la\s+route|des\s+assurances|[a-z]{4,})" +
+        @"|(?<![\p{L}])(?:reglement|directive|regulation|decision)\s*(?:\((?:ue|ce|eu|ec|cee)\))?\s*(?:n[o°]\s*)?\d{2,4}/\d{2,4}",
+        Options, Timeout);
+
+    // A name written in capitals ("DORA", "RGPD", "CSSF"): an acronym, read against the dictionary and the index.
+    private static readonly Regex AcronymPattern = new(@"(?<![\p{L}\d])\p{Lu}[\p{Lu}\d]{2,}(?![\p{L}\d])", RegexOptions.CultureInvariant | RegexOptions.Compiled, Timeout);
+
+    /// <summary>
+    /// Whether the question names an act the corpus index does not hold a name for: an acronym in capitals that is no word
+    /// of the dictionary or of the index ("DORA", "RGPD"), a code, an EU instrument by its number, or an act named by its
+    /// date. The tables of one domain do not answer a question that names another act: Lex's own operations do, on the act
+    /// it names (2026-11-19: "Que prévoit DORA pour la notification des incidents ?" got an article of the insurance law).
+    /// </summary>
+    public static bool NamesAnotherAct(V4QuestionRow row, IReadOnlyList<V3ParsedDate> dates, V4Dictionary dictionary)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(dates);
+        ArgumentNullException.ThrowIfNull(dictionary);
+        bool Read(int start, int end) =>
+            row.Acts.Any(act => start >= act.Start && end <= act.End) ||
+            row.Concepts.Concat(row.Roles).Any(read => start >= read.Start && end <= read.End);
+
+        foreach (Match match in OtherActPattern.Matches(row.Folded))
+        {
+            if (!Read(match.Index, match.Index + match.Length))
+            {
+                return true;
+            }
+        }
+
+        // An act named by its date that the index does not name.
+        if (dates.Any(date => !row.Acts.Any(act => date.Start >= act.Start && date.End <= act.End) &&
+            date.Start <= row.Folded.Length && NamesAnActPattern.IsMatch(row.Folded[Math.Max(0, date.Start - 48)..date.Start])))
+        {
+            return true;
+        }
+
+        // A question typed all in capitals holds no acronym to read.
+        var letters = row.Question.Count(char.IsLetter);
+        if (letters == 0 || row.Question.Count(char.IsUpper) * 2 > letters)
+        {
+            return false;
+        }
+
+        foreach (Match match in AcronymPattern.Matches(row.Question))
+        {
+            var folded = V4Text.Fold(match.Value);
+            if (!Read(match.Index, match.Index + match.Length) && !dictionary.Abbreviations.Any(abbreviation => abbreviation.Short.In(V4Text.Words(folded))))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Whether the question cites an article or an identifier (route 2: Lex's reference reader).</summary>
     public static bool CitesArticle(V4QuestionRow row)
     {

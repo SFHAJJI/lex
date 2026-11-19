@@ -1738,7 +1738,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       assistant: Object.freeze({
         heading: 'L’assistant',
-        processor: 'Lorsque l’assistant est activé, une question que vous y saisissez et à laquelle le code de Lex ne répond pas seul est envoyée au service Azure OpenAI de Microsoft, fourni dans l’Espace économique européen par Microsoft Ireland Operations Limited (zone de données de l’UE), qui agit en qualité de sous-traitant, après que le code de Lex en a retiré les identifiants personnels qu’il reconnaît, comme les numéros de compte bancaire et d’identification. Ce traitement a pour seule finalité d’indiquer ce que la question demande et lesquels de ses mots nomment un acte, un article ou un sujet, puis de désigner, parmi des lignes du droit que le code de Lex a trouvées, celles qui y répondent ; le modèle n’écrit aucune phrase de la réponse. N’accompagnent la question que la position de ses mots et de ses dates, des lignes du droit publié, et les listes fixes de Lex (ses langues de recherche et les termes de son dictionnaire) ; rien d’autre vous concernant n’est envoyé : ni votre adresse IP, ni l’agent utilisateur de votre navigateur, ni aucun cookie, ni vos questions précédentes. Lex ne conserve ni la question ni la réponse. Microsoft n’utilise ni les invites ni les réponses pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut les conserver jusqu’à 30 jours. Vos droits au titre du RGPD sont exposés ci-dessous.',
+        processor: 'Lorsque l’assistant est activé, une question que vous y saisissez et à laquelle le code de Lex ne répond pas seul est envoyée au service Azure OpenAI de Microsoft, fourni dans l’Espace économique européen par Microsoft Ireland Operations Limited (zone de données de l’UE), qui agit en qualité de sous-traitant, après que le code de Lex en a retiré les identifiants personnels qu’il reconnaît, comme les numéros de compte bancaire et d’identification. Ce traitement a pour seule finalité d’indiquer ce que la question demande et lesquels de ses mots nomment un acte, un article ou un sujet, puis de désigner, parmi des lignes de loi que le code de Lex a trouvées, celles qui y répondent ; le modèle n’écrit aucune phrase de la réponse. N’accompagnent la question que la position de ses mots et de ses dates, des lignes du droit publié, et les listes fixes de Lex (ses langues de recherche et les termes de son dictionnaire) ; rien d’autre vous concernant n’est envoyé : ni votre adresse IP, ni l’agent utilisateur de votre navigateur, ni aucun cookie, ni vos questions précédentes. Lex ne conserve ni la question ni la réponse. Microsoft n’utilise ni les invites ni les réponses pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut les conserver jusqu’à 30 jours. Vos droits au titre du RGPD sont exposés ci-dessous.',
       }),
       rights: Object.freeze({
         heading: 'Vos droits',
@@ -2078,6 +2078,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     parseDate: 'date : {date}',
     parseNoCues: 'mots qui demandent un conseil : aucun',
     parseCues: 'mots qui demandent un conseil : {count}',
+    parseCuesRule: 'mots qui demandent un conseil : {count}, à propos d’un rôle prévu par la loi et sans élément d’un cas personnel : question sur la règle',
     composeQuotes: 'citations : {count}, identiques au texte détenu',
     composeOutside: 'phrases hors formules : {count}',
     composeNotes: 'notes montrées avec la citation : {count}',
@@ -2134,7 +2135,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     registryColumns: Object.freeze({
       version: 'Version',
       registered: 'Enregistrée',
-      planner: 'Planificateur',
+      planner: 'Moteur',
       code: 'Code',
       data: 'Données',
       result: 'Résultat des tests',
@@ -2146,7 +2147,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       passed: 'réussis',
       failed: 'échoués',
     }),
-    registryTags: 'Chaque version porte son planificateur (le modèle sollicité et la version des instructions, du dictionnaire et de la liste des actes), le code qui l’a servie, l’instantané des données et le résultat des contrôles. Son évaluation journalise les paramètres, les métriques et ces fichiers : {artifacts}.',
+    registryTags: 'Chaque version porte son moteur (le modèle sollicité et la version des instructions, du dictionnaire et de la liste des actes), le code qui l’a servie, l’instantané des données et le résultat des contrôles. Son évaluation journalise les paramètres, les métriques et ces fichiers : {artifacts}.',
     registryCode: 'Le code qui journalise chaque évaluation et enregistre chaque version',
     supervisionHeading: 'Supervision',
     supAvailability: 'Disponibilité, vérifiée depuis l’extérieur d’Azure à intervalles réguliers : l’état du service, les pages, un appel à l’API et le certificat TLS. Deux échecs ouvrent un incident.',
@@ -2169,7 +2170,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       rightBehaviour: 'bien traitées sans article (refus, précision, texte non détenu)',
     }),
     stability: 'Posée deux fois, une question reçoit le même verdict {sameVerdict} % du temps et le même plan {samePlan} % : la réponse d’un modèle peut varier, les contrôles vérifient donc le résultat.',
-    heldout: 'Questions inédites, jamais utilisées pour régler Lex : {heldoutRight} bon article sur {heldoutCases}. {heldoutRefused} refusées par la règle du conseil, {heldoutNotFound} pas trouvées, {heldoutNoPlan} sans réponse à temps.',
+    heldout: 'Questions inédites, jamais utilisées pour régler Lex : le bon article {heldoutRight} fois sur {heldoutCases}. {heldoutRefused} refusées par la règle du conseil, {heldoutNotFound} pas trouvées, {heldoutNoPlan} sans réponse à temps.',
     gateRule: 'Un article faux sur les questions d’assurance, ou une question réussie qui échoue, bloque la mise en ligne.',
     everyQuestion: 'Les {cases} questions, une par une',
     maskedEmail: '[adresse électronique masquée]',

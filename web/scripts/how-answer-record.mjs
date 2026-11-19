@@ -1,30 +1,30 @@
-// One real answer, recorded from the live site for How it works (the owner's brief of 2026-11-15, section 5: one real
-// question followed through the six stages). Captured on 2026-11-15 at 13:51 UTC by one request to the live API,
-// POST https://law.soufien.lu/api/v3/ask with the body `request` below (ask/1's request: the question alone).
+// One real answer, recorded for How it works (the owner's brief of 2026-11-15, section 5: one real question followed
+// through its stages). Captured on 2026-11-19 at 00:13 UTC by one request to the API at `origin` below,
+// POST /api/v3/ask with the body `request` (ask/1's request: the question alone). The origin is the release candidate on the driver's PC (the same code, data and model as the release); the record is made again from the live site once the release serves.
 //
-// `envelope` is the answer as served, whole and unedited. `act` is the title the live dossier of the same act gives the
-// version the answer quotes (one dossier request, the same minute: `act.request`), since the answer names the act by its
-// address only. Do not edit: record again with the same two requests, and date the record.
+// `envelope` is the answer as served, whole and unedited. `act` is the title the dossier of the same act gives the version
+// the answer quotes (one dossier request, the same minute: `act.request`), since the answer names the act by its address
+// only. Do not edit: record again with the same two requests (C:\lex-v3\driver-scripts\make-how-record.py), and date it.
 
 export const HOW_ANSWER_RECORD = Object.freeze({
-  "recordedAt": "2026-11-15T13:51:39Z",
-  "origin": "https://law.soufien.lu",
+  "recordedAt": "2026-11-19T00:13:45Z",
+  "origin": "http://127.0.0.1:5080",
   "request": {
     "operation_id": "ask",
     "parameters": {
-      "question": "Quel est le délai de prescription d'un contrat d'assurance ?"
+      "question": "L'assureur peut-il résilier le contrat ?"
     }
   },
   "envelope": {
     "context": {
       "commits": {
         "index_builder_source_commit": "bfb839839ea7d49cec79e8525275968d1000be8e",
-        "serving_runtime_source_commit": "38c1a47bac9af8ff055568523eb228b0b9f7066a"
+        "serving_runtime_source_commit": "353f1d91b7d1963fed6a8da417359867fe12cc28"
       },
       "freshness": {
         "channels": [
           {
-            "age_days": 2,
+            "age_days": 6,
             "lag_days": null,
             "lag_observations": 0,
             "newest_completed_observation": "2026-11-12T15:22:05Z",
@@ -32,7 +32,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
             "stale": false
           },
           {
-            "age_days": 3,
+            "age_days": 7,
             "lag_days": null,
             "lag_observations": 0,
             "newest_completed_observation": "2026-11-11T19:24:48Z",
@@ -43,7 +43,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "index_built_at": "2026-11-12T15:22:06Z",
         "last_checked_against_publisher": null,
         "maximum_data_age_days": 30,
-        "observed_at": "2026-11-15T13:51:38.0819203Z",
+        "observed_at": "2026-11-19T00:13:45.8748896Z",
         "stale": false,
         "upstream_health": "stale"
       },
@@ -62,7 +62,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "refusal": null,
     "registry_schema": "lex-v3-operation-registry/2",
     "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
-    "request_ref": "http_f91cc8ef0fac2224ce50eb2849e4000ca45a9b91d42fcbefb82997e1b1961471",
+    "request_ref": "http_79cf718eb668929477ad949c38a5c9b639659495757b476f8fa599a39b493397",
     "result": {
       "object_type": "answer_dossier",
       "schema": "lex-v3-ask-result/1",
@@ -70,9 +70,9 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "answer_locale": "fr",
         "gates": {
           "disclosure_complete": true,
-          "disclosures": 3,
+          "disclosures": 15,
           "non_template_strings": 0,
-          "quotes": 1
+          "quotes": 5
         },
         "label": {
           "facts": [],
@@ -93,8 +93,8 @@ export const HOW_ANSWER_RECORD = Object.freeze({
             "facts": [],
             "kind": "claim",
             "locale": "fr",
-            "template_id": "notice.assembled_by_model",
-            "text": "Un modèle d’IA a assemblé cette réponse : il a planifié les opérations de Lex à exécuter. Le code de Lex a vérifié ce plan, exécuté les opérations et écrit chaque phrase à partir de formules fixes ; les citations reproduisent le texte publié."
+            "template_id": "notice.model_assisted",
+            "text": "Un modèle d’IA a aidé à trouver les passages : parmi les lignes que le code de Lex lui a fournies, il a désigné celles qui répondent à votre question. Il n’a écrit aucune phrase de cette réponse : le code de Lex a vérifié chaque ligne désignée et écrit chaque phrase à partir de formules fixes ; les citations reproduisent le texte publié."
           },
           {
             "facts": [],
@@ -108,6 +108,13 @@ export const HOW_ANSWER_RECORD = Object.freeze({
           {
             "blocks": [
               {
+                "facts": [],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "answer.rule",
+                "text": "La règle, dans les termes du texte :"
+              },
+              {
                 "facts": [
                   {
                     "kind": "work_address",
@@ -117,39 +124,44 @@ export const HOW_ANSWER_RECORD = Object.freeze({
                   {
                     "kind": "anchor",
                     "name": "anchor",
-                    "value": "art_44"
+                    "value": "art_39"
+                  },
+                  {
+                    "kind": "law_words",
+                    "name": "heading",
+                    "value": "Cas, formes et effets de la résiliation"
                   },
                   {
                     "kind": "calendar_date",
                     "name": "date",
-                    "value": "2026-11-15"
+                    "value": "2026-11-19"
                   }
                 ],
                 "kind": "claim",
                 "locale": "fr",
-                "template_id": "law.quote_heading",
-                "text": "/lu-legilux/loi-1997-07-27-n10, article 44, tel qu’il se lisait le 15 novembre 2026"
+                "template_id": "law.extract_heading",
+                "text": "/lu-legilux/loi-1997-07-27-n10, article 39, « Cas, formes et effets de la résiliation », tel qu’il se lisait le 19 novembre 2026"
               },
               {
-                "anchor": "art_44",
-                "article_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_44",
-                "article_text_sha256": "7cc0fbd0c28a19f26d27bca22532fab42e9c5cc59b2cd1c99ed53bd475cc1076",
+                "anchor": "art_39",
+                "article_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_39",
+                "article_text_sha256": "5d934fca7b58b6845e17b144e019146d773cc0003b05d9d72b0c553166ae302d",
                 "date_role": "applicability",
                 "from": "2025-11-25",
                 "journal_officiel": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
                 "kind": "quote",
                 "language": "fra",
-                "length": 1888,
+                "length": 73,
                 "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125",
-                "offset": 0,
+                "offset": 587,
                 "publisher": "lu-legilux",
                 "quote_id": "q1",
-                "shortened": false,
+                "shortened": true,
                 "state_kind": "consolidation",
                 "state_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra",
                 "state_sha256": "dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1",
-                "step_id": "f1",
-                "text": "Article 44Délai de prescription1.Le délai de prescription de toute action dérivant du contrat d'assurance est de trois ans.Le délai court à partir du jour de l'événement qui donne ouverture à l'action. Toutefois, lorsque celui à qui appartient l'action prouve qu'il n'a eu connaissance de cet événement qu'à une date ultérieure, le délai ne commence à courir qu'à cette date, sans pouvoir excéder cinq ans à dater de l'événement, le cas de fraude excepté.En matière d'assurance de la responsabilité, le délai court, en ce qui concerne l'action récursoire de l'assuré contre l'assureur, à partir de la demande en justice de la personne lésée, soit qu'il s'agisse d'une demande originaire d'indemnisation, soit qu'il s'agisse d'une demande ultérieure ensuite de l'aggravation du dommage ou de la survenance d'un dommage nouveau.En matière d'assurance de personnes, le délai court, en ce qui concerne l'action du bénéficiaire, à partir du jour où celui-ci a connaissance à la fois de l'existence du contrat, de sa qualité de bénéficiaire et de la survenance de l'événement duquel dépend l'exigibilité des prestations d'assurance.2.Sous réserve de dispositions légales particulières, l'action résultant du droit propre que la personne lésée possède contre l'assureur en vertu de l'article 89 se prescrit par cinq ans à compter du fait générateur du dommage ou, s'il y a infraction pénale à compter du jour où celle-ci a été commise.Toutefois, lorsque la personne lésée prouve qu'elle n'a eu connaissance de son droit envers l'assureur qu'à une date ultérieure, le délai ne commence à courir qu'à cette date, sans pouvoir excéder dix ans à compter du fait générateur du dommage ou, s'il y a infraction pénale, du jour où celle-ci a été commise.3.L'action récursoire de l'assureur contre l'assuré se prescrit par trois ans à compter du jour du paiement par l'assureur, le cas de fraude excepté.",
+                "step_id": "s1",
+                "text": "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.",
                 "to": null,
                 "work": "/lu-legilux/loi-1997-07-27-n10"
               },
@@ -171,13 +183,13 @@ export const HOW_ANSWER_RECORD = Object.freeze({
                   {
                     "kind": "content_hash",
                     "name": "hash",
-                    "value": "7cc0fbd0c28a19f26d27bca22532fab42e9c5cc59b2cd1c99ed53bd475cc1076"
+                    "value": "5d934fca7b58b6845e17b144e019146d773cc0003b05d9d72b0c553166ae302d"
                   }
                 ],
                 "kind": "claim",
                 "locale": "fr",
                 "template_id": "law.content_hash",
-                "text": "Empreinte du contenu : 7cc0fbd0c28a19f26d27bca22532fab42e9c5cc59b2cd1c99ed53bd475cc1076"
+                "text": "Empreinte du contenu : 5d934fca7b58b6845e17b144e019146d773cc0003b05d9d72b0c553166ae302d"
               },
               {
                 "facts": [
@@ -197,13 +209,13 @@ export const HOW_ANSWER_RECORD = Object.freeze({
                   {
                     "kind": "uri",
                     "name": "uri",
-                    "value": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_44"
+                    "value": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_39"
                   }
                 ],
                 "kind": "claim",
                 "locale": "fr",
                 "template_id": "law.permalink",
-                "text": "Permalien : /lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_44"
+                "text": "Permalien : /lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_39"
               },
               {
                 "claim": {
@@ -252,20 +264,788 @@ export const HOW_ANSWER_RECORD = Object.freeze({
                 "flag": "validity_conflict",
                 "kind": "disclosure",
                 "object": "q1"
+              },
+              {
+                "facts": [],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "answer.rule_cases",
+                "text": "Cas prévus par le texte, relevés dans ce texte :"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "work_address",
+                    "name": "work",
+                    "value": "/lu-legilux/loi-1997-07-27-n10"
+                  },
+                  {
+                    "kind": "anchor",
+                    "name": "anchor",
+                    "value": "art_13"
+                  },
+                  {
+                    "kind": "law_words",
+                    "name": "heading",
+                    "value": "Omission ou inexactitude non intentionnelles"
+                  },
+                  {
+                    "kind": "calendar_date",
+                    "name": "date",
+                    "value": "2026-11-19"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.extract_heading",
+                "text": "/lu-legilux/loi-1997-07-27-n10, article 13, « Omission ou inexactitude non intentionnelles », tel qu’il se lisait le 19 novembre 2026"
+              },
+              {
+                "anchor": "art_13",
+                "article_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_13",
+                "article_text_sha256": "4550e706f866de2194664d9e8bd601694f6a1fcc84175b7091a5c720d1ae4a3b",
+                "date_role": "applicability",
+                "from": "2025-11-25",
+                "journal_officiel": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+                "kind": "quote",
+                "language": "fra",
+                "length": 125,
+                "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125",
+                "offset": 394,
+                "publisher": "lu-legilux",
+                "quote_id": "q2",
+                "shortened": true,
+                "state_kind": "consolidation",
+                "state_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra",
+                "state_sha256": "dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1",
+                "step_id": "s2",
+                "text": "Si l'assureur apporte la preuve qu'il n'aurait en aucun cas assuré le risque, il peut résilier le contrat dans le même délai.",
+                "to": null,
+                "work": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "calendar_date",
+                    "name": "from",
+                    "value": "2025-11-25"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.interval_lu_open",
+                "text": "Applicable à partir du 25 novembre 2025 (éditeur)."
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "content_hash",
+                    "name": "hash",
+                    "value": "4550e706f866de2194664d9e8bd601694f6a1fcc84175b7091a5c720d1ae4a3b"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.content_hash",
+                "text": "Empreinte du contenu : 4550e706f866de2194664d9e8bd601694f6a1fcc84175b7091a5c720d1ae4a3b"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.official_source",
+                "text": "Source officielle : http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_13"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.permalink",
+                "text": "Permalien : /lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_13"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "uri",
+                      "name": "uri",
+                      "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.authenticity_lu",
+                  "text": "Ceci est la copie que Lex donne du texte, à titre d’information ; elle ne fait pas foi. Seuls font foi les textes publiés au Journal officiel (Mémorial A) : l’acte tel que publié, http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo."
+                },
+                "flag": "authenticity",
+                "kind": "disclosure",
+                "object": "q2"
+              },
+              {
+                "claim": {
+                  "facts": [],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.no_legal_effect",
+                  "text": "Un texte consolidé est un outil de documentation sans effet juridique."
+                },
+                "flag": "no_legal_effect",
+                "kind": "disclosure",
+                "object": "q2"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "1997-09-07"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.validity_conflict",
+                  "text": "L’éditeur date cet article du 7 septembre 1997, une date différente de la date propre de la version ; les deux dates sont indiquées."
+                },
+                "flag": "validity_conflict",
+                "kind": "disclosure",
+                "object": "q2"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "work_address",
+                    "name": "work",
+                    "value": "/lu-legilux/loi-1997-07-27-n10"
+                  },
+                  {
+                    "kind": "anchor",
+                    "name": "anchor",
+                    "value": "art_22"
+                  },
+                  {
+                    "kind": "law_words",
+                    "name": "heading",
+                    "value": "Mise en demeure et faculté de résiliation"
+                  },
+                  {
+                    "kind": "calendar_date",
+                    "name": "date",
+                    "value": "2026-11-19"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.extract_heading",
+                "text": "/lu-legilux/loi-1997-07-27-n10, article 22, « Mise en demeure et faculté de résiliation », tel qu’il se lisait le 19 novembre 2026"
+              },
+              {
+                "anchor": "art_22",
+                "article_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_22",
+                "article_text_sha256": "893e87f998ecabdf1b8f4975d0a1312687ce72dad5a7624e399d06c5aaec5ea1",
+                "date_role": "applicability",
+                "from": "2025-11-25",
+                "journal_officiel": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+                "kind": "quote",
+                "language": "fra",
+                "length": 98,
+                "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125",
+                "offset": 287,
+                "publisher": "lu-legilux",
+                "quote_id": "q3",
+                "shortened": true,
+                "state_kind": "consolidation",
+                "state_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra",
+                "state_sha256": "dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1",
+                "step_id": "s3",
+                "text": "L'assureur a le droit de résilier le contrat dix jours après l'expiration du délai visé ci-dessus.",
+                "to": null,
+                "work": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "calendar_date",
+                    "name": "from",
+                    "value": "2025-11-25"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.interval_lu_open",
+                "text": "Applicable à partir du 25 novembre 2025 (éditeur)."
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "content_hash",
+                    "name": "hash",
+                    "value": "893e87f998ecabdf1b8f4975d0a1312687ce72dad5a7624e399d06c5aaec5ea1"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.content_hash",
+                "text": "Empreinte du contenu : 893e87f998ecabdf1b8f4975d0a1312687ce72dad5a7624e399d06c5aaec5ea1"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.official_source",
+                "text": "Source officielle : http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_22"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.permalink",
+                "text": "Permalien : /lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_22"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "uri",
+                      "name": "uri",
+                      "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.authenticity_lu",
+                  "text": "Ceci est la copie que Lex donne du texte, à titre d’information ; elle ne fait pas foi. Seuls font foi les textes publiés au Journal officiel (Mémorial A) : l’acte tel que publié, http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo."
+                },
+                "flag": "authenticity",
+                "kind": "disclosure",
+                "object": "q3"
+              },
+              {
+                "claim": {
+                  "facts": [],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.no_legal_effect",
+                  "text": "Un texte consolidé est un outil de documentation sans effet juridique."
+                },
+                "flag": "no_legal_effect",
+                "kind": "disclosure",
+                "object": "q3"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "1997-09-07"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.validity_conflict",
+                  "text": "L’éditeur date cet article du 7 septembre 1997, une date différente de la date propre de la version ; les deux dates sont indiquées."
+                },
+                "flag": "validity_conflict",
+                "kind": "disclosure",
+                "object": "q3"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "work_address",
+                    "name": "work",
+                    "value": "/lu-legilux/loi-1997-07-27-n10"
+                  },
+                  {
+                    "kind": "anchor",
+                    "name": "anchor",
+                    "value": "art_34"
+                  },
+                  {
+                    "kind": "law_words",
+                    "name": "heading",
+                    "value": "Aggravation du risque"
+                  },
+                  {
+                    "kind": "calendar_date",
+                    "name": "date",
+                    "value": "2026-11-19"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.extract_heading",
+                "text": "/lu-legilux/loi-1997-07-27-n10, article 34, « Aggravation du risque », tel qu’il se lisait le 19 novembre 2026"
+              },
+              {
+                "anchor": "art_34",
+                "article_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_34",
+                "article_text_sha256": "25d5c780ec1c90ff253b67bea7acbc349fe3e9eb9b47689141bffd21ebed21f6",
+                "date_role": "applicability",
+                "from": "2025-11-25",
+                "journal_officiel": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+                "kind": "quote",
+                "language": "fra",
+                "length": 262,
+                "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125",
+                "offset": 894,
+                "publisher": "lu-legilux",
+                "quote_id": "q4",
+                "shortened": true,
+                "state_kind": "consolidation",
+                "state_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra",
+                "state_sha256": "dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1",
+                "step_id": "s4",
+                "text": "Si la proposition de modification du contrat d'assurance est refusée par le preneur ou si, au terme d'un délai d'un mois à compter de la réception de cette proposition, cette dernière n'est pas acceptée, l'assureur peut résilier le contrat dans les quinze jours.",
+                "to": null,
+                "work": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "calendar_date",
+                    "name": "from",
+                    "value": "2025-11-25"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.interval_lu_open",
+                "text": "Applicable à partir du 25 novembre 2025 (éditeur)."
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "content_hash",
+                    "name": "hash",
+                    "value": "25d5c780ec1c90ff253b67bea7acbc349fe3e9eb9b47689141bffd21ebed21f6"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.content_hash",
+                "text": "Empreinte du contenu : 25d5c780ec1c90ff253b67bea7acbc349fe3e9eb9b47689141bffd21ebed21f6"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.official_source",
+                "text": "Source officielle : http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_34"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.permalink",
+                "text": "Permalien : /lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_34"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "uri",
+                      "name": "uri",
+                      "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.authenticity_lu",
+                  "text": "Ceci est la copie que Lex donne du texte, à titre d’information ; elle ne fait pas foi. Seuls font foi les textes publiés au Journal officiel (Mémorial A) : l’acte tel que publié, http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo."
+                },
+                "flag": "authenticity",
+                "kind": "disclosure",
+                "object": "q4"
+              },
+              {
+                "claim": {
+                  "facts": [],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.no_legal_effect",
+                  "text": "Un texte consolidé est un outil de documentation sans effet juridique."
+                },
+                "flag": "no_legal_effect",
+                "kind": "disclosure",
+                "object": "q4"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "1997-09-07"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.validity_conflict",
+                  "text": "L’éditeur date cet article du 7 septembre 1997, une date différente de la date propre de la version ; les deux dates sont indiquées."
+                },
+                "flag": "validity_conflict",
+                "kind": "disclosure",
+                "object": "q4"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "work_address",
+                    "name": "work",
+                    "value": "/lu-legilux/loi-1997-07-27-n10"
+                  },
+                  {
+                    "kind": "anchor",
+                    "name": "anchor",
+                    "value": "art_41"
+                  },
+                  {
+                    "kind": "law_words",
+                    "name": "heading",
+                    "value": "Résiliation après sinistre"
+                  },
+                  {
+                    "kind": "calendar_date",
+                    "name": "date",
+                    "value": "2026-11-19"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.extract_heading",
+                "text": "/lu-legilux/loi-1997-07-27-n10, article 41, « Résiliation après sinistre », tel qu’il se lisait le 19 novembre 2026"
+              },
+              {
+                "anchor": "art_41",
+                "article_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_41",
+                "article_text_sha256": "600725ace80b14e2ee971393a9157861927d8a7b5fc391a85aa556e3391e07bb",
+                "date_role": "applicability",
+                "from": "2025-11-25",
+                "journal_officiel": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+                "kind": "quote",
+                "language": "fra",
+                "length": 306,
+                "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125",
+                "offset": 38,
+                "publisher": "lu-legilux",
+                "quote_id": "q5",
+                "shortened": true,
+                "state_kind": "consolidation",
+                "state_permalink": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra",
+                "state_sha256": "dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1",
+                "step_id": "s5",
+                "text": "Sauf en assurance sur la vie et en assurance-maladie, le contrat peut réserver à l'assureur le droit de résilier le contrat après la survenance d'un sinistre donnant lieu à indemnisation. Cette résiliation est notifiée au preneur d'assurance dans le mois du premier paiement de la prestation de l'assureur.",
+                "to": null,
+                "work": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "calendar_date",
+                    "name": "from",
+                    "value": "2025-11-25"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.interval_lu_open",
+                "text": "Applicable à partir du 25 novembre 2025 (éditeur)."
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "content_hash",
+                    "name": "hash",
+                    "value": "600725ace80b14e2ee971393a9157861927d8a7b5fc391a85aa556e3391e07bb"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.content_hash",
+                "text": "Empreinte du contenu : 600725ace80b14e2ee971393a9157861927d8a7b5fc391a85aa556e3391e07bb"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.official_source",
+                "text": "Source officielle : http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/consolide/20251125"
+              },
+              {
+                "facts": [
+                  {
+                    "kind": "uri",
+                    "name": "uri",
+                    "value": "/lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_41"
+                  }
+                ],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "law.permalink",
+                "text": "Permalien : /lu-legilux/loi-1997-07-27-n10/2025-11-25--dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1/fra/art_41"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "uri",
+                      "name": "uri",
+                      "value": "http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.authenticity_lu",
+                  "text": "Ceci est la copie que Lex donne du texte, à titre d’information ; elle ne fait pas foi. Seuls font foi les textes publiés au Journal officiel (Mémorial A) : l’acte tel que publié, http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo."
+                },
+                "flag": "authenticity",
+                "kind": "disclosure",
+                "object": "q5"
+              },
+              {
+                "claim": {
+                  "facts": [],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.no_legal_effect",
+                  "text": "Un texte consolidé est un outil de documentation sans effet juridique."
+                },
+                "flag": "no_legal_effect",
+                "kind": "disclosure",
+                "object": "q5"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "1997-09-07"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "disclosure.validity_conflict",
+                  "text": "L’éditeur date cet article du 7 septembre 1997, une date différente de la date propre de la version ; les deux dates sont indiquées."
+                },
+                "flag": "validity_conflict",
+                "kind": "disclosure",
+                "object": "q5"
+              },
+              {
+                "facts": [],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "answer.more_articles",
+                "text": "Autres articles de ce texte où le terme figure :"
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "anchor",
+                      "name": "anchor",
+                      "value": "art_79"
+                    },
+                    {
+                      "kind": "work_address",
+                      "name": "work",
+                      "value": "/lu-legilux/loi-1997-07-27-n10"
+                    },
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "2026-11-19"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "action.read_article",
+                  "text": "Lire l’article 79 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026"
+                },
+                "kind": "action",
+                "operation_id": "evidence_bundle",
+                "parameters": {
+                  "article": "art_79",
+                  "date": "2026-11-19",
+                  "identifier": "/lu-legilux/loi-1997-07-27-n10"
+                }
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "anchor",
+                      "name": "anchor",
+                      "value": "art_43"
+                    },
+                    {
+                      "kind": "work_address",
+                      "name": "work",
+                      "value": "/lu-legilux/loi-1997-07-27-n10"
+                    },
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "2026-11-19"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "action.read_article",
+                  "text": "Lire l’article 43 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026"
+                },
+                "kind": "action",
+                "operation_id": "evidence_bundle",
+                "parameters": {
+                  "article": "art_43",
+                  "date": "2026-11-19",
+                  "identifier": "/lu-legilux/loi-1997-07-27-n10"
+                }
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "anchor",
+                      "name": "anchor",
+                      "value": "art_57"
+                    },
+                    {
+                      "kind": "work_address",
+                      "name": "work",
+                      "value": "/lu-legilux/loi-1997-07-27-n10"
+                    },
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "2026-11-19"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "action.read_article",
+                  "text": "Lire l’article 57 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026"
+                },
+                "kind": "action",
+                "operation_id": "evidence_bundle",
+                "parameters": {
+                  "article": "art_57",
+                  "date": "2026-11-19",
+                  "identifier": "/lu-legilux/loi-1997-07-27-n10"
+                }
+              },
+              {
+                "claim": {
+                  "facts": [
+                    {
+                      "kind": "anchor",
+                      "name": "anchor",
+                      "value": "art_10"
+                    },
+                    {
+                      "kind": "work_address",
+                      "name": "work",
+                      "value": "/lu-legilux/loi-1997-07-27-n10"
+                    },
+                    {
+                      "kind": "calendar_date",
+                      "name": "date",
+                      "value": "2026-11-19"
+                    }
+                  ],
+                  "kind": "claim",
+                  "locale": "fr",
+                  "template_id": "action.read_article",
+                  "text": "Lire l’article 10 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026"
+                },
+                "kind": "action",
+                "operation_id": "evidence_bundle",
+                "parameters": {
+                  "article": "art_10",
+                  "date": "2026-11-19",
+                  "identifier": "/lu-legilux/loi-1997-07-27-n10"
+                }
+              },
+              {
+                "facts": [],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "caveat.conditions_apply",
+                "text": "Des conditions s’appliquent : elles figurent dans les lignes citées."
+              },
+              {
+                "facts": [],
+                "kind": "claim",
+                "locale": "fr",
+                "template_id": "caveat.cases_from_sweep",
+                "text": "Cette liste vient d’un relevé des mots du terme dans le texte ; un cas rédigé autrement peut y manquer."
               }
             ],
             "class": "lookup",
-            "cues": [],
+            "cues": [
+              {
+                "function": "concludes_on_situation",
+                "span": [
+                  11,
+                  18
+                ]
+              }
+            ],
             "part_id": "p1",
             "span": [
               0,
-              59
+              40
             ],
             "verdict": "answer"
           }
         ],
         "plan": {
-          "plan_sha256": "9419f6802bf602bd1b376e2df051d00c8c28abb8fd2dadc170e41ddd1850de2d",
+          "plan_sha256": "5e1f2cd5f606a03fd1dabca397069f603f15f28d735ad8d2f7ccb850ae32fc03",
           "rendered": [
             {
               "facts": [],
@@ -277,47 +1057,163 @@ export const HOW_ANSWER_RECORD = Object.freeze({
             {
               "facts": [
                 {
-                  "kind": "calendar_date",
-                  "name": "date",
-                  "value": "2026-11-15"
-                }
-              ],
-              "kind": "claim",
-              "locale": "fr",
-              "template_id": "plan.date_today",
-              "text": "Votre question ne donne pas de date : Lex a lu le droit tel qu’il se lit aujourd’hui, le 15 novembre 2026."
-            },
-            {
-              "facts": [
-                {
-                  "kind": "language_code",
-                  "name": "language",
-                  "value": "fra"
+                  "kind": "question_span",
+                  "name": "words",
+                  "value": "résilier"
                 },
                 {
-                  "kind": "question_span",
-                  "name": "query",
-                  "value": "délai de prescription d'un contrat d'assurance"
+                  "kind": "dictionary_term",
+                  "name": "term",
+                  "value": "résiliation"
                 }
               ],
               "kind": "claim",
               "locale": "fr",
-              "template_id": "plan.step.search",
-              "text": "Recherche de vos mots dans le texte que Lex détient en français : « délai de prescription d'un contrat d'assurance »."
+              "template_id": "plan.bricks.term",
+              "text": "Lex a lu vos mots « résilier » comme le terme « résiliation » de son vocabulaire de l’assurance."
             },
             {
               "facts": [],
               "kind": "claim",
               "locale": "fr",
-              "template_id": "plan.follow_up.single_article",
-              "text": "Comme cette étape désignait un seul article, Lex a effectué l’étape suivante :"
+              "template_id": "plan.bricks.rule_question",
+              "text": "Votre question porte sur la règle, sans élément d’un cas personnel : Lex cite la règle et ne dit pas si elle s’applique à une situation."
+            },
+            {
+              "facts": [],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.kind.rule",
+              "text": "Réponse cherchée : une règle, avec ses conditions et ses exceptions."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "calendar_date",
+                  "name": "date",
+                  "value": "2026-11-19"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.date_today",
+              "text": "Votre question ne donne pas de date : Lex a lu le droit tel qu’il se lit aujourd’hui, le 19 novembre 2026."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "work_address",
+                  "name": "work",
+                  "value": "/lu-legilux/loi-1997-07-27-n10"
+                },
+                {
+                  "kind": "calendar_date",
+                  "name": "date",
+                  "value": "2026-11-19"
+                },
+                {
+                  "kind": "count",
+                  "name": "articles",
+                  "value": "147"
+                },
+                {
+                  "kind": "count",
+                  "name": "lines",
+                  "value": "913"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.scope",
+              "text": "Texte lu : /lu-legilux/loi-1997-07-27-n10, tel qu’il se lisait le 19 novembre 2026 (articles : 147 ; lignes : 913)."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "count",
+                  "name": "articles",
+                  "value": "4"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.detector.title",
+              "text": "Articles dont l’intitulé contient le terme : 4."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "count",
+                  "name": "lines",
+                  "value": "45"
+                },
+                {
+                  "kind": "count",
+                  "name": "articles",
+                  "value": "25"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.detector.keyword",
+              "text": "Lignes contenant une forme du terme : 45 ; articles concernés : 25."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "count",
+                  "name": "lines",
+                  "value": "30"
+                },
+                {
+                  "kind": "count",
+                  "name": "articles",
+                  "value": "16"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.detector.cooccurrence",
+              "text": "Lignes où le terme figure avec la partie nommée dans votre question ou avec une valeur : 30 ; articles concernés : 16."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "count",
+                  "name": "lines",
+                  "value": "31"
+                },
+                {
+                  "kind": "count",
+                  "name": "articles",
+                  "value": "17"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.detector.type_pattern",
+              "text": "Lignes ayant aussi la forme de la réponse cherchée : 31 ; articles concernés : 17."
+            },
+            {
+              "facts": [],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.pass.sweep_cases",
+              "text": "La règle renvoie aux cas prévus par la loi sans les nommer : Lex a parcouru tout le texte pour les relever."
+            },
+            {
+              "facts": [],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.bricks.model.extraction",
+              "text": "Un modèle d’IA a désigné, parmi les lignes fournies, celles qui répondent à votre question. Le code de Lex a vérifié chacune dans le texte avant de l’afficher."
             },
             {
               "facts": [
                 {
                   "kind": "anchor",
                   "name": "anchor",
-                  "value": "art_44"
+                  "value": "art_39"
                 },
                 {
                   "kind": "identifier_text",
@@ -327,13 +1223,105 @@ export const HOW_ANSWER_RECORD = Object.freeze({
                 {
                   "kind": "calendar_date",
                   "name": "date",
-                  "value": "2026-11-15"
+                  "value": "2026-11-19"
                 }
               ],
               "kind": "claim",
               "locale": "fr",
               "template_id": "plan.step.evidence_bundle_article",
-              "text": "Lecture de l’article 44 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 15 novembre 2026."
+              "text": "Lecture de l’article 39 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "anchor",
+                  "name": "anchor",
+                  "value": "art_13"
+                },
+                {
+                  "kind": "identifier_text",
+                  "name": "identifier",
+                  "value": "/lu-legilux/loi-1997-07-27-n10"
+                },
+                {
+                  "kind": "calendar_date",
+                  "name": "date",
+                  "value": "2026-11-19"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.step.evidence_bundle_article",
+              "text": "Lecture de l’article 13 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "anchor",
+                  "name": "anchor",
+                  "value": "art_22"
+                },
+                {
+                  "kind": "identifier_text",
+                  "name": "identifier",
+                  "value": "/lu-legilux/loi-1997-07-27-n10"
+                },
+                {
+                  "kind": "calendar_date",
+                  "name": "date",
+                  "value": "2026-11-19"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.step.evidence_bundle_article",
+              "text": "Lecture de l’article 22 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "anchor",
+                  "name": "anchor",
+                  "value": "art_34"
+                },
+                {
+                  "kind": "identifier_text",
+                  "name": "identifier",
+                  "value": "/lu-legilux/loi-1997-07-27-n10"
+                },
+                {
+                  "kind": "calendar_date",
+                  "name": "date",
+                  "value": "2026-11-19"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.step.evidence_bundle_article",
+              "text": "Lecture de l’article 34 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026."
+            },
+            {
+              "facts": [
+                {
+                  "kind": "anchor",
+                  "name": "anchor",
+                  "value": "art_41"
+                },
+                {
+                  "kind": "identifier_text",
+                  "name": "identifier",
+                  "value": "/lu-legilux/loi-1997-07-27-n10"
+                },
+                {
+                  "kind": "calendar_date",
+                  "name": "date",
+                  "value": "2026-11-19"
+                }
+              ],
+              "kind": "claim",
+              "locale": "fr",
+              "template_id": "plan.step.evidence_bundle_article",
+              "text": "Lecture de l’article 41 de /lu-legilux/loi-1997-07-27-n10 tel qu’il se lisait le 19 novembre 2026."
             }
           ]
         },
@@ -343,61 +1331,524 @@ export const HOW_ANSWER_RECORD = Object.freeze({
           "context": [],
           "handoff_registry_sha256": "3fdb047bb32728a0a6ba91c367613dd749424cce0ba5f1f718c96716d1f1ccbb",
           "plan": {
-            "follow_ups": [
-              {
-                "after": "s1",
-                "arguments": {
-                  "article": {
-                    "pick": "sole_article",
-                    "result": "s1"
-                  },
-                  "date": {
-                    "today": true
-                  },
-                  "identifier": {
-                    "pick": "sole_work",
-                    "result": "s1"
-                  }
+            "bricks": {
+              "activations": [
+                {
+                  "id": "title",
+                  "on": true,
+                  "reason": "act_has_headings"
                 },
-                "condition": "on_single_article",
-                "operation_id": "evidence_bundle",
-                "step_id": "f1"
-              }
-            ],
+                {
+                  "id": "keyword",
+                  "on": true,
+                  "reason": "row_has_concept"
+                },
+                {
+                  "id": "cooccurrence",
+                  "on": true,
+                  "reason": "row_has_actor"
+                },
+                {
+                  "id": "type_pattern",
+                  "on": true,
+                  "reason": "kind_has_pattern"
+                },
+                {
+                  "id": "lexicon",
+                  "on": true,
+                  "reason": "row_has_actor"
+                },
+                {
+                  "id": "sweep",
+                  "on": true,
+                  "reason": "proof_of_absence"
+                },
+                {
+                  "id": "outline_descent",
+                  "on": false,
+                  "reason": "act_has_no_chapter_levels"
+                },
+                {
+                  "id": "embeddings",
+                  "on": false,
+                  "reason": "off_by_default"
+                },
+                {
+                  "id": "arbiter",
+                  "on": false,
+                  "reason": "code_lead_is_clear"
+                },
+                {
+                  "id": "extraction",
+                  "on": true,
+                  "reason": "one_candidate_at_a_time"
+                }
+              ],
+              "answer": {
+                "caveats": [
+                  "conditions_apply",
+                  "cases_from_sweep"
+                ],
+                "complete": false,
+                "found": true,
+                "items": [
+                  {
+                    "extract": 0,
+                    "role": "rule",
+                    "step": "s1"
+                  },
+                  {
+                    "extract": 0,
+                    "role": "case",
+                    "step": "s2"
+                  },
+                  {
+                    "extract": 0,
+                    "role": "case",
+                    "step": "s3"
+                  },
+                  {
+                    "extract": 0,
+                    "role": "case",
+                    "step": "s4"
+                  },
+                  {
+                    "extract": 0,
+                    "role": "case",
+                    "step": "s5"
+                  }
+                ],
+                "kind": "rule",
+                "more": [
+                  "art_79",
+                  "art_43",
+                  "art_57",
+                  "art_10"
+                ],
+                "notes": [],
+                "values": []
+              },
+              "articles": 147,
+              "candidates": [
+                {
+                  "detectors": [
+                    "keyword",
+                    "title",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words",
+                    "direct_form",
+                    "general_rule"
+                  ],
+                  "line": "art_39#8",
+                  "score_tenths": 170
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "title",
+                    "special_heading",
+                    "article_lead",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words",
+                    "direct_form"
+                  ],
+                  "line": "art_41#3",
+                  "score_tenths": 140
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "title",
+                    "special_heading",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words",
+                    "direct_form"
+                  ],
+                  "line": "art_22#3",
+                  "score_tenths": 125
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "title",
+                    "special_heading",
+                    "article_lead",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words"
+                  ],
+                  "line": "art_79#2",
+                  "score_tenths": 125
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words",
+                    "direct_form"
+                  ],
+                  "line": "art_13#6",
+                  "score_tenths": 100
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words",
+                    "direct_form"
+                  ],
+                  "line": "art_34#6",
+                  "score_tenths": 100
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "title",
+                    "article_lead",
+                    "answer_words"
+                  ],
+                  "line": "art_39#3",
+                  "score_tenths": 100
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "title",
+                    "special_heading",
+                    "cooccurrence",
+                    "type_pattern"
+                  ],
+                  "line": "art_41#7",
+                  "score_tenths": 95
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words"
+                  ],
+                  "line": "art_13#5",
+                  "score_tenths": 85
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words"
+                  ],
+                  "line": "art_34#5",
+                  "score_tenths": 85
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words"
+                  ],
+                  "line": "art_43#4",
+                  "score_tenths": 85
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words"
+                  ],
+                  "line": "art_43#5",
+                  "score_tenths": 85
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern",
+                    "answer_words"
+                  ],
+                  "line": "art_57#3",
+                  "score_tenths": 85
+                },
+                {
+                  "detectors": [
+                    "keyword",
+                    "cooccurrence",
+                    "type_pattern"
+                  ],
+                  "line": "art_10#4",
+                  "score_tenths": 70
+                }
+              ],
+              "concepts": [
+                {
+                  "id": "resiliation",
+                  "keyword": 51,
+                  "source": "dictionary",
+                  "span": [
+                    19,
+                    27
+                  ]
+                }
+              ],
+              "corpus_index": "fb0eb0f31bc448be7c0719d1744568f5e6ef6f36ef0872dfac6e1e3544614416",
+              "date": "today",
+              "detectors": [
+                {
+                  "articles": 4,
+                  "id": "title",
+                  "lines": 0
+                },
+                {
+                  "articles": 25,
+                  "id": "keyword",
+                  "lines": 45
+                },
+                {
+                  "articles": 16,
+                  "id": "cooccurrence",
+                  "lines": 30
+                },
+                {
+                  "articles": 17,
+                  "id": "type_pattern",
+                  "lines": 31
+                },
+                {
+                  "articles": 11,
+                  "id": "answer_words",
+                  "lines": 19
+                },
+                {
+                  "articles": 85,
+                  "id": "lexicon",
+                  "lines": 192
+                }
+              ],
+              "dictionary": "c548165bc2130b45d2e3a40ebd8c58b3e31d87d2c4aaf953d978c7ea7a6427cc",
+              "kind": "rule",
+              "lines": 913,
+              "model_calls": [
+                {
+                  "input_tokens": 1862,
+                  "model": "gpt-4.1-mini",
+                  "output_tokens": 380,
+                  "prompt": "649d1d6a7385fbb1",
+                  "reply": "a91c039a0a82d183072d3f8b15bdd62a5757913c34bfea3438e12559650f3c6b",
+                  "step": "extraction"
+                }
+              ],
+              "passes": [
+                {
+                  "changed": "none",
+                  "n": 1,
+                  "outcome": "candidates_found",
+                  "trigger": "first_pass"
+                },
+                {
+                  "changed": "sweep_whole_act",
+                  "n": 2,
+                  "outcome": "cases_listed",
+                  "trigger": "unnamed_cases"
+                }
+              ],
+              "roles": [
+                {
+                  "id": "assureur",
+                  "keyword": 0,
+                  "source": "dictionary",
+                  "span": [
+                    2,
+                    10
+                  ]
+                }
+              ],
+              "route": "rule",
+              "route_reason": "kind_is_rule",
+              "rule_question": true,
+              "state": "dd8b4d17c1a650e2864e3551d25f109d4d5a33d81fc4a86853cb4dd0e001d1d1",
+              "state_date": "2025-11-25",
+              "sweep": [
+                {
+                  "articles": 19,
+                  "keyword": 50,
+                  "lines": 32
+                },
+                {
+                  "articles": 25,
+                  "keyword": 51,
+                  "lines": 49
+                }
+              ],
+              "unmatched": [],
+              "version": "lex-v4-bricks/1",
+              "work": "/lu-legilux/loi-1997-07-27-n10"
+            },
+            "follow_ups": [],
             "parts": [
               {
                 "part_id": "p1",
                 "proposed_verdict": "answer",
                 "span": [
                   0,
-                  59
+                  40
                 ]
               }
             ],
-            "schema": "lex-v3-assistant-plan/1",
+            "schema": "lex-v3-assistant-plan/2",
             "steps": [
               {
                 "arguments": {
-                  "language": {
-                    "choice": "fra"
+                  "article": {
+                    "corpus": "art_39"
                   },
-                  "query": {
-                    "span": [
-                      12,
-                      58
-                    ]
+                  "date": {
+                    "today": true
+                  },
+                  "identifier": {
+                    "corpus": "/lu-legilux/loi-1997-07-27-n10"
                   }
                 },
-                "operation_id": "search",
+                "extracts": [
+                  {
+                    "length": 73,
+                    "offset": 587,
+                    "role": "rule"
+                  }
+                ],
+                "heading": [
+                  10,
+                  49
+                ],
+                "operation_id": "evidence_bundle",
                 "part_id": "p1",
-                "step_id": "s1"
+                "step_id": "s1",
+                "text_sha256": "5d934fca7b58b6845e17b144e019146d773cc0003b05d9d72b0c553166ae302d"
+              },
+              {
+                "arguments": {
+                  "article": {
+                    "corpus": "art_13"
+                  },
+                  "date": {
+                    "today": true
+                  },
+                  "identifier": {
+                    "corpus": "/lu-legilux/loi-1997-07-27-n10"
+                  }
+                },
+                "extracts": [
+                  {
+                    "length": 125,
+                    "offset": 394,
+                    "role": "case"
+                  }
+                ],
+                "heading": [
+                  10,
+                  54
+                ],
+                "operation_id": "evidence_bundle",
+                "part_id": "p1",
+                "step_id": "s2",
+                "text_sha256": "4550e706f866de2194664d9e8bd601694f6a1fcc84175b7091a5c720d1ae4a3b"
+              },
+              {
+                "arguments": {
+                  "article": {
+                    "corpus": "art_22"
+                  },
+                  "date": {
+                    "today": true
+                  },
+                  "identifier": {
+                    "corpus": "/lu-legilux/loi-1997-07-27-n10"
+                  }
+                },
+                "extracts": [
+                  {
+                    "length": 98,
+                    "offset": 287,
+                    "role": "case"
+                  }
+                ],
+                "heading": [
+                  10,
+                  51
+                ],
+                "operation_id": "evidence_bundle",
+                "part_id": "p1",
+                "step_id": "s3",
+                "text_sha256": "893e87f998ecabdf1b8f4975d0a1312687ce72dad5a7624e399d06c5aaec5ea1"
+              },
+              {
+                "arguments": {
+                  "article": {
+                    "corpus": "art_34"
+                  },
+                  "date": {
+                    "today": true
+                  },
+                  "identifier": {
+                    "corpus": "/lu-legilux/loi-1997-07-27-n10"
+                  }
+                },
+                "extracts": [
+                  {
+                    "length": 262,
+                    "offset": 894,
+                    "role": "case"
+                  }
+                ],
+                "heading": [
+                  10,
+                  31
+                ],
+                "operation_id": "evidence_bundle",
+                "part_id": "p1",
+                "step_id": "s4",
+                "text_sha256": "25d5c780ec1c90ff253b67bea7acbc349fe3e9eb9b47689141bffd21ebed21f6"
+              },
+              {
+                "arguments": {
+                  "article": {
+                    "corpus": "art_41"
+                  },
+                  "date": {
+                    "today": true
+                  },
+                  "identifier": {
+                    "corpus": "/lu-legilux/loi-1997-07-27-n10"
+                  }
+                },
+                "extracts": [
+                  {
+                    "length": 306,
+                    "offset": 38,
+                    "role": "case"
+                  }
+                ],
+                "heading": [
+                  10,
+                  36
+                ],
+                "operation_id": "evidence_bundle",
+                "part_id": "p1",
+                "step_id": "s5",
+                "text_sha256": "600725ace80b14e2ee971393a9157861927d8a7b5fc391a85aa556e3391e07bb"
               }
             ]
           },
-          "plan_sha256": "9419f6802bf602bd1b376e2df051d00c8c28abb8fd2dadc170e41ddd1850de2d",
-          "planner_id": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
-          "question": "Quel est le délai de prescription d'un contrat d'assurance ?",
-          "question_sha256": "9488693ce3a8b254d215370daae1f31eee86a059ae375f965db7bcb12c7f60a2",
+          "plan_sha256": "5e1f2cd5f606a03fd1dabca397069f603f15f28d735ad8d2f7ccb850ae32fc03",
+          "planner_id": "lex-v4-bricks/gpt-4.1-mini/prompt-b2f677687022",
+          "question": "L'assureur peut-il résilier le contrat ?",
+          "question_sha256": "2a094f04c96b7354989c119fdeb4274cb56bd2275ae3cdb82eacffe9f961b580",
           "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
           "schema": "lex-v3-answer-trace/1",
           "snapshot": {
@@ -407,16 +1858,16 @@ export const HOW_ANSWER_RECORD = Object.freeze({
           "steps": [
             {
               "fired": true,
-              "object_type": "quote",
-              "operation_id": "search",
+              "object_type": "evidence_bundle",
+              "operation_id": "evidence_bundle",
               "outcome": "result",
               "parameters": {
-                "language": "fra",
-                "limit": 10,
-                "query": "délai de prescription d'un contrat d'assurance"
+                "article": "art_39",
+                "date": "2026-11-19",
+                "identifier": "/lu-legilux/loi-1997-07-27-n10"
               },
               "refusal_code": null,
-              "result_sha256": "8d075f3191cf5132fcf1cedc1be789a333ee8c17260ec057645cd6253d7f27cf",
+              "result_sha256": "24ea975d25bd4c62bf34c4a3992cf5fe9daf3560efb84ce41f2423365e5bd883",
               "step_id": "s1",
               "verdict": "answer"
             },
@@ -426,18 +1877,63 @@ export const HOW_ANSWER_RECORD = Object.freeze({
               "operation_id": "evidence_bundle",
               "outcome": "result",
               "parameters": {
-                "article": "art_44",
-                "date": "2026-11-15",
+                "article": "art_13",
+                "date": "2026-11-19",
                 "identifier": "/lu-legilux/loi-1997-07-27-n10"
               },
               "refusal_code": null,
-              "result_sha256": "bdbe0de9bae4a3d1c788d7ee0da95735134147207591a93073ccf95ed144116b",
-              "step_id": "f1",
+              "result_sha256": "8861340f0c946ee2f53d9511f23cc44ab17569720c9766d3dfa8ead2dd611dcf",
+              "step_id": "s2",
+              "verdict": "answer"
+            },
+            {
+              "fired": true,
+              "object_type": "evidence_bundle",
+              "operation_id": "evidence_bundle",
+              "outcome": "result",
+              "parameters": {
+                "article": "art_22",
+                "date": "2026-11-19",
+                "identifier": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              "refusal_code": null,
+              "result_sha256": "bc980e73ec729e06527bd99913bb0eed9642665ce09398a24fca06367177a13e",
+              "step_id": "s3",
+              "verdict": "answer"
+            },
+            {
+              "fired": true,
+              "object_type": "evidence_bundle",
+              "operation_id": "evidence_bundle",
+              "outcome": "result",
+              "parameters": {
+                "article": "art_34",
+                "date": "2026-11-19",
+                "identifier": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              "refusal_code": null,
+              "result_sha256": "6ece9723794d9a8f955f9672c4dfdf68b651757403ad79f9f1b8d86c9aff6095",
+              "step_id": "s4",
+              "verdict": "answer"
+            },
+            {
+              "fired": true,
+              "object_type": "evidence_bundle",
+              "operation_id": "evidence_bundle",
+              "outcome": "result",
+              "parameters": {
+                "article": "art_41",
+                "date": "2026-11-19",
+                "identifier": "/lu-legilux/loi-1997-07-27-n10"
+              },
+              "refusal_code": null,
+              "result_sha256": "5e852999569bb8bd18cb3131ec6ea7a1ae41190fdf162e5ec7e217da3aab9913",
+              "step_id": "s5",
               "verdict": "answer"
             }
           ],
-          "templates_sha256": "fecb138f2e489b6bb59e26cf9ab1c014f314f16aaca46e1bfd3bdf239b5b0c7b",
-          "today": "2026-11-15"
+          "templates_sha256": "68d990941751c750fd35c038947d9789fca46a8adfa98f1db7ea6e949c643745",
+          "today": "2026-11-19"
         },
         "verdict": "answer"
       }
@@ -458,6 +1954,6 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "identifier": "/lu-legilux/loi-1997-07-27-n10"
       }
     },
-    "request_ref": "http_8429919e31c3073798c6cc512be74731fb74de3e272aa9445575841f592199c4"
+    "request_ref": "http_ee664068a94126fe056e844a357bdb46dfee6d07aaeedfb12ab9889a1a4cbc6d"
   }
 });

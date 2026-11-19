@@ -235,7 +235,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockBricksNote: 'A model may rank passages and point at lines; it never writes the answer.',
     dockBricksNoModel: 'No AI model was asked for this answer.',
     dockDescribedNote: 'A model describes the question; code chooses what to run and writes the answer.',
-    dockNoModelUsed: 'No AI model took part in this answer.',
+    dockNoModelUsed: 'An AI model was asked and gave no usable answer; code answered alone.',
     dockQuestionDescribed: 'described by an AI model: {asks}',
     dockQuestionByCode: 'read by code alone: your words are searched as written',
     dockQuestionCited: 'read by code alone: the act and the article you cite',
@@ -274,7 +274,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
       'Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.',
     preview: 'Phase d’essai : l’assistant n’a pas encore été examiné par un avocat ni par des annotateurs indépendants.',
     processor:
-      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui indique ce qu’elle demande ou désigne des lignes de loi que le code de Lex a trouvées, sauf si le code de Lex y répond seul ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours. Lex ne conserve rien.',
+      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui décrit la question ou désigne des lignes de loi que le code de Lex a trouvées, sauf si le code de Lex y répond seul ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours. Lex ne conserve rien.',
     inputLabel: 'Votre question',
     submit: 'Demander',
     contextLabel: 'Repris de la dernière réponse',
@@ -456,7 +456,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockBricksNote: 'Un modèle peut classer des passages et désigner des lignes\u00A0; il n’écrit jamais la réponse.',
     dockBricksNoModel: 'Aucun modèle d’IA n’a été interrogé pour cette réponse.',
     dockDescribedNote: 'Un modèle décrit la question\u00A0; le code choisit quoi exécuter et écrit la réponse.',
-    dockNoModelUsed: 'Aucun modèle d’IA n’a contribué à cette réponse.',
+    dockNoModelUsed: 'Un modèle d’IA a été interrogé et n’a pas donné de réponse utilisable\u00A0; le code a répondu seul.',
     dockQuestionDescribed: 'décrite par un modèle d’IA\u00A0: {asks}',
     dockQuestionByCode: 'lue par le code seul\u00A0: vos mots sont cherchés tels quels',
     dockQuestionCited: 'lue par le code seul\u00A0: l’acte et l’article que vous citez',
@@ -1014,7 +1014,9 @@ function bricksStageRows(dossier, bricks, copy) {
     rows.push({ key: 'arbiter', name: copy.dockStageArbiter, line: fill(copy.dockArbiterLine, { primary: count('primary'), supporting: count('supporting'), others: count('tangential') + count('discarded') }), model: true });
   }
   if (calls.includes('extraction')) {
-    rows.push({ key: 'extraction', name: copy.dockStageExtraction, line: fill(copy.dockExtractionLine, { count: Array.isArray(bricks.answer?.items) ? bricks.answer.items.length : 0 }), model: true });
+    // The lines the model pointed at: an item code added to them (`by: code`) is not the model's.
+    const pointed = (Array.isArray(bricks.answer?.items) ? bricks.answer.items : []).filter((item) => item?.by !== 'code').length;
+    rows.push({ key: 'extraction', name: copy.dockStageExtraction, line: fill(copy.dockExtractionLine, { count: pointed }), model: true });
   }
   rows.push({ key: 'checks', name: copy.dockStageChecks, line: quotes === 0 ? copy.dockComposerNone : fill(copy.dockChecksLine, { count: quotes }), model: false });
   return Object.freeze(rows.map((row) => Object.freeze(row)));

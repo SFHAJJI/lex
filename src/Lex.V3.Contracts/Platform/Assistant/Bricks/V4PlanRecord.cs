@@ -122,6 +122,12 @@ public sealed class V4PlanRecord
     /// <summary>The EU act of the corpus index the question names and Lex does not hold, or null.</summary>
     public string? EuAct { get; private init; }
 
+    /// <summary>
+    /// For a plan of route <c>operations</c>: what became of the question call (<see cref="V4QuestionCall.Outcomes"/>:
+    /// a model described the question, code read a citation itself, or code read the question alone and why); else null.
+    /// </summary>
+    public string? QuestionCall { get; private init; }
+
     private static bool IsToken(string value) =>
         value.Length is >= 1 and <= 120 && value.All(static character => char.IsAsciiLetterOrDigit(character) || character is '_' or '#' or '.' or '/' or ':' or '+' or '-');
 
@@ -297,6 +303,13 @@ public sealed class V4PlanRecord
                 return new V4AnswerNote(code, Span(item.GetProperty("span")), concept);
             }).ToList();
 
+            var questionCall = Text(element, "question_call");
+            if (questionCall is not null && !V4QuestionCall.Outcomes.Contains(questionCall))
+            {
+                refusal = "the bricks record names an outcome of the question call outside the closed list";
+                return null;
+            }
+
             var euAct = Text(answer, "eu_act");
             if (euAct is not null && V4CorpusIndex.Insurance.EuAct(euAct) is null)
             {
@@ -350,6 +363,7 @@ public sealed class V4PlanRecord
                 Usage = answer.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object ? (Number(usage, "lines"), Number(usage, "articles")) : null,
                 Absence = absence,
                 EuAct = euAct,
+                QuestionCall = questionCall,
             };
         }
         catch (Exception exception) when (exception is InvalidDataException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or FormatException)

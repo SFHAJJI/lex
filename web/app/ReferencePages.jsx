@@ -387,7 +387,7 @@ function FirstScreen({ values }) {
   const read = [
     say(page.parseLanguage, { language: page.languages[stages.language] ?? stages.language }),
     stages.date.today ? say(page.parseToday, { date: numericDate(stages.date.date) }) : say(page.parseDate, { date: numericDate(stages.date.date) }),
-    stages.cues === 0 ? page.parseNoCues : say(page.parseCues, { count: count(stages.cues) }),
+    stages.cues === 0 ? page.parseNoCues : say(stages.ruleQuestion ? page.parseCuesRule : page.parseCues, { count: count(stages.cues) }),
   ];
   const checked = [
     say(page.composeQuotes, { count: count(stages.gates.quotes) }),

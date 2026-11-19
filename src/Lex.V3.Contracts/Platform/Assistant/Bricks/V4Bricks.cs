@@ -53,7 +53,8 @@ public static class V4Bricks
     /// <summary>The most lines the extraction is given.</summary>
     public const int MaximumLines = 40;
 
-    private sealed record Item(V4Line First, V4Line Last, string Role, V4Value? Value);
+    /// <param name="ByCode">The line is in an answer a model helped with, and code added it: the model did not point at it.</param>
+    private sealed record Item(V4Line First, V4Line Last, string Role, V4Value? Value, bool ByCode = false);
 
     private sealed class Draft
     {
@@ -81,57 +82,82 @@ public static class V4Bricks
 
         // Steps 1 to 5 of question parsing are code; the tables answer what they read.
         var row = V4QuestionParser.Parse(question, input.Locale, dictionary, V4CorpusIndex.Insurance);
-        var own = ByTheTables(input, row, corpus, model, cancellationToken, prior: null);
-        if (own.PlanJson is not null)
+        var planner = new V3PlannerInput(question, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
+
+        // Step 6, the question call: a model describes the question, from closed lists and words it copies from the question.
+        // It names no operation. It is asked at most once for a question, and only where code cannot decide alone.
+        string? outcome = null;
+        List<V4DescribedPart>? parts = null;
+        (V4ModelCall Call, V4ModelReply Reply, string Model)? asked = null;
+        long cost = 0;
+        void Describe()
         {
-            return own;
+            if (outcome is not null)
+            {
+                return;
+            }
+
+            if (model is null)
+            {
+                outcome = "not_wired";
+                return;
+            }
+
+            var call = V4QuestionCall.Call(planner, dictionary);
+            V4ModelReply reply;
+            try
+            {
+                reply = model.Complete(call, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                outcome = "failed";
+                return;
+            }
+
+            cost = reply.CostMicroEuros;
+            parts = V4QuestionCall.Read(reply.Content, question, dictionary);
+            outcome = parts is null ? "refused" : "described";
+            asked = parts is null ? null : (call, reply, model.ModelId);
         }
 
-        // Step 6, the question call, only when the row is incomplete: a model describes the question, from closed lists and
-        // spans of the reader's own words. It names no operation; code maps what it says to operations by a fixed table.
-        var planner = new V3PlannerInput(question, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
+        // The advice boundary (R15; the owner's decision 4(i) of 2026-11-18). Code refuses a part that holds a cue, unless it
+        // is a question on the rule. One judgement code cannot make from words alone: a question that carries a mark of the
+        // reader's own case ("mon contrat", "my claim") and no cue code reads ("My insurer says my claim is time-barred, is
+        // it right?"). As before the bricks, a model is asked whether it is a person's own case, and such a part is refused,
+        // with the law beside it. With no model to ask it is refused too: the boundary is biased to refusal.
+        var ownCase = false;
+        if (!row.Greeting && V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count == 0 && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0)
+        {
+            Describe();
+            ownCase = parts is null || parts.Any(static part => part.OwnCase);
+        }
+
+        var own = ByTheTables(input, row, corpus, model, cancellationToken, asked, ownCase);
+        if (own.PlanJson is not null)
+        {
+            return own with { CostMicroEuros = own.CostMicroEuros + (asked is null ? cost : 0) };
+        }
 
         // With no description from a model (none is wired, the call failed, its reply left its closed form), nothing is
         // repaired and nothing is asked again: code searches the reader's own words, and the answer says no model took part.
+        Describe();
         var readingDates = V4Dispatcher.ReadingDates(row, input.Dates).Select(static date => date.Ref).ToList();
-        V4PlanOutcome ReadByCode(string outcome, long cost) =>
-            new(V4QuestionCall.PlanJson(planner, V4QuestionCall.ByCode(planner, row), outcome, null, readingDates), cost, own.Reason + "+question_" + outcome);
-
-        if (model is null)
+        if (parts is null || asked is null)
         {
-            return ReadByCode("not_wired", 0);
-        }
-
-        var call = V4QuestionCall.Call(planner, dictionary);
-        V4ModelReply reply;
-        try
-        {
-            reply = model.Complete(call, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OutOfMemoryException)
-        {
-            return ReadByCode("failed", 0);
-        }
-
-        var parts = V4QuestionCall.Read(reply.Content, question, dictionary);
-        if (parts is null)
-        {
-            return ReadByCode("refused", reply.CostMicroEuros);
+            var read = V4QuestionCall.ByCode(planner, row).Select(part => part with { OwnCase = ownCase }).ToList();
+            return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, read, outcome!, null, readingDates), cost, own.Reason + "+question_" + outcome);
         }
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
-        // words the dictionary lacks. Then the tables answer, as for any question.
+        // words the dictionary lacks. Then the tables answer, as for any question, under the boundary above.
         if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { } concept)
         {
-            // The advice boundary of a question the tables answer is code's (decision 4(i)): its cues, and the marks of a
-            // case of the reader's own. What the model says of it counts only with such a mark in the question ("mon
-            // contrat", "je"): then the part is refused, with the law beside it.
-            var ownCase = described.OwnCase && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0;
             var span = described.Words ?? described.Span;
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
             if (keyword is not null && !question.AsSpan(span.Start, span.End - span.Start).Contains('•'))
             {
-                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, (call, reply, model.ModelId), ownCase);
+                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, asked, ownCase);
                 if (reached.PlanJson is not null)
                 {
                     return reached;
@@ -147,7 +173,7 @@ public static class V4Bricks
             parts = parts.Select(static part => part.Asks == "act_on_a_date" ? part with { Asks = "words_on_a_subject", Words = part.Words ?? part.Act, Act = null } : part).ToList();
         }
 
-        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", (call, reply, model.ModelId), readingDates), reply.CostMicroEuros, "route:operations");
+        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates), cost, "route:operations");
     }
 
     /// <summary>
@@ -170,6 +196,25 @@ public static class V4Bricks
         var ruleQuestion = cues.Count > 0 && V4Boundary.RuleQuestion(question, 0, question.Length, cues);
         var application = (cues.Count > 0 && !ruleQuestion) || ownCase;
 
+        // A question call made for this question (the model was asked whether it is a person's own case, or which concept
+        // the reader's words name) is part of the answer's record and of its cost, whatever route answers.
+        Draft Asked(Draft made)
+        {
+            if (prior is { } call)
+            {
+                made.Cost += call.Reply.CostMicroEuros;
+                made.Calls.Add((
+                    call.Call.Step,
+                    call.Model,
+                    Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(call.Call.System + "\n" + call.Call.User)))[..16],
+                    Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(call.Reply.Content))),
+                    call.Reply.InputTokens,
+                    call.Reply.OutputTokens));
+            }
+
+            return made;
+        }
+
         // Route 0: not a legal question. "which deserves a direct reply and no pipeline at all" [13]
         if (row.Greeting)
         {
@@ -189,12 +234,18 @@ public static class V4Bricks
         if (V4Dispatcher.CitesArticle(row))
         {
             // One article of an act the index names, on one date: code opens it, with no model and no search.
-            return (asksChange ? null : Cited(input, row, corpus, reading)) ?? new V4PlanOutcome(null, 0, "cites_article");
+            return (asksChange || prior is not null ? null : Cited(input, row, corpus, reading, ownCase)) ?? new V4PlanOutcome(null, 0, "cites_article");
         }
 
         if (asksChange)
         {
             return new V4PlanOutcome(null, 0, "asks_change");
+        }
+
+        // The tables of this domain answer no question that names an act of another: Lex's own operations do.
+        if (V4Dispatcher.NamesAnotherAct(row, input.Dates, dictionary))
+        {
+            return new V4PlanOutcome(null, 0, "names_another_act");
         }
 
         if (row.Acts.FirstOrDefault(static act => act.EuAct is not null) is { } named)
@@ -205,8 +256,8 @@ public static class V4Bricks
                 return new V4PlanOutcome(null, 0, "eu_act_held");
             }
 
-            var notHeld = new Draft { Route = "not_held", AnswerKind = "not_held", EuAct = act.Id };
-            return new V4PlanOutcome(Write(input, row, notHeld, null, null, null, "today", ruleQuestion: false, proposed: "point", asked: string.Empty), 0, "route:not_held");
+            var notHeld = Asked(new Draft { Route = "not_held", AnswerKind = "not_held", EuAct = act.Id });
+            return new V4PlanOutcome(Write(input, row, notHeld, null, null, null, "today", ruleQuestion: false, proposed: "point", asked: string.Empty), notHeld.Cost, "route:not_held");
         }
 
         var asksDefinition = row.Kinds.Any(static kind => kind.Kind == "definition") || (row.Kinds.Count == 0 && row.Concepts.Count == 0 && row.Words.Count <= 5);
@@ -274,19 +325,7 @@ public static class V4Bricks
 
         var decision = V4Dispatcher.Decide(
             new V4DispatchInput(row, application, EuActNotHeld: false, tables is not null, tables is { Summary.Headings: > 0 }, terms.Count > 0, model is not null), dictionary);
-        var draft = new Draft { Route = decision.Route, AnswerKind = decision.Kind };
-        if (prior is { } asked)
-        {
-            // The question call that reached the concept is part of this answer's record and of its cost.
-            draft.Cost += asked.Reply.CostMicroEuros;
-            draft.Calls.Add((
-                asked.Call.Step,
-                asked.Model,
-                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(asked.Call.System + "\n" + asked.Call.User)))[..16],
-                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(asked.Reply.Content))),
-                asked.Reply.InputTokens,
-                asked.Reply.OutputTokens));
-        }
+        var draft = Asked(new Draft { Route = decision.Route, AnswerKind = decision.Kind });
 
         V4RetrievalResult? retrieval = null;
         var notes = new List<V4AnswerNote>();
@@ -295,7 +334,7 @@ public static class V4Bricks
             draft.AnswerKind = "absence";
             draft.Absence = "text_not_held";
             return new V4PlanOutcome(
-                Write(input, row, draft, null, null, decision, dateRef, ruleQuestion, "point", decision.Kind, "/lu-legilux/" + scope.Facts.Work), 0, "route:absence");
+                Write(input, row, draft, null, null, decision, dateRef, ruleQuestion, "point", decision.Kind, "/lu-legilux/" + scope.Facts.Work), draft.Cost, "route:absence");
         }
 
         if (decision.Route == "definition")
@@ -387,7 +426,7 @@ public static class V4Bricks
     /// any of the three is not read (another act, several articles, an article the version does not hold): the question
     /// call then describes the question, as for every citation code does not read.
     /// </summary>
-    private static V4PlanOutcome? Cited(V4PlanInput input, V4QuestionRow row, IV4Corpus corpus, List<V3ParsedDate> reading)
+    private static V4PlanOutcome? Cited(V4PlanInput input, V4QuestionRow row, IV4Corpus corpus, List<V3ParsedDate> reading, bool ownCase)
     {
         var works = row.Acts.Where(static act => act.Work is not null).Select(static act => act.Work!).Distinct(StringComparer.Ordinal).ToList();
         if (works.Count != 1 || row.Acts.Any(static act => act.EuAct is not null) || reading.Count > 1 || V4Dispatcher.CitedArticle(row) is not { } number)
@@ -402,7 +441,7 @@ public static class V4Bricks
         }
 
         var planner = new V3PlannerInput(input.MaskedQuestion, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
-        var json = V4QuestionCall.CitedPlanJson(planner, at.Tables.Work, article.Id, reading.Count == 1 ? reading[0].Ref : "today", at.Tables.Language);
+        var json = V4QuestionCall.CitedPlanJson(planner, at.Tables.Work, article.Id, reading.Count == 1 ? reading[0].Ref : "today", at.Tables.Language, ownCase);
         return new V4PlanOutcome(json, 0, "route:operations+cited");
     }
 
@@ -828,6 +867,7 @@ public static class V4Bricks
         // case the model pointed at that states another party's right is not a case of the rule asked, and is left out.
         var found = retrieval.Candidates.ToDictionary(static candidate => candidate.Line.Id, StringComparer.Ordinal);
         var kept = new List<V4Generation.Checked>();
+        var byCode = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in items)
         {
             if (item.Role is "case" or "item" && kept.Any(other => other.Role == item.Role && other.Line.Article == item.Line.Article))
@@ -858,6 +898,7 @@ public static class V4Bricks
                 if (!kept.Any(item => item.Line.Article == candidate.Line.Article))
                 {
                     kept.Add(new V4Generation.Checked(candidate.Line, "case", null));
+                    byCode.Add(candidate.Line.Id);
                 }
             }
 
@@ -876,6 +917,7 @@ public static class V4Bricks
             if (lead.Values.Count > 0 && lead.Detectors.Contains("keyword") && lead.Detectors.Contains("title") && kept.All(item => item.Line.Id != lead.Line.Id))
             {
                 kept.Insert(0, new V4Generation.Checked(lead.Line, "value", lead.Values[0]));
+                byCode.Add(lead.Line.Id);
             }
         }
 
@@ -887,7 +929,7 @@ public static class V4Bricks
         }
 
         draft.Items = kept.Take(V3AssistantPipeline.MaximumQuotes)
-            .Select(item => new Item(item.Line, item.Line, draft.AnswerKind == "text" ? "passage" : item.Role, item.Value)).ToList();
+            .Select(item => new Item(item.Line, item.Line, draft.AnswerKind == "text" ? "passage" : item.Role, item.Value, byCode.Contains(item.Line.Id))).ToList();
         if (kind == "rule" && draft.Items.Any(static item => item.Role == "case"))
         {
             draft.Caveats.Add("cases_from_sweep");
@@ -1242,6 +1284,12 @@ public static class V4Bricks
                 writer.WriteString("step", step);
                 writer.WriteNumber("extract", extract);
                 writer.WriteString("role", item.Role);
+                if (item.ByCode)
+                {
+                    // Said in the record, so that what a model pointed at is counted as that and no more.
+                    writer.WriteString("by", "code");
+                }
+
                 writer.WriteEndObject();
             }
 

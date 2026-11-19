@@ -224,6 +224,22 @@ public static class V4Retrieval
             .Where(article => article.HeadingWords.Count >= 2 && Holds(said, article.HeadingWords.Select(static word => V4Text.Stem(word.Text)).ToList()))
             .Select(static article => article.Id)
             .ToHashSet(StringComparer.Ordinal);
+        if (quoted.Count > 1)
+        {
+            // Several headings written out: the one whose words the act writes least is what is asked ("erreur sur l'âge de
+            // l'assuré"); a heading the act repeats on many lines says where ("dans une assurance sur la vie").
+            var stems = tables.Lines.Select(static line => line.Words.Select(static word => V4Text.Stem(word.Text)).ToList()).ToList();
+            var written = quoted.ToDictionary(
+                static id => id,
+                id =>
+                {
+                    var run = tables.Article(id)!.HeadingWords.Select(static word => V4Text.Stem(word.Text)).ToList();
+                    return stems.Count(line => Holds(line, run));
+                },
+                StringComparer.Ordinal);
+            var least = written.Values.Min();
+            quoted = written.Where(pair => pair.Value == least).Select(static pair => pair.Key).ToHashSet(StringComparer.Ordinal);
+        }
 
         // A heading that also names another concept of the dictionary ("Résiliation après sinistre", "Mise en demeure et
         // faculté de résiliation") is a special case of the one asked; the heading that names it alone is the general one.

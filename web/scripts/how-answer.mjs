@@ -89,7 +89,8 @@ function layout(value, column, name, width) {
  *   masked     the question after masking, when it differs from the question sent; null when nothing was masked
  *   language   the answer's language, as the code read it (`fr`)
  *   date       `{ today, date }`: the date the code read (`today` when the question gives none)
- *   cues       how many advice cues the code found
+ *   cues       how many advice cues the code found; `ruleQuestion` whether the code still read a question on the rule (a
+ *              role of the law is its subject and nothing marks a case of the reader's own)
  *   model      the model the answer's engine may ask (its planner identity names it)
  *   rows       the answer's stages, each `{ key, name, line, model }`, exactly as the assistant's own panel reads them from
  *              the trace (`stageRows`): the bricks' stages for an answer the tables gave, the stages of operations otherwise
@@ -115,6 +116,7 @@ export function howAnswerStages(record, locale) {
     language: trace.answer_locale,
     date: Object.freeze({ today: dated === null || dated.template_id === 'plan.date_today', date: dateFact }),
     cues: value.parts.reduce((sum, part) => sum + (part.cues?.length ?? 0), 0),
+    ruleQuestion: trace.plan.bricks?.rule_question === true,
     model: plannerModel(trace.planner_id),
     rows: stageRows(value, locale),
     gates: Object.freeze({ quotes: value.gates.quotes, outside: value.gates.non_template_strings, notes: value.gates.disclosures }),

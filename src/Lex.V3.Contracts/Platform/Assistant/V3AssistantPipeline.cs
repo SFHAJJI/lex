@@ -758,6 +758,11 @@ public static partial class V3AssistantPipeline
         {
             lines.Insert(1, V3AnswerClaim.Bind(V3AnswerTemplates.PlanBricksModelQuestion, locale));
         }
+        else if (plan.Bricks?.QuestionCall is "failed" or "refused")
+        {
+            // The question went to a model that gave nothing usable: the answer is code's alone, and its plan says both.
+            lines.Insert(1, V3AnswerClaim.Bind(V3AnswerTemplates.PlanBricksModelQuestionUnavailable, locale));
+        }
 
         return new V3AnswerDossier(overall, locale, label.Claim, notices, lines, parts, trace);
     }
