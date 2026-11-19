@@ -282,7 +282,25 @@ public static class V4Dispatcher
             return "definition";
         }
 
-        return row.Concepts.Count > 0 ? dictionary.Concept(row.Concepts[0].Concept)!.UsualAnswer.FirstOrDefault() ?? "text" : "text";
+        if (row.Concepts.Count == 0)
+        {
+            return "text";
+        }
+
+        // The usual kind of the first concept. A definition is its usual answer only when the term stands alone, with
+        // nothing else of substance beside it ("prime ?"): a question of several content words and no cue for a
+        // definition ("prime assurance non payée suspension couverture délai", the fresh set of 2026-11-19, answered by
+        // the line that defines "prime") asks something else of the concept, and goes on to the tables and the outline.
+        var alone = row.Concepts.Count == 1 && row.Roles.Count == 0 && row.Unmatched.Count == 0;
+        foreach (var usual in dictionary.Concept(row.Concepts[0].Concept)!.UsualAnswer)
+        {
+            if (usual != "definition" || alone)
+            {
+                return usual;
+            }
+        }
+
+        return "text";
     }
 
     /// <summary>The route and the activations for a row. The routes are tried the cheapest first.</summary>

@@ -1258,6 +1258,19 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void ADefinitionIsTheKindOnlyWhenOneIsAskedOrTheTermStandsAlone()
+    {
+        // The fresh set of 2026-11-19: "prime assurance non payée suspension couverture délai" was answered, with no model,
+        // by the line that defines "prime" (a definition is that concept's usual answer). Several content words and no
+        // cue for a definition ask something else: the question goes on to the tables and the outline.
+        var dictionary = V4Dictionary.Insurance;
+        Assert.AreNotEqual("definition", V4Dispatcher.KindOf(Row("prime assurance non payée suspension couverture délai"), dictionary, termDefined: true));
+        Assert.AreEqual("definition", V4Dispatcher.KindOf(Row("prime"), dictionary, termDefined: true), "the term alone");
+        Assert.AreEqual("definition", V4Dispatcher.KindOf(Row("C'est quoi la prime ?"), dictionary, termDefined: true), "a definition asked");
+        Assert.AreEqual("definition", V4Dispatcher.KindOf(Row("Que signifie prime dans un contrat d'assurance non payé ?"), dictionary, termDefined: true), "asked, among other words");
+    }
+
+    [TestMethod]
     public void AQuestionThatHoldsNothingOfInsuranceIsNotAnsweredFromItsActs()
     {
         // The practice set of 2026-11-19 (D001): the question holds nothing of insurance, the model's description named the
