@@ -460,8 +460,9 @@ public sealed class EveryLawTests
     }
 
     /// <summary>
-    /// The release gate's cases outside insurance (lex-eval, lex-assistant-v2), with the index this build carries: every
-    /// one is stopped by code before the wider reading, so each is answered by the road that answers it today.
+    /// The release gate's cases outside insurance (lex-eval, lex-assistant-v2) and its two refusals inside it, with the
+    /// index this build carries: every one is stopped by code before the wider reading, so each is answered by the road
+    /// that answers it today.
     /// </summary>
     [TestMethod]
     public void TheReleaseGatesCasesOutsideInsuranceKeepTheRoadTheyHave()
@@ -499,6 +500,11 @@ public sealed class EveryLawTests
             "Que dit l'article 6 du règlement DORA ?",
             "What does DORA say about the ICT risk management framework?",
             "Que prévoit DORA pour la notification des incidents majeurs liés aux TIC ?",
+
+            // The gate's two refusals inside insurance: a refusal that quotes nothing is one the wider reading could
+            // replace, so code must stop these too (a cue of R15; a decision asked on the reader's own facts).
+            "Mon assureur refuse de payer mon sinistre, que dois-je faire ?",
+            "My insurer says my claim is time-barred, is it right?",
         ];
         foreach (var question in questions)
         {
