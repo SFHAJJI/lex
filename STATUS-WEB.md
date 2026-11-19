@@ -4,6 +4,31 @@ Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 16 is live; a refusal shows the law beside it, an absence its act's title (sole driver, 2026-11-19)
+
+- **Release 16** (`v3-20261119T050837Z-0af7de23ab55`, built and signed on Azure from #1065's 0af7de23; revision
+  `ca-lex-v3--v3-20261119t050837z-0af7de23ab55-9ed049f6`), web only, over Release 15's engine and data. On the candidate:
+  the deployment's probes passed, two-address PASS, the runner's screenshots (`ops/screens-r16`, 56 shots, none failed):
+  the quoted line is marked alone on the law page and brought into view, in French and in English; an answer of code
+  alone prints its time and no cost; the figures are the promotion gate's. Then the evaluation gate, every gate passed
+  (36 right articles of 56, 0 wrong, 10 not found, 1 refused by mistake, 9 rightly handled without an article, 0 errors,
+  64 quotations all verified; p50 1.05 s), and its script moved all traffic at about 06:47 UTC. On the live site the two
+  questions of 2026-11-18 answer with the same lines. MLflow version 12 holds `champion` and `serving`.
+- **One of #1065's four changes had no effect,** seen on those screenshots: an absence still named its act by its
+  address. The card of an answer that quotes nothing is of the kind `said`, and the title was asked for the kind
+  `answer` only. Corrected here (`workTitleToRead`), with the test that would have caught it.
+- **A refusal shows the law's lines beside it** (`web/refusal-law-beside`, this slice). The plan's dispatcher gives the
+  reader's own case "Lex's refusal with the law shown beside it"; the engine's answer has held those lines since slice 1
+  (the descriptive maximum), and the dock, since Release 14, showed the refusal and a question Lex can answer only. The
+  refusal's card now says its sentence, then "What the text says on this subject, quoted as it reads:" and the lines,
+  each with its article, its heading and a way to the whole article, none marked as an answer; then the question it can
+  answer. A refusal that holds no line keeps its card. One new sentence in each language; the French read by an
+  independent AI reviewer (unchanged).
+- The site's records are taken again from the live release: the registry (12 versions), the gate's run on Release 16
+  (`20261119-r16-gate`), the How it works answer (asked of law.soufien.lu at 06:48 UTC).
+- Evidence: `web` `npm run build` and `npm test`, 1592 tests, 1589 pass, 3 skipped, 0 fail; no file under `src/` or
+  `tests/` changes.
+
 ## After Release 15's screenshots: the quoted line, the cost line, the act's title, the live records (sole driver, 2026-11-19)
 
 `web/v4-polish` (#1065), web only; the next release (16) carries it. Release 15's screenshots on the runner showed four
@@ -17,8 +42,8 @@ things, none a wrong answer; three are corrected and one is left:
   every answer; an answer of code alone now prints its time alone (`modelWasAsked`).
 - **An absence names its act by its title.** The server's sentence carries the act's address; the dock reads the title
   from the act's dossier (the one request site the titles already used) and says it in the address's place.
-- **Left:** a refusal's card shows the refusal and a question Lex can answer, not the lines the answer's dossier holds
-  beside it (the dock's design since Release 14). A reversible driver decision: unchanged in this slice.
+- **Left to the next slice** (done there, see above): a refusal's card showed the refusal and a question Lex can
+  answer, not the lines the answer's dossier holds beside it (the dock's design since Release 14).
 - **The records the site prints are the live release's:** the registry (11 versions, `champion` and `serving` on 11),
   the 56 questions' run (the promotion gate's run on Release 15 at its own address, kept as `20261119-r15-gate`) and
   the How it works answer (asked of law.soufien.lu on 2026-11-19 at 05:00 UTC). The 15 unseen questions' run stays the

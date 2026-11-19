@@ -1,5 +1,5 @@
 // One real answer, recorded for How it works (the owner's brief of 2026-11-15, section 5: one real question followed
-// through its stages). Captured on 2026-11-19 at 05:00 UTC by one request to the API at `origin` below,
+// through its stages). Captured on 2026-11-19 at 06:48 UTC by one request to the API at `origin` below,
 // POST /api/v3/ask with the body `request` (ask/1's request: the question alone).
 //
 // `envelope` is the answer as served, whole and unedited. `act` is the title the dossier of the same act gives the version
@@ -7,7 +7,7 @@
 // only. Do not edit: record again with the same two requests (C:\lex-v3\driver-scripts\make-how-record.py), and date it.
 
 export const HOW_ANSWER_RECORD = Object.freeze({
-  "recordedAt": "2026-11-19T05:00:19Z",
+  "recordedAt": "2026-11-19T06:48:21Z",
   "origin": "https://law.soufien.lu",
   "request": {
     "operation_id": "ask",
@@ -19,7 +19,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "context": {
       "commits": {
         "index_builder_source_commit": "bfb839839ea7d49cec79e8525275968d1000be8e",
-        "serving_runtime_source_commit": "405abff0d2263fd817538c302b8936e5bcc73e17"
+        "serving_runtime_source_commit": "0af7de23ab559fecb7dcaf19340c9b143c76b928"
       },
       "freshness": {
         "channels": [
@@ -43,7 +43,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "index_built_at": "2026-11-12T15:22:06Z",
         "last_checked_against_publisher": null,
         "maximum_data_age_days": 30,
-        "observed_at": "2026-11-19T05:00:19.7799733Z",
+        "observed_at": "2026-11-19T06:48:21.9715154Z",
         "stale": false,
         "upstream_health": "stale"
       },
@@ -62,7 +62,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "refusal": null,
     "registry_schema": "lex-v3-operation-registry/2",
     "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
-    "request_ref": "http_6cb1fb39be82226f85c016c5aa3ab26eb1a6541535cdd4e2c87ddfba3c30c5b8",
+    "request_ref": "http_47f4495c8f65b175162586a6034274c2404092ed582c66e37e80c28b9836ae92",
     "result": {
       "object_type": "answer_dossier",
       "schema": "lex-v3-ask-result/1",
@@ -1956,6 +1956,6 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "identifier": "/lu-legilux/loi-1997-07-27-n10"
       }
     },
-    "request_ref": "http_f267ecd6e61508b8675c03f21d84214361fac044dfee936ac59c8e37dbd7aad6"
+    "request_ref": "http_48578635ed5b05fe05fc595ad75fea840265d36d25dc11236ce4b60ac4e79788"
   }
 });

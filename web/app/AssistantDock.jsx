@@ -23,6 +23,8 @@ import {
   actTitleAt,
   aroundAddress,
   bricksWork,
+  linesBeside,
+  workTitleToRead,
   builtNote,
   builtFoot,
   modelWasAsked,
@@ -215,9 +217,10 @@ function Cite({ number, facts, copy }) {
  * is marked and named with its text's title; each other line is named by its article and heading, with a way to the whole
  * article; the further articles are links to the text page.
  */
-function BricksBody({ turn, copy, locale, onText }) {
-  const body = bricksBody(turn.dossier);
-  const lead = body.find((entry) => entry.type === 'quote') ?? null;
+function BricksBody({ turn, copy, locale, onText, beside = false }) {
+  // Beside a refusal (`beside`), the quotations alone, none of them marked as the answer: each with its article and a way to it.
+  const body = beside ? linesBeside(turn.dossier) : bricksBody(turn.dossier);
+  const lead = beside ? null : body.find((entry) => entry.type === 'quote') ?? null;
   const opening = answerOpening(turn, locale);
   return body.map((entry, at) => {
     if (entry.type === 'line') {
@@ -489,6 +492,12 @@ function Turn({ turn, copy, locale, onText, onAsk, onChoose, onFindByName, onFin
         {bubble}
         <div className="lx-dock-card" data-dock-card="advice">
           <p className="lx-dock-lead">{copy.dockAdvice}</p>
+          {linesBeside(turn.dossier).length > 0 ? (
+            <div className="lx-dock-beside" data-dock-beside="">
+              <p className="lx-dock-line">{copy.dockAdviceLaw}</p>
+              <BricksBody turn={turn} copy={copy} locale={locale} onText={false} beside />
+            </div>
+          ) : null}
           <p className="lx-dock-words">
             {copy.dockAdviceExample}{' '}
             <button type="button" className="lx-dock-link" lang={example.lang} onClick={() => onAsk(example.question)}>{example.question}</button>
@@ -705,10 +714,10 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
         ? articleVersions({ identifier: where.identifier, article: where.article, language: where.language }, doFetch).catch(() => null)
         : Promise.resolve(shown.strip);
       Promise.all([facts, strip]).then(([factsRead, stripRead]) => update(shown.id, shown.kind === 'answer' ? { facts: factsRead, strip: stripRead } : { strip: stripRead }));
-    } else if (shown.kind === 'answer' && where === null && shown.workTitle === undefined && bricksWork(shown.dossier) !== null) {
-      // An answer that quotes nothing and names the act it read: the act's title, asked once.
+    } else if (workTitleToRead(shown, where) !== null) {
+      // An answer that quotes nothing and names the act it read (`said`): the act's title, asked once.
       fetching.current.add(shown.id);
-      actTitleAt(bricksWork(shown.dossier), doFetch).then((workTitle) => update(shown.id, { workTitle }));
+      actTitleAt(workTitleToRead(shown, where), doFetch).then((workTitle) => update(shown.id, { workTitle }));
     } else if (shown.kind === 'clarify' && shown.choices === undefined) {
       fetching.current.add(shown.id);
       Promise.all(clarifyCandidates(shown.dossier).map((candidate) => articleFacts(candidate, doFetch).catch(() => null)))
