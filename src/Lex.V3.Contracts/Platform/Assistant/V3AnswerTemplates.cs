@@ -386,6 +386,7 @@ public static partial class V3AnswerTemplates
     public const string PlanBricksModelQuestion = "plan.bricks.model.question";
     public const string PlanBricksModelArbiter = "plan.bricks.model.arbiter";
     public const string PlanBricksModelExtraction = "plan.bricks.model.extraction";
+    public const string PlanBricksModelOutline = "plan.bricks.model.outline";
     public const string PlanBricksModelUnavailable = "plan.bricks.model.unavailable";
     public const string PlanBricksModelQuestionUnavailable = "plan.bricks.model.question_unavailable";
     public const string PlanBricksPassSweepCases = "plan.bricks.pass.sweep_cases";
@@ -404,6 +405,7 @@ public static partial class V3AnswerTemplates
     public const string AnswerTermUsage = "answer.term_usage";
     public const string LawExtractHeading = "law.extract_heading";
     public const string CaveatConditionsApply = "caveat.conditions_apply";
+    public const string CaveatNotYourCase = "caveat.not_your_case";
     public const string CaveatLeftToContract = "caveat.left_to_contract";
     public const string CaveatCasesFromSweep = "caveat.cases_from_sweep";
     public const string CaveatListFromSweep = "caveat.list_from_sweep";
@@ -411,6 +413,7 @@ public static partial class V3AnswerTemplates
     public const string CaveatNotDefined = "caveat.not_defined";
     public const string CaveatVocabularyIncomplete = "caveat.vocabulary_incomplete";
     public const string NoteLawTerm = "note.law_term";
+    public const string NoteLatestHeld = "note.latest_held";
     public const string NoteWordNotInAct = "note.word_not_in_act";
     public const string AbsenceSweepHeading = "absence.sweep_heading";
     public const string AbsenceTermCount = "absence.term_count";
@@ -551,6 +554,7 @@ public static partial class V3AnswerTemplates
         (PlanBricksModelQuestion, "An AI model described your question (the kind of answer, the terms). It chose no operation.", BricksDraft, []),
         (PlanBricksModelArbiter, "An AI model gave each passage found a role (main, supporting, set aside). It could add no passage and write no text.", BricksDraft, []),
         (PlanBricksModelExtraction, "An AI model marked, among the lines given to it, those that answer your question. Lex's code checked each one against the text before showing it.", BricksDraft, []),
+        (PlanBricksModelOutline, "An AI model named, in the tables of contents of the texts Lex reads on this subject, the articles to read. It could name only articles of those tables.", BricksDraft, []),
         (PlanBricksModelUnavailable, "The AI model that ranks the passages gave no usable answer: Lex shows the passages its code found, in the order that code set.", BricksDraft, []),
         (PlanBricksModelQuestionUnavailable, "An AI model was asked to describe your question and gave no usable answer: Lex's code searched your own words.", BricksDraft, []),
         (PlanBricksPassSweepCases, "The rule refers to the cases the law provides without naming them: Lex swept the whole text for them.", BricksDraft, []),
@@ -569,6 +573,7 @@ public static partial class V3AnswerTemplates
         (AnswerTermUsage, "Lines of this text where this term appears: {lines}; articles concerned: {articles}.", BricksDraft, [("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
         (LawExtractHeading, "{work}, article {anchor}, “{heading}”, as it read on {date}", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress), ("anchor", V3AnswerSlotKind.Anchor), ("heading", V3AnswerSlotKind.LawWords), ("date", V3AnswerSlotKind.CalendarDate)]),
         (CaveatConditionsApply, "Conditions apply: they are in the lines quoted.", BricksDraft, []),
+        (CaveatNotYourCase, "The text does not say how it applies to your situation.", BricksDraft, []),
         (CaveatLeftToContract, "On this point the text refers to the contract: it sets no value of its own.", BricksDraft, []),
         (CaveatCasesFromSweep, "This list comes from a sweep of the text for the term's words; a case worded differently may be missing.", BricksDraft, []),
         (CaveatListFromSweep, "This list comes from a sweep of the text; an element worded differently may be missing.", BricksDraft, []),
@@ -576,6 +581,7 @@ public static partial class V3AnswerTemplates
         (CaveatNotDefined, "Lex found no definition of this term in this text; these are the passages that use it.", BricksDraft, []),
         (CaveatVocabularyIncomplete, "Lex's vocabulary on this subject is not complete: a passage worded differently may exist.", BricksDraft, []),
         (NoteLawTerm, "You wrote “{words}”; the text's word is “{term}”.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan), ("term", V3AnswerSlotKind.DictionaryTerm)]),
+        (NoteLatestHeld, "Latest version held: {date}. Lex holds no more recent version of this text.", BricksDraft, [("date", V3AnswerSlotKind.CalendarDate)]),
         (NoteWordNotInAct, "The word “{words}” of your question appears nowhere in this text.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan)]),
         (AbsenceSweepHeading, "Lex swept the text of {work} (lines: {lines}; articles: {articles}), as it stood on {date}, for these terms:", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress), ("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count), ("date", V3AnswerSlotKind.CalendarDate)]),
         (AbsenceTermCount, "Lines that hold “{term}”: {lines}; articles concerned: {articles}.", BricksDraft, [("term", V3AnswerSlotKind.DictionaryTerm), ("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),

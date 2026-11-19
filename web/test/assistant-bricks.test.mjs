@@ -216,9 +216,14 @@ test('the dock draws a bricks answer: the lead line marked, each case with its a
 
   // A refusal shows the law's lines its answer holds beside it (the plan's dispatcher, route 1: "Lex's refusal with the law
   // shown beside it"): the lines alone, each with its article and a way to it, none marked as an answer to the reader's case.
-  const beside = linesBeside(answers.refusal);
+  // A refusal that holds lines of the law is what Lex's own operations and the plans made before 2026-11-19 give; since
+  // that day the bricks quote the general rule as an answer (`general`) and refuse only with no line found (`refusal`).
+  const withLines = { ...structuredClone(answers.general), verdict: 'refuse' };
+  assert.equal(linesBeside(answers.refusal).length, 0, 'the engine\'s refusal of today holds no line');
+  const beside = linesBeside(withLines);
   assert.ok(beside.length > 0, 'the engine\'s refusal holds lines of the law');
-  const refused = dockTurnOf(asked(answers.refusal), 'fr');
+  const refused = dockTurnOf(asked(withLines), 'fr');
+  assert.equal(refused.kind, 'advice');
   const card = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...refused, id: 't3', question: 'Mon assureur peut-il résilier mon contrat ?' } }));
   assert.match(card, /data-dock-card="advice"/u);
   assert.ok(card.includes(FR.dockAdvice), 'the refusal\'s own sentence first');
@@ -258,4 +263,29 @@ test('an answer that names the act it read by its address says the act\'s title 
   const none = await actTitleAt(address, async (url, init) => { asked.push([url, JSON.parse(init.body)]); throw new Error('offline'); });
   assert.equal(none, null);
   assert.deepEqual(asked, [['/api/v3/dossier', { operation_id: 'dossier', parameters: { identifier: address } }]]);
+});
+
+test('the general rule behind a personal wording is drawn as an answer, with the line that says the text applies nothing to the reader', async () => {
+  const { DockView } = await dock();
+  const turn = { ...dockTurnOf(asked(answers.general), 'fr'), id: 't9', question: 'Mon assureur peut-il résilier mon contrat ?' };
+  assert.equal(turn.kind, 'answer', 'an answer: the rule is quoted, nothing is refused');
+  const lines = bricksBody(answers.general);
+  assert.ok(lines.some((entry) => entry.type === 'quote'), 'the rule, quoted');
+  const caveat = lines.find((entry) => entry.type === 'remark' && entry.text === 'Le texte ne dit pas comment il s’applique à votre situation.');
+  assert.ok(caveat, 'the server\'s own sentence on the reader\'s situation, among the remarks');
+  const markup = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: turn }));
+  assert.ok(markup.includes('Le texte ne dit pas comment il s’applique à votre situation.'));
+  assert.ok(!markup.includes('data-dock-card="advice"'), 'not the refusal\'s card');
+});
+
+test('the work says that a model named the articles to read when the tables of contents were read', () => {
+  const routed = structuredClone(answers.rule);
+  routed.trace.plan.bricks.model_calls = [{ step: 'outline' }, { step: 'extraction' }];
+  const rows = stageRows(routed, 'en');
+  const outline = rows.find((row) => row.key === 'outline');
+  assert.deepEqual([outline?.name, outline?.line, outline?.model], [EN.dockStageOutline, EN.dockOutlineLine, true]);
+  assert.ok(rows.findIndex((row) => row.key === 'outline') < rows.findIndex((row) => row.key === 'extraction'), 'in the order the steps ran');
+  assert.equal(stageRows(routed, 'fr').find((row) => row.key === 'outline').name, FR.dockStageOutline);
+  assert.ok(!stageRows(answers.rule, 'en').some((row) => row.key === 'outline'), 'no row when the step did not run');
+  assert.equal(modelWasAsked(routed, rows), true);
 });

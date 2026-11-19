@@ -348,7 +348,7 @@ public static partial class V3AssistantPipeline
                     break;
                 case V3ArgumentSourceKind.Corpus:
                     value = source.Corpus!;
-                    kind = name == "identifier" ? V3AnswerSlotKind.IdentifierText : V3AnswerSlotKind.Anchor;
+                    kind = name == "identifier" ? V3AnswerSlotKind.IdentifierText : name == "date" ? V3AnswerSlotKind.CalendarDate : V3AnswerSlotKind.Anchor;
                     break;
                 default:
                     throw new InvalidOperationException("Not an argument source.");

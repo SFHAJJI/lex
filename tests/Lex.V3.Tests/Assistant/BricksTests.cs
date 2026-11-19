@@ -309,7 +309,14 @@ public sealed class BricksTests
         Assert.IsTrue(V4Dispatcher.CitesArticle(Row("Que dit l'article 39 de la loi sur le contrat d'assurance ?")));
         Assert.IsTrue(V4Dispatcher.CitesArticle(Row("art. 62-3 de la loi du 27 juillet 1997")));
         Assert.IsFalse(V4Dispatcher.CitesArticle(Row("L'assureur peut-il résilier le contrat ?")));
-        Assert.IsTrue(V4Dispatcher.AsksChange(Row("Qu'est-ce qui a changé sur la résiliation ?"), 0));
+        Assert.IsTrue(V4Dispatcher.AsksChange(Row("Qu'est-ce qui a changé dans la loi sur la résiliation ?"), 0));
+        Assert.IsTrue(V4Dispatcher.AsksChange(Row("Qu'est-ce qui a changé sur la résiliation en 2013 ?"), 0));
+        Assert.IsTrue(V4Dispatcher.AsksChange(Row("Historique de la résiliation"), 0));
+        // A word of change that is not about a text asks what the law provides (the reader's set of 2026-11-19).
+        foreach (var question in new[] { "L'assureur peut-il modifier les conditions générales en cours de contrat ?", "comment je fais pour changer d'assureur", "Quelle est la différence entre l'assuré et le preneur d'assurance ?", "Quelle est la différence entre nullité et résiliation du contrat d'assurance ?" })
+        {
+            Assert.IsFalse(V4Dispatcher.AsksChange(Row(question), 0), question);
+        }
         Assert.IsTrue(V4Dispatcher.AsksChange(Row("La résiliation entre le 1er janvier 2020 et le 1er janvier 2024"), 2));
         Assert.IsFalse(V4Dispatcher.AsksChange(Row("L'assureur peut-il résilier le contrat ?"), 0));
         Assert.AreEqual("duration", V4Dispatcher.KindOf(Row("c'est quoi le délai de prescription ?"), Dictionary, termDefined: false), "a definition is asked of a term the act defines; else the next kind the words ask for");
@@ -784,16 +791,29 @@ public sealed class BricksTests
     }
 
     [TestMethod]
-    public void TheReadersOwnCaseIsRefusedWithTheLawBesideItAndNoModelIsAsked()
+    public void AQuestionWordedForTheReadersOwnCaseGetsTheGeneralRuleAndIsToldTheTextAppliesNothing()
     {
-        var model = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked on the reader's own case"));
-        var dossier = Answered(BricksFixture.Ask("Mon assureur peut-il résilier mon contrat ?", model));
-        Assert.AreEqual(V3AssistantVerdict.Refuse, dossier.Verdict);
-        Assert.IsTrue(dossier.Parts.Single().Application);
-        Assert.AreEqual(V3AnswerTemplates.BoundaryWholeNoAdviser, Templates(dossier)[0], "the refusal opens the answer");
-        Assert.AreEqual("Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.", dossier.Quotes.Single().Text, "the descriptive maximum: the law found, verbatim and dated");
-        Assert.AreEqual(0, model.Calls.Count);
-        Assert.IsTrue(dossier.Blocks.OfType<V3HandoffBlock>().Any());
+        // The owner's direction of 2026-11-19 (a reader's verdict on 18 November: "make it answer first"): the general
+        // question behind a personal wording is answered by quoting the rule, and the answer says that the text does not say
+        // how it applies to the reader's situation. Lex applies nothing; it needs no model to say so.
+        var dossier = Answered(BricksFixture.Ask("Mon assureur peut-il résilier mon contrat ?"));
+        Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict);
+        Assert.IsTrue(dossier.Parts.Single().Application, "the part is still one that asks application: the answer applies nothing");
+        Assert.AreEqual("Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.", dossier.Quotes.First().Text);
+        CollectionAssert.Contains(Templates(dossier), V3AnswerTemplates.CaveatNotYourCase);
+        CollectionAssert.DoesNotContain(Templates(dossier), V3AnswerTemplates.BoundaryWholeNoAdviser);
+        var said = dossier.Blocks.OfType<V3ClaimBlock>().Single(static block => block.Claim.TemplateId == V3AnswerTemplates.CaveatNotYourCase).Claim.Text;
+        Assert.AreEqual("Le texte ne dit pas comment il s’applique à votre situation.", said);
+        CollectionAssert.Contains(Bricks(dossier).GetProperty("answer").GetProperty("caveats").EnumerateArray().Select(static caveat => caveat.GetString()).ToArray(), "not_your_case");
+
+        // The same question with no word of a case is the same rule without that line.
+        var general = Answered(BricksFixture.Ask("L'assureur peut-il résilier le contrat ?"));
+        Assert.AreEqual(dossier.Quotes.First().Text, general.Quotes.First().Text);
+        CollectionAssert.DoesNotContain(Templates(general), V3AnswerTemplates.CaveatNotYourCase);
+
+        // With no line of the law to quote, a question worded for a case is refused, as before.
+        var none = Answered(BricksFixture.Ask("Ma franchise est-elle trop élevée ?"));
+        Assert.AreEqual((V3AssistantVerdict.Refuse, 0), (none.Verdict, none.Quotes.Count()));
     }
 
     [TestMethod]
@@ -1292,48 +1312,52 @@ public sealed class BricksTests
     }
 
     [TestMethod]
-    public void AMarkOfTheReadersOwnCaseWithNoCueIsJudgedByTheModelAndRefusedWhenNoneCanJudge()
+    public void AMarkOfTheReadersOwnCaseAsksNoModelWhereTheTablesAnswerAndIsStillJudgedForLexsOwnOperations()
     {
         // 2026-11-19, found by the 56 questions on the real model: this question holds no cue code reads, the dictionary
-        // reads "time-barred", and the tables answered it. Before the bricks the planner's own judgement refused it.
+        // reads "time-barred", and the tables answer it. Since the owner's direction of the same day it is answered with the
+        // general rule and the line on the reader's situation; no model is asked to judge its wording.
         foreach (var question in new[] { "My insurer says my claim is time-barred, is it right?", "Mon assureur dit que ma demande est prescrite, a-t-il raison ?" })
         {
             Assert.AreEqual(0, V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count, "no cue code reads: " + question);
             Assert.IsTrue(V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0, question);
             Assert.IsTrue(Row(question).Concepts.Count > 0, "the dictionary reads it: " + question);
 
-            // The model says it is a person's own case: refused, the law beside it; the call is in the record.
-            var says = new BricksFixture.Model(call => call.Step == "question"
-                ? Described("words_on_a_subject", question, ownCase: true)
-                : throw new InvalidOperationException("only the question call is made"));
-            var refused = Answered(BricksFixture.Ask(question, says));
-            Assert.AreEqual(V3AssistantVerdict.Refuse, refused.Verdict, question);
-            CollectionAssert.AreEqual(new[] { "question" }, says.Calls.Select(static call => call.Step).ToArray());
-            Assert.AreEqual("question", Bricks(refused).GetProperty("model_calls")[0].GetProperty("step").GetString(), "the call is in the answer's record");
-            CollectionAssert.Contains(refused.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeModelDescribed);
+            var alone = Answered(BricksFixture.Ask(question));
+            Assert.AreEqual(V3AssistantVerdict.Answer, alone.Verdict, question);
+            Assert.IsTrue(alone.Quotes.Any(), question);
+            CollectionAssert.Contains(Templates(alone), V3AnswerTemplates.CaveatNotYourCase, question);
 
-            // The model says it is a question on the law in general: the tables answer.
-            var general = new BricksFixture.Model(call => call.Step == "question"
-                ? Described("words_on_a_subject", question)
-                : throw new HttpRequestException("no other call answers in this test"));
-            Assert.AreEqual(V3AssistantVerdict.Answer, Answered(BricksFixture.Ask(question, general)).Verdict, question);
-            Assert.AreEqual("question", general.Calls[0].Step);
-
-            // No model to ask, a model that fails, or a reply outside its form: refused too. The boundary is biased to refusal.
-            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question)).Verdict, question);
-            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question, new BricksFixture.Model(static _ => throw new HttpRequestException("HTTP 429")))).Verdict, question);
-            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question, new BricksFixture.Model(static _ => "not a description"))).Verdict, question);
+            var model = new BricksFixture.Model(static _ => throw new HttpRequestException("no call answers in this test"));
+            var withModel = Answered(BricksFixture.Ask(question, model));
+            Assert.AreEqual(V3AssistantVerdict.Answer, withModel.Verdict, question);
+            Assert.IsFalse(model.Calls.Any(static call => call.Step == "question"), "no model is asked whether it is a person's own case: " + question);
         }
+
+        // For Lex's own operations (a question the acts of the domain do not answer) the judgement is as before the bricks:
+        // a mark with no cue is shown to the model; a part it calls a person's case is refused; with no model, a model that
+        // fails or a reply outside its form, it is refused too.
+        const string other = "Mon propriétaire dit que mon bail est terminé, a-t-il raison ?";
+        Assert.AreEqual(0, V3AssistantParsers.ApplicationCues(other, 0, other.Length).Count);
+        Assert.IsTrue(V4Boundary.PersonalMarkers(other, 0, other.Length).Count > 0);
+        var says = new BricksFixture.Model(call => call.Step == "question"
+            ? Described("words_on_a_subject", other, ownCase: true)
+            : throw new InvalidOperationException("only the question call is made"));
+        var refused = Answered(BricksFixture.Ask(other, says));
+        Assert.AreEqual(V3AssistantVerdict.Refuse, refused.Verdict);
+        CollectionAssert.AreEqual(new[] { "question" }, says.Calls.Select(static call => call.Step).ToArray());
+        Assert.AreEqual(0, says.Outlines.Count, "the outline is read for a question of the domain only");
+        var onTheLaw = new BricksFixture.Model(call => call.Step == "question"
+            ? Described("words_on_a_subject", other)
+            : throw new HttpRequestException("no other call answers in this test"));
+        Assert.AreNotEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(other, onTheLaw)).Verdict);
+        Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(other)).Verdict);
+        Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(other, new BricksFixture.Model(static _ => throw new HttpRequestException("HTTP 429")))).Verdict);
+        Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(other, new BricksFixture.Model(static _ => "not a description"))).Verdict);
 
         // With no mark of a case of the reader's own, no model is asked for this: code's own cues are the boundary.
         var never = new BricksFixture.Model(static _ => throw new InvalidOperationException("no model is asked"));
         Assert.AreEqual(V3AssistantVerdict.Answer, Answered(BricksFixture.Ask("c'est quoi une personne lésé", never)).Verdict);
-        Assert.AreEqual(0, never.Calls.Count);
-
-        // A cited article of a known act is under the same boundary: with such a mark and no model, the article is shown beside a refusal.
-        var beside = Answered(BricksFixture.Ask("Dans mon cas, que dit l'article 39 de la loi sur le contrat d'assurance ?"));
-        Assert.AreEqual(V3AssistantVerdict.Refuse, beside.Verdict);
-        Assert.AreEqual("art_39", beside.Quotes.Single().Anchor, "the law beside the refusal");
     }
 
     [TestMethod]
@@ -1375,20 +1399,27 @@ public sealed class BricksTests
     }
 
     [TestMethod]
-    public void TheReaderAsTheSubjectOfTheQuestionsOwnVerbIsACaseOfTheReadersOwnAndNoModelIsAskedForIt()
+    public void TheReaderAsTheSubjectOfTheQuestionsOwnVerbGetsTheLawQuotedOrARefusalAndNeverAnApplication()
     {
         foreach (var question in new[] { "À partir de quand suis-je couvert après la signature ?", "Am I covered if the premium is paid late?", "Est-ce que je suis couvert dès la signature ?", "Suis-je couvert si je ne paie pas ma prime ?" })
         {
             Assert.IsTrue(V4Boundary.AsksOfOneself(question, 0, question.Length), question);
-            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question)).Verdict, question);
-            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question, new BricksFixture.Model(static _ => "not a description"))).Verdict, question);
+
+            // With lines of the law found: the general rule, and the line that says the text does not say how it applies
+            // to the reader. With none: refused.
+            var dossier = Answered(BricksFixture.Ask(question));
+            Assert.AreEqual(dossier.Quotes.Any() ? V3AssistantVerdict.Answer : V3AssistantVerdict.Refuse, dossier.Verdict, question);
+            Assert.AreEqual(dossier.Quotes.Any(), Templates(dossier).Contains(V3AnswerTemplates.CaveatNotYourCase), question);
         }
 
-        // Where the dictionary reads the question, the tables show the law beside the refusal and no model is asked at all.
-        var never = new BricksFixture.Model(static _ => throw new InvalidOperationException("no model is asked"));
-        var beside = Answered(BricksFixture.Ask("Suis-je couvert si je ne paie pas ma prime ?", never));
-        Assert.AreEqual((V3AssistantVerdict.Refuse, 0), (beside.Verdict, never.Calls.Count));
-        Assert.IsTrue(beside.Quotes.Any(), "the law beside the refusal");
+        // Where the dictionary reads the question, the law is quoted with that line, and no model is needed for it.
+        var beside = Answered(BricksFixture.Ask("Suis-je couvert si je ne paie pas ma prime ?"));
+        Assert.AreEqual(V3AssistantVerdict.Answer, beside.Verdict);
+        Assert.IsTrue(beside.Quotes.Any(), "the law, quoted");
+        CollectionAssert.Contains(Templates(beside), V3AnswerTemplates.CaveatNotYourCase);
+
+        // A question outside the acts of the domain, with the reader as the subject of its verb, is refused by code.
+        Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask("Suis-je obligé de quitter mon logement ?")).Verdict);
 
         foreach (var question in new[] { "Que se passe-t-il si je ne paie pas ma prime ?", "L'assureur peut-il résilier le contrat ?", "What happens if I do not pay?", "Pouvez-vous me dire ce qu'est une personne lésée ?" })
         {
@@ -1438,6 +1469,155 @@ public sealed class BricksTests
         // The same for a word of a reader's key said apart from it ("choisir son avocat" for the key "choisir mon avocat").
         var lawyer = Answered(BricksFixture.Ask("L'assuré peut-il choisir son avocat en protection juridique ?", silent));
         Assert.AreEqual((V3AssistantVerdict.Answer, "art_94"), (lawyer.Verdict, lawyer.Quotes.First().Anchor));
+    }
+
+    // ---- The second reading: the tables of contents, then the articles named (the owner's brief of 2026-11-19) ----------
+
+    /// <summary>A model for the second reading: it names the article whose heading holds a word, then points at that article's first line.</summary>
+    private static BricksFixture.Model Reader(string headingWord, Func<V4ModelCall, string>? other = null) => new(
+        call =>
+        {
+            if (call.Step != "extraction")
+            {
+                return other is null ? throw new HttpRequestException("no other call answers in this test") : other(call);
+            }
+
+            using var sent = JsonDocument.Parse(call.User);
+            var first = sent.RootElement.GetProperty("lines").EnumerateArray().First();
+            return new JsonObject { ["found"] = true, ["complete"] = false, ["items"] = new JsonArray(new JsonObject { ["line"] = first.GetProperty("id").GetString(), ["role"] = "passage", ["value"] = string.Empty }), ["caveats"] = new JsonArray() }.ToJsonString();
+        },
+        call =>
+        {
+            using var sent = JsonDocument.Parse(call.User);
+            var named = sent.RootElement.GetProperty("acts").EnumerateArray().SelectMany(static act => act.GetProperty("articles").EnumerateArray())
+                .Where(article => article.GetProperty("heading").GetString()!.Contains(headingWord, StringComparison.Ordinal))
+                .Select(static article => (JsonNode)article.GetProperty("id").GetString()!).ToArray();
+            return new JsonObject { ["articles"] = new JsonArray(named) }.ToJsonString();
+        });
+
+    [TestMethod]
+    public void AQuestionOfTheDomainTheDictionaryDoesNotReadIsRoutedByTheTablesOfContentsAndItsArticlesAreRead()
+    {
+        // No key of the dictionary reads "si je vends ma voiture"; "contrat d'assurance" says the question is of the domain.
+        const string question = "Que devient mon contrat d'assurance si je vends ma voiture ?";
+        var model = Reader("Cession d'une chose assurée");
+        var executor = new BricksFixture.Executor();
+        var dossier = Answered(BricksFixture.Ask(question, model, executor: executor));
+        Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict);
+        Assert.AreEqual("art_69", dossier.Quotes.Single().Anchor);
+        CollectionAssert.AreEqual(new[] { "outline", "extraction" }, model.Calls.Select(static call => call.Step).ToArray(), "two calls: the articles to read, then the lines that answer");
+        Assert.IsTrue(executor.Calls.All(static call => call.Operation == "evidence_bundle"), "the article is read, nothing is searched");
+        var bricks = Bricks(dossier);
+        Assert.AreEqual("open", bricks.GetProperty("route").GetString());
+        CollectionAssert.AreEqual(new[] { "outline", "extraction" }, bricks.GetProperty("model_calls").EnumerateArray().Select(static entry => entry.GetProperty("step").GetString()).ToArray());
+        var lines = dossier.PlanLines.Select(static line => line.TemplateId).ToArray();
+        CollectionAssert.Contains(lines, V3AnswerTemplates.PlanBricksModelOutline);
+        CollectionAssert.Contains(lines, V3AnswerTemplates.PlanBricksModelExtraction);
+        CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeModelAssisted);
+        CollectionAssert.Contains(Templates(dossier), V3AnswerTemplates.CaveatNotYourCase, "\"mon contrat\", \"ma voiture\": the general rule, and the line on the reader's situation");
+
+        // What the outline call is sent: the question and, per act, its summary and its articles by an id and a heading.
+        using (var sent = JsonDocument.Parse(model.Calls[0].User))
+        {
+            var articles = sent.RootElement.GetProperty("acts")[0].GetProperty("articles");
+            Assert.AreEqual(BricksFixture.Tables.Articles.Count(static article => article.Status != "empty"), articles.GetArrayLength());
+            Assert.AreEqual("A1", articles[0].GetProperty("id").GetString());
+            Assert.IsFalse(model.Calls[0].User.Contains("art_69", StringComparison.Ordinal), "an article is named by the id of the call, never by its number");
+        }
+
+        // A reply that names an id it was not given is refused whole: nothing of it is read, and Lex's own search answers.
+        Assert.IsNull(V4Generation.ReadOutline("""{"articles":["A1","A9999"]}""", 147));
+        Assert.IsNull(V4Generation.ReadOutline("""{"articles":["art_69"]}""", 147));
+        Assert.IsNull(V4Generation.ReadOutline("not json", 147));
+        CollectionAssert.AreEqual(new[] { 2, 0 }, V4Generation.ReadOutline("""{"articles":["A3","A1","A3"]}""", 147));
+        var invented = new BricksFixture.Model(static _ => throw new HttpRequestException("no other call answers in this test"), static _ => """{"articles":["A9999"]}""");
+        var searched = new BricksFixture.Executor();
+        _ = BricksFixture.Ask(question, invented, executor: searched);
+        Assert.IsTrue(searched.Calls.Any(static call => call.Operation == "search"), "with no article read, Lex's own search is asked");
+
+        // A question of another subject is not routed by this domain's tables of contents: no call is spent on it.
+        var other = new BricksFixture.Model(static _ => throw new HttpRequestException("no call answers in this test"));
+        _ = BricksFixture.Ask("Quelle est la durée maximale de la période d'essai ?", other);
+        Assert.AreEqual((0, false), (other.Outlines.Count, other.Calls.Any(static call => call.Step == "outline")));
+    }
+
+    [TestMethod]
+    public void WhereTheTablesAreNotSureTheArticlesReadUnderTheirOwnHeadingsDecideAndWhatCodeIsSureOfIsNotReadTwice()
+    {
+        // The dictionary reads "sinistre" and the tables quote the declaration of the claim (art. 26); the question asks when
+        // the insurer must pay, which article 29 states under its own heading. The two readings differ: the article read
+        // under its heading is the answer (the reader's set of 2026-11-19, where the tables' answer was the wrong article).
+        const string question = "L'assureur doit payer en combien de temps après un sinistre ?";
+        var alone = Answered(BricksFixture.Ask(question));
+        Assert.AreNotEqual("art_29", alone.Quotes.First().Anchor, "the tables alone quote another article");
+        var differs = Reader("Prestation de l'assureur", static call => call.Step == "arbiter" ? throw new HttpRequestException("the arbiter does not answer in this test") : throw new HttpRequestException("no other call answers"));
+        var dossier = Answered(BricksFixture.Ask(question, differs));
+        Assert.AreEqual("art_29", dossier.Quotes.Single().Anchor);
+        Assert.IsTrue(differs.Calls.Any(static call => call.Step == "outline"));
+
+        // When the second reading names the article the tables quote first, the tables' answer stands as it is.
+        var agrees = Reader(BricksFixture.Tables.Article(alone.Quotes.First().Anchor)!.Heading!, static _ => throw new HttpRequestException("no other call answers"));
+        var same = Answered(BricksFixture.Ask(question, agrees));
+        Assert.AreEqual(alone.Quotes.First().Anchor, same.Quotes.First().Anchor);
+        Assert.IsTrue(agrees.Calls.Any(static call => call.Step == "outline"));
+
+        // What code is sure of by the law's own words is not read twice: the term the act defines, the rule that says of
+        // itself that it is the general one, a cited article.
+        foreach (var sure in new[] { "c'est quoi une personne lésé", "l'assureur peut résilier le contrat de façon unilatérale ?", "Que dit l'article 39 de la loi sur le contrat d'assurance ?" })
+        {
+            var model = CarefulModel();
+            _ = Answered(BricksFixture.Ask(sure, model));
+            Assert.AreEqual((0, false), (model.Outlines.Count, model.Calls.Any(static call => call.Step == "outline")), sure);
+        }
+    }
+
+    [TestMethod]
+    public void ACitationInShorthandIsOpenedByCode()
+    {
+        // The reader's set of 2026-11-19: the act named without its preposition, by its initials, or by its date in figures.
+        foreach (var (question, article) in new[] { ("art. 38 loi contrat d'assurance", "art_38"), ("L. 27.07.1997 art 10", "art_10"), ("art 44 loi du 27/07/97", "art_44"), ("LCA art 44", "art_44") })
+        {
+            var never = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked for a citation code reads"));
+            var executor = new BricksFixture.Executor();
+            var dossier = Answered(BricksFixture.Ask(question, never, executor: executor));
+            Assert.AreEqual((V3AssistantVerdict.Answer, article), (dossier.Verdict, dossier.Quotes.Single().Anchor), question);
+            Assert.AreEqual((0, 0), (never.Calls.Count, never.Outlines.Count), question);
+            Assert.IsTrue(executor.Calls.All(static call => call.Operation == "evidence_bundle"), question);
+        }
+
+        // A date in figures that is no act's of the index names no act.
+        Assert.AreEqual(0, V4CorpusIndex.Insurance.Mentions(V4Text.Words(V4Text.Fold("L. 28.07.1997 art 10"))).Count(static mention => mention.Work is not null));
+        Assert.AreEqual(BricksFixture.Work, V4CorpusIndex.Insurance.Mentions(V4Text.Words(V4Text.Fold("loi du 27/07/97"))).Single().Work);
+    }
+
+    [TestMethod]
+    public void AnActWhoseLastVersionEndedBeforeTheDateIsReadInItsLatestVersionHeldAndTheAnswerSaysSo()
+    {
+        // The owner's brief of 2026-11-19, work item 2 (the motor insurance law: its last version held ended on 01/01/2025
+        // and every question without a date was refused). The assistant reads the latest version held and says so above
+        // the quotation; the operations keep their strict answer.
+        var corpus = new BricksFixture.Corpus { LatestHeld = true };
+        var executor = new BricksFixture.Executor();
+        var dossier = Answered(BricksFixture.Ask("c'est quoi une personne lésé", executor: executor, corpus: corpus));
+        Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict);
+        var first = dossier.Blocks.OfType<V3ClaimBlock>().First().Claim;
+        Assert.AreEqual(V3AnswerTemplates.NoteLatestHeld, first.TemplateId, "said above the quotation");
+        Assert.AreEqual("Dernière version détenue\u00A0: 25 novembre 2025. Lex ne détient pas de version plus récente de ce texte.", first.Text);
+        using (var asked = JsonDocument.Parse(executor.Calls.Single().Parameters))
+        {
+            Assert.AreEqual(BricksFixture.Tables.Date, asked.RootElement.GetProperty("date").GetString(), "the article is read on the date of that version, not today");
+        }
+
+        Assert.AreEqual(BricksFixture.Tables.Date, Bricks(dossier).GetProperty("latest_held").GetString());
+
+        // With a version that covers the date, nothing of this is said, and the article is read on the date asked.
+        var covered = Answered(BricksFixture.Ask("c'est quoi une personne lésé"));
+        CollectionAssert.DoesNotContain(Templates(covered), V3AnswerTemplates.NoteLatestHeld);
+        Assert.IsFalse(Bricks(covered).TryGetProperty("latest_held", out _));
+
+        // The date of a step is a calendar date of the corpus or nothing: a plan that writes anything else there is refused.
+        Assert.IsFalse(Forged("c'est quoi une personne lésé", static plan => plan["steps"]![0]!["arguments"]!["date"] = new JsonObject { ["corpus"] = "hier" }).Admitted);
+        Assert.IsTrue(Forged("c'est quoi une personne lésé", static plan => plan["steps"]![0]!["arguments"]!["date"] = new JsonObject { ["corpus"] = "2025-11-25" }).Admitted);
     }
 
     [TestMethod]
@@ -1498,7 +1678,7 @@ public sealed class BricksTests
                  {
                      ("definition", "c'est quoi une personne lésé"), ("rule", "l'assureur peut résilier le contrat de façon unilatérale ?"),
                      ("absence", "C'est quoi la franchise ?"), ("several", "Quel est le délai de rétractation ?"),
-                     ("refusal", "Mon assureur peut-il résilier mon contrat ?"), ("greeting", "Bonjour"),
+                     ("general", "Mon assureur peut-il résilier mon contrat ?"), ("refusal", "Ma franchise est-elle trop élevée ?"), ("greeting", "Bonjour"),
                      ("searched", "Quelle est la durée maximale de la période d'essai ?"),
                      ("cited", "Que dit l'article 39 de la loi sur le contrat d'assurance ?"),
                  })

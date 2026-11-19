@@ -50,7 +50,7 @@ public sealed class V4PlanRecord
 
     /// <summary>The caveats an answer can carry: a closed list of codes, each with its fixed wording (ours: no model sentence is shown).</summary>
     public static readonly IReadOnlyList<string> Caveats =
-        ["conditions_apply", "left_to_contract", "cases_from_sweep", "general_and_special", "model_unavailable", "not_defined", "vocabulary_incomplete", "several_by_scope", "list_from_sweep"];
+        ["conditions_apply", "left_to_contract", "cases_from_sweep", "general_and_special", "model_unavailable", "not_defined", "vocabulary_incomplete", "several_by_scope", "list_from_sweep", "not_your_case"];
 
     /// <summary>The ways an answer is "not found" (brick I, four in place of one).</summary>
     public static readonly IReadOnlyList<string> Absences = ["terms_nowhere", "words_not_found", "no_answer_in_lines", "act_not_held", "text_not_held"];
@@ -74,6 +74,12 @@ public sealed class V4PlanRecord
 
     /// <summary>The date the act was read on: "today", or the reference of a date the parser read in the question ("d1").</summary>
     public string DateRef { get; private init; } = "today";
+
+    /// <summary>
+    /// The date of the latest version held of the act, when no version covers the date asked (the act's last version ended
+    /// before it): the answer is read from that version and says so. Null for every other answer.
+    /// </summary>
+    public string? LatestHeld { get; private init; }
 
     /// <summary>The act read, as its address on this site, or null when the route reads none.</summary>
     public string? Work { get; private init; }
@@ -343,6 +349,7 @@ public sealed class V4PlanRecord
                 Kind = kind,
                 Asked = asked,
                 DateRef = dateRef,
+                LatestHeld = Text(element, "latest_held") is { } latest && DateOnly.TryParseExact(latest, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _) ? latest : null,
                 Work = work,
                 Lines = Number(element, "lines"),
                 Articles = Number(element, "articles"),

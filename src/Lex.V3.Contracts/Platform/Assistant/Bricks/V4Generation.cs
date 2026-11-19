@@ -80,6 +80,109 @@ public static class V4Generation
         - Prefer few primaries. Never invent, complete or correct a line.
         """;
 
+    /// <summary>The most articles the outline call may name.</summary>
+    public const int MaximumOutlinePicks = 6;
+
+    public const string OutlinePrompt = """
+        lex-v4-outline-prompt/1
+
+        You route a question to articles; you never answer it. Lex is a public website that shows legislation exactly as
+        published. A person asked the question you are given. You are given the tables of contents of the acts Lex reads on
+        this subject: each act with what it covers, and each of its articles by an "id" and its heading (or its first
+        words when it has no heading). Your only output names the articles most likely to state the rule that answers the
+        question. Nothing you write is shown to anyone: Lex's code then reads those articles.
+
+        RULES
+        - Name an article by its "id" (A1, A2, ...), never by its number. Use only ids given. At most six, the best first,
+          all from the one act that governs the question.
+        - A question worded for a person's own case ("mon assureur", "ma prime", "my claim") is routed like the general
+          question behind it: which article states the rule. You never say what applies to that person.
+        - If no article given can answer (another subject, another country's law, an act that is not listed, a question
+          that is not about what these acts provide), return no article. Never guess.
+        """;
+
+    /// <summary>
+    /// The outline call: the question and, for each act given, its summary line and its articles by a short id and their
+    /// heading. The second value gives each id's article back. "Trust the TOC" [7C]: the author wrote those titles.
+    /// </summary>
+    public static (V4ModelCall Call, List<(V4ActTables Tables, V4Article Article)> Ids) OutlineCall(string question, IReadOnlyList<(V4IndexAct Act, V4ActTables Tables)> acts)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        ArgumentNullException.ThrowIfNull(acts);
+        var ids = new List<(V4ActTables, V4Article)>();
+        var given = new JsonArray();
+        foreach (var (act, tables) in acts)
+        {
+            var articles = new JsonArray();
+            foreach (var article in tables.Articles.Where(static article => article.Status != "empty"))
+            {
+                ids.Add((tables, article));
+                var heading = article.Heading;
+                if (string.IsNullOrWhiteSpace(heading))
+                {
+                    var first = tables.TextLinesOf(article).FirstOrDefault()?.Text ?? string.Empty;
+                    heading = first.Length > 110 ? first[..110] : first;
+                }
+
+                articles.Add(new JsonObject { ["id"] = "A" + ids.Count.ToString(CultureInfo.InvariantCulture), ["heading"] = heading });
+            }
+
+            given.Add(new JsonObject { ["act"] = act.SummaryFr, ["articles"] = articles });
+        }
+
+        var user = new JsonObject { ["question"] = question, ["acts"] = given };
+        return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
+    }
+
+    private static string OutlineSchema { get; } = new JsonObject
+    {
+        ["type"] = "object",
+        ["additionalProperties"] = false,
+        ["required"] = new JsonArray("articles"),
+        ["properties"] = new JsonObject
+        {
+            ["articles"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+        },
+    }.ToJsonString();
+
+    /// <summary>
+    /// Reads the outline call's reply: the places (from zero) of the articles it names among the <paramref name="given"/>,
+    /// each once, in its order, at most <see cref="MaximumOutlinePicks"/>. Null when the reply is not of the form or names
+    /// an id that was not given: nothing of it is kept.
+    /// </summary>
+    public static List<int>? ReadOutline(string content, int given)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("articles", out var articles) || articles.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var picks = new List<int>();
+            foreach (var entry in articles.EnumerateArray())
+            {
+                var id = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
+                if (id is null || id.Length < 2 || id[0] != 'A' || !int.TryParse(id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > given)
+                {
+                    return null;
+                }
+
+                if (!picks.Contains(number - 1) && picks.Count < MaximumOutlinePicks)
+                {
+                    picks.Add(number - 1);
+                }
+            }
+
+            return picks;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public const string ExtractionBase = """
         lex-v4-extraction-prompt/1
 
@@ -143,7 +246,7 @@ public static class V4Generation
 
     /// <summary>The digest of the instructions this build sends, for the planner's identity: a changed prompt is a changed planner.</summary>
     public static string PromptsSha256 { get; } = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
-        ArbiterPrompt + "\n" + ExtractionBase + "\n" + string.Join("\n", Fragments.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => pair.Key + ":" + pair.Value)))));
+        ArbiterPrompt + "\n" + OutlinePrompt + "\n" + ExtractionBase + "\n" + string.Join("\n", Fragments.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => pair.Key + ":" + pair.Value)))));
 
     /// <summary>The fragment of the extraction prompt for a kind of answer: "a fixed base that every question shares, plus only the rules this particular question needs." [8B]</summary>
     public static string FragmentFor(string kind) => Fragments.TryGetValue(kind, out var fragment) ? fragment : Fragments["text"];

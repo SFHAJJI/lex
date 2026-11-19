@@ -58,6 +58,20 @@ internal sealed partial class V3CorpusMount
             var parameters = JsonSerializer.Serialize(new { identifier = "/lu-legilux/" + work, date, language = French });
             var outcome = mount.RunAssistantStep("evidence_bundle", parameters, clock());
             var versions = mount._reader.ResolveWorkStates(work).Count(state => string.Equals(state.Language, French, StringComparison.Ordinal));
+            // The act's last version ended before the date and none took its place (`no_version_for_date`, the nearest
+            // earlier state named): the bricks read that latest version held, and the answer says so. The operations
+            // themselves keep their strict answer; this is the assistant's reading only (the brief of 2026-11-19).
+            if (outcome.Refused && outcome.RefusalCode == "no_version_for_date" && outcome.Payload is { ValueKind: JsonValueKind.Object } gap &&
+                gap.TryGetProperty("nearest_earlier", out var earlier) && earlier.ValueKind == JsonValueKind.String && earlier.GetString() is { Length: 10 } last &&
+                string.CompareOrdinal(last, date) < 0 && (!gap.TryGetProperty("nearest_later", out var later) || later.ValueKind != JsonValueKind.String))
+            {
+                var held = Read(work, last);
+                if (held.Tables is not null)
+                {
+                    return new V4ActAtDate(held.Tables, held.Facts with { TextStatus = "latest_held", VersionFrom = held.Tables.Date });
+                }
+            }
+
             if (outcome.Refused || outcome.Result is not { } result ||
                 !result.TryGetProperty("states", out var states) || states.ValueKind != JsonValueKind.Array || states.GetArrayLength() != 1)
             {

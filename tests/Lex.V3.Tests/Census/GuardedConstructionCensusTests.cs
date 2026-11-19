@@ -353,7 +353,10 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private static "
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::.cctor, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::Build",
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::Build, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation::OutlineCall, "
+                    + "1 compiler-generated",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Candidate: constructor internal "
                     + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4Candidate::.ctor, "
                     + "method public instance "
@@ -384,7 +387,7 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private static "
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::.cctor, "
                     + "method public static Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::Read, "
-                    + "7 compiler-generated",
+                    + "8 compiler-generated",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord: constructor private "
                     + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord::.ctor, "
                     + "constructor private static "

@@ -48,11 +48,14 @@ internal static class BricksFixture
 
         public HashSet<string> EuActsHeld { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>The act's last version ended before the date asked: its tables are the latest version held.</summary>
+        public bool LatestHeld { get; init; }
+
         public V4ActAtDate Act(string work, string date)
         {
             Asked.Add(work + "@" + date);
             return work == Work
-                ? new V4ActAtDate(Tables, new V4ActFacts(work, "held", Tables.Date, null, 11, Tables.Summary.Articles, Tables.Summary.Lines))
+                ? new V4ActAtDate(Tables, new V4ActFacts(work, LatestHeld ? "latest_held" : "held", Tables.Date, null, 11, Tables.Summary.Articles, Tables.Summary.Lines))
                 : new V4ActAtDate(null, new V4ActFacts(work, "text_not_available", null, null, 0, 0, 0));
         }
 
@@ -60,14 +63,33 @@ internal static class BricksFixture
     }
 
     /// <summary>A model that answers what a test scripts for each step, and records what it was sent.</summary>
-    internal sealed class Model(Func<V4ModelCall, string> reply) : IV4Model
+    /// <param name="outline">
+    /// What the outline call answers (the second reading, 2026-11-19). A test that does not script it gets a model that names
+    /// no article of the tables of contents, so the tables' own answer stands as it did; those calls are kept apart.
+    /// </param>
+    internal sealed class Model(Func<V4ModelCall, string> reply, Func<V4ModelCall, string>? outline = null) : IV4Model
     {
         public List<V4ModelCall> Calls { get; } = [];
+
+        /// <summary>The outline calls answered by the default (no article named).</summary>
+        public List<V4ModelCall> Outlines { get; } = [];
 
         public string ModelId => "scripted-model";
 
         public V4ModelReply Complete(V4ModelCall call, CancellationToken cancellationToken)
         {
+            if (call.Step == "outline")
+            {
+                if (outline is null)
+                {
+                    Outlines.Add(call);
+                    return new V4ModelReply("{\"articles\":[]}", 1500, 10, 100);
+                }
+
+                Calls.Add(call);
+                return new V4ModelReply(outline(call), 1500, 100, 100);
+            }
+
             Calls.Add(call);
             return new V4ModelReply(reply(call), 1500, 1000, 100);
         }

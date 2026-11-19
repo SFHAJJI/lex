@@ -111,8 +111,12 @@ public static partial class V3AssistantPipeline
         var part = plan.Parts[0];
         var cues = V3AssistantParsers.ApplicationCues(question, part.Span.Start, part.Span.End);
         var application = AsksApplication(question, part, cues);
+        // The general rule behind a question worded for the reader's own case (the record's caveat `not_your_case`, written
+        // only with lines to quote): the lines are the answer, said not to say how they apply to the reader. A plan without
+        // that caveat (every plan made before 2026-11-19) is refused as it was, so an older trace replays to its bytes.
+        var general = application && record.Items.Count > 0 && record.AnswerCaveats.Contains("not_your_case");
         var dictionary = V4Dictionary.Insurance;
-        var date = record.DateRef == "today" ? environment.Today : context.Value(record.DateRef, "date") ?? environment.Today;
+        var date = record.LatestHeld ?? (record.DateRef == "today" ? environment.Today : context.Value(record.DateRef, "date") ?? environment.Today);
 
         var quoteNumber = 0;
         string NextQuoteId() => "q" + (++quoteNumber).ToString(CultureInfo.InvariantCulture);
@@ -188,7 +192,7 @@ public static partial class V3AssistantPipeline
 
         var blocks = new List<V3DossierBlock>();
         V3AssistantVerdict verdict;
-        if (application)
+        if (application && !general)
         {
             // The descriptive maximum (S4-A05): the law the bricks found, verbatim and dated, beside the refusal; nothing else.
             verdict = V3AssistantVerdict.Refuse;
@@ -278,7 +282,14 @@ public static partial class V3AssistantPipeline
             }
         }
 
-        if (!application)
+        // An act whose last version ended before the date asked is read in the latest version held, and the answer says so
+        // above its first quotation (the owner's brief of 2026-11-19, work item 2).
+        if (record.LatestHeld is not null && record.Items.Count > 0)
+        {
+            blocks.Insert(0, Claim(V3AnswerTemplates.NoteLatestHeld, locale, Date("date", record.LatestHeld)));
+        }
+
+        if (!application || general)
         {
             if (record.Usage is { } usage)
             {
@@ -305,6 +316,7 @@ public static partial class V3AssistantPipeline
                     "list_from_sweep" => V3AnswerTemplates.CaveatListFromSweep,
                     "general_and_special" => V3AnswerTemplates.CaveatGeneralAndSpecial,
                     "vocabulary_incomplete" => V3AnswerTemplates.CaveatVocabularyIncomplete,
+                    "not_your_case" => V3AnswerTemplates.CaveatNotYourCase,
                     _ => null,
                 };
                 if (template is not null)
@@ -344,7 +356,7 @@ public static partial class V3AssistantPipeline
         // What a model did, as it was: it described the question (it named the concept the reader's words are about), it
         // marked lines among those code gave it, both, or nothing.
         var described = record.ModelSteps.Contains("question");
-        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "extraction");
+        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "outline" or "extraction");
         if (described)
         {
             notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeModelDescribed, locale));
@@ -481,6 +493,7 @@ public static partial class V3AssistantPipeline
                 {
                     "question" => V3AnswerTemplates.PlanBricksModelQuestion,
                     "arbiter" => V3AnswerTemplates.PlanBricksModelArbiter,
+                    "outline" => V3AnswerTemplates.PlanBricksModelOutline,
                     "extraction" => V3AnswerTemplates.PlanBricksModelExtraction,
                     _ => null,
                 };

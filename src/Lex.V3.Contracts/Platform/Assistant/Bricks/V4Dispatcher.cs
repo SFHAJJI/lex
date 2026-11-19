@@ -41,8 +41,20 @@ public static class V4Dispatcher
         Options, Timeout);
 
     // A question on how the law changed: Lex's own operations (diff, changes_in_period, timeline) answer these.
+    // Words that are about a text's own life whatever stands beside them ("historique", "version", "abrogé").
     private static readonly Regex ChangePattern = new(
-        @"(?<![\p{L}])(?:modifi\w*|change\w*|changement\w*|evolu\w*|historique|versions?|difference\w*|compar\w*|avant et apres|amend\w*|changed|history|differ\w*|abroge\w*|repealed)(?![\p{L}])",
+        @"(?<![\p{L}])(?:historique|versions?|avant et apres|amend\w*|history|abroge\w*|repealed)(?![\p{L}])",
+        Options, Timeout);
+
+    // Words that say a change of anything ("modifier les conditions générales", "changer d'assureur", "la différence entre
+    // l'assuré et le preneur"): they ask how the law changed only beside a word for a text, or a year (the reader's set of
+    // 2026-11-19: four such questions on the content of the law were sent to the comparison of versions).
+    private static readonly Regex LooseChangePattern = new(
+        @"(?<![\p{L}])(?:modifi\w*|change\w*|changement\w*|evolu\w*|difference\w*|compar\w*|changed|differ\w*)(?![\p{L}])",
+        Options, Timeout);
+
+    private static readonly Regex TextOrYearPattern = new(
+        @"(?<![\p{L}\d])(?:loi|lois|texte|textes|article|articles|art|reglement|reglements|code|directive|law|laws|act|regulation|legislation|(?:19|20)\d{2})(?![\p{L}\d])",
         Options, Timeout);
 
     // The number an article is cited by: "l'article 39", "art. 62-3", "article 1er", "article 15 bis".
@@ -159,7 +171,7 @@ public static class V4Dispatcher
     public static bool AsksChange(V4QuestionRow row, int dates)
     {
         ArgumentNullException.ThrowIfNull(row);
-        return dates >= 2 || ChangePattern.IsMatch(row.Folded);
+        return dates >= 2 || ChangePattern.IsMatch(row.Folded) || (LooseChangePattern.IsMatch(row.Folded) && TextOrYearPattern.IsMatch(row.Folded));
     }
 
     /// <summary>

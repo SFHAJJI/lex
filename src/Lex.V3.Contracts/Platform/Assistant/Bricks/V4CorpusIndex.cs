@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -54,10 +55,12 @@ public sealed class V4CorpusIndex
     private readonly HashSet<string> _terms;
 
     private readonly V4Key[] _otherDomain;
+    private readonly V4Key[] _domain;
 
-    private V4CorpusIndex(string version, string sha256, List<V4IndexAct> acts, List<V4IndexEuAct> euActs, List<string> otherDomainWords)
+    private V4CorpusIndex(string version, string sha256, List<V4IndexAct> acts, List<V4IndexEuAct> euActs, List<string> otherDomainWords, List<string> domainWords)
     {
         _otherDomain = otherDomainWords.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
+        _domain = domainWords.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
         Version = version;
         Sha256 = sha256;
         Acts = acts.OrderBy(static act => act.Order).ToList().AsReadOnly();
@@ -96,6 +99,12 @@ public sealed class V4CorpusIndex
     /// </summary>
     public bool OtherDomain(IReadOnlyList<V4Word> words) => _otherDomain.Any(key => key.In(words));
 
+    /// <summary>
+    /// Whether a question holds a word of this domain (<c>domain_words</c>: "assurance", "sinistre", "prime", "voiture"...):
+    /// what lets the outline be read for a question no dictionary key reads, and keeps it shut for every other subject.
+    /// </summary>
+    public bool InDomain(IReadOnlyList<V4Word> words) => _domain.Any(key => key.In(words));
+
     /// <summary>The acts a question names by a short name of the index, the longest name first.</summary>
     public List<V4ActMention> Mentions(IReadOnlyList<V4Word> words)
     {
@@ -120,8 +129,38 @@ public sealed class V4CorpusIndex
             }
         }
 
+        // An act named by its date in figures ("L. 27.07.1997", "loi du 27/07/97"): three numbers one sign apart that are
+        // the date of exactly one act of the index.
+        for (var at = 0; at + 2 < words.Count; at++)
+        {
+            if (taken[at] || taken[at + 1] || taken[at + 2] || words[at + 1].Start - words[at].End != 1 || words[at + 2].Start - words[at + 1].End != 1 ||
+                !Figure(words[at].Text, 2, out var day) || !Figure(words[at + 1].Text, 2, out var month) || !(Figure(words[at + 2].Text, 4, out var year) && words[at + 2].Text.Length is 2 or 4))
+            {
+                continue;
+            }
+
+            if (words[at + 2].Text.Length == 2)
+            {
+                year += year > 30 ? 1900 : 2000;
+            }
+
+            var iso = string.Create(CultureInfo.InvariantCulture, $"{year:D4}-{month:D2}-{day:D2}");
+            var dated = Acts.Where(act => act.Date == iso).ToList();
+            if (dated.Count == 1)
+            {
+                taken[at] = taken[at + 1] = taken[at + 2] = true;
+                mentions.Add(new V4ActMention(dated[0].Work, null, words[at].Start, words[at + 2].End));
+            }
+        }
+
         mentions.Sort(static (left, right) => left.Start.CompareTo(right.Start));
         return mentions;
+
+        static bool Figure(string text, int most, out int value)
+        {
+            value = 0;
+            return text.Length <= most && text.All(static letter => letter is >= '0' and <= '9') && int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
+        }
     }
 
     private static V4CorpusIndex Load()
@@ -170,6 +209,7 @@ public sealed class V4CorpusIndex
         }
 
         var other = root.GetProperty("domains").EnumerateArray().SelectMany(static domain => Strings(domain, "other_domain_words")).ToList();
-        return new V4CorpusIndex(root.GetProperty("version").GetString()!, Convert.ToHexStringLower(SHA256.HashData(utf8)), acts, euActs, other);
+        var domain = root.GetProperty("domains").EnumerateArray().SelectMany(static entry => Strings(entry, "domain_words")).ToList();
+        return new V4CorpusIndex(root.GetProperty("version").GetString()!, Convert.ToHexStringLower(SHA256.HashData(utf8)), acts, euActs, other, domain);
     }
 }

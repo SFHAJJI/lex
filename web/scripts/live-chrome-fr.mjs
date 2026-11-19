@@ -2062,6 +2062,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       route: 'Des règles fixes choisissent le chemin d’après ce qui a été lu : un terme défini, un fait, une règle et ses cas, une liste, un texte que Lex ne détient pas, un cas personnel. Aucun modèle ne choisit.',
       retrieval: 'Le code trouve les lignes du texte qui contiennent le terme, et les classe d’après des indices qu’il peut montrer : l’intitulé, qui agit, la forme d’une règle.',
       arbiter: 'Un modèle d’IA répartit les lignes trouvées par le code : principales, complémentaires, écartées. Il n’en ajoute aucune.',
+      outline: 'Un modèle d’IA lit les tables des matières des textes sur le sujet et désigne les articles à lire. Il ne peut désigner que des articles de ces tables.',
       extraction: 'Un modèle d’IA désigne, par leur numéro, les lignes qui répondent. Il n’écrit aucun mot ; le code vérifie chaque ligne désignée.',
       checks: 'Chaque phrase vient d’une formule fixe ; la loi est citée, jamais reformulée. La réponse n’est donnée que si chaque citation est identique au texte conservé.',
       validator: 'Le plan écrit par le code est vérifié par rapport à la liste des opérations permises. Un plan qui n’y tient pas est rejeté, jamais réparé.',

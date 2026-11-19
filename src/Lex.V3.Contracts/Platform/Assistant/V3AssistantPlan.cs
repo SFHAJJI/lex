@@ -683,7 +683,7 @@ public static class V3AssistantPlanValidator
             // Plan /2: code names the act and the article it read in its own tables. Only an evidence step takes them, and
             // only as the two addresses the corpus holds.
             var fromCorpus = second && followUp is null && source.Kind == V3ArgumentSourceKind.Corpus &&
-                operation == "evidence_bundle" && member.Name is "identifier" or "article";
+                operation == "evidence_bundle" && member.Name is "identifier" or "article" or "date";
             if (!kinds.Contains(source.Kind) && !fromCorpus)
             {
                 throw new PlanRefused(V3PlanRefusal.SourceNotAdmitted, $"{operation}'s '{member.Name}' does not take a {ContractWire.NameOf(source.Kind)} source");
@@ -817,7 +817,11 @@ public static class V3AssistantPlanValidator
             case V3ArgumentSourceKind.Today:
                 break;
             case V3ArgumentSourceKind.Corpus:
-                if (parameter == "identifier" ? !IsWorkAddress(source.Corpus!) : !IsArticleId(source.Corpus!))
+                // The date of a version the corpus holds (plan /2, an act whose last version ended before the date asked):
+                // a calendar date, written by code from the act's own table.
+                if (parameter == "date"
+                        ? !DateOnly.TryParseExact(source.Corpus!, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _)
+                        : parameter == "identifier" ? !IsWorkAddress(source.Corpus!) : !IsArticleId(source.Corpus!))
                 {
                     throw new PlanRefused(V3PlanRefusal.OutsideClosedSet, $"{stepId}'s {parameter} is not an address of the corpus");
                 }

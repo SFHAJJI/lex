@@ -34,7 +34,9 @@ public sealed record V4PlanInput(
 /// What the bricks answer: a plan /2, or none with the reason (a question the bricks do not answer: it cites an article,
 /// asks how the law changed, or names nothing of the dictionary), and what the model calls cost.
 /// </summary>
-public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string Reason);
+/// <param name="Firm">Code is sure of the answer by the law's own words (a term the act defines, a general rule that says so itself, one value clearly ahead, a word the act never uses): no second reading is asked for it.</param>
+/// <param name="Articles">The articles the plan quotes, in its order.</param>
+public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string Reason, bool Firm = false, IReadOnlyList<string>? Articles = null);
 
 /// <summary>
 /// The function behind the validator (brick H): parse the question, read the corpus context, decide the route, run one
@@ -42,7 +44,7 @@ public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string
 /// hand the composer a plan. "A loop that hits max_iterations doesn't crash. It returns the best output produced so far,
 /// flagged" [13]. A model that fails, is refused by a check twice, or is not wired leaves the answer code found, said as such.
 /// </summary>
-public static class V4Bricks
+public static partial class V4Bricks
 {
     /// <summary>Their hard limit on passes.</summary>
     public const int MaximumPasses = 4;
@@ -71,6 +73,10 @@ public static class V4Bricks
         public List<V4RecordPass> Passes = [];
         public List<(string Step, string Model, string Prompt, string Reply, int Input, int Output)> Calls = [];
         public long Cost;
+        public bool Firm;
+
+        /// <summary>The date of the version read when it is the latest held and does not cover the date asked.</summary>
+        public string? LatestHeld;
     }
 
     public static V4PlanOutcome Plan(V4PlanInput input, IV4Corpus corpus, IV4Model? model, CancellationToken cancellationToken)
@@ -126,11 +132,52 @@ public static class V4Bricks
         // reader's own case ("mon contrat", "my claim") and no cue code reads ("My insurer says my claim is time-barred, is
         // it right?"). As before the bricks, a model is asked whether it is a person's own case, and such a part is refused,
         // with the law beside it. With no model to ask it is refused too: the boundary is biased to refusal.
-        var ownCase = false;
-        if (!row.Greeting && V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count == 0 && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0)
+        //
+        // The owner's direction of 2026-11-19 (a reader's verdict: "make it answer first"): where the acts of the domain
+        // answer the general question behind a personal wording ("L'assureur peut-il augmenter ma prime ?"), Lex quotes that
+        // rule and says the text does not say how it applies to the reader's situation; it applies nothing. A refusal is
+        // what a question worded for a case gets when no line of the law is found for it. So the tables and the outline
+        // are asked first, with the mark of a personal wording as code reads it, and no model is asked to judge it.
+        var personal = !row.Greeting && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0;
+        var own = ByTheTables(input, row, corpus, model, cancellationToken, asked, personal);
+        if (own.PlanJson is not null && (own.Firm || model is null))
         {
-            // The reader as the subject of the question's own verb ("suis-je couvert ?", "am I covered?") is a case of the
-            // reader's own by its grammar: code is sure, and no model is asked for it.
+            return own with { CostMicroEuros = own.CostMicroEuros + (asked is null ? cost : 0) };
+        }
+
+        // The second reading (the owner's brief of 2026-11-19): a question of this domain is also routed by the acts' own
+        // tables of contents, and the articles named are read. It answers what the tables do not read, and it checks what
+        // they answered without being sure: when both name the same article first, the tables' answer stands (it is the
+        // typed one); when they differ, the articles read under their own headings are the answer. A citation, a change
+        // over time, another domain or another act keep their own routes, and what code is sure of is not read twice.
+        long outline = 0;
+        var outlined = string.Empty;
+        if (model is not null && (own.PlanJson is not null || own.Reason is "nothing_of_the_dictionary" or "no_act_in_scope"))
+        {
+            var read = ByTheOutline(input, row, corpus, model, cancellationToken, asked, personal);
+            if (read.PlanJson is not null)
+            {
+                var agree = own.PlanJson is not null && own.Articles is { Count: > 0 } quoted && (read.Articles ?? []).Contains(quoted[0], StringComparer.Ordinal);
+                return agree
+                    ? own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+outline_agrees" }
+                    : read with { CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0), Reason = read.Reason + (own.PlanJson is null ? string.Empty : "+tables_differ") };
+            }
+
+            if (own.PlanJson is not null)
+            {
+                return own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+" + read.Reason };
+            }
+
+            outline = read.CostMicroEuros;
+            outlined = "+" + read.Reason;
+        }
+
+        // For Lex's own operations the boundary is as before the bricks: a mark of the reader's own case with no cue is
+        // judged by the model, the reader as the subject of the question's own verb is a case by its grammar, and with no
+        // model to ask the part is refused.
+        var ownCase = false;
+        if (personal && V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count == 0)
+        {
             if (V4Boundary.AsksOfOneself(question, 0, question.Length))
             {
                 ownCase = true;
@@ -142,12 +189,6 @@ public static class V4Bricks
             }
         }
 
-        var own = ByTheTables(input, row, corpus, model, cancellationToken, asked, ownCase);
-        if (own.PlanJson is not null)
-        {
-            return own with { CostMicroEuros = own.CostMicroEuros + (asked is null ? cost : 0) };
-        }
-
         // With no description from a model (none is wired, the call failed, its reply left its closed form), nothing is
         // repaired and nothing is asked again: code searches the reader's own words, and the answer says no model took part.
         Describe();
@@ -155,7 +196,7 @@ public static class V4Bricks
         if (parts is null || asked is null)
         {
             var read = V4QuestionCall.ByCode(planner, row).Select(part => part with { OwnCase = ownCase }).ToList();
-            return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, read, outcome!, null, readingDates), cost, own.Reason + "+question_" + outcome);
+            return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, read, outcome!, null, readingDates), cost + outline, own.Reason + "+question_" + outcome + outlined);
         }
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
@@ -166,10 +207,13 @@ public static class V4Bricks
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
             if (keyword is not null && !question.AsSpan(span.Start, span.End - span.Start).Contains('•'))
             {
-                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, asked, ownCase);
-                if (reached.PlanJson is not null)
+                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, asked, personal);
+                // An answer reached through a concept the model named stands when code is sure of it, or when no second
+                // reading was there to contradict it; where the articles read under their own headings held no answer,
+                // an answer code is not sure of is not given (the reader's set of 2026-11-19: one such answer was wrong).
+                if (reached.PlanJson is not null && (reached.Firm || outlined != "+outline_reading_found_nothing"))
                 {
-                    return reached;
+                    return reached with { CostMicroEuros = reached.CostMicroEuros + outline };
                 }
             }
         }
@@ -182,7 +226,7 @@ public static class V4Bricks
             parts = parts.Select(static part => part.Asks == "act_on_a_date" ? part with { Asks = "words_on_a_subject", Words = part.Words ?? part.Act, Act = null } : part).ToList();
         }
 
-        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates), cost, "route:operations");
+        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates), cost + outline, "route:operations(" + own.Reason + ")" + outlined);
     }
 
     /// <summary>
@@ -228,7 +272,7 @@ public static class V4Bricks
         if (row.Greeting)
         {
             var greeting = new Draft { Route = "greeting", AnswerKind = "greeting" };
-            return new V4PlanOutcome(Write(input, row, greeting, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:greeting");
+            return new V4PlanOutcome(Write(input, row, greeting, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:greeting", Firm: true);
         }
 
         // Routes 2 and 3 are Lex's own: a cited article goes to the reference reader, a change over time to diff and its kin.
@@ -266,7 +310,7 @@ public static class V4Bricks
             }
 
             var notHeld = Asked(new Draft { Route = "not_held", AnswerKind = "not_held", EuAct = act.Id });
-            return new V4PlanOutcome(Write(input, row, notHeld, null, null, null, "today", ruleQuestion: false, proposed: "point", asked: string.Empty), notHeld.Cost, "route:not_held");
+            return new V4PlanOutcome(Write(input, row, notHeld, null, null, null, "today", ruleQuestion: false, proposed: "point", asked: string.Empty), notHeld.Cost, "route:not_held", Firm: true);
         }
 
         var asksDefinition = row.Kinds.Any(static kind => kind.Kind == "definition") || (row.Kinds.Count == 0 && row.Concepts.Count == 0 && row.Words.Count <= 5);
@@ -332,9 +376,10 @@ public static class V4Bricks
             return new V4PlanOutcome(null, 0, "nothing_of_the_dictionary");
         }
 
+        var latestHeld = scope.Facts.TextStatus == "latest_held" ? scope.Facts.VersionFrom : null;
         var decision = V4Dispatcher.Decide(
-            new V4DispatchInput(row, application, EuActNotHeld: false, tables is not null, tables is { Summary.Headings: > 0 }, terms.Count > 0, model is not null), dictionary);
-        var draft = Asked(new Draft { Route = decision.Route, AnswerKind = decision.Kind });
+            new V4DispatchInput(row, Application: false, EuActNotHeld: false, tables is not null, tables is { Summary.Headings: > 0 }, terms.Count > 0, model is not null), dictionary);
+        var draft = Asked(new Draft { Route = decision.Route, AnswerKind = decision.Kind, LatestHeld = latestHeld });
 
         V4RetrievalResult? retrieval = null;
         var notes = new List<V4AnswerNote>();
@@ -343,7 +388,7 @@ public static class V4Bricks
             draft.AnswerKind = "absence";
             draft.Absence = "text_not_held";
             return new V4PlanOutcome(
-                Write(input, row, draft, null, null, decision, dateRef, ruleQuestion, "point", decision.Kind, "/lu-legilux/" + scope.Facts.Work), draft.Cost, "route:absence");
+                Write(input, row, draft, null, null, decision, dateRef, ruleQuestion, "point", decision.Kind, "/lu-legilux/" + scope.Facts.Work), draft.Cost, "route:absence", Firm: true);
         }
 
         if (decision.Route == "definition")
@@ -446,9 +491,21 @@ public static class V4Bricks
             }
         }
 
-        var proposed = application ? "refuse" : draft.AnswerKind is "absence" && draft.Absence is "words_not_found" ? "clarify" : "answer";
+        // A question worded for the reader's own case: with lines of the law found, they are quoted as the general rule, and
+        // the answer says the text does not say how it applies to the reader; with none, the part is refused.
+        var general = application && draft.Items.Count > 0;
+        if (general && !draft.Caveats.Contains("not_your_case"))
+        {
+            draft.Caveats.Add("not_your_case");
+        }
+
+        var proposed = application && !general ? "refuse" : draft.AnswerKind is "absence" && draft.Absence is "words_not_found" ? "clarify" : "answer";
         var json = Write(input, row, draft, tables, retrieval, decision, dateRef, ruleQuestion, proposed, decision.Kind, tables.Work, notes);
-        return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route);
+        // What code is sure of by the law's own words: the line that defines the term asked, the rule that says of itself
+        // that it is the general one, the one value clearly ahead, and a word of a complete row that the act never uses.
+        var firm = (draft.Route == "definition" && draft.AnswerKind == "definition") || draft.Route == "fact" || draft.Firm ||
+            (draft.AnswerKind == "absence" && draft.Absence == "terms_nowhere");
+        return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route, firm, draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList());
     }
 
     // ---- Route 2, by the tables: one article of an act the index names -----------------------------------------------------
@@ -475,7 +532,7 @@ public static class V4Bricks
 
         var planner = new V3PlannerInput(input.MaskedQuestion, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
         var json = V4QuestionCall.CitedPlanJson(planner, at.Tables.Work, article.Id, reading.Count == 1 ? reading[0].Ref : "today", at.Tables.Language, ownCase);
-        return new V4PlanOutcome(json, 0, "route:operations+cited");
+        return new V4PlanOutcome(json, 0, "route:operations+cited", Firm: true);
     }
 
     // ---- Route 4: a term the law defines ----------------------------------------------------------------------------------
@@ -654,6 +711,7 @@ public static class V4Bricks
             var sure = (lead.Detectors.Contains("general_rule") || lead.Detectors.Contains("direct_form") || lead.Detectors.Contains("article_lead")) &&
                 (shortlist.Count == 1 || lead.Score - shortlist[1].Score >= 1.0);
             draft.AnswerKind = sure ? "rule" : "candidates";
+            draft.Firm = sure && lead.Detectors.Contains("general_rule");
             draft.Found = true;
             draft.Items.Add(new Item(lead.Line, lead.Line, sure ? "rule" : "passage", null));
             var cases = shortlist.Skip(1)
@@ -1101,7 +1159,11 @@ public static class V4Bricks
                 writer.WriteString("corpus", article.Id);
                 writer.WriteEndObject();
                 writer.WriteStartObject("date");
-                if (dateRef == "today")
+                if (draft.LatestHeld is not null)
+                {
+                    writer.WriteString("corpus", draft.LatestHeld);
+                }
+                else if (dateRef == "today")
                 {
                     writer.WriteBoolean("today", true);
                 }
@@ -1162,6 +1224,11 @@ public static class V4Bricks
             }
 
             writer.WriteString("date", dateRef);
+            if (draft.LatestHeld is not null)
+            {
+                writer.WriteString("latest_held", draft.LatestHeld);
+            }
+
             if (work is not null)
             {
                 writer.WriteString("work", work);
