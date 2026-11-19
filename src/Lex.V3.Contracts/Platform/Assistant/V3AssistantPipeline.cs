@@ -171,10 +171,11 @@ public static partial class V3AssistantPipeline
 
         var dates = V3AssistantParsers.DatesIn(intake.Text);
         var context = new V3PlanContext(intake, dates, V3AssistantParsers.RangesIn(intake.Text, dates), chips, environment.SearchLanguages);
+        var input = new V3PlannerInput(intake.Masked, locale.Value, context.References(), environment.SearchLanguages, environment.Today);
         V3PlannerOutput output;
         try
         {
-            output = planner.Plan(new V3PlannerInput(intake.Masked, locale.Value, context.References(), environment.SearchLanguages, environment.Today), cancellationToken)
+            output = planner.Plan(input, cancellationToken)
                 ?? throw new InvalidOperationException("The planner answered nothing.");
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
@@ -190,6 +191,15 @@ public static partial class V3AssistantPipeline
         }
 
         var dossier = Run(validation.Plan!, planner.PlannerId, context, locale.Value, execute, environment);
+
+        // The wider reading (LEX_V3_EVERY_LAW): Lex's own operations ran and quoted nothing, and the planner can read the
+        // question once more in every Luxembourg act it has an index of. What it finds is shown as candidates; when it finds
+        // nothing, or anything of it fails, the first answer stands. A replay's planner offers none, so a trace replays as is.
+        if (dossier is not null && planner is IAssistantWiderPlanner wider && QuotedNothing(validation.Plan!, dossier))
+        {
+            dossier = Wider(wider, input, context, locale.Value, execute, environment, cancellationToken) ?? dossier;
+        }
+
         return dossier is null
             ? new V3AskPresented(V3AskPresentationResult.AssistantUnavailable, V3AskOutcomeReason.GateFailed)
             : new V3AskAnswered(dossier);

@@ -82,7 +82,11 @@ if (!maintenance)
             Environment.GetEnvironmentVariable(V3AssistantRuntime.OffSwitchVariable),
             deployment is null || corpusMount is null
                 ? null
-                : new Lex.V3.Contracts.Platform.Assistant.Bricks.V4BricksPlanner(corpusMount.BricksCorpus(static () => DateTimeOffset.UtcNow), deployment),
+                : new Lex.V3.Contracts.Platform.Assistant.Bricks.V4BricksPlanner(
+                    corpusMount.BricksCorpus(static () => DateTimeOffset.UtcNow),
+                    deployment,
+                    // The wider reading (the owner's order of 2026-11-19): LEX_V3_EVERY_LAW exactly `on`, read once here.
+                    everyLaw: string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.EveryLawVariable), "on", StringComparison.Ordinal)),
             Environment.GetEnvironmentVariable(V3AssistantRuntime.PreviewVariable)));
     }
     catch (Exception exception)

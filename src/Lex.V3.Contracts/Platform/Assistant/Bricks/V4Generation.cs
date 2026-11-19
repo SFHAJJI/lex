@@ -136,6 +136,33 @@ public static class V4Generation
         return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
     }
 
+    /// <summary>
+    /// The outline call over acts a router kept (every law, 2026-11-19): the same instruction, form and bound as
+    /// <see cref="OutlineCall"/>, each act by its title and by the articles a pre-filter kept of it, each with the line
+    /// shown of it (its heading, else its text around a word of the question). The second value gives each id's article back.
+    /// </summary>
+    public static (V4ModelCall Call, List<(V4ActTables Tables, V4Article Article)> Ids) OutlineCallOf(string question, IReadOnlyList<(string Title, V4ActTables Tables, IReadOnlyList<V4OutlineArticle> Articles)> acts)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        ArgumentNullException.ThrowIfNull(acts);
+        var ids = new List<(V4ActTables, V4Article)>();
+        var given = new JsonArray();
+        foreach (var (title, tables, kept) in acts)
+        {
+            var articles = new JsonArray();
+            foreach (var entry in kept)
+            {
+                ids.Add((tables, entry.Article));
+                articles.Add(new JsonObject { ["id"] = "A" + ids.Count.ToString(CultureInfo.InvariantCulture), ["heading"] = entry.Brief });
+            }
+
+            given.Add(new JsonObject { ["act"] = title, ["articles"] = articles });
+        }
+
+        var user = new JsonObject { ["question"] = question, ["acts"] = given };
+        return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
+    }
+
     private static string OutlineSchema { get; } = new JsonObject
     {
         ["type"] = "object",

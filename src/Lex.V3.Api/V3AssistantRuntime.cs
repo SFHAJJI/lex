@@ -44,8 +44,15 @@ internal sealed class V3AssistantRuntime
     /// <summary>ask's own per-client limit, a minute (R40: below 60).</summary>
     internal const int AskPerMinute = 20;
 
-    /// <summary>The per-answer cost ceiling, in micro-euros (0.02 EUR): a driver default, re-sized on the replay set (R40).</summary>
-    internal const long PerAnswerCeilingMicroEuros = 20_000;
+    /// <summary>
+    /// The switch of the wider reading (the owner's order of 2026-11-19): exactly <c>on</c> lets a question Lex's own
+    /// operations quoted nothing for be read in every Luxembourg act of the law index, and shown as candidates. Anything
+    /// else, or unset, and the assistant answers as it did.
+    /// </summary>
+    internal const string EveryLawVariable = "LEX_V3_EVERY_LAW";
+
+    /// <summary>The per-answer cost ceiling, in micro-euros (0.03 EUR, the owner's order of 2026-11-19; it was 0.02): a planner that reports more is not used (R40).</summary>
+    internal const long PerAnswerCeilingMicroEuros = 30_000;
 
     /// <summary>The monthly spend cap, in micro-euros (20 EUR, O22's recommended answer; the owner decides it).</summary>
     internal const long MonthlyCapMicroEuros = 20_000_000;
@@ -275,9 +282,37 @@ internal sealed class V3AssistantRuntime
     /// </summary>
     internal IAssistantPlanner Budgeted() => new BudgetedPlanner(this, _planner ?? throw new InvalidOperationException("No planner is wired."));
 
-    private sealed class BudgetedPlanner(V3AssistantRuntime runtime, IAssistantPlanner inner) : IAssistantPlanner
+    private sealed class BudgetedPlanner(V3AssistantRuntime runtime, IAssistantPlanner inner) : IAssistantWiderPlanner
     {
         public string PlannerId => inner.PlannerId;
+
+        /// <summary>
+        /// The wider reading, when the planner has one: under the same deadline and the same ceiling as a plan, with its own
+        /// reservation. A reading over the ceiling, or one that fails, is not used, and the first answer stands.
+        /// </summary>
+        public V3PlannerOutput? PlanWider(V3PlannerInput input, CancellationToken cancellationToken)
+        {
+            if (inner is not IAssistantWiderPlanner wider || !runtime.TryReserve())
+            {
+                return null;
+            }
+
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(PlannerDeadline);
+            V3PlannerOutput? output;
+            try
+            {
+                output = wider.PlanWider(input, deadline.Token);
+            }
+            catch
+            {
+                runtime.Settle(0);
+                throw;
+            }
+
+            runtime.Settle(output?.CostMicroEuros ?? 0);
+            return output is null || output.CostMicroEuros > PerAnswerCeilingMicroEuros ? null : output;
+        }
 
         public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)
         {

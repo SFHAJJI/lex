@@ -29,7 +29,17 @@ public sealed record V4PlanInput(
     string Today,
     IReadOnlyList<V3ParsedDate> Dates,
     IReadOnlyList<V3PlannerReference>? References = null,
-    IReadOnlyList<string>? SearchLanguages = null);
+    IReadOnlyList<string>? SearchLanguages = null)
+{
+    /// <summary>
+    /// The switch of the wider reading (LEX_V3_EVERY_LAW exactly <c>on</c>; off by default): whether a question Lex's own
+    /// operations quoted nothing for is routed to every Luxembourg act of the law index (<see cref="V4Bricks.PlanEveryLaw"/>).
+    /// </summary>
+    public bool EveryLaw { get; init; }
+
+    /// <summary>The law index the wider reading routes with; the one this build carries when none is given.</summary>
+    public V4LawIndex? Laws { get; init; }
+}
 
 /// <summary>
 /// What the bricks answer: a plan /2, or none with the reason (a question the bricks do not answer: it cites an article,
