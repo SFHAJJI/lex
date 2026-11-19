@@ -35,6 +35,12 @@ public static partial class V4Bricks
     /// <summary>How many articles of a big act are given when it has no parts, or none was named: the best by the question's words.</summary>
     internal const int EveryLawNoParts = 120;
 
+    /// <summary>A route is weak when its best act scores under this many times the router's floor.</summary>
+    internal const int EveryLawWeakRoute = 3;
+
+    /// <summary>The most acts read on a weak route: the acts the router kept and the general codes beside them.</summary>
+    internal const int EveryLawWeakActs = 5;
+
     /// <summary>The most lines one outline call holds.</summary>
     internal const int EveryLawLines = 400;
 
@@ -222,6 +228,7 @@ public static partial class V4Bricks
         // An act named (a code, a law by its date, an act of the insurance index): only that act is read, when the law
         // index knows it by that name or holds it, whatever its words weigh; an act the index does not know by name is
         // never guessed from the other words of the question.
+        var named0 = false;
         var mentioned = false;
         foreach (var act in row.Acts)
         {
@@ -245,11 +252,29 @@ public static partial class V4Bricks
             }
 
             kept = named;
+            named0 = true;
         }
 
         if (kept.Count == 0)
         {
             return "every_law_router_keeps_nothing";
+        }
+
+        // A weak route (the best act scores under three times the router's floor, and the question names no act): the
+        // question's everyday words say little of where its rule stands, and the rule is often one of the general law
+        // ("un chien mord un passant, qui paie ?", "prendre une voiture sans demander, est-ce du vol ?": the fresh set of
+        // 2026-11-19 routed neither to the Code civil nor to the Code pénal). The two general codes are read beside the
+        // acts kept, by their parts, as any big act is.
+        if (!named0 && kept[0].ScoreCents < EveryLawWeakRoute * laws.MinScoreCents)
+        {
+            // The general law: the Code civil and the Code pénal (a local list: a static one would be a registry to pin).
+            foreach (var general in new[] { "/lu-legilux/code-civil", "/lu-legilux/code-penal" })
+            {
+                if (kept.Count < EveryLawWeakActs && laws.Act(general) is { } code && !Routed(kept, code.Work))
+                {
+                    kept.Add(new V4RoutedAct(code, 0, false));
+                }
+            }
         }
 
         routed = kept;
