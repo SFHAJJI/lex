@@ -58,6 +58,15 @@ live without his word. The hold-out rows are not read.
   14 `champion` and `serving`. Release 17 is deactivated and kept for rollback, and was backed up the same afternoon
   (the image downloaded again for it).
 - **#1067's review** on its final state (Codex, a07cf188): MERGE, no material finding; CI green on the five checks.
+- **The hold-out, measured once** on the owner's word ("Measure the hold out"), on the live Release 18, 2026-11-19 about
+  15:45 UTC (`run_holdout.py`, rules fixed before any answer was read; nothing tuned on it): of 35 questions whose article
+  was verified, 15 right, 2 wrong, 17 not found (6 candidates), 1 refused; of 16 with no article expected, 6 right; of
+  26 whose article is not verified, 3 answered from the expected law, 2 from another law, 2 answered with no law
+  labelled, 19 not found. The wrong ones: "Puis-je assurer le même bien chez deux assureurs ?" (article 53 for 55), "Qui
+  est le bénéficiaire d'une assurance-vie si rien n'est précisé ?" (article 1 for 107); from another law: the product
+  information document, transfers of data outside the Union. On the `tune` set the same release gives 47 of 80 right,
+  0 wrong, and 34 of 40: the rules of the day fit the questions they were written from better than unseen ones. The
+  hold-out is used up; a new unseen set is needed for the next measurement.
 
 ## The owner's brief "make it work": an ordinary question gets its article (sole driver, 2026-11-19)
 
