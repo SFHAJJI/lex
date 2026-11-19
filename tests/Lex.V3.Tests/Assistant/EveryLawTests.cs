@@ -37,7 +37,7 @@ public sealed class EveryLawTests
     private const string LeaseWork = "loi-2006-09-21-n1";
     private const string LeaseAddress = "/lu-legilux/" + LeaseWork;
 
-    // An act outside insurance, written for this test (four short articles in the shape the index holds an act: its pieces,
+    // An act outside insurance, written for this test (five short articles in the shape the index holds an act: its pieces,
     // which give back its text). It is not the text of the law of 21 September 2006.
     private static readonly (string Id, string[] Pieces)[] LeaseArticles =
     [
@@ -45,6 +45,7 @@ public sealed class EveryLawTests
         ("art_2", ["Art. 2.", "Loyer", "Le loyer ne peut être adapté que tous les deux ans.", "Le bailleur notifie l'adaptation du loyer au locataire par lettre recommandée."]),
         ("art_3", ["Art. 3.", "Garantie locative", "La garantie locative ne peut dépasser trois mois de loyer."]),
         ("art_4", ["Art. 4.", "Le locataire peut résilier le bail moyennant un préavis de trois mois."]),
+        ("art_5", ["Art. 5.", "Les charges communes de l'immeuble sont réparties entre les occupants selon la surface de chaque lot, sauf convention contraire écrite conclue avant l'entrée dans les lieux ; les frais de chauffage et d'eau chaude sont toutefois répartis d'après les relevés des compteurs individuels lorsqu'ils existent."]),
     ];
 
     private static readonly string LeaseState = new('c', 64);
@@ -228,6 +229,12 @@ public sealed class EveryLawTests
         var notice = Index.Prefilter(Lease, Index.Tokens("préavis du locataire"));
         var fourth = notice.Single(static entry => entry.Article.Id == "art_4");
         StringAssert.Contains(fourth.Brief, "locataire");
+
+        // A long article is shown by about 110 characters around the word, cut at spaces, and says it is a cut.
+        var fifth = Index.Prefilter(Lease, Index.Tokens("frais de chauffage")).Single(static entry => entry.Article.Id == "art_5");
+        StringAssert.Contains(fifth.Brief, "frais de chauffage");
+        Assert.IsTrue(fifth.Brief.StartsWith("… ", StringComparison.Ordinal) && fifth.Brief.Length <= V4LawIndex.BriefLength + 4, fifth.Brief);
+        Assert.IsFalse(fifth.Brief.Contains("Les charges communes", StringComparison.Ordinal), "not its first words");
     }
 
     // ---- The road: Lex's own operations quote nothing, the wider reading shows candidates ---------------------------------
