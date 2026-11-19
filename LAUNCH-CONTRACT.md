@@ -21,8 +21,16 @@ product scope. Anything not listed here ships after launch.
       licence-blocked journey.
 - [ ] Luxembourg applicability dates and EU wording-state dates are never merged, in text or in speech.
       Evidence: timeline speech test per publisher.
-- [ ] No model retrieves, reranks or authors authoritative text. `ask` answers
-      `assistant_v3_unavailable`. Evidence: registry and host census.
+- [ ] No model authors authoritative text: every quotation is cut by code from the stored text and
+      checked against it, and no sentence of an answer comes from a model. Evidence: the gates
+      `QuoteBound` and `non_template_strings` on every answer; `BricksTests`.
+      Amended on 2026-11-19 to the owner's orders of record; it read "No model retrieves, reranks or
+      authors authoritative text. `ask` answers `assistant_v3_unavailable`." The owner ordered the
+      assistant served (2026-10-28), gave the go for V4's bricks (2026-11-18: a model gives the lines
+      code found a role and points at lines it is given) and, in his brief of 2026-11-19, work item 1,
+      ordered a second pass in which a model "returns ids only, chosen from the list", with the rules
+      "the model never supplies legal text, and an id that is not in the candidate list is rejected".
+      The wording of this line is the owner's to confirm (STATUS.md, blocked on the owner).
 - [ ] Derivation and indexes are byte-stable across two independent executions. Evidence: two-build
       digest comparison in the release pipeline.
 

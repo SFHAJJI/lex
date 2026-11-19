@@ -129,7 +129,10 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   (2) whether an answer may carry one sentence written by a model (not built; five examples in
   `C:\lex-v3\kezhan-brief-2026-11-19\summary-sentence-examples.md`); (3) the monthly cap, 20 EUR today, about 3,700
   answers at the measured cost; (4) the one measurement on the 77 hold-out questions, not opened; (5) the Developers
-  page's sentence that such questions "are refused", no longer exact for an insurance question whose rule is found.
+  page's sentence that such questions "are refused", no longer exact for an insurance question whose rule is found;
+  (6) the launch contract's line on models, amended in #1067 to his orders of record (it still read "No model
+  retrieves, reranks or authors authoritative text", from before the assistant; the review of #1067 found the second
+  reading contrary to it): the wording is his to confirm.
 - Azure credits: the subscription's trial credit (175.70 EUR left, seen on 2026-10-17) expires on 12 November 2026.
   From then the private copy of the site (about 26 EUR a month, below) is billed to the payment method on file,
   within the 30 EUR monthly budget the owner accepted; a support plan pays for support only. The owner checks the

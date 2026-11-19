@@ -83,6 +83,12 @@ and waits for his word.
   indemnise la victime si le responsable n'est pas assuré ?" quoted the insolvency fund: the Fonds de Garantie
   Automobile is now a concept of its own in the dictionary, with the articles where the law treats it (15 and 16), so
   an answer on it says that article 16 exists and is not held.
+- **The review of #1067** (Codex, the other model family, one round): one material finding. The launch contract
+  still read "No model retrieves, reranks or authors authoritative text", a line from before the assistant, and the
+  second reading has a model name the articles to read. Repaired in the contract: the line now says what holds (no
+  model authors authoritative text; every quotation is cut and checked by code) and quotes the owner's orders that
+  changed the rest (the assistant, V4's bricks, the brief's work item 1: "returns ids only, chosen from the list").
+  Its wording is the owner's to confirm (STATUS.md). Its other finding was the checks still running.
 - **Reversible driver decisions:** the gates' word lists (`corpus-index.json`); the rule that a wider second reading
   stands; the deduction of a missing article's number; `lex-eval`: a case may require a sentence by its template id,
   and the cases on the reader's own case now expect the general rule and that sentence (the owner's direction).
