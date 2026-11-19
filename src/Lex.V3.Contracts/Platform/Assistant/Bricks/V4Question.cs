@@ -118,6 +118,13 @@ public static class V4QuestionParser
         "happens", "happen", "provide", "provides", "regarding", "concerning",
     };
 
+    /// <summary>
+    /// Whether a folded word of a question says something of its subject: five letters or more, no stop word, no digit and
+    /// no masked character. What a word no table read must be to be reported, and what a word must be to confirm a pick.
+    /// </summary>
+    internal static bool IsContentWord(string foldedWord) =>
+        foldedWord.Length >= 5 && !StopWords.Contains(foldedWord) && !foldedWord.Any(char.IsAsciiDigit) && !foldedWord.Contains('•', StringComparison.Ordinal);
+
     /// <summary>The row of a question, by code alone.</summary>
     public static V4QuestionRow Parse(string maskedQuestion, V3AnswerLocale locale, V4Dictionary dictionary, V4CorpusIndex index)
     {
@@ -179,7 +186,7 @@ public static class V4QuestionParser
         for (var at = 0; at < words.Count; at++)
         {
             var word = words[at];
-            if (!taken[at] && word.Text.Length >= 5 && !StopWords.Contains(word.Text) && !word.Text.Any(char.IsAsciiDigit) && !word.Text.Contains('•', StringComparison.Ordinal))
+            if (!taken[at] && IsContentWord(word.Text))
             {
                 unmatched.Add(new V4Span(word.Start, word.End));
             }
@@ -368,9 +375,12 @@ public static class V4Boundary
     }
 
     /// <summary>
-    /// Whether a part that holds cues of R15 is nevertheless a question on the rule: a role of the law is named before the
-    /// first cue, every cue is of the two functions a rule can be asked in ("peut-il", "doit-il"), and nothing marks a case of
-    /// the reader's own.
+    /// Whether a part that holds cues of R15 is nevertheless a question on the rule: every cue is of the two functions a rule
+    /// can be asked in ("peut-il", "doit-il"), and nothing marks a case of the reader's own (no personal marker, no number
+    /// that states a fact). Until 2026-11-19 a role of the insurance dictionary also had to be the subject of the cue's
+    /// verb, so an impersonal question on any other law ("Un employeur peut-il ...", "Faut-il ...") was refused by
+    /// construction; the owner's order of that day: an impersonal "peut-il / doit-il" question is a question on the rule,
+    /// whatever the law.
     /// </summary>
     public static bool RuleQuestion(string text, int start, int end, IReadOnlyList<V3ApplicationCue> cues)
     {
@@ -391,15 +401,7 @@ public static class V4Boundary
             return false;
         }
 
-        var folded = V4Text.Fold(text[start..end]);
-        var words = V4Text.Words(folded);
-        var dictionary = V4Dictionary.Insurance;
-        var first = cues.OrderBy(static cue => cue.Start).First();
-        var cueStart = first.Start - start;
-        var cueEnd = first.End - start;
-
-        // The role is the subject of the cue's verb: named before it ("L'assureur peut-il ..."), or right after an inverted
-        // one ("Que doit faire le preneur d'assurance ...").
-        return dictionary.Lookup(words).Any(hit => dictionary.Concept(hit.Keyword.Concept)!.Kind == "role" && (hit.Start < cueStart || (hit.Start >= cueEnd && hit.Start - cueEnd <= 16)));
+        // No role of the insurance dictionary is asked for: the subject of the cue's verb may be any person a law names.
+        return true;
     }
 }

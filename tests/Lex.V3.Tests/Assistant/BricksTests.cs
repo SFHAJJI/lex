@@ -241,10 +241,17 @@ public sealed class BricksTests
     [DataRow("L'assureur peut-il me résilier ?", false)]
     [DataRow("L'assureur peut-il résilier le contrat après 2 sinistres ?", false)]
     [DataRow("Dans mon cas, l'assureur peut-il résilier le contrat ?", false)]
-    [DataRow("Peut-on résilier un contrat d'assurance ?", false)]
-    [DataRow("Un salarié peut-il être licencié pendant un congé de maladie ?", false)]
+    // The owner's order of 2026-11-19: with no mark of a case and no number that states a fact, an impersonal "peut-il /
+    // doit-il" question is a question on the rule whatever the law; no role of the insurance dictionary is asked for.
+    [DataRow("Peut-on résilier un contrat d'assurance ?", true)]
+    [DataRow("Un salarié peut-il être licencié pendant un congé de maladie ?", true)]
+    [DataRow("Un employeur doit-il motiver un licenciement ?", true)]
+    [DataRow("Faut-il un écrit pour un bail ?", true)]
+    [DataRow("Mon employeur peut-il me licencier pendant un congé de maladie ?", false)]
+    [DataRow("Puis-je être licencié pendant un congé de maladie ?", false)]
+    [DataRow("Un salarié peut-il être licencié après 3 avertissements ?", false)]
     [DataRow("L'assureur va-t-il gagner devant le tribunal ? Quelles sont ses chances de gagner ?", false)]
-    public void AQuestionOnTheRuleNamesARoleOfTheLawAndNoCaseOfTheReadersOwn(string question, bool onTheRule)
+    public void AQuestionOnTheRuleHoldsOnlyCuesARuleIsAskedInAndNoCaseOfTheReadersOwn(string question, bool onTheRule)
     {
         var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
         Assert.IsTrue(cues.Count > 0, "every one of these holds a cue of R15");
@@ -785,9 +792,19 @@ public sealed class BricksTests
         Assert.AreEqual(0, dossier.Quotes.Count());
         Assert.AreEqual(0, executor.Calls.Count, "nothing to read: the sweep is the answer");
         var claims = dossier.Blocks.OfType<V3ClaimBlock>().Select(static block => block.Claim).ToArray();
-        Assert.AreEqual("Lex a parcouru le texte de /lu-legilux/loi-1997-07-27-n10 (lignes\u00A0: 913\u00A0; articles\u00A0: 147), tel qu’il se lisait le 18 novembre 2026, à la recherche de ces termes\u00A0:", claims[0].Text);
-        Assert.AreEqual("Lignes contenant «\u00A0franchise\u00A0»\u00A0: 0\u00A0; articles concernés\u00A0: 0.", claims[1].Text);
-        Assert.AreEqual(V3AnswerTemplates.AbsenceTermsNowhere, claims[^1].TemplateId);
+        // One plain sentence: the act by its name, never its address on this site, and no line of counts.
+        Assert.AreEqual(1, claims.Count(static claim => claim.TemplateId.StartsWith("absence.", StringComparison.Ordinal)));
+        Assert.AreEqual(V3AnswerTemplates.AbsenceTermsNowhereInAct, claims[0].TemplateId);
+        Assert.AreEqual("Aucun des termes que Lex connaît pour ce sujet ne figure dans le texte «\u00A0loi du 27 juillet 1997 sur le contrat d'assurance\u00A0», tel qu’il se lisait le 18 novembre 2026\u00A0: cela indique ce que contient ce texte, et non ce que prévoit un contrat.", claims[0].Text);
+        foreach (var claim in claims)
+        {
+            Assert.IsFalse(claim.Text.Contains("/lu-legilux/", StringComparison.Ordinal), "no address of this site in a sentence of the answer: " + claim.Text);
+            Assert.IsFalse(claim.Text.Contains("articles concernés", StringComparison.Ordinal), "no line of counts: " + claim.Text);
+        }
+
+        // The same in English, the act by the same name.
+        var english = Answered(BricksFixture.Ask("What is the deductible?")).Blocks.OfType<V3ClaimBlock>().Select(static block => block.Claim).ToArray();
+        Assert.AreEqual("None of the terms Lex knows for this subject appears in the text “loi du 27 juillet 1997 sur le contrat d'assurance”, as it stood on 18 November 2026: this says what this text contains, not what a contract provides.", english[0].Text);
     }
 
     [TestMethod]
@@ -1545,6 +1562,28 @@ public sealed class BricksTests
         var other = new BricksFixture.Model(static _ => throw new HttpRequestException("no call answers in this test"));
         _ = BricksFixture.Ask("Quelle est la durée maximale de la période d'essai ?", other);
         Assert.AreEqual((0, false), (other.Outlines.Count, other.Calls.Any(static call => call.Step == "outline")));
+    }
+
+    [TestMethod]
+    public void AnAnswerOfTheSecondReadingAloneIsAssertedOnlyWhenCodeFindsAWordOfTheQuestionInWhatItQuotes()
+    {
+        // The tables read nothing of either question, so the second reading stands alone: two model calls picked the
+        // article and the line. Code asserts the line only when it finds a content word of the question in the line
+        // quoted or in the heading of its article; otherwise the same line is a candidate (point 1; 2026-11-19).
+        // "immeuble" stands on the first line of article 69: code confirms the pick, and the line is the answer.
+        var confirmed = Answered(BricksFixture.Ask("Que devient mon contrat d'assurance si je vends mon immeuble ?", Reader("Cession d'une chose assurée")));
+        Assert.AreEqual((V3AssistantVerdict.Answer, "art_69"), (confirmed.Verdict, confirmed.Quotes.Single().Anchor));
+        Assert.AreEqual("text", Bricks(confirmed).GetProperty("answer").GetProperty("kind").GetString());
+        CollectionAssert.Contains(Templates(confirmed), V3AnswerTemplates.AnswerPassages);
+        CollectionAssert.DoesNotContain(Templates(confirmed), V3AnswerTemplates.AnswerCandidates);
+
+        // "vends" and "voiture" stand neither on that line nor in its heading ("Cession d'une chose assurée"): the same
+        // article and the same line, shown as a candidate and not as the answer.
+        var unconfirmed = Answered(BricksFixture.Ask("Que devient mon contrat d'assurance si je vends ma voiture ?", Reader("Cession d'une chose assurée")));
+        Assert.AreEqual((V3AssistantVerdict.Answer, "art_69"), (unconfirmed.Verdict, unconfirmed.Quotes.Single().Anchor));
+        Assert.AreEqual("candidates", Bricks(unconfirmed).GetProperty("answer").GetProperty("kind").GetString());
+        CollectionAssert.Contains(Templates(unconfirmed), V3AnswerTemplates.AnswerCandidates);
+        CollectionAssert.DoesNotContain(Templates(unconfirmed), V3AnswerTemplates.AnswerPassages);
     }
 
     [TestMethod]
