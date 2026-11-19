@@ -502,7 +502,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::QuoteBlocks, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::RefusalBlocks, "
-                    + "12 compiler-generated",
+                    + "11 compiler-generated",
                 "Lex.V3.Contracts.Platform.V3AuthoritativeClaim: constructor private instance "
                     + "Lex.V3.Contracts.Platform.V3AuthoritativeClaim::.ctor, "
                     + "constructor private instance "

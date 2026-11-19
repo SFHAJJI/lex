@@ -57,6 +57,12 @@ public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string
     /// them all: code is not sure of it, and no agreement asserts it (the owner's point 1).
     /// </summary>
     internal bool Partial { get; init; }
+
+    /// <summary>
+    /// Code confirms the second reading's pick: a content word of the question stands in a line it quotes or in the heading
+    /// of that line's article. Where the tables read nothing and code does not confirm, the lines are candidates (point 1).
+    /// </summary>
+    internal bool Confirmed { get; init; }
 }
 
 /// <summary>
@@ -214,11 +220,17 @@ public static partial class V4Bricks
                 // assert". Where the tables and the second reading differ, neither is sure: the lines of both are shown as
                 // candidates, not as the answer.
                 var differs = own.PlanJson is not null && !wider;
+
+                // The tables read nothing, so the second reading stands alone: two model calls picked the article and the
+                // lines, and code checked only that they were ones it gave. Unless code itself finds a word of the
+                // question in what is quoted (`read.Confirmed`), nothing but the model says the lines are on the subject:
+                // code is not sure, and they are shown as candidates (point 1), never asserted.
+                var unconfirmed = OutlinePickNeedsCodeConfirmation && own.PlanJson is null && !read.Confirmed;
                 return read with
                 {
-                    PlanJson = differs ? AsCandidates(read.PlanJson) : read.PlanJson,
+                    PlanJson = differs || unconfirmed ? AsCandidates(read.PlanJson) : read.PlanJson,
                     CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0),
-                    Reason = read.Reason + (own.PlanJson is null ? string.Empty : wider ? "+tables_narrower" : "+tables_differ+candidates"),
+                    Reason = read.Reason + (own.PlanJson is null ? (unconfirmed ? "+unconfirmed_by_code+candidates" : string.Empty) : wider ? "+tables_narrower" : "+tables_differ+candidates"),
                 };
             }
 
