@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "9750681825233765119"
+      "templateHash": "7799282469599306427"
     }
   },
   "parameters": {
@@ -97,6 +97,17 @@
       "defaultValue": {},
       "metadata": {
         "description": "The assistant (R30; the owner's order of 2026-10-28), or empty for none (the switched-off card, as every deployment before it): account, the Azure OpenAI account in this resource group whose key Azure reads as it deploys; deployment, its model deployment; apiVersion; eurPerMillionInput and eurPerMillionOutput, the deployment's prices; preview, exactly `unreviewed` while the people's reviews are not done. Ignored by the maintenance revision."
+      }
+    },
+    "everyLaw": {
+      "type": "string",
+      "defaultValue": "on",
+      "allowedValues": [
+        "on",
+        "off"
+      ],
+      "metadata": {
+        "description": "The assistant's wider reading (the owner's order of 2026-11-19), read by the API at startup as LEX_V3_EVERY_LAW: on (a question Lex's own operations quoted nothing for is read in every Luxembourg act of the law index and shown as candidates) or off (the assistant answers as it did before). Set only where the assistant is on."
       }
     },
     "maintenance": {
@@ -253,7 +264,7 @@
                 "cpu": "[json('2.0')]",
                 "memory": "4Gi"
               },
-              "env": "[concat(variables('baseEnvironment'), if(variables('assistantOn'), createArray(createObject('name', 'LEX_V3_ASSISTANT', 'value', 'on'), createObject('name', 'LEX_V3_ASSISTANT_PREVIEW', 'value', parameters('assistant').preview), createObject('name', 'LEX_ASSISTANT_ENDPOINT', 'value', reference(variables('assistantAccountId'), '2024-10-01').endpoint), createObject('name', 'LEX_ASSISTANT_DEPLOYMENT', 'value', parameters('assistant').deployment), createObject('name', 'LEX_ASSISTANT_API_VERSION', 'value', parameters('assistant').apiVersion), createObject('name', 'LEX_ASSISTANT_EUR_PER_MILLION_INPUT', 'value', parameters('assistant').eurPerMillionInput), createObject('name', 'LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT', 'value', parameters('assistant').eurPerMillionOutput), createObject('name', 'LEX_ASSISTANT_KEY', 'secretRef', 'assistant-key')), createArray(createObject('name', 'LEX_V3_ASSISTANT', 'value', 'off'))))]",
+              "env": "[concat(variables('baseEnvironment'), if(variables('assistantOn'), createArray(createObject('name', 'LEX_V3_ASSISTANT', 'value', 'on'), createObject('name', 'LEX_V3_ASSISTANT_PREVIEW', 'value', parameters('assistant').preview), createObject('name', 'LEX_V3_EVERY_LAW', 'value', parameters('everyLaw')), createObject('name', 'LEX_ASSISTANT_ENDPOINT', 'value', reference(variables('assistantAccountId'), '2024-10-01').endpoint), createObject('name', 'LEX_ASSISTANT_DEPLOYMENT', 'value', parameters('assistant').deployment), createObject('name', 'LEX_ASSISTANT_API_VERSION', 'value', parameters('assistant').apiVersion), createObject('name', 'LEX_ASSISTANT_EUR_PER_MILLION_INPUT', 'value', parameters('assistant').eurPerMillionInput), createObject('name', 'LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT', 'value', parameters('assistant').eurPerMillionOutput), createObject('name', 'LEX_ASSISTANT_KEY', 'secretRef', 'assistant-key')), createArray(createObject('name', 'LEX_V3_ASSISTANT', 'value', 'off'))))]",
               "probes": "[if(parameters('maintenance'), variables('maintenanceProbes'), variables('releaseProbes'))]",
               "volumeMounts": [
                 {
