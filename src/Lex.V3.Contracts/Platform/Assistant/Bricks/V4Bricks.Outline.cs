@@ -22,7 +22,8 @@ public static partial class V4Bricks
         CancellationToken cancellationToken,
         (V4ModelCall Call, V4ModelReply Reply, string Model)? prior,
         bool ownCase,
-        (string Work, V4Line Line)? tablesLead = null)
+        (string Work, V4Line Line)? tablesLead = null,
+        bool decides = false)
     {
         var dictionary = V4Dictionary.Insurance;
         var index = V4CorpusIndex.Insurance;
@@ -211,13 +212,18 @@ public static partial class V4Bricks
 
         var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
         var ruleQuestion = cues.Count > 0 && V4Boundary.RuleQuestion(question, 0, question.Length, cues);
-        if (((cues.Count > 0 && !ruleQuestion) || ownCase) && !draft.Caveats.Contains("not_your_case"))
+        if (decides)
+        {
+            // A decision on the person's own facts: refused, the lines found shown beside the refusal (the owner's point 2).
+            draft.Caveats.Remove("not_your_case");
+        }
+        else if (((cues.Count > 0 && !ruleQuestion) || ownCase) && !draft.Caveats.Contains("not_your_case"))
         {
             // Lines of the law were found: they are quoted as the general rule, and the answer says so of the reader's case.
             draft.Caveats.Add("not_your_case");
         }
 
-        var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, "answer", "text", scope.Work, []);
+        var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, decides ? "refuse" : "answer", "text", scope.Work, []);
         return new V4PlanOutcome(json, draft.Cost, "route:outline", Articles: readArticles);
     }
 }

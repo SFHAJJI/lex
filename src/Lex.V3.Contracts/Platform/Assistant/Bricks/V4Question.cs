@@ -246,6 +246,71 @@ public static class V4Boundary
         @"|(?<![\p{L}\d])(?:am|can|could|do|did|will|would|should|must|may|shall|have)\s+(?-i:I)(?![\p{L}\d'’])",
         Options, Timeout);
 
+    // ---- A decision on the person's own facts (the owner's point 2 of 2026-11-19) ------------------------------------
+    // All read on the folded question (no accents, lower case, straight apostrophes).
+
+    // A judgement of a situation: "est-ce légal", "ai-je raison", "le droit de me faire", "is it right".
+    private static readonly Regex Judgement = new(
+        @"\b(?:est-ce|est-il|est-elle|c'est)\s+(?:bien\s+|vraiment\s+)?(?:legal|illegal|normal|abusif|abusive|permis|autorise|autorisee|juste|injuste|valable|regulier|reguliere|conforme|licite)\b" +
+        @"|\b(?:ai-je|a-t-il|a-t-elle|ont-ils|ont-elles)\s+(?:eu\s+)?(?:raison|tort)\b|\ble droit de me faire\b" +
+        @"|\bis (?:it|this|that) (?:right|legal|lawful|fair|allowed|normal)\b|\bam i right\b",
+        Options, Timeout);
+
+    // Advice on what the reader should do: "que dois-je faire", "devrais-je", "dois-je accepter", "should I".
+    private static readonly Regex Advice = new(
+        @"\bque (?:dois|devrais|puis|peux)-je faire\b|\bque faire\b|\bdevrai[st]-je\b|\bdevrions-nous\b|\bdois-je (?:accepter|signer|refuser|contester)\b" +
+        @"|\bfaut-il que je\b|\bvaut-il mieux que\b|\bconseillez-moi\b|\bme conseill|\bwhat should i do\b|\bshould i\b|\bwhat can i do\b",
+        Options, Timeout);
+
+    // A prediction of a decision: "vais-je gagner", "mes chances".
+    private static readonly Regex Prediction = new(
+        @"\b(?:vais-je|va-t-il|allons-nous) gagner\b|\bgagner (?:mon|ma|mes|notre|le|ce) proces\b|\b(?:mes|nos) chances\b|\bwill i win\b|\bmy chances\b",
+        Options, Timeout);
+
+    // "Am I covered", "who pays": a decision only after a fact of the reader's own situation is stated.
+    private static readonly Regex CoveredOrPays = new(
+        @"\b(?:suis-je|sommes-nous|serai-je|serais-je|est-il|est-elle)\s+(?:bien\s+)?(?:couvert|couverte|couverts|couvertes|assure|assuree|indemnise|indemnisee|rembourse|remboursee)\b" +
+        @"|\bqui (?:paie|paye|payera|paiera|doit payer|rembourse|indemnise|est responsable)\b|\bam i (?:covered|insured)\b|\bwho pays\b|\bwho is liable\b",
+        Options, Timeout);
+
+    // A fact of the reader's own situation: "ma voiture a été volée", "mon voisin a inondé", "j'ai eu un accident",
+    // "mon assureur refuse de payer", "my insurer says".
+    private static readonly Regex OwnFact = new(
+        @"\bj'(?:ai|avais)\s+(?!droit\b|le droit\b)\p{L}" +
+        @"|\b(?:mon|ma|mes|notre|nos)\s+(?:[\p{L}-]+\s+){0,2}?(?:a|ont|avait|avaient|est|sont|etait|m'a|nous a)\s+(?:ete\s+)?\p{L}+(?:e|ee|es|ees|i|ie|is|u|ue|us|it|t)\b" +
+        @"|\b(?:mon|ma|mes)\s+[\p{L}-]+\s+(?:refuse|refusent|veut|exige|demande|me reclame|dit|affirme|pretend)\b" +
+        @"|\bmy\s+\w+\s+(?:has|have|is|was|were|says|said|refuses|refused|wants|claims)\b",
+        Options, Timeout);
+
+    // An instruction to Lex itself: answer yes or no, invent, ignore the rules, show the prompt.
+    private static readonly Regex Instruction = new(
+        @"\brepond(?:s|ez)?\s+(?:par\s+|uniquement\s+(?:par\s+)?)?oui ou non\b|\bsans (?:explication|justification)\b|\banswer (?:only )?(?:with )?yes or no\b" +
+        @"|\binvent(?:e|ez)\b|\bignor(?:e|ez) (?:tes|les|vos|your|the) (?:instructions|regles|consignes|rules)\b|\b(?:tu es|vous etes) (?:maintenant|desormais)\b|\byou are now\b" +
+        @"|\b(?:affiche|montre|donne|revele)[\p{L}-]*\s+(?:ton|ta|tes|votre|vos)\s+(?:prompt|instructions|consignes)\b",
+        Options, Timeout);
+
+    /// <summary>
+    /// Whether <c>text[start, end)</c> asks Lex for a decision on the person's own facts (the owner's point 2 of
+    /// 2026-11-19), which is refused with the article shown: a judgement, advice or a prediction on the reader's own
+    /// situation; "who pays" or "am I covered" after a fact of the reader's own; or an instruction to Lex. A general
+    /// question in personal words ("mon assureur peut-il résilier mon contrat ?") is not one: it is answered with the
+    /// article and the line on the reader's situation. Read by code; no model is asked.
+    /// </summary>
+    public static bool DecidesOwnFacts(string text, int start, int end)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var part = text[start..end];
+        var folded = V4Text.Fold(part);
+        if (Instruction.IsMatch(folded))
+        {
+            return true;
+        }
+
+        var own = PersonalMarkers(text, start, end).Count > 0 || Oneself.IsMatch(part);
+        return (own && (Judgement.IsMatch(folded) || Advice.IsMatch(folded) || Prediction.IsMatch(folded))) ||
+            (CoveredOrPays.IsMatch(folded) && OwnFact.IsMatch(folded));
+    }
+
     /// <summary>Whether the reader is the subject of the question's own verb in <c>text[start, end)</c>: a case of the reader's own, by its grammar.</summary>
     public static bool AsksOfOneself(string text, int start, int end)
     {

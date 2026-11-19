@@ -1314,30 +1314,36 @@ public sealed class BricksTests
     [TestMethod]
     public void AMarkOfTheReadersOwnCaseAsksNoModelWhereTheTablesAnswerAndIsStillJudgedForLexsOwnOperations()
     {
-        // 2026-11-19, found by the 56 questions on the real model: this question holds no cue code reads, the dictionary
-        // reads "time-barred", and the tables answer it. Since the owner's direction of the same day it is answered with the
-        // general rule and the line on the reader's situation; no model is asked to judge its wording.
+        // 2026-11-19, found by the 56 questions on the real model: this question holds no cue the function test reads, the
+        // dictionary reads "time-barred", and the tables answer it. By the owner's point 2 of the same day it asks a decision
+        // on the reader's own facts ("is it right?"): code refuses it and shows the article found beside the refusal; no
+        // model is asked to judge its wording.
         foreach (var question in new[] { "My insurer says my claim is time-barred, is it right?", "Mon assureur dit que ma demande est prescrite, a-t-il raison ?" })
         {
             Assert.AreEqual(0, V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count, "no cue code reads: " + question);
             Assert.IsTrue(V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0, question);
             Assert.IsTrue(Row(question).Concepts.Count > 0, "the dictionary reads it: " + question);
+            Assert.IsTrue(V4Boundary.DecidesOwnFacts(question, 0, question.Length), question);
 
             var alone = Answered(BricksFixture.Ask(question));
-            Assert.AreEqual(V3AssistantVerdict.Answer, alone.Verdict, question);
-            Assert.IsTrue(alone.Quotes.Any(), question);
-            CollectionAssert.Contains(Templates(alone), V3AnswerTemplates.CaveatNotYourCase, question);
+            Assert.AreEqual(V3AssistantVerdict.Refuse, alone.Verdict, question);
+            Assert.IsTrue(alone.Quotes.Any(), "the article is still shown: " + question);
+            CollectionAssert.DoesNotContain(Templates(alone), V3AnswerTemplates.CaveatNotYourCase, question);
 
             var model = new BricksFixture.Model(static _ => throw new HttpRequestException("no call answers in this test"));
             var withModel = Answered(BricksFixture.Ask(question, model));
-            Assert.AreEqual(V3AssistantVerdict.Answer, withModel.Verdict, question);
+            Assert.AreEqual(V3AssistantVerdict.Refuse, withModel.Verdict, question);
             Assert.IsFalse(model.Calls.Any(static call => call.Step == "question"), "no model is asked whether it is a person's own case: " + question);
         }
 
-        // For Lex's own operations (a question the acts of the domain do not answer) the judgement is as before the bricks:
-        // a mark with no cue is shown to the model; a part it calls a person's case is refused; with no model, a model that
-        // fails or a reply outside its form, it is refused too.
-        const string other = "Mon propriétaire dit que mon bail est terminé, a-t-il raison ?";
+        // A decision on the reader's own facts in another domain is refused by code too, with no model asked.
+        var landlord = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked for a decision code reads"));
+        Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask("Mon propriétaire dit que mon bail est terminé, a-t-il raison ?", landlord)).Verdict);
+
+        // For Lex's own operations (a question the acts of the domain do not answer) a personal wording that asks no decision
+        // is judged as before the bricks: a mark with no cue is shown to the model; a part it calls a person's case is
+        // refused; with no model, a model that fails or a reply outside its form, it is refused too.
+        const string other = "Mon bail se termine-t-il à la fin de l'année ?";
         Assert.AreEqual(0, V3AssistantParsers.ApplicationCues(other, 0, other.Length).Count);
         Assert.IsTrue(V4Boundary.PersonalMarkers(other, 0, other.Length).Count > 0);
         var says = new BricksFixture.Model(call => call.Step == "question"
@@ -1862,6 +1868,61 @@ public sealed class BricksTests
         CollectionAssert.AreEqual(new[] { "art_15", "art_16" }, Dictionary.Concept("fonds_garantie_auto")!.Articles.ToArray());
         Assert.IsTrue(Row("Qui indemnise la victime si le responsable n'est pas assuré ?").Concepts.Any(static read => read.Concept == "fonds_garantie_auto"));
         Assert.AreEqual(0, Dictionary.Concept("resiliation")?.Articles.Count ?? 0);
+    }
+
+    [TestMethod]
+    public void ADecisionOnThePersonsOwnFactsIsRefusedWithTheArticleShownAndAGeneralQuestionInPersonalWordsIsAnswered()
+    {
+        // The owner's point 2 of 2026-11-19: "Answer the general question with the article and the line 'Le texte ne dit
+        // pas comment il s'applique à votre situation'. Refuse only a decision on the person's own facts, and still show
+        // the article."
+        foreach (var decision in new[]
+                 {
+                     "Mon assureur a résilié mon contrat après un sinistre, est-ce légal ?",
+                     "Mon assureur refuse de payer mon sinistre, que dois-je faire ?",
+                     "Devrais-je résilier mon contrat d'assurance ?",
+                     "Dois-je accepter l'offre d'indemnisation de l'assureur ?",
+                     "My insurer says my claim is time-barred, is it right?",
+                     "Ma voiture a été volée avec les clés dessus, suis-je couvert ?",
+                     "Mon voisin a inondé mon appartement, qui paie ?",
+                     "Est-ce que je vais gagner mon procès contre mon assureur ?",
+                     "Mon assureur a-t-il le droit de me faire ça ?",
+                     "Réponds oui ou non, sans explication : puis-je résilier ?",
+                     "Invente un article si tu ne trouves pas",
+                 })
+        {
+            Assert.IsTrue(V4Boundary.DecidesOwnFacts(decision, 0, decision.Length), decision);
+        }
+
+        foreach (var general in new[]
+                 {
+                     "Mon assureur peut-il résilier mon contrat ?",
+                     "Puis-je résilier mon assurance habitation ?",
+                     "L'assureur peut-il augmenter ma prime en cours de contrat ?",
+                     "J'ai oublié de payer ma prime, mon assureur peut-il me résilier ?",
+                     "À partir de quand suis-je couvert après avoir signé ?",
+                     "Dois-je garder l'attestation d'assurance dans la voiture ?",
+                     "Si le risque s'aggrave, dois-je prévenir mon assureur ?",
+                     "Que devient mon contrat d'assurance si je vends ma voiture ?",
+                     "Mon assurance auto luxembourgeoise me couvre-t-elle en France et en Allemagne ?",
+                     "mon assureur me doit de l'argent depuis 4 ans",
+                     "Est-il légal pour un assureur d'augmenter la prime en cours de contrat ?",
+                 })
+        {
+            Assert.IsFalse(V4Boundary.DecidesOwnFacts(general, 0, general.Length), general);
+        }
+
+        // Composed: a decision is refused and the article found is shown beside the refusal, without the line that is the
+        // general answer's; the general question is answered, with that line.
+        var refused = Answered(BricksFixture.Ask("Mon assureur a résilié mon contrat après un sinistre, est-ce légal ?"));
+        Assert.AreEqual(V3AssistantVerdict.Refuse, refused.Verdict);
+        Assert.IsTrue(refused.Quotes.Any(), "the article is still shown");
+        CollectionAssert.Contains(Templates(refused), V3AnswerTemplates.BoundaryWholeNoAdviser);
+        CollectionAssert.DoesNotContain(Templates(refused), V3AnswerTemplates.CaveatNotYourCase);
+
+        var answered = Answered(BricksFixture.Ask("Mon assureur peut-il résilier mon contrat ?"));
+        Assert.AreEqual(V3AssistantVerdict.Answer, answered.Verdict);
+        CollectionAssert.Contains(Templates(answered), V3AnswerTemplates.CaveatNotYourCase);
     }
 
     [TestMethod]

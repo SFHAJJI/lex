@@ -146,7 +146,11 @@ public static partial class V4Bricks
         // what a question worded for a case gets when no line of the law is found for it. So the tables and the outline
         // are asked first, with the mark of a personal wording as code reads it, and no model is asked to judge it.
         var personal = !row.Greeting && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0;
-        var own = ByTheTables(input, row, corpus, model, cancellationToken, asked, personal);
+
+        // The owner's point 2 of 2026-11-19: only a decision on the person's own facts is refused, and the article found
+        // is still shown beside the refusal. Code reads it; no model is asked.
+        var decides = !row.Greeting && V4Boundary.DecidesOwnFacts(question, 0, question.Length);
+        var own = ByTheTables(input, row, corpus, model, cancellationToken, asked, personal || decides, decides);
         if (own.PlanJson is not null && (own.Firm || model is null))
         {
             return own with { CostMicroEuros = own.CostMicroEuros + (asked is null ? cost : 0) };
@@ -161,7 +165,7 @@ public static partial class V4Bricks
         var outlined = string.Empty;
         if (model is not null && (own.PlanJson is not null || own.Reason is "nothing_of_the_dictionary" or "no_act_in_scope"))
         {
-            var read = ByTheOutline(input, row, corpus, model, cancellationToken, asked, personal, own.Lead);
+            var read = ByTheOutline(input, row, corpus, model, cancellationToken, asked, personal || decides, own.Lead, decides);
             if (read.PlanJson is not null)
             {
                 // The tables' answer stands when the second reading quotes the tables' first article and no article the
@@ -189,8 +193,8 @@ public static partial class V4Bricks
         // For Lex's own operations the boundary is as before the bricks: a mark of the reader's own case with no cue is
         // judged by the model, the reader as the subject of the question's own verb is a case by its grammar, and with no
         // model to ask the part is refused.
-        var ownCase = false;
-        if (personal && V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count == 0)
+        var ownCase = decides;
+        if (!ownCase && personal && V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count == 0)
         {
             if (V4Boundary.AsksOfOneself(question, 0, question.Length))
             {
@@ -233,7 +237,7 @@ public static partial class V4Bricks
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
             if (keyword is not null && !question.AsSpan(span.Start, span.End - span.Start).Contains('•'))
             {
-                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, asked, personal);
+                var reached = ByTheTables(input, row.With(new V4RowConcept(concept.Id, keyword.Row, span.Start, span.End, "model")), corpus, model, cancellationToken, asked, personal || decides, decides);
                 // An answer reached through a concept the model named stands when code is sure of it, or when no second
                 // reading was there to contradict it; where the articles read under their own headings held no answer,
                 // an answer code is not sure of is not given (the reader's set of 2026-11-19: one such answer was wrong).
@@ -266,7 +270,8 @@ public static partial class V4Bricks
         IV4Model? model,
         CancellationToken cancellationToken,
         (V4ModelCall Call, V4ModelReply Reply, string Model)? prior,
-        bool ownCase = false)
+        bool ownCase = false,
+        bool decides = false)
     {
         var dictionary = V4Dictionary.Insurance;
         var index = V4CorpusIndex.Insurance;
@@ -321,7 +326,7 @@ public static partial class V4Bricks
         if (V4Dispatcher.CitesArticle(row))
         {
             // One article of an act the index names, on one date: code opens it, with no model and no search.
-            return (asksChange || prior is not null ? null : Cited(input, row, corpus, reading, ownCase)) ?? new V4PlanOutcome(null, 0, "cites_article");
+            return (asksChange || prior is not null ? null : Cited(input, row, corpus, reading, decides)) ?? new V4PlanOutcome(null, 0, "cites_article");
         }
 
         if (asksChange)
@@ -526,8 +531,9 @@ public static partial class V4Bricks
         }
 
         // A question worded for the reader's own case: with lines of the law found, they are quoted as the general rule, and
-        // the answer says the text does not say how it applies to the reader; with none, the part is refused.
-        var general = application && draft.Items.Count > 0;
+        // the answer says the text does not say how it applies to the reader; with none, the part is refused. A decision on
+        // the person's own facts is refused, and the lines found are shown beside the refusal (the owner's point 2).
+        var general = application && draft.Items.Count > 0 && !decides;
         if (general && !draft.Caveats.Contains("not_your_case"))
         {
             draft.Caveats.Add("not_your_case");
