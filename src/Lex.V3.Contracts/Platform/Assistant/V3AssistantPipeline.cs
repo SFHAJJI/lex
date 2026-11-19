@@ -191,15 +191,60 @@ public static partial class V3AssistantPipeline
         }
 
         var dossier = Run(validation.Plan!, planner.PlannerId, context, locale.Value, execute, environment);
+        var planJson = output.PlanJson!;
 
+        // The answer check on Lex's own operations (LEX_V3_ANSWER_CHECK): the search named one article and it was read as
+        // the answer, with nothing checking it. The planner reads the question against that article once more; what it
+        // said is written in the plan's record, and the plan is run again so that the answer's own trace holds it.
+        V3AnswerCheckResult? check = null;
+        if (dossier is not null && planner is IAssistantAnswerChecker checker && AssertedByOperations(validation.Plan!, dossier, out var quotedWork, out var quotedArticle, out var severalActs))
+        {
+            try
+            {
+                check = checker.CheckRun(input, quotedWork, quotedArticle, severalActs, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                check = null;
+            }
+
+            if (check is not null)
+            {
+                var recorded = WithCheck(planJson, check);
+                if (Rerun(recorded, planner.PlannerId, context, locale.Value, execute, environment) is { } again)
+                {
+                    planJson = recorded;
+                    dossier = again;
+                }
+            }
+        }
+
+        var rejected = check is { Rejected: true };
         // The wider reading (LEX_V3_EVERY_LAW): Lex's own operations ran and quoted nothing, and the planner can read the
         // question once more in every Luxembourg act it has an index of. What it finds is shown as candidates; when it finds
         // nothing, or anything of it fails, the first answer stands. A replay's planner offers none, so a trace replays as is.
-        if (dossier is not null && planner is IAssistantWiderPlanner wider && QuotedNothing(validation.Plan!, dossier))
+        if (dossier is not null && planner is IAssistantWiderPlanner wider && (rejected || QuotedNothing(validation.Plan!, dossier)))
         {
-            // When it gives nothing, the first answer stands, and its trace says how the wider reading ended.
-            dossier = Wider(wider, input, context, locale.Value, execute, environment, cancellationToken, out var why)
-                ?? (why is null ? dossier : Marked(output.PlanJson!, why, planner.PlannerId, context, locale.Value, execute, environment) ?? dossier);
+            // An answer the check rejected is treated as one that quoted nothing: the wider reading's candidates replace it.
+            var second = Wider(wider, input, context, locale.Value, execute, environment, cancellationToken, out var why, rejected ? check : null);
+            if (second is not null)
+            {
+                dossier = second;
+            }
+            else
+            {
+                // The wider reading gave nothing. An answer the check rejected is then shown as candidates (the same
+                // article, nothing asserted) when the planner could write that plan; else the first answer stands. Either
+                // way the trace of the answer shown says how the wider reading ended.
+                V3AnswerDossier? shown = null;
+                if (rejected && check!.CandidatesPlanJson is { } candidates)
+                {
+                    var marked = WithCheck(candidates, check);
+                    shown = Rerun(why is null ? marked : WithWider(marked, why), planner.PlannerId, context, locale.Value, execute, environment);
+                }
+
+                dossier = shown ?? (why is null ? dossier : Rerun(WithWider(planJson, why), planner.PlannerId, context, locale.Value, execute, environment) ?? dossier);
+            }
         }
 
         return dossier is null

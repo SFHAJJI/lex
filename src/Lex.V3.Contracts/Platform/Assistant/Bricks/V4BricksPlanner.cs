@@ -17,7 +17,7 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 /// (<see cref="V4Bricks.PlanEveryLaw"/>). With <paramref name="answerCheck"/> (LEX_V3_ANSWER_CHECK exactly <c>on</c>), an answer
 /// the plan asserts is checked against the first article it quotes (<see cref="V4Bricks.CheckAnswer"/>).
 /// </remarks>
-public sealed class V4BricksPlanner(IV4Corpus corpus, IV4Model? model, bool everyLaw = false, V4LawIndex? laws = null, bool answerCheck = false) : IAssistantWiderPlanner
+public sealed class V4BricksPlanner(IV4Corpus corpus, IV4Model? model, bool everyLaw = false, V4LawIndex? laws = null, bool answerCheck = false) : IAssistantWiderPlanner, IAssistantAnswerChecker
 {
     private readonly IV4Corpus _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
     private readonly V4LawIndex? _laws = everyLaw ? laws ?? V4LawIndex.Embedded : null;
@@ -50,6 +50,28 @@ public sealed class V4BricksPlanner(IV4Corpus corpus, IV4Model? model, bool ever
         return new V3PlannerOutput(
             outcome.PlanJson ?? throw new InvalidOperationException("The bricks wrote no plan (" + outcome.Reason + ")."),
             outcome.CostMicroEuros);
+    }
+
+    /// <summary>
+    /// The answer check on an answer of Lex's own operations, once the plan was run (<see cref="V4Bricks.CheckRun"/>): null
+    /// when the check is switched off or this question's answers are not checked.
+    /// </summary>
+    public V3AnswerCheckResult? CheckRun(V3PlannerInput input, string work, string article, bool severalActs, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (!answerCheck || model is null || input.Today is not { } today)
+        {
+            return null;
+        }
+
+        return V4Bricks.CheckRun(
+            new V4PlanInput(input.MaskedQuestion, input.AnswerLocale, today, V3AssistantParsers.DatesIn(input.MaskedQuestion), input.References, input.SearchLanguages),
+            work,
+            article,
+            severalActs,
+            _corpus,
+            model,
+            cancellationToken);
     }
 
     /// <summary>

@@ -109,7 +109,7 @@ public static partial class V4Bricks
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(laws);
         routed = [];
-        if (row.Greeting || row.Words.Count <= 1)
+        if (row.Greeting || row.Words.Count <= 1 || V4QuestionParser.AsksNothingNamed(row))
         {
             return "every_law_not_a_question";
         }

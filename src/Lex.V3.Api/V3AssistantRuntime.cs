@@ -289,8 +289,36 @@ internal sealed class V3AssistantRuntime
     /// </summary>
     internal IAssistantPlanner Budgeted() => new BudgetedPlanner(this, _planner ?? throw new InvalidOperationException("No planner is wired."));
 
-    private sealed class BudgetedPlanner(V3AssistantRuntime runtime, IAssistantPlanner inner) : IAssistantWiderPlanner
+    private sealed class BudgetedPlanner(V3AssistantRuntime runtime, IAssistantPlanner inner) : IAssistantWiderPlanner, IAssistantAnswerChecker
     {
+        /// <summary>
+        /// The answer check on an answer of Lex's own operations, when the planner has one: under the same deadline, with
+        /// its own reservation. A check that fails says nothing, and the answer stands.
+        /// </summary>
+        public V3AnswerCheckResult? CheckRun(V3PlannerInput input, string work, string article, bool severalActs, CancellationToken cancellationToken)
+        {
+            if (inner is not IAssistantAnswerChecker checker || !runtime.TryReserve())
+            {
+                return null;
+            }
+
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(PlannerDeadline);
+            V3AnswerCheckResult? result;
+            try
+            {
+                result = checker.CheckRun(input, work, article, severalActs, deadline.Token);
+            }
+            catch
+            {
+                runtime.Settle(0);
+                throw;
+            }
+
+            runtime.Settle(result?.CostMicroEuros ?? 0);
+            return result;
+        }
+
         public string PlannerId => inner.PlannerId;
 
         /// <summary>

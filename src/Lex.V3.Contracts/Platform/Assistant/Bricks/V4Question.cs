@@ -94,6 +94,54 @@ public sealed class V4QuestionRow
 /// </summary>
 public static class V4QuestionParser
 {
+    // What follows a greeting and asks nothing ("Salut, tu es là ?", "Hello, anyone there?"): the words after the greeting
+    // words, joined by one space. A pattern, not a set of words: the words of it mean something else in a question.
+    private static readonly System.Text.RegularExpressions.Regex GreetingFiller = new(
+        @"^(?:tu es la|t.?es la|vous etes la|es.?tu la|etes.?vous la|ca va|comment ca va|comment vas.?tu|comment allez.?vous|il y a quelqu.?un|y a quelqu.?un|quelqu.?un|are you there|is anyone there|anyone there|how are you|you there)$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    // Words that stand for no thing ("blabla", "truc", "machin"): a question made of them asks nothing.
+    private static readonly System.Text.RegularExpressions.Regex PlaceholderWord = new(
+        @"^(?:bla|blabla|blablabla|truc|trucs|machin|machins|bidule|bidules|trucmuche|schmilblick|lorem|ipsum|foo|bar|baz|asdf|qwerty|azerty|xxx|test|tests)$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>A greeting followed by words that ask nothing ("Salut, tu es là ?"): a greeting, answered as one.</summary>
+    private static bool GreetsAndAsksNothing(IReadOnlyList<V4Word> words)
+    {
+        if (words.Count is < 2 or > 8 || !GreetingWords.Contains(words[0].Text))
+        {
+            return false;
+        }
+
+        var rest = new List<string>();
+        foreach (var word in words)
+        {
+            if (rest.Count > 0 || !GreetingWords.Contains(word.Text))
+            {
+                rest.Add(word.Text);
+            }
+        }
+
+        return rest.Count > 0 && GreetingFiller.IsMatch(string.Join(' ', rest));
+    }
+
+    /// <summary>
+    /// Whether a question is made of words that stand for no thing ("blabla truc machin la loi du mardi bleu"): two or more
+    /// of them, and at least half of its words of four letters or more. It asks nothing: Lex asks for a question in full.
+    /// </summary>
+    public static bool AsksNothingNamed(V4QuestionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        var placeholders = 0;
+        var longer = 0;
+        foreach (var word in row.Words)
+        {
+            longer += word.Text.Length >= 4 ? 1 : 0;
+            placeholders += PlaceholderWord.IsMatch(word.Text) ? 1 : 0;
+        }
+
+        return placeholders >= 2 && placeholders * 2 >= longer;
+    }
     private static readonly HashSet<string> GreetingWords = new(StringComparer.Ordinal)
     {
         "bonjour", "bonsoir", "salut", "coucou", "hello", "hi", "hey", "merci", "thanks", "thank", "you", "beaucoup", "bien", "ok",
@@ -192,7 +240,7 @@ public static class V4QuestionParser
             }
         }
 
-        var greeting = words.Count is > 0 and <= 6 && words.All(static word => GreetingWords.Contains(word.Text));
+        var greeting = (words.Count is > 0 and <= 6 && words.All(static word => GreetingWords.Contains(word.Text))) || GreetsAndAsksNothing(words);
         return new V4QuestionRow(
             maskedQuestion,
             folded,
@@ -277,7 +325,12 @@ public static class V4Boundary
     // "Am I covered", "who pays": a decision only after a fact of the reader's own situation is stated.
     private static readonly Regex CoveredOrPays = new(
         @"\b(?:suis-je|sommes-nous|serai-je|serais-je|est-il|est-elle)\s+(?:bien\s+)?(?:couvert|couverte|couverts|couvertes|assure|assuree|indemnise|indemnisee|rembourse|remboursee)\b" +
-        @"|\bqui (?:paie|paye|payera|paiera|doit payer|rembourse|indemnise|est responsable)\b|\bam i (?:covered|insured)\b|\bwho pays\b|\bwho is liable\b",
+        @"|\bqui (?:paie|paye|payera|paiera|doit payer|rembourse|indemnise|est responsable)\b|\bam i (?:covered|insured)\b|\bwho pays\b|\bwho is liable\b" +
+        // A verdict asked on an incident the reader states ("... dit que c'est ma faute : qui a raison et est-ce que mon
+        // assurance va payer ?", the fresh set of 2026-11-19).
+        @"|\bqui a (?:raison|tort)\b|\bqui est (?:en tort|fautif|en faute)\b|\ba qui (?:est )?la faute\b|\b(?:est-ce|c'est) (?:de )?ma faute\b" +
+        @"|\b(?:mon|ma|notre) (?:assurance|assureur|mutuelle) (?:va|doit|devra|peut)(?:-t-(?:il|elle))? (?:me |nous |bien )?(?:payer|rembourser|indemniser|couvrir|prendre en charge)\b" +
+        @"|\bwho is (?:right|wrong|at fault|to blame)\b|\bwill my (?:insurance|insurer) (?:pay|cover)\b",
         Options, Timeout);
 
     // A fact of the reader's own situation: "ma voiture a été volée", "mon voisin a inondé", "j'ai eu un accident",

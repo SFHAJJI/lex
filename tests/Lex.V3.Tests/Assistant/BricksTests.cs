@@ -1235,6 +1235,94 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void AGreetingWithFillerAndWordsThatStandForNoThingAreAskedForAQuestion()
+    {
+        // The fresh set of 2026-11-19: both ended on a pointer where a clarification is the answer.
+        foreach (var greeting in new[] { "Salut, tu es là ?", "Bonjour, il y a quelqu'un ?", "Hello, anyone there?" })
+        {
+            Assert.IsTrue(Row(greeting).Greeting, greeting);
+            Assert.AreEqual(V3AssistantVerdict.Clarify, Answered(BricksFixture.Ask(greeting)).Verdict, greeting);
+        }
+
+        Assert.IsFalse(Row("Bonjour, quel est le délai de prescription ?").Greeting, "a question after a greeting is a question");
+        foreach (var nothing in new[] { "blabla truc machin la loi du mardi bleu ???", "asdf qwerty 123 ???" })
+        {
+            Assert.IsTrue(V4QuestionParser.AsksNothingNamed(Row(nothing)), nothing);
+            var dossier = Answered(BricksFixture.Ask(nothing));
+            Assert.AreEqual(V3AssistantVerdict.Clarify, dossier.Verdict, nothing);
+            Assert.AreEqual(0, dossier.Quotes.Count(), nothing);
+        }
+
+        Assert.IsFalse(V4QuestionParser.AsksNothingNamed(Row("Qu'est-ce que la responsabilité du fait des choses ?")));
+
+        // A verdict asked on an incident the reader states is a decision on their own facts; the general question is not.
+        const string incident = "J'ai eu un accrochage ce matin et l'autre conducteur dit que c'est ma faute : qui a raison et est-ce que mon assurance va payer ?";
+        Assert.IsTrue(V4Boundary.DecidesOwnFacts(incident, 0, incident.Length));
+        const string general = "En cas d'accrochage sur un parking, qui a raison selon la loi ?";
+        Assert.IsFalse(V4Boundary.DecidesOwnFacts(general, 0, general.Length), "no incident of the reader's own is stated");
+    }
+
+    [TestMethod]
+    public void AnAnswerOfLexsOwnOperationsIsCheckedOnceItsPlanWasRun()
+    {
+        // The fresh set of 2026-11-19: "Selon la Constitution, quelle est la langue du Luxembourg ?" was answered by an
+        // article of the insurance sector law the search named. The search names one article, it is read as the answer,
+        // and nothing checked it. Here the search opens article 39 of the fixture's act for a question on languages.
+        const string question = "Quelles sont les langues officielles du Luxembourg ?";
+        const string rejects = """{"reason":"The article is about another subject.","answer_found":false,"complete_answer_found":false}""";
+        const string accepts = """{"reason":"The article states the rule asked.","answer_found":true,"complete_answer_found":false}""";
+        BricksFixture.Model Model(string? check) => new(call => call.Step == "question"
+            ? Described("words_on_a_subject", question, words: "langues officielles")
+            : call.Step == "check" && check is not null ? check : throw new HttpRequestException("no other call answers in this test"));
+        V3AnswerDossier Ask(string asked, BricksFixture.Model model, bool answerCheck) => Answered(V3AssistantPipeline.Answer(
+            new V3AssistantRequest(asked),
+            new V4BricksPlanner(new BricksFixture.Corpus(), model, answerCheck: answerCheck),
+            new BricksFixture.Executor { SearchOpens = "art_39" }.Run,
+            BricksFixture.Environment,
+            CancellationToken.None));
+
+        var off = Ask(question, Model(rejects), answerCheck: false);
+        Assert.AreEqual(V3AssistantVerdict.Answer, off.Verdict, "asserted today");
+        Assert.AreEqual("art_39", off.Quotes.First().Anchor);
+        Assert.IsFalse(Bricks(off).TryGetProperty("answer_check", out _), "switched off, nothing is checked and nothing is recorded");
+
+        // Accepted: the same answer, and the record holds the call and what it said.
+        var accepting = Model(accepts);
+        var accepted = Ask(question, accepting, answerCheck: true);
+        Assert.AreEqual(V3AssistantVerdict.Answer, accepted.Verdict);
+        CollectionAssert.AreEqual(Templates(off), Templates(accepted));
+        Assert.AreEqual("accepted_not_complete", Bricks(accepted).GetProperty("answer_check").GetString());
+        Assert.AreEqual("check", Bricks(accepted).GetProperty("model_calls").EnumerateArray().Last().GetProperty("step").GetString());
+        var check = accepting.Calls.Single(static call => call.Step == "check");
+        Assert.AreEqual(V4Generation.AnswerCheckPrompt, check.System);
+        StringAssert.StartsWith(check.User, "QUESTION:\n" + question + "\n\nARTICLE (" + BricksFixture.Work + ", art_39):\n");
+
+        // Rejected, with no wider reading to replace it: the same article is shown as candidates, nothing is asserted.
+        var rejected = Ask(question, Model(rejects), answerCheck: true);
+        Assert.AreEqual("art_39", rejected.Quotes.First().Anchor);
+        CollectionAssert.Contains(Templates(rejected), V3AnswerTemplates.AnswerCandidates);
+        Assert.AreEqual(("candidates", "rejected"), (Bricks(rejected).GetProperty("answer").GetProperty("kind").GetString(), Bricks(rejected).GetProperty("answer_check").GetString()));
+        Assert.AreEqual("check", Bricks(rejected).GetProperty("model_calls").EnumerateArray().Last().GetProperty("step").GetString());
+
+        // The check fails: the answer stands as it was.
+        var failed = Ask(question, Model(null), answerCheck: true);
+        CollectionAssert.AreEqual(Templates(off), Templates(failed));
+        Assert.AreEqual("unavailable", Bricks(failed).GetProperty("answer_check").GetString());
+
+        // A reader who cites the article by its number gets it, and no check is asked.
+        const string cited = "Que dit l'article 39 de la loi du 10 août 1991 ?";
+        var citing = new BricksFixture.Model(call => call.Step == "question"
+            ? Described("article_or_act_cited", cited, citation: "l'article 39 de la loi du 10 août 1991")
+            : throw new InvalidOperationException("no check is asked of a cited article"));
+        var read = Ask(cited, citing, answerCheck: true);
+        Assert.AreEqual(V3AssistantVerdict.Answer, read.Verdict);
+        Assert.IsFalse(Bricks(read).TryGetProperty("answer_check", out _));
+        Assert.IsFalse(V4Bricks.ChecksOperations(Row(cited)));
+        Assert.IsFalse(V4Bricks.ChecksOperations(Row("Que prévoit le RGPD sur le droit à l'effacement ?")), "an EU act named keeps its road");
+        Assert.IsTrue(V4Bricks.ChecksOperations(Row(question)));
+    }
+
+    [TestMethod]
     public void AReadersWordsTheDictionaryLacksReachAConceptThroughTheModelAndThenTheTablesAnswer()
     {
         const string question = "Et si l'acheteur de la police ne règle plus rien ?";

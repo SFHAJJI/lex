@@ -17,8 +17,121 @@ public interface IAssistantWiderPlanner : IAssistantPlanner
     V3PlannerOutput? PlanWider(V3PlannerInput input, CancellationToken cancellationToken, out string? reason);
 }
 
+/// <summary>
+/// What the answer check said of an answer Lex's own operations asserted (the owner's order of 2026-11-19).
+/// </summary>
+/// <param name="Outcome">One token: accepted_complete, accepted_not_complete, rejected, rejected_several_acts, reply_unreadable or unavailable.</param>
+/// <param name="Rejected">The answer is not to be asserted.</param>
+/// <param name="CallJson">The model call as a plan's record holds one (step <c>check</c>), or null when no reply came.</param>
+/// <param name="CostMicroEuros">What the call cost.</param>
+/// <param name="CandidatesPlanJson">For a rejected answer: a plan that shows the same article as candidates, or null.</param>
+public sealed record V3AnswerCheckResult(string Outcome, bool Rejected, string? CallJson, long CostMicroEuros, string? CandidatesPlanJson);
+
+/// <summary>
+/// A planner that can check an answer its plan of Lex's own operations asserted once the plan was run: the search named
+/// one article and it was read as the answer, with nothing checking it. Null when it has no check to make of this
+/// question (switched off, an article cited by its number, an EU act named, an act asked alone).
+/// </summary>
+public interface IAssistantAnswerChecker : IAssistantPlanner
+{
+    V3AnswerCheckResult? CheckRun(V3PlannerInput input, string work, string article, bool severalActs, CancellationToken cancellationToken);
+}
+
 public static partial class V3AssistantPipeline
 {
+    /// <summary>
+    /// Whether a plan of Lex's own operations was run and gave law as the answer: the first act and article it quotes,
+    /// and whether it quotes more than one act.
+    /// </summary>
+    private static bool AssertedByOperations(V3AssistantPlan plan, V3AnswerDossier dossier, out string work, out string article, out bool severalActs)
+    {
+        work = string.Empty;
+        article = string.Empty;
+        severalActs = false;
+        if (plan.Bricks is not { Kind: "operations" } || dossier.Verdict != V3AssistantVerdict.Answer)
+        {
+            return false;
+        }
+
+        foreach (var quote in dossier.Quotes)
+        {
+            if (work.Length == 0)
+            {
+                work = quote.Work ?? string.Empty;
+                article = quote.Anchor ?? string.Empty;
+            }
+            else if (!string.Equals(work, quote.Work, StringComparison.Ordinal))
+            {
+                severalActs = true;
+            }
+        }
+
+        return work.Length > 0 && article.Length > 0;
+    }
+
+    /// <summary>A plan with what the answer check said written in its record: the call (step <c>check</c>) and <c>bricks.answer_check</c>.</summary>
+    private static string WithCheck(string planJson, V3AnswerCheckResult check)
+    {
+        try
+        {
+            if (JsonNode.Parse(planJson) is not JsonObject plan || plan["bricks"] is not JsonObject bricks)
+            {
+                return planJson;
+            }
+
+            bricks["answer_check"] = check.Outcome;
+            if (check.CallJson is { } call && JsonNode.Parse(call) is JsonObject made)
+            {
+                if (bricks["model_calls"] is not JsonArray calls)
+                {
+                    calls = [];
+                    bricks["model_calls"] = calls;
+                }
+
+                calls.Add(made);
+            }
+
+            return plan.ToJsonString();
+        }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return planJson;
+        }
+    }
+
+    /// <summary>A plan with how the wider reading ended written in its record (<c>bricks.wider</c>, one token).</summary>
+    private static string WithWider(string planJson, string why)
+    {
+        try
+        {
+            if (JsonNode.Parse(planJson) is not JsonObject plan || plan["bricks"] is not JsonObject bricks)
+            {
+                return planJson;
+            }
+
+            var token = new string(why.Select(static character => char.IsAsciiLetterOrDigit(character) || character is '_' or '+' or ':' or '.' or '-' ? character : '_').ToArray());
+            bricks["wider"] = token.Length > 120 ? token[..120] : token.Length == 0 ? "none" : token;
+            return plan.ToJsonString();
+        }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return planJson;
+        }
+    }
+
+    /// <summary>A plan validated and run: its answer, or null when it is not admitted, fails a gate, or anything of it fails.</summary>
+    private static V3AnswerDossier? Rerun(string planJson, string plannerId, V3PlanContext context, V3AnswerLocale locale, V3StepExecutor execute, V3AssistantEnvironment environment)
+    {
+        try
+        {
+            var validation = V3AssistantPlanValidator.Validate(planJson, context);
+            return validation.Admitted ? Run(validation.Plan!, plannerId, context, locale, execute, environment) : null;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
     /// <summary>
     /// Whether an answer is one the wider reading may replace: a plan of Lex's own operations that was run and quoted
     /// nothing, ending on a clarification, a pointer, or a refusal with no text beside it. An answer that quotes, an act
@@ -60,7 +173,8 @@ public static partial class V3AssistantPipeline
         V3StepExecutor execute,
         V3AssistantEnvironment environment,
         CancellationToken cancellationToken,
-        out string? why)
+        out string? why,
+        V3AnswerCheckResult? check = null)
     {
         why = null;
         try
@@ -71,7 +185,8 @@ public static partial class V3AssistantPipeline
                 return null;
             }
 
-            var validation = V3AssistantPlanValidator.Validate(output.PlanJson, context);
+            // The answer this reading replaces was rejected by the answer check: the record of the answer shown says so.
+            var validation = V3AssistantPlanValidator.Validate(check is null ? output.PlanJson : WithCheck(output.PlanJson, check), context);
             if (!validation.Admitted || validation.Plan!.Bricks is null || validation.Plan.Bricks.Kind == "operations")
             {
                 why = "wider_plan_refused";
@@ -107,38 +222,6 @@ public static partial class V3AssistantPipeline
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             why = "wider_failed";
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// The first answer again, with how the wider reading ended written in its plan's record (<c>bricks.wider</c>, one
-    /// token), so that an answer the wider reading did not replace says why in its own trace. The same plan, validated and
-    /// run again; null when anything of that fails, and the first answer then stands as it was.
-    /// </summary>
-    private static V3AnswerDossier? Marked(
-        string planJson,
-        string why,
-        string plannerId,
-        V3PlanContext context,
-        V3AnswerLocale locale,
-        V3StepExecutor execute,
-        V3AssistantEnvironment environment)
-    {
-        try
-        {
-            if (JsonNode.Parse(planJson) is not JsonObject plan || plan["bricks"] is not JsonObject bricks)
-            {
-                return null;
-            }
-
-            var token = new string(why.Select(static character => char.IsAsciiLetterOrDigit(character) || character is '_' or '+' or ':' or '.' or '-' ? character : '_').ToArray());
-            bricks["wider"] = token.Length > 120 ? token[..120] : token.Length == 0 ? "none" : token;
-            var validation = V3AssistantPlanValidator.Validate(plan.ToJsonString(), context);
-            return validation.Admitted ? Run(validation.Plan!, plannerId, context, locale, execute, environment) : null;
-        }
-        catch (Exception exception) when (exception is not OutOfMemoryException)
-        {
             return null;
         }
     }

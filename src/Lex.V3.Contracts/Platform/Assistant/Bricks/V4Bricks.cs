@@ -404,7 +404,7 @@ public static partial class V4Bricks
 
         // One word alone ("garantie", "test") is not a question: Lex asks for a full one and reads nothing (the owner's
         // brief of 2026-11-19: a single word got an article quoted as if it answered something).
-        if (row.Words.Count == 1 && row.Acts.Count == 0)
+        if ((row.Words.Count == 1 && row.Acts.Count == 0) || V4QuestionParser.AsksNothingNamed(row))
         {
             var oneWord = new Draft { Route = "clarify", AnswerKind = "greeting" };
             return new V4PlanOutcome(Write(input, row, oneWord, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:clarify", Firm: true);

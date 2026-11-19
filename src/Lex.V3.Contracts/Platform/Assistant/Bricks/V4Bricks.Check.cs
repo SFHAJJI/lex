@@ -211,4 +211,170 @@ public static partial class V4Bricks
             Reason = outcome.Reason + (said is null ? "+answer_check_unavailable" : rejected ? "+answer_check_rejected" : "+answer_check_accepted"),
         };
     }
+
+    // ---- The same check on an answer of Lex's own operations, once its plan was run (the fresh set of 2026-11-19: "Selon
+    // la Constitution, quelle est la langue du Luxembourg ?" was answered by an article of the insurance sector law the
+    // search named). The plan is made before the search, so the article is known only afterwards: the pipeline asks.
+
+    /// <summary>
+    /// Whether an answer of Lex's own operations to this question is checked. Not when the reader cites an article by its
+    /// number, names an EU act (its text is not among the tables), or asks for an act alone: those keep the road they have.
+    /// </summary>
+    public static bool ChecksOperations(V4QuestionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (row.Greeting || V4Dispatcher.CitesArticle(row) || EuropeanPattern.IsMatch(row.Folded))
+        {
+            return false;
+        }
+
+        var named = 0;
+        foreach (var act in row.Acts)
+        {
+            if (act.EuAct is not null)
+            {
+                return false;
+            }
+
+            named += act.Work is not null ? 1 : 0;
+        }
+
+        // An act of the index named with nothing of the domain beside it: the act itself is asked (V4Bricks.Plan).
+        var beside = new List<V4Word>();
+        foreach (var word in row.Words)
+        {
+            var inside = false;
+            foreach (var act in row.Acts)
+            {
+                inside |= word.Start >= act.Start && word.End <= act.End;
+            }
+
+            if (!inside)
+            {
+                beside.Add(word);
+            }
+        }
+
+        return !(named == 1 && row.Concepts.Count == 0 && row.Roles.Count == 0 && !V4CorpusIndex.Insurance.InDomain(beside));
+    }
+
+    /// <summary>
+    /// The check of an answer Lex's own operations gave: the first act and article quoted, read against the question.
+    /// Null when this question's answers are not checked. Several acts quoted is a rejection with no call. A rejection
+    /// carries a plan that shows the same article as candidates, when the article is one of a Luxembourg act held.
+    /// </summary>
+    public static V3AnswerCheckResult? CheckRun(V4PlanInput input, string work, string articleId, bool severalActs, IV4Corpus corpus, IV4Model? model, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(work);
+        ArgumentNullException.ThrowIfNull(articleId);
+        ArgumentNullException.ThrowIfNull(corpus);
+        if (model is null)
+        {
+            return null;
+        }
+
+        var parsed = V4QuestionParser.Parse(input.MaskedQuestion, input.Locale, V4Dictionary.Insurance, V4CorpusIndex.Insurance);
+        if (!ChecksOperations(parsed))
+        {
+            return null;
+        }
+
+        const string prefix = "/lu-legilux/";
+        var reading = V4Dispatcher.ReadingDates(parsed, input.Dates);
+        var dateRef = reading.Count == 1 ? reading[0].Ref : "today";
+        V4ActTables? tables = null;
+        V4Article? article = null;
+        string? heldOn = null;
+        var key = work.StartsWith(prefix, StringComparison.Ordinal) ? work[prefix.Length..] : string.Empty;
+        if (key.Length > 0 && V3AssistantPlanValidator.IsWorkAddress(work) && V3AssistantPlanValidator.IsArticleId(articleId))
+        {
+            var at = corpus.Act(key, reading.Count == 1 ? reading[0].Iso : input.Today);
+            tables = at.Tables;
+            article = tables?.Article(articleId);
+            heldOn = at.Facts.TextStatus == "latest_held" ? at.Facts.VersionFrom : null;
+        }
+
+        // The same article, shown and not asserted: what a rejected answer becomes when nothing wider is found.
+        string? candidates = null;
+        if (tables is not null && article is not null)
+        {
+            var lines = new List<V4Line>();
+            foreach (var line in tables.TextLinesOf(article))
+            {
+                if (lines.Count < V3AssistantPipeline.MaximumQuotes)
+                {
+                    lines.Add(line);
+                }
+            }
+
+            if (lines.Count > 0)
+            {
+                var row = new V4QuestionRow(parsed.Question, parsed.Folded, [.. parsed.Words], parsed.Language, parsed.Greeting, parsed.OtherDomain, [], [], [.. parsed.Acts], [.. parsed.Kinds], [.. parsed.Unmatched]);
+                var draft = new Draft { Route = "open", AnswerKind = "text", Found = true, LatestHeld = heldOn };
+                foreach (var line in lines)
+                {
+                    draft.Items.Add(new Item(line, line, "passage", null));
+                }
+
+                draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", "answer_check_rejected"));
+                if (V4Boundary.PersonalMarkers(input.MaskedQuestion, 0, input.MaskedQuestion.Length).Count > 0)
+                {
+                    draft.Caveats.Add("not_your_case");
+                }
+
+                candidates = AsCandidates(Write(input, row, draft, tables, null, null, dateRef, ruleQuestion: false, "answer", "text", tables.Work, []));
+            }
+        }
+
+        if (severalActs)
+        {
+            return new V3AnswerCheckResult("rejected_several_acts", true, null, 0, candidates);
+        }
+
+        if (tables is null || article is null)
+        {
+            return new V3AnswerCheckResult("unavailable", false, null, 0, null);
+        }
+
+        var text = new StringBuilder();
+        foreach (var line in tables.LinesOf(article))
+        {
+            if (text.Length > 0)
+            {
+                text.Append('\n');
+            }
+
+            text.Append(line.Text);
+        }
+
+        var call = AnswerCheckCall(input.MaskedQuestion, key, articleId, text.ToString());
+        V4ModelReply reply;
+        try
+        {
+            reply = model.Complete(call, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return new V3AnswerCheckResult("unavailable", false, null, 0, null);
+        }
+
+        var said = ReadAnswerCheck(reply.Content);
+        var record = new JsonObject
+        {
+            ["step"] = call.Step,
+            ["model"] = Token(model.ModelId),
+            ["prompt"] = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(call.System + "\n" + call.User)))[..16],
+            ["reply"] = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(reply.Content))),
+            ["input_tokens"] = Math.Max(0, reply.InputTokens),
+            ["output_tokens"] = Math.Max(0, reply.OutputTokens),
+        }.ToJsonString();
+        var rejected = said is { Found: false };
+        return new V3AnswerCheckResult(
+            said is not { } read ? "reply_unreadable" : !read.Found ? "rejected" : read.Complete ? "accepted_complete" : "accepted_not_complete",
+            rejected,
+            record,
+            reply.CostMicroEuros,
+            rejected ? candidates : null);
+    }
 }
