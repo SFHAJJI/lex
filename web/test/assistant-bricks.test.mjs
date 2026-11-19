@@ -202,14 +202,18 @@ test('the dock draws a bricks answer: the lead line marked, each case with its a
   assert.match(absence, /Aucun de ces termes ne figure dans ce texte\./u);
   assert.ok(!absence.includes(FR.dockNotFound), 'an absence proved by a sweep is not the card of a search that found nothing');
 
-  // The absence names the act it read by its address until the act's title is read; then the title stands in its place.
+  // The absence's sentence names the act it read by its address. The card never shows the address (2026-11-19: no raw
+  // identifier on a page): "this act", in the answer's language, until the act's title is read, then the title.
   // (Release 16's candidate: the title was never asked for, the card being of the kind `said`, not `answer`.)
   const address = bricksWork(answers.absence);
   assert.equal(workTitleToRead(said, null), address, 'a card that quotes nothing asks for the title of the act it read');
   assert.equal(workTitleToRead({ ...said, workTitle: null }, null), null, 'asked once: a title that could not be read is not asked again');
   assert.equal(workTitleToRead({ ...said, kind: 'advice' }, null), null);
   assert.equal(workTitleToRead(said, { identifier: address, article: 'art_1er' }), null, 'an answer that opens a text names it by its quotation');
-  assert.ok(absence.includes(address), 'with no title read, the server\'s sentence stands as it is');
+  assert.ok(!absence.includes(address), 'with no title read, the address is not in sight');
+  assert.match(absence, /Lex a parcouru le texte de cet acte \(lignes/u, 'the act is "cet acte" until its title is read');
+  const unread = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'en', shown: { ...said, workTitle: null } }));
+  assert.ok(!unread.includes(address) && unread.includes('le texte de cet acte'), 'a title that could not be read: still no address, and the answer\'s language (French), not the page\'s');
   const titled = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...said, workTitle: { title: 'Loi du 27 juillet 1997 sur le contrat d\'assurance', language: 'fra' } } }));
   assert.ok(!titled.includes(address), 'the address is no longer in sight');
   assert.match(titled, /Lex a parcouru le texte de «[^<]*<span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance<\/span>/u);
@@ -244,7 +248,7 @@ test('the dock\'s new words are in both copy tables', () => {
   }
 });
 
-test('an answer that names the act it read by its address says the act\'s title once it is read, and the address when it is not', async () => {
+test('an answer that names the act it read by its address: the act\'s title is read from its dossier, with the browser\'s own fetch in a page', async () => {
   // The absence of the engine's own samples names its act by its address, in the server's sentence.
   const absence = answers.absence;
   const address = bricksWork(absence);
@@ -258,11 +262,23 @@ test('an answer that names the act it read by its address says the act\'s title 
   assert.equal(bricksWork({ trace: { plan: { bricks: { work: '/eu-eurlex/32016R0679' } } } }), null, 'another publisher\'s act keeps its address');
   assert.equal(bricksWork({ trace: { plan: {} } }), null);
 
-  // The title is the act's own, read from its dossier; a dossier that cannot be read gives none, and the address stays.
+  // The title is the act's own, read from its dossier; a dossier that cannot be read gives none (the card says "this act").
   const asked = [];
   const none = await actTitleAt(address, async (url, init) => { asked.push([url, JSON.parse(init.body)]); throw new Error('offline'); });
   assert.equal(none, null);
   assert.deepEqual(asked, [['/api/v3/dossier', { operation_id: 'dossier', parameters: { identifier: address } }]]);
+
+  // In a page the dock hands no fetch: the request goes out with the browser's own. (Until 2026-11-19 it called
+  // `undefined`, read no title, and the live card kept the address in sight: Release 18's shot fr-10.)
+  const browsers = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (url, init) => { sent.push([url, JSON.parse(init.body)]); throw new Error('offline'); };
+  try {
+    assert.equal(await actTitleAt(address, undefined), null);
+  } finally {
+    globalThis.fetch = browsers;
+  }
+  assert.deepEqual(sent, [['/api/v3/dossier', { operation_id: 'dossier', parameters: { identifier: address } }]], 'asked with the browser\'s own fetch');
 });
 
 test('the general rule behind a personal wording is drawn as an answer, with the line that says the text applies nothing to the reader', async () => {
