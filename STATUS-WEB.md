@@ -4,6 +4,28 @@ Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## After Release 15's screenshots: the quoted line, the cost line, the act's title, the live records (sole driver, 2026-11-19)
+
+`web/v4-polish` (#1065), web only; the next release (16) carries it. Release 15's screenshots on the runner showed four
+things, none a wrong answer; three are corrected and one is left:
+
+- **The law page marks the quoted line.** It marked the whole article an answer opened (right when a quotation was a
+  whole article, before the bricks). The dock now says the lines the answer in sight quotes (`lex:mark`), the text page
+  marks the paragraphs that hold them and brings the first into view (`quotedParagraphs`, `marksOf` in
+  `web/scripts/text-address.mjs`); with no paragraph met, the article is marked whole, as before.
+- **No cost on an answer no model was asked for.** The work's foot printed the latest run's average cost of an answer on
+  every answer; an answer of code alone now prints its time alone (`modelWasAsked`).
+- **An absence names its act by its title.** The server's sentence carries the act's address; the dock reads the title
+  from the act's dossier (the one request site the titles already used) and says it in the address's place.
+- **Left:** a refusal's card shows the refusal and a question Lex can answer, not the lines the answer's dossier holds
+  beside it (the dock's design since Release 14). A reversible driver decision: unchanged in this slice.
+- **The records the site prints are the live release's:** the registry (11 versions, `champion` and `serving` on 11),
+  the 56 questions' run (the promotion gate's run on Release 15 at its own address, kept as `20261119-r15-gate`) and
+  the How it works answer (asked of law.soufien.lu on 2026-11-19 at 05:00 UTC). The 15 unseen questions' run stays the
+  one made before any rule was written from it.
+- Evidence: `web` `npm run build` and `npm test`, 1592 tests, 1589 pass, 3 skipped, 0 fail; no file under `src/` or
+  `tests/` changes.
+
 ## Release 15 is live: V4, the bricks (sole driver, 2026-11-19)
 
 - **Release 15** (`v3-20261119T030608Z-405abff0d226`, built and signed on Azure from #1063's 405abff0; revision
