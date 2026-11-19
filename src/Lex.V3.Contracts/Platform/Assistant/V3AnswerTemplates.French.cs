@@ -21,6 +21,10 @@ public static partial class V3AnswerTemplates
     // the independent reviewer kept the draft as it was).
     private static V3TemplateProvenance BricksFrenchReviewedLater => new(null, BricksAgentDraft, FrenchReviewer, "2026-11-19", false);
 
+    // The sentence of an absence as a reader sees it: drafted by an agent on 2026-11-19 and reviewed the same day by an
+    // independent reviewer, who kept the four drafts as they were.
+    private static V3TemplateProvenance AbsenceFrenchReviewed => new(null, AbsenceAgentDraft, FrenchReviewer, "2026-11-19", false);
+
     private static Dictionary<string, (string Text, V3TemplateProvenance Basis)> FrenchTexts() => new(StringComparer.Ordinal)
     {
         ["action.candidate"] = ("{candidate}", FrenchReviewed),
@@ -158,8 +162,10 @@ public static partial class V3AnswerTemplates
         ["note.word_not_in_act"] = ("Le mot «\u00A0{words}\u00A0» de votre question ne figure nulle part dans ce texte.", BricksFrenchReviewed),
         ["absence.sweep_heading"] = ("Lex a parcouru le texte de {work} (lignes\u00A0: {lines}\u00A0; articles\u00A0: {articles}), tel qu’il se lisait le {date}, à la recherche de ces termes\u00A0:", BricksFrenchReviewed),
         ["absence.term_count"] = ("Lignes contenant «\u00A0{term}\u00A0»\u00A0: {lines}\u00A0; articles concernés\u00A0: {articles}.", BricksFrenchReviewed),
-        ["absence.terms_nowhere"] = ("Aucun de ces termes ne figure dans ce texte. Cela indique ce que contient ce texte, et non ce que prévoit un contrat.", BricksFrenchReviewed),
-        ["absence.words_not_found"] = ("Lex n’a pas trouvé ces mots dans ce texte, et son vocabulaire sur ce sujet n’est pas complet\u00A0: cela ne montre pas que le texte est muet.", BricksFrenchReviewed),
+        ["absence.terms_nowhere"] = ("Aucun des termes que Lex connaît pour ce sujet ne figure dans ce texte, tel qu’il se lisait le {date}\u00A0: cela indique ce que contient ce texte, et non ce que prévoit un contrat.", AbsenceFrenchReviewed),
+        ["absence.terms_nowhere_in_act"] = ("Aucun des termes que Lex connaît pour ce sujet ne figure dans le texte «\u00A0{name}\u00A0», tel qu’il se lisait le {date}\u00A0: cela indique ce que contient ce texte, et non ce que prévoit un contrat.", AbsenceFrenchReviewed),
+        ["absence.words_not_found"] = ("Lex n’a trouvé aucun passage sur ce sujet dans ce texte, tel qu’il se lisait le {date}\u00A0: cela ne montre pas que le texte est muet, car Lex ne cherche que les mots qu’il connaît pour ce sujet.", AbsenceFrenchReviewed),
+        ["absence.words_not_found_in_act"] = ("Lex n’a trouvé aucun passage sur ce sujet dans le texte «\u00A0{name}\u00A0», tel qu’il se lisait le {date}\u00A0: cela ne montre pas que le texte est muet, car Lex ne cherche que les mots qu’il connaît pour ce sujet.", AbsenceFrenchReviewed),
         ["absence.no_answer_in_lines"] = ("Lex a trouvé des lignes sur ce sujet, mais aucune ne donne de réponse du type demandé. Les plus proches\u00A0:", BricksFrenchReviewed),
         ["absence.act_not_held"] = ("Votre question nomme un acte\u00A0: {name}. Lex ne détient pas encore le texte de cet acte.", BricksFrenchReviewed),
         ["absence.text_not_held"] = ("Lex détient la notice de {work}, mais aucun texte qu’il puisse en montrer à cette date.", BricksFrenchReviewed),

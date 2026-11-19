@@ -44,6 +44,29 @@ public sealed record V4IndexAct(
                 : null;
         }
     }
+
+    /// <summary>
+    /// The name a sentence gives the act, verbatim one of the short names the index writes: the longest that names it by
+    /// its date in French ("loi du 27 juillet 1997 sur le contrat d'assurance"), else the first; null when the index
+    /// writes none. A sentence never shows the act's address on this site to a reader. Plain loops: no compiler-made class.
+    /// </summary>
+    public string? Name
+    {
+        get
+        {
+            string? dated = null;
+            foreach (var name in ShortNames)
+            {
+                if ((name.StartsWith("loi du ", StringComparison.Ordinal) || name.StartsWith("règlement grand-ducal du ", StringComparison.Ordinal)) &&
+                    (dated is null || name.Length > dated.Length))
+                {
+                    dated = name;
+                }
+            }
+
+            return dated ?? (ShortNames.Count > 0 ? ShortNames[0] : null);
+        }
+    }
 }
 
 /// <summary>An EU act of the domain by the names people give it, with its official address: held or not is read from the mount.</summary>
@@ -89,6 +112,13 @@ public sealed class V4CorpusIndex
             .ThenByDescending(static entry => entry.Item1.Source.Length)
             .ToArray();
         _terms = new HashSet<string>(euActs.SelectMany(static act => new[] { act.NameFr, act.NameEn }), StringComparer.Ordinal);
+        foreach (var act in acts)
+        {
+            if (act.Name is { } name)
+            {
+                _terms.Add(name);
+            }
+        }
     }
 
     /// <summary>The corpus index this build carries.</summary>
@@ -107,7 +137,7 @@ public sealed class V4CorpusIndex
 
     public V4IndexEuAct? EuAct(string id) => EuActs.FirstOrDefault(act => act.Id == id);
 
-    /// <summary>Whether a text is a name this index writes for an EU act, exactly: what a sentence may show as one.</summary>
+    /// <summary>Whether a text is a name this index writes for an EU act, or the name a sentence gives one of its acts (<see cref="V4IndexAct.Name"/>), exactly: what a sentence may show as one.</summary>
     public bool IsName(string value) => value is not null && _terms.Contains(value);
 
     /// <summary>
