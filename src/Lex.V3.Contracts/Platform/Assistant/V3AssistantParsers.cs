@@ -116,9 +116,10 @@ public static class V3AssistantParsers
             "ma", "mes", "quel", "quelle", "quels", "quelles", "comment", "pourquoi", "dit", "disait", "loi", "selon", "peut",
             "je", "il", "elle", "nous", "vous", "avec", "qui", "quoi", "et", "l'", "d'", "qu'", "que", "puis", "dois", "être",
             "bonjour", "bonsoir", "salut", "merci",
-            // 2026-11-19: "Que risque-t-on à rouler sans assurance ?" tied with English on "on".
-            "à", "sans", "en", "un", "de", "si", "ce", "se", "son", "sa", "ses", "leur", "leurs", "où", "quand", "combien",
-            "faut", "doit", "sont", "ont", "par", "contre", "après", "avant", "chez",
+            // 2026-11-19: "Que risque-t-on à rouler sans assurance ?" tied with English on "on". Only words a French
+            // question asks with and a French act's title does not hold: an English question cites French titles ("What does
+            // article 5 de la loi du 10 août 1991 say?").
+            "sans", "quand", "combien", "faut", "chez", "où",
         },
         [V3QuestionLanguage.English] = new(StringComparer.Ordinal)
         {
