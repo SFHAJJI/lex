@@ -11,7 +11,7 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { build } from 'esbuild';
 
-import { ASSISTANT_PANEL_COPY, builtFoot, clarifyCandidates, dockTurnOf, stageRows, stripSentence } from '../scripts/assistant-panel.mjs';
+import { ASSISTANT_PANEL_COPY, builtBy, builtFoot, builtRows, clarifyCandidates, dockTurnOf, modelCallCount, stageRows, stripSentence } from '../scripts/assistant-panel.mjs';
 import { articleStrip, bundleFacts, firstSentenceOf, maskedCount, numericDate, plannerName, referenceOpening } from '../scripts/answer-view.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 import { REGISTRY_RECORD } from '../scripts/registry-record.mjs';
@@ -162,27 +162,34 @@ test("the dock's first screen, as the server renders it: the header, the intro, 
     const markup = renderToStaticMarkup(h(AssistantDock, { page }));
     assert.equal(markup, renderToStaticMarkup(liveDockTree(page)), `${page}: the tree the server renders is the one the browser hydrates`);
     const said = shown(markup);
-    for (const key of ['heading', 'dockPreview', 'dockHide', 'dockIntro', 'dockExampleOne', 'dockExampleOneCaption', 'dockExampleTwo', 'dockExampleTwoCaption', 'dockExampleThree', 'dockExampleThreeCaption', 'dockDoes', 'dockDoesText', 'dockDoesNot', 'dockDoesNotText', 'dockHowLink', 'dockPlaceholder', 'dockAsk']) {
+    for (const key of ['heading', 'dockPreview', 'dockHide', 'dockIntro', 'dockExampleOne', 'dockExampleOneCaption', 'dockExampleTwo', 'dockExampleTwoCaption', 'dockExampleThree', 'dockExampleThreeCaption', 'dockDoes', 'dockDoesText', 'dockDoesNot', 'dockDoesNotText', 'dockScopeText', 'dockHowLink', 'dockPlaceholder', 'dockAsk']) {
       assert.ok(said.includes(EN[key]), `${page}: ${key}`);
     }
     assert.ok(markup.includes('href="/en/evidence.html"'), 'how an answer is built, with the measured results');
     assert.ok(markup.includes('<label class="lx-visually-hidden" for="lx-dock-q">Your question</label>'), 'the field is labelled');
     assert.match(markup, /<span class="lx-dock-example-question" lang="fr">Quel est/u);
-    assert.match(markup, /<span class="lx-dock-example-question" lang="en">What does Article 5/u);
+    assert.match(markup, /<span class="lx-dock-example-question" lang="en">Can the insurer terminate/u);
+    // The scope sentence stands where the reader types: under "What it does not do", before the link to How it works.
+    assert.ok(markup.includes(`<p class="lx-dock-scope" data-dock-scope="">${EN.dockScopeText}</p><p><a class="lx-dock-link" href="/en/evidence.html">`), 'the scope sentence');
+    assert.equal(EN.dockScopeText, 'Today Lex answers on Luxembourg insurance law. For other Luxembourg laws it proposes the closest passages without deciding. EU law is not yet read this way.');
     assert.ok(!markup.includes('data-lex-assistant-panel') && !markup.includes('assistant-question'), "the old panel's marker and field are not the dock's");
     assert.ok(!markup.includes('style='), 'no inline style (the Content-Security-Policy blocks them)');
     forms(markup);
   }
   // The notice before a question (R44), word for word, behind "preview, not legal advice".
   const markup = renderToStaticMarkup(h((await dock()).DockView, { page: 'live-home', locale: 'fr' }));
-  for (const key of ['notice', 'preview', 'processor', 'dockIntro', 'dockExampleThree', 'dockAsk']) assert.ok(decode(markup).includes(FR[key]), `fr: ${key}`);
+  for (const key of ['notice', 'preview', 'processor', 'dockIntro', 'dockExampleThree', 'dockScopeText', 'dockAsk']) assert.ok(decode(markup).includes(FR[key]), `fr: ${key}`);
+  assert.equal(FR.dockScopeText, 'Lex répond aujourd’hui sur le droit luxembourgeois des assurances. Pour les autres lois du Luxembourg, il propose les passages les plus proches sans trancher. Le droit de l’Union n’est pas encore lu de cette façon.');
   assert.doesNotMatch(markup, /lang="en"/u, 'the French examples are all French');
 });
 
-test('the three examples are the brief\'s, checked live on 15/11/2026, and the French copy keeps its no-break spaces', () => {
+test('the examples: the brief\'s first two, checked live on 15/11/2026, and an insurance question as the third (2026-11-19); the French copy keeps its no-break spaces', () => {
   assert.equal(EN.dockExampleOne, "Quel est le délai de prescription d'un contrat d'assurance ?");
   assert.equal(EN.dockExampleTwo, "Loi du 27 juillet 1997 sur le contrat d'assurance, article 38, 1er juin 2012");
-  assert.equal(EN.dockExampleThree, 'What does Article 5 of the GDPR say?');
+  // The third was "What does Article 5 of the GDPR say?" until 2026-11-19: its card quoted half a sentence. Each language now
+  // shows an insurance question the screenshot run shows answered (its shots en-20 and fr-09).
+  assert.equal(EN.dockExampleThree, 'Can the insurer terminate the contract?');
+  assert.equal(FR.dockExampleThree, 'Quel est le délai de préavis pour résilier un contrat d’assurance\u00A0?');
   for (const [key, text] of Object.entries(FR).filter(([name]) => name.startsWith('dock'))) {
     assert.doesNotMatch(text, / [:;?!»€]|« /u, `fr.${key}`);
     assert.doesNotMatch(text, /'/u, `fr.${key}`);
@@ -221,13 +228,23 @@ test('how this answer was built: five stages from the trace, the AI model on the
   const markup = renderToStaticMarkup(h(DockView, { page: 'live-text', shown: turn, initialPlan: true }));
   const rows = [...markup.matchAll(/<li class="lx-dock-row" data-stage="([a-z]+)"><span class="lx-dock-row-name">([^<]+)<\/span><span class="lx-dock-row-line">([^<]+)<\/span><span class="([^"]+)" data-stage-by="([a-z]+)">([^<]+)<\/span><\/li>/gu)]
     .map((match) => [match[1], match[2], decode(match[3]), match[5], match[6]]);
+  // A masking that masked nothing is drawn last (2026-11-19): the first rows in sight are those that differ between answers.
   assert.deepEqual(rows, [
-    ['masking', 'Masking', 'nothing to mask', 'code', 'code'],
     ['planner', 'Planner', 'search, then read the article', 'model', 'AI model'],
     ['validator', 'Validator', 'plan accepted, nothing repaired', 'code', 'code'],
     ['execution', 'Execution', 'art. 44 read as of 15/11/2026', 'code', 'code'],
     ['composer', 'Composer', 'quote identical to the text', 'code', 'code'],
+    ['masking', 'Masking', 'nothing to mask', 'code', 'code'],
   ]);
+  assert.deepEqual(stageRows(turn.dossier, 'en').map((row) => row.key), ['masking', 'planner', 'validator', 'execution', 'composer'], 'the stages keep the order they ran in (How it works shows it)');
+  const masked = structuredClone(turn.dossier);
+  masked.trace.question = 'Mon adresse est jean@example.org : quel est le délai de prescription ?';
+  assert.equal(builtRows(masked, 'en')[0].key, 'masking', 'a masking that masked something stays first');
+  assert.equal(builtRows(masked, 'en')[0].line, EN.dockMaskOne);
+  // Beside the time, who did the work: code and one model call here (an answer a model planned).
+  assert.ok(markup.includes('<span class="lx-dock-built-by" data-dock-by="model">code + 1 model call</span>'), markup);
+  assert.equal(builtBy(turn.dossier, stageRows(turn.dossier, 'fr'), 'fr'), 'code + 1 appel au modèle');
+  assert.equal(modelCallCount(turn.dossier, stageRows(turn.dossier, 'en')), 1);
   assert.equal((markup.match(/lx-dock-tag-model/gu) ?? []).length, 1, 'one AI model call');
   const cost = EVALUATION_RECORD.dev.costEur.toLocaleString('en-GB', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
   assert.ok(markup.includes(`>1.6 s, about €${cost}<`), 'the time the answer took and the latest test run\'s average cost, said "about"');

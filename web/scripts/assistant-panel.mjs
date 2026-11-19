@@ -131,12 +131,16 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockExampleOneCaption: 'a question in your own words',
     dockExampleTwo: "Loi du 27 juillet 1997 sur le contrat d'assurance, article 38, 1er juin 2012",
     dockExampleTwoCaption: 'a citation with a date, opened by code with no model call',
-    dockExampleThree: 'What does Article 5 of the GDPR say?',
-    dockExampleThreeCaption: 'an article of an EU regulation',
+    // The third example (2026-11-19): an insurance question the screenshot run shows answered in English (its shot en-20),
+    // in place of "What does Article 5 of the GDPR say?", whose card quoted half a sentence.
+    dockExampleThree: 'Can the insurer terminate the contract?',
+    dockExampleThreeCaption: 'a question in English: the rule and its cases, quoted from the French text',
     dockDoes: 'What it does.',
     dockDoesText: 'Code reads your question, finds the lines of the text and writes the answer from them. An AI model may describe a question or rank passages; it writes nothing you read.',
     dockDoesNot: 'What it does not do.',
     dockDoesNotText: 'It gives no advice on your situation, and when it does not find the article it says so.',
+    // THE SCOPE SENTENCE, in English (2026-11-19): on the dock's first screen, under "What it does not do". Reword it here.
+    dockScopeText: 'Today Lex answers on Luxembourg insurance law. For other Luxembourg laws it proposes the closest passages without deciding. EU law is not yet read this way.',
     dockHowLink: 'How an answer is built, with the measured results',
     dockStays: 'Your conversation stays here while you move between pages.',
     dockAgainAnswer: 'Answered from article {number}. Open the answer again',
@@ -171,6 +175,10 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockBuiltFoot: '{seconds} s, about €{cost}',
     dockBuiltCost: 'about €{cost}',
     dockBuiltSeconds: '{seconds} s',
+    // Beside the time: who did the work, code alone or code and so many model calls (the answer's own record of its calls).
+    dockBuiltByCode: 'code only',
+    dockBuiltByOne: 'code + 1 model call',
+    dockBuiltBySome: 'code + {count} model calls',
     dockStageMasking: 'Masking',
     dockStagePlanner: 'Planner',
     dockStageValidator: 'Validator',
@@ -257,6 +265,8 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockHidePlan: 'Hide the plan',
     dockPlanHeading: 'The plan, as returned',
     dockStepsHeading: 'The steps run, as returned',
+    // An act a sentence names by its address, while its title is not read (or cannot be): never the address in sight.
+    dockThisAct: 'this act',
     dockNotFound: 'Lex did not find an article for these words.',
     dockSearched: 'Words searched: “{words}”',
     dockFindByName: 'Find a text by name',
@@ -356,12 +366,15 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockExampleOneCaption: 'une question avec vos mots',
     dockExampleTwo: 'Loi du 27 juillet 1997 sur le contrat d’assurance, article 38, 1er juin 2012',
     dockExampleTwoCaption: 'une citation avec une date, ouverte par le code sans appel au modèle',
-    dockExampleThree: 'Que dit l’article 5 du RGPD ?',
-    dockExampleThreeCaption: 'un article d’un règlement de l’UE',
+    dockExampleThree: 'Quel est le délai de préavis pour résilier un contrat d’assurance ?',
+    dockExampleThreeCaption: 'un délai, relevé mot pour mot dans la loi',
     dockDoes: 'Ce qu’il fait.',
     dockDoesText: 'Le code lit votre question, trouve les lignes du texte et en tire la réponse. Un modèle d’IA peut décrire une question ou classer des passages\u00A0; il n’écrit rien de ce que vous lisez.',
     dockDoesNot: 'Ce qu’il ne fait pas.',
     dockDoesNotText: 'Il ne donne aucun conseil sur votre situation et, quand il ne trouve pas l’article, il le dit.',
+    // LA PHRASE DE PÉRIMÈTRE, en français (2026-11-19) : sur le premier écran de l’assistant, sous « Ce qu’il ne fait pas ».
+    // À reformuler ici.
+    dockScopeText: 'Lex répond aujourd’hui sur le droit luxembourgeois des assurances. Pour les autres lois du Luxembourg, il propose les passages les plus proches sans trancher. Le droit de l’Union n’est pas encore lu de cette façon.',
     dockHowLink: 'Comment une réponse est construite, avec les résultats mesurés',
     dockStays: 'Votre conversation reste ici pendant que vous passez d’une page à l’autre.',
     dockAgainAnswer: 'Réponse tirée de l’article {number}. Rouvrir la réponse',
@@ -396,6 +409,9 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockBuiltFoot: '{seconds} s, environ {cost} €',
     dockBuiltCost: 'environ {cost} €',
     dockBuiltSeconds: '{seconds} s',
+    dockBuiltByCode: 'code seul',
+    dockBuiltByOne: 'code + 1 appel au modèle',
+    dockBuiltBySome: 'code + {count} appels au modèle',
     dockStageMasking: 'Masquage',
     dockStagePlanner: 'Planificateur',
     dockStageValidator: 'Validateur',
@@ -482,6 +498,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockHidePlan: 'Masquer le plan',
     dockPlanHeading: 'Le plan, tel que renvoyé',
     dockStepsHeading: 'Les étapes exécutées, telles que renvoyées',
+    dockThisAct: 'cet acte',
     dockNotFound: 'Lex n’a pas trouvé d’article pour ces mots.',
     dockSearched: 'Mots cherchés : « {words} »',
     dockFindByName: 'Trouver un texte par son nom',
@@ -594,8 +611,9 @@ export async function actTitlesOf(dossier, fetchImpl) {
 }
 
 /**
- * The Luxembourg act a bricks answer read and names by its address in a sentence of its own (an absence: "Lex went through
- * the text of /lu-legilux/..."): the record's `work`. Null for another publisher's act or an answer of another kind.
+ * The Luxembourg act a bricks answer read, which a sentence of its own may name by its address (a text Lex cannot show:
+ * "Lex holds the record of /lu-legilux/..."; an absence names the act by its title since 2026-11-19): the record's `work`.
+ * Null for another publisher's act or an answer of another kind.
  */
 export function bricksWork(dossier) {
   const work = dossier?.trace?.plan?.bricks?.work;
@@ -606,7 +624,10 @@ export function bricksWork(dossier) {
  * One act's dossier as the pages read it (`readDossier`), asked by the act's address: an address an answer carries (its
  * quotation's or its record's), never a word the reader typed. The one request the acts' titles are read from.
  */
-async function actDossierAt(address, fetchImpl) {
+async function actDossierAt(address, given) {
+  // In a page the dock hands no fetch (`AssistantDock`): the browser's own is used, as `askV3` does. (Until 2026-11-19 this
+  // called `undefined`, so an absence's card kept the act's address in sight: the title was never read.)
+  const fetchImpl = given ?? globalThis.fetch;
   const response = await fetchImpl('/api/v3/dossier', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1090,6 +1111,34 @@ function bricksStageRows(dossier, bricks, copy) {
   }
   rows.push({ key: 'checks', name: copy.dockStageChecks, line: quotes === 0 ? copy.dockComposerNone : fill(copy.dockChecksLine, { count: quotes }), model: false });
   return Object.freeze(rows.map((row) => Object.freeze(row)));
+}
+
+/**
+ * The stages in the order the dock draws them (`stageRows` keeps the order they ran in, which How it works shows): a masking
+ * row that masked nothing goes last, so the first rows in sight are the ones that differ between answers.
+ */
+export function builtRows(dossier, locale) {
+  const rows = stageRows(dossier, locale);
+  if (maskedCount(dossier?.trace?.question ?? '') !== 0) return rows;
+  return Object.freeze([...rows.filter((row) => row.key !== 'masking'), ...rows.filter((row) => row.key === 'masking')]);
+}
+
+/**
+ * How many model calls an answer made: the calls its own record lists (`trace.plan.bricks.model_calls`), never fewer than
+ * the stages tagged `model`; one for an answer whose model was asked and recorded no call (an answer from before the
+ * bricks, which a model planned; a model asked that gave nothing usable); none for an answer of code alone.
+ */
+export function modelCallCount(dossier, rows) {
+  const calls = dossier?.trace?.plan?.bricks?.model_calls;
+  const recorded = Array.isArray(calls) ? calls.length : 0;
+  return Math.max(recorded, rows.filter((row) => row.model).length, modelWasAsked(dossier, rows) ? 1 : 0);
+}
+
+/** Beside the work's time, who did it: "code only", or "code + N model calls". */
+export function builtBy(dossier, rows, locale) {
+  const copy = panelCopy(locale);
+  const count = modelCallCount(dossier, rows);
+  return count === 0 ? copy.dockBuiltByCode : count === 1 ? copy.dockBuiltByOne : fill(copy.dockBuiltBySome, { count });
 }
 
 /** A number of seconds or euros as the dock writes it in `locale` (1,6 in French, 1.6 in English). */

@@ -3933,6 +3933,7 @@ html[data-layout="v4"] .lx-dock-example-caption { display: block; margin-top: 3p
 html[data-layout="v4"] .lx-dock-about { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--lx-line); font-size: 13.5px; line-height: 1.5; color: var(--lx-muted); display: flex; flex-direction: column; gap: 8px; }
 html[data-layout="v4"] .lx-dock-about p { margin: 0; }
 html[data-layout="v4"] .lx-dock-about strong { color: var(--lx-ink); font-weight: 600; }
+html[data-layout="v4"] .lx-dock-about .lx-dock-scope { color: var(--lx-ink); }
 html[data-layout="v4"] .lx-dock-link { padding: 0; font: inherit; color: var(--lx-ink); background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; text-align: left; }
 /* The question, as a bubble; the cards. */
 html[data-layout="v4"] .lx-dock-bubble { margin: 0; align-self: flex-end; max-width: 88%; box-sizing: border-box; padding: 9px 13px; font-size: 14.5px; line-height: 1.4; color: #FFFFFF; background: var(--lx-green); border-radius: 12px 12px 3px 12px; overflow-wrap: anywhere; }
@@ -3972,14 +3973,19 @@ html[data-layout="v4"] .lx-dock-choice-article { display: block; font-size: 14px
 html[data-layout="v4"] .lx-dock-choice-title { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--lx-muted); }
 /* "How this answer was built": five rows, each tagged code or AI model. */
 html[data-layout="v4"] .lx-dock-built { padding: 12px 16px 10px; gap: 0; }
-html[data-layout="v4"] .lx-dock-built-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 6px; }
+html[data-layout="v4"] .lx-dock-built-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 10px; padding-bottom: 6px; }
 html[data-layout="v4"] .lx-dock-built-title { margin: 0; font-family: var(--lx-sans); font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--lx-ink); }
+/* Who did the work ("code only", "code + 2 model calls"), then the time and the cost: beside the title, or under it. */
+html[data-layout="v4"] .lx-dock-built-facts { flex: 0 1 auto; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; font-size: 12.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-built-by { font-weight: 600; color: var(--lx-ink); white-space: nowrap; }
 html[data-layout="v4"] .lx-dock-built-foot { flex: 0 0 auto; font-size: 12.5px; color: var(--lx-muted); white-space: nowrap; }
+html[data-layout="v4"] .lx-dock-built-foot:empty { display: none; }
 html[data-layout="v4"] .lx-dock-rows { margin: 0; padding: 0; list-style: none; }
 html[data-layout="v4"] .lx-dock-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--lx-line-soft); font-size: 13px; line-height: 1.35; }
 html[data-layout="v4"] .lx-dock-row-name { flex: 0 0 74px; font-weight: 600; }
 html[data-layout="v4"][lang="fr"] .lx-dock-row-name { flex-basis: 96px; }
-html[data-layout="v4"] .lx-dock-row-line { flex: 1 1 auto; min-width: 0; color: var(--lx-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A stage's line is read whole: it wraps (until 2026-11-19 it was cut with an ellipsis). */
+html[data-layout="v4"] .lx-dock-row-line { flex: 1 1 auto; min-width: 0; color: var(--lx-muted); overflow-wrap: anywhere; }
 html[data-layout="v4"] .lx-dock-tag { flex: 0 0 auto; padding: 1px 8px; border-radius: 10px; background: var(--lx-chip); color: var(--lx-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
 html[data-layout="v4"] .lx-dock-tag-model { background: var(--lx-green); color: #FFFFFF; }
 html[data-layout="v4"] .lx-dock-built-note { margin: 0; padding-top: 7px; border-top: 1px solid var(--lx-line-soft); font-size: 12.5px; color: var(--lx-muted); }
@@ -4005,7 +4011,7 @@ html[data-layout="v4"] .lx-dock-submit { flex: 0 0 auto; height: 34px; padding: 
 html[data-layout="v4"] .lx-dock-folded { align-items: center; }
 html[data-layout="v4"] .lx-dock-tab { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0 0; font: inherit; color: var(--lx-ink); background: none; border: none; cursor: pointer; }
 html[data-layout="v4"] .lx-dock-tab-icon { flex: 0 0 auto; }
-html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size: 13.5px; font-weight: 600; }
+html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
 /* == v4: assistant dock end == */
 
 
@@ -4044,6 +4050,22 @@ html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size
   html[data-layout="v4"] .lx-home-headline { font-size: 27px; line-height: 1.12; }
   html[data-layout="v4"] .lx-home-lede { margin-top: 8px; font-size: 14.5px; line-height: 1.45; }
   html[data-layout="v4"] .lx-home-find { margin-top: 14px; height: 48px; }
+  /* Home's lists on a phone (2026-11-19: the heading was printed a letter a line, its row's two fixed cells taking the
+     width). The page's side padding is the header's; the heading takes a line of its own; a text's name takes a line, its
+     versions on the scale and their count the next; a change's title takes a line under its date and counts. */
+  html[data-layout="v4"] .lx-home { padding: 24px 16px 0; }
+  html[data-layout="v4"] .lx-home-start-head { flex-wrap: wrap; gap: 6px 12px; }
+  html[data-layout="v4"] .lx-home-start-head h2 { flex: 1 1 100%; }
+  html[data-layout="v4"] .lx-home-start-head h2 span { display: block; padding-left: 0; }
+  html[data-layout="v4"] .lx-home-text { flex-wrap: wrap; gap: 6px 12px; }
+  html[data-layout="v4"] .lx-home-text-name { flex: 1 1 100%; }
+  html[data-layout="v4"] .lx-home-scale-cell { flex: 1 1 0; min-width: 0; }
+  html[data-layout="v4"] .lx-home-years, html[data-layout="v4"] .lx-home-marks { width: 100%; height: auto; }
+  html[data-layout="v4"] .lx-home-count-cell { flex: 0 0 84px; }
+  html[data-layout="v4"] .lx-home-change { flex-wrap: wrap; gap: 2px 12px; }
+  html[data-layout="v4"] .lx-home-change-date { flex: 0 0 auto; }
+  html[data-layout="v4"] .lx-home-change-counts { margin-left: auto; }
+  html[data-layout="v4"] .lx-home-change-title { order: 3; flex: 1 1 100%; }
   /* Compare stacks the old wording above the new. */
   html[data-layout="v4"] .lx-compare-head { flex-direction: column; }
   html[data-layout="v4"] .lx-compare-nav { margin-left: 0; }
