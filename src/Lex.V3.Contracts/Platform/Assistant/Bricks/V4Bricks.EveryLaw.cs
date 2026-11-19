@@ -32,9 +32,12 @@ public static partial class V4Bricks
         @"|(?<!\d)(?:19|20)\d{2}/\d{1,4}(?!\d)",
         EveryLawOptions, V4Text.PatternTimeout);
 
-    // A question on Lex itself that is not put in the second person ("Combien coûte une réponse ?").
+    // A question on Lex itself that is not put in the second person ("Combien coûte une réponse ?"), or something asked
+    // of Lex that is no question ("Appelez-moi au ...").
     private static readonly Regex AboutLexPattern = new(
-        @"(?<![\p{L}])(?:lex|chatbot|une\s+reponse|cette\s+reponse|ta\s+reponse|tes\s+reponses|an\s+answer\s+cost|this\s+site|ce\s+site)(?![\p{L}])", EveryLawOptions, V4Text.PatternTimeout);
+        @"(?<![\p{L}])(?:lex|chatbot|une\s+reponse|cette\s+reponse|ta\s+reponse|tes\s+reponses|an\s+answer\s+cost|this\s+site|ce\s+site)(?![\p{L}])" +
+        @"|(?<![\p{L}])(?:appelez|rappelez|contactez|ecrivez|appelle|rappelle|contacte)-(?:moi|nous)(?![\p{L}])|(?<![\p{L}])(?:call|phone|email|contact)\s+(?:me|us)(?![\p{L}])",
+        EveryLawOptions, V4Text.PatternTimeout);
 
     // Not a question on what a text provides: the weather, who holds an office ("qui est le directeur de ..."; "qui est
     // responsable de ..." is a question on a rule and is not stopped). A short hand list; the outline call's own

@@ -4,7 +4,7 @@
  "mount": "d4-20261113-bfb83983",
  "stem_rule": "strip_sx_prefix7",
  "name_bonus": 150.0,
- "min_score": 25.0,
+ "min_score": 20.0,
  "keep_ratio": 0.5,
  "max_acts": 3,
  "note": "kept = the router's answer (score >= min_score, score >= keep_ratio * best, at most max_acts; ties by work ascending, ordinal). top5 = the five best scores before the keep rule, for debugging a port. Scores have 2 decimals.",
@@ -49,12 +49,12 @@
      "score": 26.43
     },
     {
-     "work": "/lu-legilux/code-civil",
-     "score": 21.06
-    },
-    {
      "work": "/lu-legilux/code-travail",
      "score": 19.17
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 15.17
     }
    ]
   },
@@ -126,6 +126,10 @@
     {
      "work": "/lu-legilux/code-travail",
      "score": 28.58
+    },
+    {
+     "work": "/lu-legilux/rgd-2001-12-28-n1",
+     "score": 22.31
     }
    ],
    "top5": [
@@ -561,16 +565,16 @@
      "score": 42.01
     },
     {
-     "work": "/lu-legilux/code-civil",
-     "score": 34.1
-    },
-    {
      "work": "/lu-legilux/rgd-2012-02-03-n2",
      "score": 22.75
     },
     {
      "work": "/lu-legilux/loi-1990-11-09-n1",
      "score": 17.7
+    },
+    {
+     "work": "/lu-legilux/loi-2015-03-25-n8",
+     "score": 17.58
     }
    ]
   },
@@ -829,10 +833,6 @@
     {
      "work": "/lu-legilux/code-travail",
      "score": 42.92
-    },
-    {
-     "work": "/lu-legilux/loi-1997-07-27-n10",
-     "score": 34.01
     }
    ],
    "top5": [
@@ -845,16 +845,16 @@
      "score": 42.92
     },
     {
-     "work": "/lu-legilux/loi-1997-07-27-n10",
-     "score": 34.01
-    },
-    {
      "work": "/lu-legilux/loi-2009-11-10-n1",
      "score": 28.79
     },
     {
      "work": "/lu-legilux/loi-2011-09-02-n1",
      "score": 25.57
+    },
+    {
+     "work": "/lu-legilux/loi-2000-08-14-n8",
+     "score": 25.47
     }
    ]
   },
@@ -1161,10 +1161,6 @@
      "score": 8.17
     },
     {
-     "work": "/lu-legilux/rgd-2018-05-30-a447",
-     "score": 8.11
-    },
-    {
      "work": "/lu-legilux/loi-2022-04-26-a204",
      "score": 7.92
     },
@@ -1175,6 +1171,10 @@
     {
      "work": "/lu-legilux/loi-2026-04-02-a176",
      "score": 7.15
+    },
+    {
+     "work": "/lu-legilux/rgd-2019-10-26-a734",
+     "score": 6.07
     }
    ]
   },

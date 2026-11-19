@@ -1,6 +1,6 @@
 {
  "index_version": "2026-11-19.1",
- "index_sha256": "8a31f61116f11abec765f9950385db90da47244359b519144f68bf087c98f451",
+ "index_sha256": "aef3807068ef01cab08d6f977c7f13c6b2604554a99c7f50685bca025dc7a498",
  "vectors": [
   {
    "question": "Mon patron veut me virer après 3 ans dans la boîte, il doit me laisser combien de temps de préavis ?",
@@ -97,7 +97,7 @@
    "kept": [
     {
      "work": "/lu-legilux/code-travail",
-     "score": 93.09
+     "score": 105.44
     }
    ]
   },
@@ -182,6 +182,10 @@
     {
      "work": "/lu-legilux/code-travail",
      "score": 33.84
+    },
+    {
+     "work": "/lu-legilux/loi-2003-02-18-n2",
+     "score": 24.05
     }
    ]
   },
@@ -250,7 +254,7 @@
     },
     {
      "work": "/lu-legilux/code-civil",
-     "score": 60.89
+     "score": 51.37
     }
    ]
   },
@@ -267,12 +271,12 @@
    ],
    "kept": [
     {
-     "work": "/lu-legilux/loi-2023-08-07-a611",
-     "score": 50.81
+     "work": "/lu-legilux/code-civil",
+     "score": 54.52
     },
     {
-     "work": "/lu-legilux/code-civil",
-     "score": 41.49
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 50.81
     },
     {
      "work": "/lu-legilux/loi-2006-09-21-n1",
@@ -341,7 +345,7 @@
    "kept": [
     {
      "work": "/lu-legilux/code-civil",
-     "score": 87.45
+     "score": 77.93
     },
     {
      "work": "/lu-legilux/loi-2023-08-07-a611",
@@ -364,12 +368,16 @@
    ],
    "kept": [
     {
+     "work": "/lu-legilux/code-consommation",
+     "score": 76.19
+    },
+    {
      "work": "/lu-legilux/code-travail",
      "score": 65.04
     },
     {
-     "work": "/lu-legilux/code-consommation",
-     "score": 54.84
+     "work": "/lu-legilux/rgd-1980-03-07-n3",
+     "score": 39.37
     }
    ]
   },
@@ -482,15 +490,11 @@
    "kept": [
     {
      "work": "/lu-legilux/code-civil",
-     "score": 39.75
+     "score": 62.3
     },
     {
      "work": "/lu-legilux/loi-2001-04-18-n2",
      "score": 33.3
-    },
-    {
-     "work": "/lu-legilux/loi-2018-04-25-a307",
-     "score": 25.85
     }
    ]
   },
@@ -534,11 +538,11 @@
    "kept": [
     {
      "work": "/lu-legilux/code-civil",
-     "score": 101.86
+     "score": 106.55
     },
     {
      "work": "/lu-legilux/loi-1975-05-16-n1",
-     "score": 54.51
+     "score": 75.04
     }
    ]
   },
@@ -558,6 +562,14 @@
     {
      "work": "/lu-legilux/code-civil",
      "score": 47.04
+    },
+    {
+     "work": "/lu-legilux/loi-1992-06-17-n1",
+     "score": 23.91
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 23.64
     }
    ]
   },
@@ -573,7 +585,7 @@
    "kept": [
     {
      "work": "/lu-legilux/code-civil",
-     "score": 72.22
+     "score": 80.03
     }
    ]
   },
@@ -595,10 +607,6 @@
     {
      "work": "/lu-legilux/code-travail",
      "score": 42.92
-    },
-    {
-     "work": "/lu-legilux/loi-1997-07-27-n10",
-     "score": 34.01
     }
    ]
   },
@@ -705,7 +713,20 @@
     "voler",
     "magasin"
    ],
-   "kept": []
+   "kept": [
+    {
+     "work": "/lu-legilux/rgd-2004-02-06-n3",
+     "score": 23.98
+    },
+    {
+     "work": "/lu-legilux/loi-2020-07-24-a642",
+     "score": 22.06
+    },
+    {
+     "work": "/lu-legilux/loi-2020-12-19-a1035",
+     "score": 20.82
+    }
+   ]
   },
   {
    "question": "légitime défense",
@@ -764,6 +785,10 @@
     {
      "work": "/lu-legilux/code-penal",
      "score": 36.39
+    },
+    {
+     "work": "/lu-legilux/code-procedure_penale",
+     "score": 21.78
     }
    ]
   },
@@ -779,6 +804,10 @@
     {
      "work": "/lu-legilux/loi-1915-08-10-n1",
      "score": 30.81
+    },
+    {
+     "work": "/lu-legilux/loi-2021-07-16-a552",
+     "score": 24.18
     }
    ]
   },
@@ -953,6 +982,14 @@
     {
      "work": "/lu-legilux/rgd-2013-05-24-n6",
      "score": 27.66
+    },
+    {
+     "work": "/lu-legilux/rgd-2009-05-07-n2",
+     "score": 24.73
+    },
+    {
+     "work": "/lu-legilux/rgd-1979-06-13-n1",
+     "score": 22.83
     }
    ]
   },
