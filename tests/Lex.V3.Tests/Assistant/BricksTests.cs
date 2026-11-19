@@ -1777,6 +1777,27 @@ public sealed class BricksTests
         Assert.AreEqual(other.Id, quoted[0], "the second reading's article first");
         CollectionAssert.Contains(quoted, lead, "and the tables' first line after it");
         Assert.AreEqual("open", Bricks(dossier).GetProperty("route").GetString());
+
+        // The owner's point 1 of 2026-11-19: neither reading is sure, so the lines are shown as candidates and nothing is
+        // asserted: the candidates' sentence, not the answer's.
+        Assert.AreEqual("candidates", Bricks(dossier).GetProperty("answer").GetProperty("kind").GetString());
+        CollectionAssert.Contains(Templates(dossier), V3AnswerTemplates.AnswerCandidates);
+        CollectionAssert.DoesNotContain(Templates(dossier), V3AnswerTemplates.AnswerPassages);
+
+        // When the two readings land on the same article, code is sure enough: the answer is asserted.
+        var agrees = Reader(BricksFixture.Tables.Article(lead)!.Heading!, static _ => throw new HttpRequestException("no other call answers in this test"));
+        var same = Answered(BricksFixture.Ask(question, agrees));
+        Assert.AreNotEqual("candidates", Bricks(same).GetProperty("answer").GetProperty("kind").GetString());
+        CollectionAssert.DoesNotContain(Templates(same), V3AnswerTemplates.AnswerCandidates);
+
+        // When the second reading ran and found nothing, the tables' answer is not confirmed: candidates too.
+        var nothing = new BricksFixture.Model(static _ => throw new HttpRequestException("no other call answers in this test"), static _ => """{"articles":[]}""");
+        var unconfirmed = Answered(BricksFixture.Ask(question, nothing));
+        Assert.AreEqual("candidates", Bricks(unconfirmed).GetProperty("answer").GetProperty("kind").GetString());
+
+        // A refusal, an absence and a greeting are never turned into candidates.
+        var greeting = PlanOf("Bonjour").Json;
+        Assert.AreEqual(greeting, V4Bricks.AsCandidates(greeting));
     }
 
     [TestMethod]

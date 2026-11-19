@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 
@@ -176,14 +177,35 @@ public static partial class V4Bricks
                 // act (`read.Articles` are the articles the model's reading quoted, without that line).
                 var agree = own.PlanJson is not null && own.Articles is { Count: > 0 } quoted && (read.Articles ?? []).Contains(quoted[0], StringComparer.Ordinal);
                 var wider = agree && (read.Articles ?? []).Any(article => !own.Articles!.Contains(article, StringComparer.Ordinal));
-                return agree && !wider
-                    ? own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+outline_agrees" }
-                    : read with { CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0), Reason = read.Reason + (own.PlanJson is null ? string.Empty : wider ? "+tables_narrower" : "+tables_differ") };
+                if (agree && !wider)
+                {
+                    return own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+outline_agrees" };
+                }
+
+                // The owner's point 1 of 2026-11-19: "when code is not sure, show candidates or say 'not found', never
+                // assert". Where the tables and the second reading differ, neither is sure: the lines of both are shown as
+                // candidates, not as the answer.
+                var differs = own.PlanJson is not null && !wider;
+                return read with
+                {
+                    PlanJson = differs ? AsCandidates(read.PlanJson) : read.PlanJson,
+                    CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0),
+                    Reason = read.Reason + (own.PlanJson is null ? string.Empty : wider ? "+tables_narrower" : "+tables_differ+candidates"),
+                };
             }
 
             if (own.PlanJson is not null)
             {
-                return own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+" + read.Reason };
+                // The second reading ran and did not confirm what the tables answered without being sure: the tables' lines
+                // are shown as candidates (point 1). Where it did not run (a question it is not read for), the tables'
+                // answer stands as before.
+                var unconfirmed = read.Reason is "outline_reading_found_nothing" or "outline_names_nothing" or "outline_unreadable" or "outline_reading_refused" or "outline_articles_hold_no_line";
+                return own with
+                {
+                    PlanJson = unconfirmed ? AsCandidates(own.PlanJson) : own.PlanJson,
+                    CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0),
+                    Reason = own.Reason + "+" + read.Reason + (unconfirmed ? "+candidates" : string.Empty),
+                };
             }
 
             outline = read.CostMicroEuros;
@@ -549,6 +571,34 @@ public static partial class V4Bricks
         {
             Lead = draft.Items.Count > 0 && draft.AnswerKind != "absence" ? (tables.Work, draft.Items[0].First) : null,
         };
+    }
+
+    /// <summary>
+    /// A plan whose answer code is not sure of, shown as candidates (the owner's point 1 of 2026-11-19): the same lines,
+    /// quoted under "Lex a trouvé ces passages sans les départager davantage. Les plus proches :" in place of the sentence
+    /// that gives them as the answer, every line as a passage, and no value restated. A refusal, an absence, a greeting
+    /// and a plan of Lex's own operations are returned as they are.
+    /// </summary>
+    internal static string AsCandidates(string planJson)
+    {
+        ArgumentNullException.ThrowIfNull(planJson);
+        var plan = JsonNode.Parse(planJson)!.AsObject();
+        if (plan["bricks"]?["answer"] is not JsonObject answer || plan["parts"] is not JsonArray parts || parts.Count != 1 ||
+            parts[0]?["proposed_verdict"]?.GetValue<string>() != "answer" || answer["items"] is not JsonArray items || items.Count == 0 ||
+            answer["kind"]?.GetValue<string>() is "absence" or "greeting" or "not_held" or "operations" or "candidates")
+        {
+            return planJson;
+        }
+
+        answer["kind"] = "candidates";
+        foreach (var item in items.OfType<JsonObject>())
+        {
+            item["role"] = "passage";
+        }
+
+        answer["values"] = new JsonArray();
+        answer["complete"] = false;
+        return plan.ToJsonString();
     }
 
     // ---- Route 2, by the tables: one article of an act the index names -----------------------------------------------------
