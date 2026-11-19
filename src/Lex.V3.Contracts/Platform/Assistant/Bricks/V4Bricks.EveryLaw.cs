@@ -32,6 +32,13 @@ public static partial class V4Bricks
         @"|(?<!\d)(?:19|20)\d{2}/\d{1,4}(?!\d)",
         EveryLawOptions, V4Text.PatternTimeout);
 
+    // The reader asks leave for an act of their own, by the inverted first person ("puis-je exercer la profession ... ?",
+    // "ai-je le droit de ... ?", "may I ... ?"): a decision on their own case, which stays refused. "Est-ce que je peux
+    // ... ?" and "mon employeur peut-il ... ?" are not that form and are read.
+    private static readonly Regex OwnLeavePattern = new(
+        @"(?<![\p{L}])(?:puis|peux|pourrais|pourrai)-je(?![\p{L}])|(?<![\p{L}])(?:ai|aurais|aurai)-je\s+le\s+droit(?![\p{L}])|(?<![\p{L}])suis-je\s+(?:autorise|autorisee|oblige|obligee)(?![\p{L}])|(?<![\p{L}])(?:may\s+i|am\s+i\s+allowed)(?![\p{L}])",
+        EveryLawOptions, V4Text.PatternTimeout);
+
     // A question on Lex itself that is not put in the second person ("Combien coûte une réponse ?"), or something asked
     // of Lex that is no question ("Appelez-moi au ...").
     private static readonly Regex AboutLexPattern = new(
@@ -71,7 +78,7 @@ public static partial class V4Bricks
     // Capitals of everyday life that name no act: a kind of contract, a tax, a company form, an administration. A pattern,
     // not a set: a static collection here would be a registry of its own for the census to pin.
     private static readonly Regex EverydayCapitalsPattern = new(
-        "^(?:cdd|cdi|tva|sarl|sas|sci|asbl|snc|scs|pme|rcs|lbr|cns|cnap|ccss|adem|itm|cnpd|revis|rmg|ssm|pacs|aed|acd|sicav|opc|fis|cedies|cae|ctie)$",
+        "^(?:cdd|cdi|dap|ccp|tva|sarl|sas|sci|asbl|snc|scs|pme|rcs|lbr|cns|cnap|ccss|adem|itm|cnpd|revis|rmg|ssm|pacs|aed|acd|sicav|opc|fis|cedies|cae|ctie)$",
         EveryLawOptions, V4Text.PatternTimeout);
 
     /// <summary>
@@ -102,11 +109,13 @@ public static partial class V4Bricks
             return "every_law_refers_to_earlier";
         }
 
-        // What Lex's own operations refuse stays refused: a question that asks to apply the law (a cue of R15 that is no
-        // question on the rule), and a decision asked on the reader's own facts (the owner's point 2).
+        // The owner's point 2, as on the insurance road: only a decision asked on the reader's own facts stays refused (a
+        // judgement, advice, a prediction, "who pays" after a fact of the reader's own, an instruction to Lex), and the
+        // reader asking leave for an act of their own ("puis-je exercer ... ?"). A general question in personal words,
+        // with a cue of R15 or without ("mon employeur peut-il me licencier pendant un arrêt maladie ?"), is read: the
+        // rule is shown as candidates, with the line that the text does not say how it applies to the reader's situation.
         var question = row.Question;
-        var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
-        if ((cues.Count > 0 && !V4Boundary.RuleQuestion(question, 0, question.Length, cues)) || V4Boundary.DecidesOwnFacts(question, 0, question.Length))
+        if (V4Boundary.DecidesOwnFacts(question, 0, question.Length) || OwnLeavePattern.IsMatch(row.Folded))
         {
             return "every_law_asks_application";
         }
@@ -303,6 +312,10 @@ public static partial class V4Bricks
         var latest = new Dictionary<V4ActTables, string>(ReferenceEqualityComparer.Instance);
         foreach (var kept in routed)
         {
+            // The tables of a big code are built on its first question and cannot be stopped half-way: past the deadline,
+            // no further act is opened.
+            cancellationToken.ThrowIfCancellationRequested();
+
             // The tables are built for a Luxembourg act, in French; an act whose text the rights rule withholds gives none.
             if (!kept.Act.Work.StartsWith("/lu-legilux/", StringComparison.Ordinal) || !V3AssistantPlanValidator.IsWorkAddress(kept.Act.Work))
             {
@@ -459,12 +472,12 @@ public static partial class V4Bricks
             }
         }
 
-        // The advice boundary: a question that asks to apply the law, or to decide on the reader's own facts, never comes
-        // here (EveryLawExit). A question worded for the reader's case is answered by the general rule, said not to say
-        // how it applies to the reader, as the outline reading says it.
+        // The advice boundary: a decision asked on the reader's own facts never comes here (EveryLawExit). A question
+        // worded for the reader's case, or one that holds a cue of R15 and is no question on the rule, is answered by the
+        // general rule, said not to say how it applies to the reader, as the outline reading says it.
         var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
         var ruleQuestion = cues.Count > 0 && V4Boundary.RuleQuestion(question, 0, question.Length, cues);
-        if (V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0 && !draft.Caveats.Contains("not_your_case"))
+        if (((cues.Count > 0 && !ruleQuestion) || V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0 || V4Boundary.AsksOfOneself(question, 0, question.Length)) && !draft.Caveats.Contains("not_your_case"))
         {
             draft.Caveats.Add("not_your_case");
         }

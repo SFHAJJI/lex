@@ -1258,6 +1258,45 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void AQuestionThatHoldsNothingOfInsuranceIsNotAnsweredFromItsActs()
+    {
+        // The practice set of 2026-11-19 (D001): the question holds nothing of insurance, the model's description named the
+        // dictionary's "résiliation", and article 39 of the insurance contract law was asserted. A concept the model names
+        // is used only for a question that itself holds a word of the domain, a role, or an act of its index.
+        const string dismissal = "Mon patron veut me virer après 3 ans dans la boîte, il doit me laisser combien de temps de préavis ?";
+        Assert.AreEqual(0, Row(dismissal).Concepts.Count, "the lookup reads nothing here");
+        var naming = new BricksFixture.Model(call => call.Step == "question"
+            ? Described("words_on_a_subject", dismissal, words: "préavis", concept: "resiliation")
+            : throw new HttpRequestException("only the question call answers in this test"));
+        var plan = new V4BricksPlanner(new BricksFixture.Corpus(), naming).Plan(new V3PlannerInput(dismissal, V3AnswerLocale.Fr, [], ["fra"], BricksFixture.Today), CancellationToken.None);
+        using (var written = JsonDocument.Parse(plan.PlanJson!))
+        {
+            var bricks = written.RootElement.GetProperty("bricks");
+            Assert.AreEqual("operations", bricks.GetProperty("route").GetString(), "Lex's own operations go on; the tables do not answer");
+        }
+
+        // A word of the dictionary among words the tables do not know, with nothing of insurance beside it, is half a
+        // reading (D014 "à l'avance", D025 "rembourser", D030 "sur internet"): the tables do not answer, and no second
+        // reading of the insurance acts is made (a model that is asked for one fails this test).
+        var never = new BricksFixture.Model(static call => call.Step == "question" ? "{}" : throw new InvalidOperationException("no reading of the insurance acts is made"), static _ => throw new InvalidOperationException("no outline of the insurance acts is read"));
+        foreach (var question in new[]
+                 {
+                     "Je veux quitter mon appartement en location, je dois prévenir le propriétaire combien de temps à l'avance ?",
+                     "Mon fils de 12 ans a cassé la vitre du voisin avec son ballon, c'est à nous de rembourser ?",
+                     "J'ai commandé des chaussures sur internet et elles ne me plaisent pas, j'ai combien de jours pour les renvoyer ?",
+                 })
+        {
+            Assert.IsTrue(Row(question).Concepts.Count > 0, "the lookup reads a word of the dictionary: " + question);
+            var outcome = new V4BricksPlanner(new BricksFixture.Corpus(), never).Plan(new V3PlannerInput(question, V3AnswerLocale.Fr, [], ["fra"], BricksFixture.Today), CancellationToken.None);
+            using var written = JsonDocument.Parse(outcome.PlanJson!);
+            Assert.AreEqual("operations", written.RootElement.GetProperty("bricks").GetProperty("route").GetString(), question);
+        }
+
+        // "Licencié" is a word of another domain, as "licenciement" is: "prime de départ" is no insurance premium (D012).
+        Assert.IsTrue(Row("Licencié après 12 ans dans la même entreprise : est-ce que j'ai droit à une prime de départ, et de combien ?").OtherDomain);
+    }
+
+    [TestMethod]
     public void ACitedArticleOfAnActTheIndexNamesIsOpenedByCodeWithNoModelAndNoSearch()
     {
         var never = new BricksFixture.Model(static _ => throw new InvalidOperationException("no model is asked for a citation code reads"));

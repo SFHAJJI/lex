@@ -293,7 +293,11 @@ public static partial class V4Bricks
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
         // words the dictionary lacks. Then the tables answer, as for any question, under the boundary above.
-        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { Branch: false } concept)
+        // Only for a question that itself holds something of the domain (a word of it, a role, an act of its index): a
+        // concept the model names for a question that holds nothing of insurance is not used (the practice set of
+        // 2026-11-19: "Mon patron veut me virer ..., combien de temps de préavis ?" was answered from the insurance
+        // contract law, because the model named "résiliation"). Such a question goes on to Lex's own operations.
+        if (own.Reason == "nothing_of_the_dictionary" && OfTheDomain(row) && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { Branch: false } concept)
         {
             var span = described.Words ?? described.Span;
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
@@ -319,6 +323,36 @@ public static partial class V4Bricks
         }
 
         return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates, searchOnly, row.Acts, actAlone), cost + outline, "route:operations(" + own.Reason + ")" + outlined);
+    }
+
+    /// <summary>
+    /// Whether a question itself holds something of the insurance domain: a word of it, a role, an act of its index, or
+    /// the word "police" (the index lists only "police d'assurance"; "l'acheteur de la police", "police n° ...").
+    /// </summary>
+    private static bool OfTheDomain(V4QuestionRow row)
+    {
+        if (row.Roles.Count > 0 || V4CorpusIndex.Insurance.InDomain(row.Words))
+        {
+            return true;
+        }
+
+        foreach (var word in row.Words)
+        {
+            if (row.Folded.AsSpan(word.Start, word.End - word.Start) is "police" or "polices")
+            {
+                return true;
+            }
+        }
+
+        foreach (var act in row.Acts)
+        {
+            if (act.Work is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -424,6 +458,16 @@ public static partial class V4Bricks
         }
 
         var asksDefinition = row.Kinds.Any(static kind => kind.Kind == "definition") || (row.Kinds.Count == 0 && row.Concepts.Count == 0 && row.Words.Count <= 5);
+
+        // A word of the dictionary among words the tables do not know, in a question that holds nothing of the domain (no
+        // word of it, no role, no act of its index), is half a reading: "à l'avance" in a question on a lease, "rembourser"
+        // in one on a broken window, "sur internet" in one on shoes (the practice set of 2026-11-19 got articles of the
+        // insurance contract law for each). The tables do not answer it, and no second reading of this domain's acts is
+        // made: Lex's own operations go on. A definition asked ("c'est quoi la règle proportionnelle ?") names its term.
+        if (row.Concepts.Count > 0 && !asksDefinition && row.Unmatched.Count >= 2 && !OfTheDomain(row))
+        {
+            return new V4PlanOutcome(null, 0, "not_of_the_domain");
+        }
         if (row.Concepts.Count == 0 && row.Acts.Count == 0 && !asksDefinition)
         {
             // A role alone ("l'assuré ...") names half the lines of the act: without a concept there is nothing to filter on.
