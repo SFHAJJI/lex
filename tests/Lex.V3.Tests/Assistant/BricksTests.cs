@@ -1577,13 +1577,13 @@ public sealed class BricksTests
         CollectionAssert.Contains(Templates(confirmed), V3AnswerTemplates.AnswerPassages);
         CollectionAssert.DoesNotContain(Templates(confirmed), V3AnswerTemplates.AnswerCandidates);
 
-        // "vends" and "voiture" stand neither on that line nor in its heading ("Cession d'une chose assurée"): the same
-        // article and the same line, shown as a candidate and not as the answer.
+        // "vends" and "voiture" stand neither on that line nor in its heading ("Cession d'une chose assurée"). The rule that
+        // made such a pick a candidate is switched off (V4Bricks.OutlinePickNeedsCodeConfirmation: on the owner's 80 it moved
+        // 14 right answers to candidates and removed no wrong one), so the same line is the answer here too.
         var unconfirmed = Answered(BricksFixture.Ask("Que devient mon contrat d'assurance si je vends ma voiture ?", Reader("Cession d'une chose assurée")));
         Assert.AreEqual((V3AssistantVerdict.Answer, "art_69"), (unconfirmed.Verdict, unconfirmed.Quotes.Single().Anchor));
-        Assert.AreEqual("candidates", Bricks(unconfirmed).GetProperty("answer").GetProperty("kind").GetString());
-        CollectionAssert.Contains(Templates(unconfirmed), V3AnswerTemplates.AnswerCandidates);
-        CollectionAssert.DoesNotContain(Templates(unconfirmed), V3AnswerTemplates.AnswerPassages);
+        Assert.AreEqual("text", Bricks(unconfirmed).GetProperty("answer").GetProperty("kind").GetString());
+        CollectionAssert.Contains(Templates(unconfirmed), V3AnswerTemplates.AnswerPassages);
     }
 
     [TestMethod]

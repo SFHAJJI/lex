@@ -20,7 +20,9 @@ public static partial class V4Bricks
     /// the heading of its article, the lines are shown as candidates. False: such an answer is asserted on the model's
     /// word alone, as before. One line to switch off if a measure shows the rule costs too many right answers.
     /// </summary>
-    private const bool OutlinePickNeedsCodeConfirmation = true;
+    // Off since the measure of 2026-11-19 21:07 UTC on the owner's 80: on, it moved 14 right answers to candidates (47 right to 34)
+    // and removed no wrong one. The check stays computed and recorded; it does not decide.
+    private const bool OutlinePickNeedsCodeConfirmation = false;
 
     /// <summary>
     /// Whether code confirms what the second reading quotes: a content word of the question (five letters or more, no stop
