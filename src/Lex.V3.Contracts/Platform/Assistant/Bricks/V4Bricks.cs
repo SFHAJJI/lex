@@ -332,7 +332,7 @@ public static partial class V4Bricks
     /// Whether a question itself holds something of the insurance domain: a word of it, a role, an act of its index, or
     /// the word "police" (the index lists only "police d'assurance"; "l'acheteur de la police", "police n° ...").
     /// </summary>
-    private static bool OfTheDomain(V4QuestionRow row)
+    internal static bool OfTheDomain(V4QuestionRow row)
     {
         if (row.Roles.Count > 0 || V4CorpusIndex.Insurance.InDomain(row.Words))
         {
@@ -341,7 +341,10 @@ public static partial class V4Bricks
 
         foreach (var word in row.Words)
         {
-            if (row.Folded.AsSpan(word.Start, word.End - word.Start) is "police" or "polices")
+            // "coassurance", "coassureurs", "réassureur", "assurance-vie", "insurer": a word built on the domain's own root is of
+            // the domain though the index lists only its plain forms (the release gate's case on co-insurance, 2026-11-19).
+            var text = row.Folded.AsSpan(word.Start, word.End - word.Start);
+            if (text is "police" or "polices" || text.Contains("assur", StringComparison.Ordinal) || text.Contains("insur", StringComparison.Ordinal))
             {
                 return true;
             }

@@ -273,6 +273,31 @@ public static partial class V4Bricks
             named0 = true;
         }
 
+        // A question of the insurance domain is read in the insurance acts alone: another act's passages are not shown
+        // for it (a question on co-insurance was shown the Code civil on solidarity; the release gate, 2026-11-19).
+        var insurance = OfTheDomain(row) && !row.OtherDomain && !named0;
+        if (insurance)
+        {
+            var own = new List<V4RoutedAct>();
+            foreach (var act in kept)
+            {
+                foreach (var indexed in V4CorpusIndex.Insurance.Acts)
+                {
+                    if (string.Equals(indexed.Address, act.Act.Work, StringComparison.Ordinal))
+                    {
+                        own.Add(act);
+                    }
+                }
+            }
+
+            if (own.Count == 0)
+            {
+                return "every_law_of_the_insurance_domain";
+            }
+
+            kept = own;
+        }
+
         if (kept.Count == 0)
         {
             return "every_law_router_keeps_nothing";
@@ -283,7 +308,7 @@ public static partial class V4Bricks
         // ("un chien mord un passant, qui paie ?", "prendre une voiture sans demander, est-ce du vol ?": the fresh set of
         // 2026-11-19 routed neither to the Code civil nor to the Code pénal). The two general codes are read beside the
         // acts kept, by their parts, as any big act is.
-        if (!named0 && kept[0].ScoreCents < EveryLawWeakRoute * laws.MinScoreCents)
+        if (!named0 && !insurance && kept[0].ScoreCents < EveryLawWeakRoute * laws.MinScoreCents)
         {
             // The general law: the Code civil and the Code pénal (a local list: a static one would be a registry to pin).
             foreach (var general in new[] { "/lu-legilux/code-civil", "/lu-legilux/code-penal" })
