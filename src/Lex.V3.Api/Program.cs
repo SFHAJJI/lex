@@ -72,12 +72,17 @@ if (!maintenance)
         // off-switch, unset or empty; LEX_V3_ASSISTANT_PREVIEW exactly `unreviewed` while the people's reviews are not done; and
         // a planner, which exists only when LEX_ASSISTANT_ENDPOINT and its companions name an Azure OpenAI deployment. All are
         // read once here. Anything less, and ask answers the switched-off card.
+        // The bricks (V4) stand where the planner stood: code reads the question and decides the route; the deployment is
+        // asked to describe a question the tables did not read, to rank candidates and to point at lines. It plans nothing.
+        var deployment = string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable), "on", StringComparison.Ordinal)
+            ? AzureOpenAiModel.FromEnvironment(Environment.GetEnvironmentVariable)
+            : null;
         corpusMount?.UseAssistant(V3AssistantRuntime.FromConfiguration(
             Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable),
             Environment.GetEnvironmentVariable(V3AssistantRuntime.OffSwitchVariable),
-            string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable), "on", StringComparison.Ordinal)
-                ? AzureOpenAiAssistantPlanner.FromEnvironment(Environment.GetEnvironmentVariable)
-                : null,
+            deployment is null || corpusMount is null
+                ? null
+                : new Lex.V3.Contracts.Platform.Assistant.Bricks.V4BricksPlanner(corpusMount.BricksCorpus(static () => DateTimeOffset.UtcNow), deployment),
             Environment.GetEnvironmentVariable(V3AssistantRuntime.PreviewVariable)));
     }
     catch (Exception exception)

@@ -1,0 +1,49 @@
+{
+  "schema": "lex-v4-corpus-index/1",
+  "version": "2026-11-18.1",
+  "status": "The columns a person types (domain, short names) and the summary line an agent drafted once (2026-11-18), not yet reviewed by a person. Every other column of the index (kind, dates, versions, counts, text status, relations) is read from Lex's own index when a question is answered and is never copied here: the index holds no law text.",
+  "domains": [
+    { "id": "private_insurance", "label_fr": "assurance privée", "label_en": "private insurance",
+      "note": "Assurance has two meanings in one word: a private contract, or the statutory social insurance. A question that holds one of other_domain_words is not of this domain and is not answered from its acts.",
+      "other_domain_words": ["sécurité sociale", "code de la sécurité sociale", "assurance sociale", "assurances sociales", "cns", "caisse nationale de santé", "caisse de maladie", "assurance dépendance", "assurance pension", "assurance accident", "association d'assurance accident", "cnap", "ccss", "chômage", "indemnité pécuniaire", "cotisations sociales", "affiliation", "salarié", "salariés", "employeur", "employeurs", "congé de maladie", "social security", "social insurance", "employee", "employer", "unemployment"] }
+  ],
+  "acts": [
+    { "work": "loi-1997-07-27-n10", "publisher": "lu-legilux", "kind": "loi", "date": "1997-07-27", "role": "base_text", "tier": "deep",
+      "domain": "private_insurance", "language": "fra", "order": 1,
+      "short_names": ["loi sur le contrat d'assurance", "loi du 27 juillet 1997 sur le contrat d'assurance", "loi du 27 juillet 1997", "loi de 1997 sur le contrat d'assurance", "lca", "insurance contract law", "law on the insurance contract", "law of 27 july 1997 on insurance contracts", "law of 27 july 1997 on the insurance contract", "law of 27 july 1997", "law on insurance contracts", "insurance contracts law"],
+      "summary_fr": "Loi du 27 juillet 1997 sur le contrat d'assurance. Le contrat entre l'assureur et le preneur d'assurance (ce que les lecteurs appellent police, souscripteur, résilier, mettre fin, cotisation): conclusion, déclaration du risque, prime, sinistre, durée et résiliation, prescription; assurances de dommages, de responsabilité, de protection juridique, de personnes et vie. Répond à: définitions, droits et obligations des parties, délais. Ne traite pas: l'agrément et la surveillance des assureurs (loi de 2015), l'assurance automobile obligatoire (loi de 2003), les assurances sociales." },
+    { "work": "loi-2015-12-07-n1", "publisher": "lu-legilux", "kind": "loi", "date": "2015-12-07", "role": "base_text", "tier": "deep",
+      "domain": "private_insurance", "language": "fra", "order": 2,
+      "short_names": ["loi sur le secteur des assurances", "loi du 7 décembre 2015 sur le secteur des assurances", "loi du 7 décembre 2015", "loi de 2015 sur le secteur des assurances", "lsa", "law on the insurance sector", "law of 7 december 2015 on the insurance sector", "law of 7 december 2015", "insurance sector law"],
+      "summary_fr": "Loi du 7 décembre 2015 sur le secteur des assurances. Les entreprises d'assurance et de réassurance et leur autorité, le Commissariat aux assurances (ce que les lecteurs appellent régulateur, licence, contrôle): agrément, solvabilité et fonds propres, gouvernance, groupes, assainissement et liquidation, fonds de pension, distribution et intermédiaires, secret professionnel, sanctions. Répond à: conditions d'agrément, obligations prudentielles, pouvoirs du CAA, définitions du secteur. Ne traite pas: les droits du preneur dans son contrat (loi de 1997), l'assurance automobile obligatoire (loi de 2003)." },
+    { "work": "loi-2003-04-16-n2", "publisher": "lu-legilux", "kind": "loi", "date": "2003-04-16", "role": "base_text", "tier": "deep",
+      "domain": "private_insurance", "language": "fra", "order": 3,
+      "short_names": ["loi sur l'assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs", "loi du 16 avril 2003", "loi sur l'assurance automobile obligatoire", "loi rc auto", "motor liability insurance law"],
+      "summary_fr": "Loi du 16 avril 2003 relative à l'assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs. L'obligation d'assurer tout véhicule (ce que les lecteurs appellent assurance auto, RC auto, carte verte): étendue de la garantie, indemnisation de la personne lésée, offre d'indemnisation, Fonds de Garantie Automobile, Bureau luxembourgeois, véhicules non assurés ou non identifiés. Répond à: qui doit s'assurer, ce que l'assurance doit couvrir, qui indemnise quand il n'y a pas d'assureur. Ne traite pas: les règles générales du contrat d'assurance (loi de 1997), le code de la route." },
+    { "work": "rgd-2014-10-08-n1", "publisher": "lu-legilux", "kind": "rgd", "date": "2014-10-08", "role": "executing_regulation", "tier": "deep",
+      "domain": "private_insurance", "language": "fra", "order": 4,
+      "short_names": ["règlement grand-ducal du 8 octobre 2014 concernant les modalités d'agrément et d'exercice des intermédiaires d'assurances et de réassurances", "règlement grand-ducal du 8 octobre 2014", "règlement sur les intermédiaires d'assurances", "règlement du 8 octobre 2014"],
+      "summary_fr": "Règlement grand-ducal du 8 octobre 2014 concernant les modalités d'agrément et d'exercice des intermédiaires d'assurances et de réassurances ainsi que des professionnels du secteur de l'assurance. Courtiers, sous-courtiers, agents et agences d'assurances (ce que les lecteurs appellent courtier, agent): demande d'agrément, assurance de responsabilité civile professionnelle du courtier, changement d'adresse, transfert et retrait d'agrément, décès du courtier. Répond à: démarches et pièces pour l'agrément d'un intermédiaire. Ne traite pas: le contrat entre l'assureur et son client (loi de 1997), la surveillance des entreprises d'assurance (loi de 2015)." },
+    { "work": "loi-2022-03-30-a149", "publisher": "lu-legilux", "kind": "loi", "date": "2022-03-30", "role": "base_text", "tier": "deep",
+      "domain": "private_insurance", "language": "fra", "order": 5,
+      "short_names": ["loi sur les comptes inactifs", "loi du 30 mars 2022", "loi sur les contrats d'assurance en déshérence", "loi sur les comptes dormants", "dormant accounts law"],
+      "summary_fr": "Loi du 30 mars 2022 relative aux comptes inactifs, aux coffres-forts inactifs et aux contrats d'assurance en déshérence. Ce que doivent faire les banques et les assureurs quand un titulaire ou un bénéficiaire ne se manifeste plus (ce que les lecteurs appellent compte dormant, contrat oublié): point de départ de l'inactivité, information et recherche des titulaires, consignation auprès de la Caisse de consignation, restitution. Répond à: délais d'inactivité, obligations d'information, où réclamer les avoirs. Ne traite pas: la vie normale du contrat d'assurance (loi de 1997)." }
+  ],
+  "eu_acts": [
+    { "id": "solvency_ii", "celex": "32009L0138", "name_fr": "directive 2009/138/CE (Solvabilité II)", "name_en": "Directive 2009/138/EC (Solvency II)",
+      "official": "https://eur-lex.europa.eu/eli/dir/2009/138/oj",
+      "short_names": ["solvabilité ii", "solvabilité 2", "solvency ii", "solvency 2", "directive 2009/138", "2009/138/ce", "2009/138/ec"] },
+    { "id": "idd", "celex": "32016L0097", "name_fr": "directive (UE) 2016/97 sur la distribution d’assurances (DDA)", "name_en": "Directive (EU) 2016/97 on insurance distribution (IDD)",
+      "official": "https://eur-lex.europa.eu/eli/dir/2016/97/oj",
+      "short_names": ["directive sur la distribution d'assurances", "distribution d'assurances", "insurance distribution directive", "idd", "dda", "directive 2016/97", "2016/97"] },
+    { "id": "priips", "celex": "32014R1286", "name_fr": "règlement (UE) n° 1286/2014 (PRIIPs)", "name_en": "Regulation (EU) No 1286/2014 (PRIIPs)",
+      "official": "https://eur-lex.europa.eu/eli/reg/2014/1286/oj",
+      "short_names": ["priips", "priip", "document d'informations clés", "key information document", "règlement 1286/2014", "1286/2014"] },
+    { "id": "motor_directive", "celex": "32009L0103", "name_fr": "directive 2009/103/CE (assurance automobile)", "name_en": "Directive 2009/103/EC (motor insurance)",
+      "official": "https://eur-lex.europa.eu/eli/dir/2009/103/oj",
+      "short_names": ["directive assurance automobile", "directive automobile", "motor insurance directive", "directive 2009/103", "2009/103/ce", "2009/103/ec"] },
+    { "id": "distance_marketing", "celex": "32002L0065", "name_fr": "directive 2002/65/CE (commercialisation à distance de services financiers)", "name_en": "Directive 2002/65/EC (distance marketing of financial services)",
+      "official": "https://eur-lex.europa.eu/eli/dir/2002/65/oj",
+      "short_names": ["commercialisation à distance de services financiers", "distance marketing of financial services", "directive 2002/65", "2002/65/ce", "2002/65/ec"] }
+  ]
+}

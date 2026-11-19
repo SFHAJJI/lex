@@ -10,8 +10,8 @@ parsed into relational SQLite indexes (works, dated versions and their validity 
 relations), built twice and compared byte for byte; questions are parsed by deterministic parsers (ELI, CELEX, citations,
 dates); retrieval goes by structure first (act, version on a date, article), then lexical search over the articles' text;
 every answer is a typed envelope and every refusal a typed code with a mandatory payload. Releases are reproducible, signed
-images, checked against the release serving before them. An assistant is built to a typed answer contract (the model only
-plans; code validates and quotes) and is switched off until its gates pass.
+images, checked against the release serving before them. An assistant is built to a typed answer contract (code reads the
+question, finds the lines and quotes them; a model only describes a question or marks lines code found) and is switched off until its gates pass.
 
 Where to read more: [STATUS.md](STATUS.md) (what is served, what is next), [docs/OPERATING.md](docs/OPERATING.md) (how it
 runs), [LAUNCH-CONTRACT.md](LAUNCH-CONTRACT.md) (the acceptance list), and on the site itself the Developers page and

@@ -74,7 +74,7 @@ test('Decisions and Evidence print the recorded runs\' and the coverage answer\'
   const decisions = renderLiveReferencePage('decisions');
   assert.ok(decisions.includes(`${dev.wrongArticle} wrong articles in ${dev.cases} test questions.`));
   assert.ok(decisions.includes(`${dev.notFound + dev.wronglyRefused} of the ${dev.rightArticle + dev.wrongArticle + dev.notFound + dev.wronglyRefused} questions that call for an article get none.`));
-  assert.ok(decisions.includes(`Open problem: ${heldout.rightArticle} of ${heldout.cases} unseen questions get the right article.`));
+  assert.ok(decisions.includes(`Measured: ${heldout.rightArticle} of ${heldout.cases} unseen questions get the right article.`));
   // V4 (V5How's typography): each decision a row, with its own anchor How it works links.
   assert.equal((decisions.match(/<li class="lx-dec-item" id="decision-[a-zA-Z]+" data-decision=/g) ?? []).length, 7, 'seven decisions');
   const evidence = renderLiveReferencePage('evidence');
@@ -107,8 +107,10 @@ test('How it works shows the MLflow registry as MLflow holds it, the stability, 
   const dev = EVALUATION_RECORD.dev;
   assert.ok(page.includes(`the same verdict ${Math.floor(100 * dev.replaySameVerdict + 0.5)} % of the time and the same plan ${Math.floor(100 * dev.replaySamePlan + 0.5)} %`));
   const heldout = EVALUATION_RECORD.heldout;
-  const said = /(\d+) refused by the advice rule, (\d+) not found, (\d+) with no plan from the model/.exec(page);
+  const said = /(\d+) refused by the advice rule, (\d+) not found, (\d+) with no answer in time/.exec(page);
   assert.ok(said !== null, 'the held-out misses, by kind');
+  // A wrong article on an unseen question is said beside the right ones, never left out of the count.
+  assert.ok(page.includes(`${heldout.rightArticle} right articles of ${heldout.cases}, ${heldout.wrongArticle} wrong.`), 'the held-out right and wrong articles');
   assert.equal(Number(said[1]) + Number(said[2]) + Number(said[3]), heldout.cases - heldout.rightArticle - heldout.wrongArticle);
   // The API's description, the public code and the two schedules, linked.
   assert.ok(page.includes('href="/openapi.json" data-openapi=""'));

@@ -123,16 +123,39 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Index.TitleFolding: Folds=2140",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation: ArbiterReasons=11, "
+                    + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const ArbiterPrompt, "
+                    + "const ExtractionBase, static property ArbiterSchema, "
+                    + "static property ExtractionSchema, static property PromptsSha256",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Patterns: const Number, "
+                    + "const NumberWords, const Tens, const Units",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionCall: Asks=9, Outcomes=5, "
+                    + "TitleOpeners=11, const Prompt, static property PromptSha256",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionParser: GreetingWords=28, "
+                    + "StopWords=151",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval: Modals=22",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Text: Table=592, const LatinBases",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerGates: ConsolidatedKinds=3",
-                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=160, "
-                    + "Definitions=80, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=160, "
-                    + "Ids=80, LanguageCodes=4, const ActionCandidate, const ActionOpenWork, "
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=276, "
+                    + "Definitions=138, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=276, "
+                    + "Ids=138, LanguageCodes=4, const AbsenceActNotHeld, "
+                    + "const AbsenceNoAnswerInLines, const AbsenceSweepHeading, "
+                    + "const AbsenceTermCount, const AbsenceTermsNowhere, const AbsenceTextNotHeld, "
+                    + "const AbsenceWordsNotFound, const ActionCandidate, const ActionOpenWork, "
                     + "const ActionReadArticle, const ActionReadState, const ActionReadStateEu, "
-                    + "const AgentDraft, const BoundaryLine, const BoundaryNoAdviser, "
-                    + "const BoundaryWhole, const BoundaryWholeNoAdviser, const BoundaryWholeNoText, "
+                    + "const AgentDraft, const AnswerCandidates, const AnswerDefinition, "
+                    + "const AnswerList, const AnswerMoreArticles, const AnswerPassages, "
+                    + "const AnswerRule, const AnswerRuleCases, const AnswerSeveral, "
+                    + "const AnswerTermUsage, const AnswerValue, const AnswerValueWords, "
+                    + "const BoundaryLine, const BoundaryNoAdviser, const BoundaryWhole, "
+                    + "const BoundaryWholeNoAdviser, const BoundaryWholeNoText, "
+                    + "const BricksAgentDraft, const CaveatCasesFromSweep, "
+                    + "const CaveatConditionsApply, const CaveatGeneralAndSpecial, "
+                    + "const CaveatLeftToContract, const CaveatListFromSweep, "
+                    + "const CaveatNotDefined, const CaveatVocabularyIncomplete, "
                     + "const ClarifyWhichAct, const ClarifyWhichArticle, "
                     + "const ClarifyWhichArticleOfAct, const ClarifyWhichIdentifier, "
-                    + "const ClarifyWhichState, const ClarifyWhichWordingEu, "
+                    + "const ClarifyWhichState, const ClarifyWhichWordingEu, const DirectGreeting, "
                     + "const DisclosureAuthenticityEu, const DisclosureAuthenticityEuOriginal, "
                     + "const DisclosureAuthenticityLu, const DisclosureCorrigendum, "
                     + "const DisclosureDerogation, const DisclosureNoLegalEffect, "
@@ -142,11 +165,26 @@ public sealed class VocabularyRegistryCensusTests
                     + "const HandoffInformation, const HandoffMediation, "
                     + "const HandoffOfficialSource, const LawContentHash, "
                     + "const LawDatedByEntryIntoForce, const LawEuOriginalWording, "
-                    + "const LawIntervalEu, const LawIntervalEuOpen, const LawIntervalLu, "
-                    + "const LawIntervalLuOpen, const LawOfficialSource, const LawPermalink, "
-                    + "const LawQuoteHeading, const LawQuoteShortened, const NoticeAssembledByModel, "
-                    + "const NoticeInput, const NoticeNotLegalAdvice, const NoticePreview, "
-                    + "const PlanArticleHistory, const PlanAsOf, const PlanChangesInPeriod, "
+                    + "const LawExtractHeading, const LawIntervalEu, const LawIntervalEuOpen, "
+                    + "const LawIntervalLu, const LawIntervalLuOpen, const LawOfficialSource, "
+                    + "const LawPermalink, const LawQuoteHeading, const LawQuoteShortened, "
+                    + "const NoteLawTerm, const NoteWordNotInAct, const NoticeAssembledByModel, "
+                    + "const NoticeInput, const NoticeModelAssisted, const NoticeModelDescribed, "
+                    + "const NoticeNoModel, const NoticeNotLegalAdvice, const NoticePreview, "
+                    + "const PlanArticleHistory, const PlanAsOf, "
+                    + "const PlanBricksDetectorCooccurrence, const PlanBricksDetectorKeyword, "
+                    + "const PlanBricksDetectorTitle, const PlanBricksDetectorTypePattern, "
+                    + "const PlanBricksKindAmount, const PlanBricksKindDate, "
+                    + "const PlanBricksKindDefinition, const PlanBricksKindDuration, "
+                    + "const PlanBricksKindList, const PlanBricksKindReference, "
+                    + "const PlanBricksKindRule, const PlanBricksKindText, "
+                    + "const PlanBricksModelArbiter, const PlanBricksModelExtraction, "
+                    + "const PlanBricksModelNone, const PlanBricksModelQuestion, "
+                    + "const PlanBricksModelQuestionUnavailable, const PlanBricksModelUnavailable, "
+                    + "const PlanBricksPassRetry, const PlanBricksPassSweepCases, "
+                    + "const PlanBricksPassWider, const PlanBricksRouteDefinition, "
+                    + "const PlanBricksRouteFact, const PlanBricksRuleQuestion, "
+                    + "const PlanBricksScope, const PlanBricksTerm, const PlanChangesInPeriod, "
                     + "const PlanDateToday, const PlanDiff, const PlanDossier, "
                     + "const PlanEvidenceBundle, const PlanEvidenceBundleArticle, "
                     + "const PlanFollowUpSingleArticle, const PlanFollowUpSingleWork, "
@@ -167,9 +205,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline: ClarifyCodes=2",
                 "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanValidator: ChoiceOnly=1, "
                     + "DateSources=2, FollowUpOperations=5, Grammar=9, IdentifierSources=3, "
-                    + "RangeSources=1, ResultOnly=1, SpanOnly=1, AllowedOperations=9, const Schema",
-                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanWire: FollowUpOperations=5, "
-                    + "StepOperations=7, const SchemaName",
+                    + "RangeSources=1, ResultOnly=1, SpanOnly=1, AllowedOperations=9, const Schema, "
+                    + "const Schema2",
                 "Lex.V3.Contracts.Platform.Assistant.V3HandoffRegistry: Bytes=2566, Entries=4, "
                     + "const Resource, const Schema, const SchemaResource, static property Sha256",
                 "Lex.V3.Contracts.Platform.V3ClaimTemplates: ByIdValue=4, All=4, "
@@ -289,16 +326,18 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
                     + "Predicates=18",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: Admissible=7, "
-                    + "Entries=32, Rulings=4, RegisteredSha256s=32, const AskedL4a, const AskedOctober, const OwnersWords, "
-                    + "const OwnersWordsL4a, const Policy1Name, "
-                    + "const Policy1Text, const PolicyAName, const PolicyAText, "
+                    + "Entries=32, Rulings=4, RegisteredSha256s=32, const AskedL4a, "
+                    + "const AskedOctober, const OwnersWords, const OwnersWordsL4a, "
+                    + "const Policy1Name, const Policy1Text, const PolicyAName, const PolicyAText, "
                     + "const SingleChannelAdmission, const WindowEveryPage, const WindowLivePages, "
-                    + "const WordsNotYetGiven, static property Policy1Sha256, static property PolicyASha256",
+                    + "const WordsNotYetGiven, static property Policy1Sha256, "
+                    + "static property PolicyASha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels: const "
                     + "ResolutionRulesNineToFifteen, const ResolutionRulesOneToSeven, "
                     + "const ResolutionThreeProfileName, const ResolutionThreeProfileText, "
-                    + "const ResolutionTwoProfileName, const ResolutionTwoProfileText, const ResolutionTwoRuleEight, "
-                    + "static property ResolutionThreeProfileSha256, static property ResolutionTwoProfileSha256",
+                    + "const ResolutionTwoProfileName, const ResolutionTwoProfileText, "
+                    + "const ResolutionTwoRuleEight, static property ResolutionThreeProfileSha256, "
+                    + "static property ResolutionTwoProfileSha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

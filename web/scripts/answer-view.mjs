@@ -227,11 +227,15 @@ export function maskedCount(question) {
   return count;
 }
 
-/** The operations the plan asked for, in its order: its steps, then its follow-ups (`followUp` true), as the trace holds it. */
+/**
+ * The operations the plan asked for, in its order: its steps, then its follow-ups (`followUp` true), as the trace holds it;
+ * `article` says whether the operation reads one article (its plan names one).
+ */
 export function plannedOperations(trace) {
   const plan = trace?.plan ?? {};
-  const steps = (Array.isArray(plan.steps) ? plan.steps : []).map((step) => Object.freeze({ operation: String(step?.operation_id ?? ''), followUp: false }));
-  const follow = (Array.isArray(plan.follow_ups) ? plan.follow_ups : []).map((step) => Object.freeze({ operation: String(step?.operation_id ?? ''), followUp: true }));
+  const one = (step, followUp) => Object.freeze({ operation: String(step?.operation_id ?? ''), followUp, article: step?.arguments?.article !== undefined });
+  const steps = (Array.isArray(plan.steps) ? plan.steps : []).map((step) => one(step, false));
+  const follow = (Array.isArray(plan.follow_ups) ? plan.follow_ups : []).map((step) => one(step, true));
   return Object.freeze([...steps, ...follow].filter((entry) => entry.operation.length > 0));
 }
 

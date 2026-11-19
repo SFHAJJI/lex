@@ -865,12 +865,12 @@ public sealed class PublicRequestRecordingTests
     }
 
     /// <summary>
-    /// The one network client the public process holds: the assistant's planner (the owner's order of 2026-10-28), which,
-    /// only when the assistant is switched on, sends the masked question and opaque references to the Azure OpenAI deployment
-    /// the environment names, and nothing of a request's headers, address or agent (R33). It is pinned to its one file, so a
-    /// network client anywhere else is still a finding.
+    /// The one network client the public process holds: the model the assistant's bricks ask (the owner's order of
+    /// 2026-10-28), which, only when the assistant is switched on, sends the masked question, with lists and lines Lex itself
+    /// holds, to the Azure OpenAI deployment the environment names, and nothing of a request's headers, address or agent
+    /// (R33). It is pinned to its one file, so a network client anywhere else is still a finding.
     /// </summary>
-    private const string PlannerFile = "AzureOpenAiAssistantPlanner.cs";
+    private const string PlannerFile = "AzureOpenAiModel.cs";
 
     [TestMethod]
     public void TheApiSourceNamesNoSourceOfClientIdentityAndNoPlaceToRecordIt()
@@ -886,7 +886,7 @@ public sealed class PublicRequestRecordingTests
         CollectionAssert.AreEqual(
             new[] { PlannerFile },
             sources.Where(static source => Findings(source.Code).Contains("a network client")).Select(static source => source.File).ToArray(),
-            "the assistant's planner is the one network client of the public process");
+            "the assistant's model is the one network client of the public process");
     }
 
     private static IReadOnlyList<string> WriteCapableOpens(string code) =>

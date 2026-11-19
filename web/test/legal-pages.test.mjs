@@ -401,11 +401,11 @@ test("the legal notice promises a text at a date only for the texts and dates Le
     for (const [path, text] of entriesOf(LIVE_CHROME[language]).filter(([one]) => LEGAL_SECTIONS.test(one))) assert.doesNotMatch(text, unqualified, `${language} ${path}`);
   }
   assert.ok(said(app.renderLiveLegalPage("legalNotice")).includes(english), "the English page says it");
-  // The texts changed on 2026-10-26, again on 2026-10-27 (the privacy notice's per-client limit, below) and on 2026-10-28 (its
-  // sentence on an act that names private persons, below), and every page says the last ("Last updated"), in words and in the
-  // markup.
-  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-28");
-  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-28">28 October 2026</time>`), page.key);
+  // The texts changed on 2026-10-26, again on 2026-10-27 (the privacy notice's per-client limit, below), on 2026-10-28 (its
+  // sentence on an act that names private persons, below) and on 2026-11-19 (what the assistant sends to its processor and
+  // why, V4), and every page says the last ("Last updated"), in words and in the markup.
+  assert.equal(LEGAL_TEXTS_UPDATED, "2026-11-19");
+  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-11-19">19 November 2026</time>`), page.key);
   // The footer strip of a page that ships no script, as reviewed in the same addendum, byte for byte (shown on every legal
   // page and the maintenance page: `freshness.test.mjs`; the French page as built says both: the first test above).
   assert.equal(LIVE_CHROME.fr.freshness.noAnswer, "Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.");

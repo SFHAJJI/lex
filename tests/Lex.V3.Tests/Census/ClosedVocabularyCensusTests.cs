@@ -168,11 +168,11 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerLocale: Fr, En",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerSlotKind: CalendarDate, WorkAddress, "
                     + "Anchor, ContentHash, Uri, QuestionSpan, IdentifierText, LanguageCode, "
-                    + "RefusalCode, EntryName",
+                    + "RefusalCode, EntryName, Count, LawWords, DictionaryTerm",
                 "Lex.V3.Contracts.Platform.Assistant.V3ApplicationFunction: ChoosesAmongOptions, "
                     + "ConcludesOnSituation, PredictsDecisionMaker, ComputesFromFacts",
                 "Lex.V3.Contracts.Platform.Assistant.V3ArgumentSourceKind: Span, Reference, Result, "
-                    + "Choice, Today",
+                    + "Choice, Today, Corpus",
                 "Lex.V3.Contracts.Platform.Assistant.V3AskOutcomeReason: Answered, SwitchedOff, "
                     + "QuestionRejected, LocaleUnavailable, PlannerFailed, PlanRefused, GateFailed, "
                     + "CapReached",
@@ -683,7 +683,8 @@ public sealed class ClosedVocabularyCensusTests
                     + "TypedQuarantineInFileReadingRejected, AgreedCcByRederived, "
                     + "SparqlCcByInFileNamesOtherIdentity, SparqlCcByInFileSilent, "
                     + "SparqlCcByInFileOwnBlockEmpty, SparqlCcByInFileNotApplicable, "
-                    + "TypedQuarantineInFileIdentityUnknown, SparqlCcByInFileOtherIdentityLicensedOtherwise",
+                    + "TypedQuarantineInFileIdentityUnknown, "
+                    + "SparqlCcByInFileOtherIdentityLicensedOtherwise",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgSelectorCardinality: Missing, Single, "
                     + "Multiple",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTypedRoleKind: NotApplicable, "

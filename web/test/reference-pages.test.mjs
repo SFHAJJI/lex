@@ -654,9 +654,10 @@ test("the home page and How to read Lex claim no more than each publisher's page
   }
 });
 
-test("How it works' first screen follows the recorded answer through its six stages, every value the answer's or a run's (V5How, the owner's brief of 2026-11-15)", async () => {
+test("How it works' first screen follows the recorded answer through its own stages, every value the answer's or a run's (V5How, the owner's brief of 2026-11-15)", async () => {
   const { HOW_ANSWER_RECORD } = await import("../scripts/how-answer-record.mjs");
   const { howAnswerStages, compactJson } = await import("../scripts/how-answer.mjs");
+  const { stageRows } = await import("../scripts/assistant-panel.mjs");
   const { EVALUATION_RECORD } = await import("../scripts/evaluation-record.mjs");
   const { textHref } = await import("../scripts/text-address.mjs");
   const copy = liveChrome("en").evidence;
@@ -666,26 +667,37 @@ test("How it works' first screen follows the recorded answer through its six sta
   // The record is a real answer to the question it names, as served (ask/1's request: the question alone).
   assert.deepEqual(HOW_ANSWER_RECORD.request, { operation_id: "ask", parameters: { question: value.trace.question } });
   assert.equal(HOW_ANSWER_RECORD.envelope.verdict, "answer");
-  assert.match(HOW_ANSWER_RECORD.recordedAt, /^2026-11-15T/);
-  // Six stages, in order, one of them the model's only call.
-  assert.deepEqual([...main.matchAll(/data-stage="([a-z]+)"/g)].map((match) => match[1]), ["mask", "parse", "plan", "check", "run", "compose"]);
-  assert.equal((main.match(/class="lx-how-tag lx-how-tag-model"/g) ?? []).length, 1, "one stage is the AI model");
-  assert.equal((main.match(/class="lx-how-tag">/g) ?? []).length, 5, "the five others are code");
-  // The plan as the model returned it: the printed JSON is the trace's steps and follow-ups, member for member.
-  const stages = howAnswerStages(HOW_ANSWER_RECORD);
-  assert.deepEqual(JSON.parse(stages.plan), { steps: value.trace.plan.steps, follow_ups: value.trace.plan.follow_ups });
-  const [from, to] = value.trace.plan.steps[0].arguments.query.span;
-  assert.ok(main.includes(`it points at characters ${from} to ${to} of the question.`), "the span, the plan's own");
-  assert.equal(value.trace.question.slice(from, to), value.trace.steps[0].parameters.query, "and the words it points at are the words searched");
-  assert.ok(main.includes(escaped(`search « `)) && main.includes(escaped(value.trace.steps[0].parameters.query)), "the search as run");
-  assert.ok(main.includes(`read article 44 of « <span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance</span> » as of 15/11/2026`), "the read as run, the act by its title, never its address");
+  assert.match(HOW_ANSWER_RECORD.recordedAt, /^2026-11-(?:19|2\d|30)T/);
+  assert.equal(value.trace.plan.schema, "lex-v3-assistant-plan/2", "an answer of the bricks");
+  // The stages are the answer's own, in order: the rows the assistant's panel reads from the same trace. A stage is the AI
+  // model's only when the trace records a call for it; the others are code.
+  const rows = stageRows(value, "en");
+  assert.ok(rows.length >= 5 && rows[0].key === "masking", "the stages of an answer, masking first");
+  assert.deepEqual([...main.matchAll(/data-stage="([a-z]+)"/g)].map((match) => match[1]), rows.map((row) => row.key));
+  assert.equal((main.match(/class="lx-how-tag lx-how-tag-model"/g) ?? []).length, rows.filter((row) => row.model).length, "the model's stages are the calls the trace records");
+  assert.equal((main.match(/class="lx-how-tag">/g) ?? []).length, rows.filter((row) => !row.model).length, "the others are code");
+  assert.deepEqual(rows.filter((row) => row.model).map((row) => row.key), value.trace.plan.bricks.model_calls.map((call) => call.step));
+  for (const row of rows.slice(1)) {
+    // The last stage shows the gates' own counts (below) in place of its one line.
+    if (row.key !== "checks" && row.key !== "composer") assert.ok(main.includes(escaped(row.line)), `${row.key}: its own line`);
+    assert.ok(main.includes(escaped(copy.stageTexts[row.key])), `${row.key}: what the stage is`);
+  }
+  assert.ok(!main.slice(0, main.indexOf('class="lx-how-more"')).includes("Planner"), "no planner stage: no model plans");
+  const stages = howAnswerStages(HOW_ANSWER_RECORD, "en");
+  assert.deepEqual(stages.rows, rows);
   assert.ok(main.includes(`quotes: ${value.gates.quotes}, identical`) && main.includes(`sentences outside templates: ${value.gates.non_template_strings}`) && main.includes(`notes shown with the quote: ${value.gates.disclosures}`));
-  // The answer opens on the text page at the article, the address the text page's contract gives.
-  const href = textHref({ identifier: "/lu-legilux/loi-1997-07-27-n10", article: "art_44" }, "en");
+  // The answer: the rule in the law's own sentence and its cases, the act by its title, never its address; it opens on the
+  // text page at the article, the address the text page's contract gives.
+  const quotes = value.parts.flatMap((part) => part.blocks).filter((block) => block.kind === "quote");
+  assert.equal(stages.answer.kind, "rule");
+  assert.equal(stages.answer.lines, quotes.length);
+  assert.equal(stages.answer.cases, quotes.length - 1, "one line is the rule, the others its cases");
+  assert.ok(main.includes(`(article 39 of « <span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance</span> »), then ${quotes.length - 1} cases the text provides`), "the answer, said from the record");
+  const href = textHref({ identifier: "/lu-legilux/loi-1997-07-27-n10", article: "art_39" }, "en");
   assert.ok(main.includes(`<a href="${href.replaceAll("&", "&amp;")}" data-open-answer="">${copy.answerOpen}</a>`), "Open this answer");
   // Never in the main flow (the brief's section 9): no address, no id, no digest on the first screen's words.
-  const words = main.slice(0, main.indexOf('class="lx-how-more"')).replace(/<pre class="lx-how-record"><code>\{[\s\S]*?<\/code><\/pre>/, "").replace(/<[^>]+>/g, " ");
-  assert.doesNotMatch(words, /\/lu-legilux\/|art_44|[0-9a-f]{40}/, "no address, id or digest said");
+  const words = main.slice(0, main.indexOf('class="lx-how-more"')).replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(words, /\/lu-legilux\/|art_39|[0-9a-f]{40}/, "no address, id or digest said");
   // The panel: the bar and its legend are the run's counts; the held-out result, the time and the cost the runs'.
   const dev = EVALUATION_RECORD.dev;
   const bar = [...main.matchAll(/<rect class="lx-how-bar-part" data-outcome="([a-zA-Z]+)" x="[0-9.]+" y="0" width="([0-9.]+)"/g)];
@@ -702,7 +714,7 @@ test("How it works' first screen follows the recorded answer through its six sta
   other.envelope.result.value.trace.question = "Mon adresse est ••••, que dit l'article 1er ?";
   other.envelope.result.value.plan.rendered = [{ template_id: "plan.date_given", facts: [{ kind: "calendar_date", value: "2012-06-01" }] }];
   other.envelope.result.value.parts[0].cues = [{ function: "advice" }];
-  const read = howAnswerStages(other);
+  const read = howAnswerStages(other, "en");
   assert.equal(read.masked, "Mon adresse est ••••, que dit l'article 1er ?");
   assert.deepEqual({ ...read.date }, { today: false, date: "2012-06-01" });
   assert.equal(read.cues, 1);

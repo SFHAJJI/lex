@@ -60,11 +60,10 @@ public sealed class GuardedConstructionCensusTests
     {
         var expected = new[]
             {
-                "Lex.V3.Api.AzureOpenAiAssistantPlanner: constructor internal instance "
-                    + "Lex.V3.Api.AzureOpenAiAssistantPlanner::.ctor, "
-                    + "constructor private static Lex.V3.Api.AzureOpenAiAssistantPlanner::.cctor, "
-                    + "method internal static "
-                    + "Lex.V3.Api.AzureOpenAiAssistantPlanner::FromEnvironment",
+                "Lex.V3.Api.AzureOpenAiModel: constructor internal instance "
+                    + "Lex.V3.Api.AzureOpenAiModel::.ctor, "
+                    + "constructor private static Lex.V3.Api.AzureOpenAiModel::.cctor, "
+                    + "method internal static Lex.V3.Api.AzureOpenAiModel::FromEnvironment",
                 "Lex.V3.Api.SyntheticApiState: constructor private instance "
                     + "Lex.V3.Api.SyntheticApiState::.ctor, "
                     + "constructor private static Lex.V3.Api.SyntheticApiState::.cctor, "
@@ -90,13 +89,9 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "
                     + "method internal static Lex.V3.Api.V3CorpusMount::Served, "
                     + "method public static Lex.V3.Api.V3CorpusMount::OpenAsync",
-                "Lex.V3.Api.V3PageRenderer: constructor private instance Lex.V3.Api.V3PageRenderer::.ctor, "
+                "Lex.V3.Api.V3PageRenderer: constructor private instance "
+                    + "Lex.V3.Api.V3PageRenderer::.ctor, "
                     + "method internal static Lex.V3.Api.V3PageRenderer::Open",
-                    // The names record's gate on every answer (R92; V3CorpusMount.Names.cs).
-                    // R77: an act only the catalogue holds is refused with its record (V3CorpusMount.CatalogueRecords.cs).
-                    // EU search over the act's time view (the audit of 2026-10-27, gap 5; V3CorpusMount.EuropeSearch.cs).
-                    // An EU act outside the mounted EU population, refused out of scope (R80; V3CorpusMount.Scope.cs).
-                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gates'.
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
                     + "method internal instance Lex.V3.Api.V3CorpusMount::RefuseOutOfScope, "
@@ -129,7 +124,6 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::ReferenceAnswer, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseArticleNotInVersion, "
-                    // A digest its work no longer has at a coordinate that holds no text (R64; the review of #1008).
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAtTextlessCoordinate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeSearchMode, "
@@ -341,8 +335,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Evaluation.RetrievalMetrics::ReciprocalRank, "
                     + "5 compiler-generated",
-                // A text and its fold, made by the fold alone (the plan's item 4.4; TextFolding).
-                "Lex.V3.Contracts.Index.FoldedText: constructor internal instance Lex.V3.Contracts.Index.FoldedText::.ctor, "
+                "Lex.V3.Contracts.Index.FoldedText: constructor internal instance "
+                    + "Lex.V3.Contracts.Index.FoldedText::.ctor, "
                     + "method public static Lex.V3.Contracts.Index.TextFolding::Folded",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
@@ -352,8 +346,69 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact::ParseAndVerify",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables: by-ref-method public "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActAtDate::Deconstruct, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::.cctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::Build",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Candidate: constructor internal "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4Candidate::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4RetrievalResult::Shortlist, "
+                    + "1 compiler-generated",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4CorpusIndex: constructor private "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4CorpusIndex::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4CorpusIndex::.cctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4CorpusIndex::Load, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4CorpusIndex::Read",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Dictionary: constructor private "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4Dictionary::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Dictionary::.cctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Dictionary::Load, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Dictionary::Read",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key: by-ref-method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4AnswerType::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Keyword::Deconstruct, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::.cctor, "
+                    + "method public static Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::Read, "
+                    + "7 compiler-generated",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord: constructor private "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord::.cctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord::Read",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionRow: by-ref-method public "
+                    + "instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4DispatchInput::Deconstruct, "
+                    + "constructor internal instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionRow::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionRow::With, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionParser::Parse",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4RetrievalResult: constructor "
+                    + "internal instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4RetrievalResult::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval::Run",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerClaim: constructor private instance "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AnswerClaim::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::BricksPlanLines, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::DisclosureClaim, "
                     + "method private static "
@@ -361,11 +416,13 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::StepLine, "
                     + "method public static Lex.V3.Contracts.Platform.Assistant.V3AnswerClaim::Bind, "
-                    + "1 compiler-generated",
+                    + "4 compiler-generated",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerDossier: constructor internal "
                     + "instance Lex.V3.Contracts.Platform.Assistant.V3AnswerDossier::.ctor, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Compose, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::ComposeBricks, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Run",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate: constructor private "
@@ -428,7 +485,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::QuoteBlocks, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::RefusalBlocks, "
-                    + "10 compiler-generated",
+                    + "12 compiler-generated",
                 "Lex.V3.Contracts.Platform.V3AuthoritativeClaim: constructor private instance "
                     + "Lex.V3.Contracts.Platform.V3AuthoritativeClaim::.ctor, "
                     + "constructor private instance "
@@ -1799,7 +1856,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::AsReso"
                     + "lutionTwo, "
                     + "method private static "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveTwoOrThree, "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveTwoOrThr"
+                    + "ee, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::<Clone"
                     + ">$, "

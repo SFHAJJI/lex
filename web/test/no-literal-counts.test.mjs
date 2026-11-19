@@ -97,6 +97,7 @@ const NUMBERS_ALLOWED = Object.freeze({
   "evidence.improvement.first": ["11", "11", "13", "11", "1", "5"],
   "evidence.improvement.incident": ["13", "11", "70", "44", "14", "11"],
   "evidence.improvement.gate": ["14", "11", "57", "15", "11"],
+  "evidence.improvement.bricks": ["18", "11", "19", "11"],
   "evidence.incidents.art70": ["13", "11", "2026", "70", "44", "14", "11"],
   "evidence.incidents.release6": ["14", "11", "2026", "6"],
   "evidence.incidents.release11": ["14", "11", "2026", "11", "57", "37", "12"],

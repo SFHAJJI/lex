@@ -20,6 +20,8 @@
     <Content Include="Fixtures/EuManifestationListing/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/LuxembourgToday/*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures/SitePaths/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The bricks' test corpus (V4): one act as the index holds it, the publisher's text unchanged (CC BY 4.0). -->
+    <Content Include="Fixtures/Bricks/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" PrivateAssets="all" />

@@ -30,7 +30,8 @@ public sealed class V3PlannerInput
         string maskedQuestion,
         V3AnswerLocale answerLocale,
         IReadOnlyList<V3PlannerReference> references,
-        IReadOnlyList<string> searchLanguages)
+        IReadOnlyList<string> searchLanguages,
+        string? today = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(maskedQuestion);
         ArgumentNullException.ThrowIfNull(references);
@@ -39,7 +40,14 @@ public sealed class V3PlannerInput
         AnswerLocale = answerLocale;
         References = references.ToList().AsReadOnly();
         SearchLanguages = searchLanguages.ToList().AsReadOnly();
+        Today = today;
     }
+
+    /// <summary>
+    /// Today in Luxembourg at the request (R13), which the answer prints: the bricks read the version of an act in force on
+    /// it. It says nothing of who asks; a planner that sends its input to a model does not send it.
+    /// </summary>
+    public string? Today { get; }
 
     public string MaskedQuestion { get; }
 
@@ -80,7 +88,15 @@ public sealed record V3ArgumentSource(
     string? Ref = null,
     string? Step = null,
     V3ResultPick? Pick = null,
-    string? Choice = null);
+    string? Choice = null,
+    string? Corpus = null);
+
+/// <summary>
+/// An extract of the article a step reads (plan /2): the exact characters at a position of the article's stored text, which
+/// become one quotation. <see cref="Breaks"/> are the positions inside the extract where a line of the law starts.
+/// </summary>
+/// <param name="Role">What the extract is in the answer: definition, rule, case, value, item, passage or nearest.</param>
+public sealed record V3PlanExtract(int Offset, int Length, string Role, IReadOnlyList<int> Breaks);
 
 /// <summary>One part of the question (at most two, R31's split) and the verdict the planner proposes for it.</summary>
 public sealed record V3PlanPart(string PartId, V3PlanSpan Span, V3AssistantVerdict ProposedVerdict);
@@ -92,7 +108,10 @@ public sealed record V3PlanStep(
     string OperationId,
     IReadOnlyDictionary<string, V3ArgumentSource> Arguments,
     string? After = null,
-    V3FollowUpCondition? Condition = null)
+    V3FollowUpCondition? Condition = null,
+    string? TextSha256 = null,
+    IReadOnlyList<V3PlanExtract>? Extracts = null,
+    V3PlanSpan? Heading = null)
 {
     public bool IsFollowUp => After is not null;
 }
@@ -108,14 +127,19 @@ public sealed class V3AssistantPlan
         ReadOnlyCollection<V3PlanPart> parts,
         ReadOnlyCollection<V3PlanStep> steps,
         ReadOnlyCollection<V3PlanStep> followUps,
+        Bricks.V4PlanRecord? bricks,
         byte[] canonicalUtf8)
     {
         Parts = parts;
         Steps = steps;
         FollowUps = followUps;
+        Bricks = bricks;
         _canonical = canonicalUtf8;
         Sha256 = Convert.ToHexStringLower(SHA256.HashData(canonicalUtf8));
     }
+
+    /// <summary>The bricks record of a plan /2 (how code read the question and what the answer is made of), or null for a plan /1.</summary>
+    public Bricks.V4PlanRecord? Bricks { get; }
 
     private readonly byte[] _canonical;
 
@@ -131,16 +155,17 @@ public sealed class V3AssistantPlan
 
     public string CanonicalJson => Encoding.UTF8.GetString(_canonical);
 
-    internal static V3AssistantPlan Create(IReadOnlyList<V3PlanPart> parts, IReadOnlyList<V3PlanStep> steps, IReadOnlyList<V3PlanStep> followUps) =>
-        new(parts.ToList().AsReadOnly(), steps.ToList().AsReadOnly(), followUps.ToList().AsReadOnly(), WriteCanonical(parts, steps, followUps));
+    internal static V3AssistantPlan Create(IReadOnlyList<V3PlanPart> parts, IReadOnlyList<V3PlanStep> steps, IReadOnlyList<V3PlanStep> followUps, Bricks.V4PlanRecord? bricks = null) =>
+        new(parts.ToList().AsReadOnly(), steps.ToList().AsReadOnly(), followUps.ToList().AsReadOnly(), bricks, WriteCanonical(parts, steps, followUps, bricks));
 
-    private static byte[] WriteCanonical(IReadOnlyList<V3PlanPart> parts, IReadOnlyList<V3PlanStep> steps, IReadOnlyList<V3PlanStep> followUps)
+    private static byte[] WriteCanonical(IReadOnlyList<V3PlanPart> parts, IReadOnlyList<V3PlanStep> steps, IReadOnlyList<V3PlanStep> followUps, Bricks.V4PlanRecord? bricks)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            writer.WriteString("schema", V3AssistantPlanValidator.Schema);
+            // A plan /1 keeps its bytes: the members of /2 are written only by a plan that carries the bricks record.
+            writer.WriteString("schema", bricks is null ? V3AssistantPlanValidator.Schema : V3AssistantPlanValidator.Schema2);
             writer.WriteStartArray("parts");
             foreach (var part in parts)
             {
@@ -166,6 +191,12 @@ public sealed class V3AssistantPlan
             }
 
             writer.WriteEndArray();
+            if (bricks is not null)
+            {
+                writer.WritePropertyName("bricks");
+                bricks.Raw.WriteTo(writer);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -209,6 +240,9 @@ public sealed class V3AssistantPlan
                 case V3ArgumentSourceKind.Today:
                     writer.WriteBoolean("today", true);
                     break;
+                case V3ArgumentSourceKind.Corpus:
+                    writer.WriteString("corpus", source.Corpus);
+                    break;
                 default:
                     throw new InvalidOperationException("Not an argument source kind.");
             }
@@ -217,6 +251,42 @@ public sealed class V3AssistantPlan
         }
 
         writer.WriteEndObject();
+        if (step.TextSha256 is not null)
+        {
+            writer.WriteString("text_sha256", step.TextSha256);
+        }
+
+        if (step.Heading is not null)
+        {
+            WriteSpan(writer, "heading", step.Heading);
+        }
+
+        if (step.Extracts is not null)
+        {
+            writer.WriteStartArray("extracts");
+            foreach (var extract in step.Extracts)
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("offset", extract.Offset);
+                writer.WriteNumber("length", extract.Length);
+                writer.WriteString("role", extract.Role);
+                if (extract.Breaks.Count > 0)
+                {
+                    writer.WriteStartArray("breaks");
+                    foreach (var at in extract.Breaks)
+                    {
+                        writer.WriteNumberValue(at);
+                    }
+
+                    writer.WriteEndArray();
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
     }
 
@@ -296,8 +366,20 @@ public static class V3AssistantPlanValidator
 {
     public const string Schema = "lex-v3-assistant-plan/1";
 
+    /// <summary>
+    /// The plan the bricks write (V4): /1's members, and beside them an address of the corpus as an argument's source, the
+    /// extracts a step quotes, and the bricks record. No model writes a plan /2: code does, from typed rows.
+    /// </summary>
+    public const string Schema2 = "lex-v3-assistant-plan/2";
+
     /// <summary>The largest planner output read, in UTF-8 bytes.</summary>
     public const int MaximumPlanBytes = 16 * 1024;
+
+    /// <summary>The largest plan /2 read, in UTF-8 bytes: its bricks record (<see cref="Bricks.V4PlanRecord.MaximumBytes"/>) and /1's own size.</summary>
+    public const int MaximumPlan2Bytes = MaximumPlanBytes + Bricks.V4PlanRecord.MaximumBytes;
+
+    /// <summary>The most extracts one step of a plan /2 quotes.</summary>
+    public const int MaximumExtracts = 5;
 
     public const int MaximumParts = 2;
     public const int MaximumSteps = 4;
@@ -357,9 +439,10 @@ public static class V3AssistantPlanValidator
     {
         ArgumentNullException.ThrowIfNull(planJson);
         ArgumentNullException.ThrowIfNull(context);
-        if (Encoding.UTF8.GetByteCount(planJson) > MaximumPlanBytes)
+        var bytes = Encoding.UTF8.GetByteCount(planJson);
+        if (bytes > MaximumPlan2Bytes)
         {
-            return Refuse(V3PlanRefusal.TooLarge, "the planner's output is larger than 16 KiB");
+            return Refuse(V3PlanRefusal.TooLarge, "the planner's output is larger than a plan may be");
         }
 
         JsonDocument document;
@@ -376,7 +459,14 @@ public static class V3AssistantPlanValidator
         {
             try
             {
-                return ValidateRoot(document.RootElement, context);
+                var second = document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("schema", out var schema) &&
+                    schema.ValueKind == JsonValueKind.String && schema.GetString() == Schema2;
+                if (!second && bytes > MaximumPlanBytes)
+                {
+                    return Refuse(V3PlanRefusal.TooLarge, "the planner's output is larger than 16 KiB");
+                }
+
+                return ValidateRoot(document.RootElement, context, second);
             }
             catch (PlanRefused refused)
             {
@@ -392,10 +482,10 @@ public static class V3AssistantPlanValidator
         public V3PlanRefusal Refusal { get; } = refusal;
     }
 
-    private static V3PlanValidation ValidateRoot(JsonElement root, V3PlanContext context)
+    private static V3PlanValidation ValidateRoot(JsonElement root, V3PlanContext context, bool second)
     {
-        Members(root, "the plan", ["schema", "parts", "steps", "follow_ups"], []);
-        if (!string.Equals(String(root.GetProperty("schema"), "schema"), Schema, StringComparison.Ordinal))
+        Members(root, "the plan", second ? ["schema", "parts", "steps", "follow_ups", "bricks"] : ["schema", "parts", "steps", "follow_ups"], []);
+        if (!string.Equals(String(root.GetProperty("schema"), "schema"), second ? Schema2 : Schema, StringComparison.Ordinal))
         {
             throw new PlanRefused(V3PlanRefusal.OutsideClosedSet, "the plan is not lex-v3-assistant-plan/1");
         }
@@ -421,9 +511,10 @@ public static class V3AssistantPlanValidator
         }
 
         var steps = new List<V3PlanStep>();
-        foreach (var element in Array(root.GetProperty("steps"), "steps", 1, MaximumSteps))
+        // A plan /2 may run no operation (a greeting; an act Lex does not hold) and as many steps as a plan runs operations.
+        foreach (var element in Array(root.GetProperty("steps"), "steps", second ? 0 : 1, second ? MaximumOperations : MaximumSteps))
         {
-            Members(element, "a step", ["step_id", "part_id", "operation_id", "arguments"], []);
+            Members(element, "a step", ["step_id", "part_id", "operation_id", "arguments"], second ? ["text_sha256", "extracts", "heading"] : []);
             var id = String(element.GetProperty("step_id"), "step_id");
             if (!string.Equals(id, "s" + (steps.Count + 1).ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
             {
@@ -434,8 +525,20 @@ public static class V3AssistantPlanValidator
             var part = parts.SingleOrDefault(candidate => candidate.PartId == partId)
                 ?? throw new PlanRefused(V3PlanRefusal.UnboundArgument, $"{id} names a part the plan does not hold");
             var operation = Operation(element.GetProperty("operation_id"));
-            var arguments = Arguments(element.GetProperty("arguments"), operation, id, part, context, followUp: null, steps);
-            steps.Add(new V3PlanStep(id, partId, operation, arguments));
+            var arguments = Arguments(element.GetProperty("arguments"), operation, id, part, context, followUp: null, steps, second);
+            var (textSha256, extracts) = Extracts(element, operation, id, arguments);
+            V3PlanSpan? heading = null;
+            if (element.TryGetProperty("heading", out var headingSpan))
+            {
+                // Where the article's own heading is in its stored text: the composer shows those characters and no others.
+                heading = RawSpan(headingSpan);
+                if (extracts is null || heading.End <= heading.Start || heading.End - heading.Start > 300)
+                {
+                    throw new PlanRefused(V3PlanRefusal.SpanOutOfBounds, $"{id}'s heading is not a short span of an article the step quotes");
+                }
+            }
+
+            steps.Add(new V3PlanStep(id, partId, operation, arguments, TextSha256: textSha256, Extracts: extracts, Heading: heading));
         }
 
         var followUps = new List<V3PlanStep>();
@@ -460,7 +563,7 @@ public static class V3AssistantPlanValidator
 
             var part = parts.Single(candidate => candidate.PartId == earlier.PartId);
             var followUp = new V3PlanStep(id, earlier.PartId, operation, new Dictionary<string, V3ArgumentSource>(), after, condition);
-            var arguments = Arguments(element.GetProperty("arguments"), operation, id, part, context, followUp, steps);
+            var arguments = Arguments(element.GetProperty("arguments"), operation, id, part, context, followUp, steps, second);
             followUps.Add(followUp with { Arguments = arguments });
         }
 
@@ -469,8 +572,87 @@ public static class V3AssistantPlanValidator
             throw new PlanRefused(V3PlanRefusal.CapExceeded, "a plan runs at most six operations");
         }
 
-        return new V3PlanValidation(V3AssistantPlan.Create(parts, steps, followUps), null, null);
+        Bricks.V4PlanRecord? bricks = null;
+        if (second)
+        {
+            bricks = Bricks.V4PlanRecord.Read(root.GetProperty("bricks"), context, steps, out var refusal)
+                ?? throw new PlanRefused(V3PlanRefusal.OutsideClosedSet, refusal ?? "the bricks record is refused");
+        }
+
+        return new V3PlanValidation(V3AssistantPlan.Create(parts, steps, followUps, bricks), null, null);
     }
+
+    /// <summary>
+    /// The extracts a step of a plan /2 quotes: only an evidence step that names its article may carry them, with the digest
+    /// of the article text they were cut from; in order, inside the quotation's cap, not overlapping.
+    /// </summary>
+    private static (string? TextSha256, IReadOnlyList<V3PlanExtract>? Extracts) Extracts(
+        JsonElement element, string operation, string stepId, Dictionary<string, V3ArgumentSource> arguments)
+    {
+        var hasDigest = element.TryGetProperty("text_sha256", out var digest);
+        var hasExtracts = element.TryGetProperty("extracts", out var list);
+        if (!hasDigest && !hasExtracts)
+        {
+            return (null, null);
+        }
+
+        if (!hasDigest || !hasExtracts || operation != "evidence_bundle" || !arguments.ContainsKey("article"))
+        {
+            throw new PlanRefused(V3PlanRefusal.UnknownMember, $"{stepId} carries extracts without being an evidence step of one article with its text's digest");
+        }
+
+        var sha = String(digest, "text_sha256");
+        if (!V3AnswerTemplates.IsSha256(sha))
+        {
+            throw new PlanRefused(V3PlanRefusal.Malformed, $"{stepId}'s text_sha256 is not a SHA-256");
+        }
+
+        var extracts = new List<V3PlanExtract>();
+        foreach (var item in Array(list, "extracts", 1, MaximumExtracts))
+        {
+            Members(item, "an extract", ["offset", "length", "role"], ["breaks"]);
+            if (!item.GetProperty("offset").TryGetInt32(out var offset) || !item.GetProperty("length").TryGetInt32(out var length) ||
+                offset < 0 || length < 1 || length > V3AssistantPipeline.MaximumQuoteLength ||
+                (extracts.Count > 0 && offset < extracts[^1].Offset + extracts[^1].Length))
+            {
+                throw new PlanRefused(V3PlanRefusal.SpanOutOfBounds, $"{stepId}'s extracts are not in order inside the quotation's cap");
+            }
+
+            var role = String(item.GetProperty("role"), "role");
+            if (!Bricks.V4PlanRecord.ItemRoles.Contains(role))
+            {
+                throw new PlanRefused(V3PlanRefusal.OutsideClosedSet, $"{stepId}'s extract has a role outside the closed list");
+            }
+
+            var breaks = new List<int>();
+            if (item.TryGetProperty("breaks", out var breakList))
+            {
+                foreach (var at in Array(breakList, "breaks", 1, 64))
+                {
+                    if (!at.TryGetInt32(out var position) || position <= (breaks.Count > 0 ? breaks[^1] : 0) || position >= length)
+                    {
+                        throw new PlanRefused(V3PlanRefusal.SpanOutOfBounds, $"{stepId}'s extract breaks are not in order inside the extract");
+                    }
+
+                    breaks.Add(position);
+                }
+            }
+
+            extracts.Add(new V3PlanExtract(offset, length, role, breaks.AsReadOnly()));
+        }
+
+        return (sha, extracts.AsReadOnly());
+    }
+
+    /// <summary>Whether a text has the form of an act's address on this site ("/lu-legilux/loi-1997-07-27-n10").</summary>
+    public static bool IsWorkAddress(string value) =>
+        value is not null && value.Length is >= 14 and <= 120 && value.StartsWith("/lu-legilux/", StringComparison.Ordinal) &&
+        value.AsSpan(12).IndexOfAnyExcept("abcdefghijklmnopqrstuvwxyz0123456789-") < 0;
+
+    /// <summary>Whether a text has the form of an article's publisher identifier ("art_39", "art_62-3", "article_15-1").</summary>
+    public static bool IsArticleId(string value) =>
+        value is not null && value.Length is >= 5 and <= 48 && (value.StartsWith("art_", StringComparison.Ordinal) || value.StartsWith("article_", StringComparison.Ordinal)) &&
+        value.AsSpan().IndexOfAnyExcept("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.") < 0;
 
     private static Dictionary<string, V3ArgumentSource> Arguments(
         JsonElement element,
@@ -479,7 +661,8 @@ public static class V3AssistantPlanValidator
         V3PlanPart part,
         V3PlanContext context,
         V3PlanStep? followUp,
-        IReadOnlyList<V3PlanStep> steps)
+        IReadOnlyList<V3PlanStep> steps,
+        bool second = false)
     {
         if (element.ValueKind != JsonValueKind.Object)
         {
@@ -496,7 +679,12 @@ public static class V3AssistantPlanValidator
             }
 
             var source = Source(member.Value, stepId);
-            if (!kinds.Contains(source.Kind))
+
+            // Plan /2: code names the act and the article it read in its own tables. Only an evidence step takes them, and
+            // only as the two addresses the corpus holds.
+            var fromCorpus = second && followUp is null && source.Kind == V3ArgumentSourceKind.Corpus &&
+                operation == "evidence_bundle" && member.Name is "identifier" or "article";
+            if (!kinds.Contains(source.Kind) && !fromCorpus)
             {
                 throw new PlanRefused(V3PlanRefusal.SourceNotAdmitted, $"{operation}'s '{member.Name}' does not take a {ContractWire.NameOf(source.Kind)} source");
             }
@@ -628,6 +816,13 @@ public static class V3AssistantPlanValidator
                 break;
             case V3ArgumentSourceKind.Today:
                 break;
+            case V3ArgumentSourceKind.Corpus:
+                if (parameter == "identifier" ? !IsWorkAddress(source.Corpus!) : !IsArticleId(source.Corpus!))
+                {
+                    throw new PlanRefused(V3PlanRefusal.OutsideClosedSet, $"{stepId}'s {parameter} is not an address of the corpus");
+                }
+
+                break;
             default:
                 throw new PlanRefused(V3PlanRefusal.OutsideClosedSet, "not an argument source");
         }
@@ -648,6 +843,7 @@ public static class V3AssistantPlanValidator
             ["pick", "result"] => new V3ArgumentSource(V3ArgumentSourceKind.Result, Step: Token(element.GetProperty("result"), "result"), Pick: Pick(element.GetProperty("pick"))),
             ["choice"] => new V3ArgumentSource(V3ArgumentSourceKind.Choice, Choice: Token(element.GetProperty("choice"), "choice")),
             ["today"] when element.GetProperty("today").ValueKind == JsonValueKind.True => new V3ArgumentSource(V3ArgumentSourceKind.Today),
+            ["corpus"] => new V3ArgumentSource(V3ArgumentSourceKind.Corpus, Corpus: String(element.GetProperty("corpus"), "corpus")),
             _ => throw new PlanRefused(V3PlanRefusal.UnknownMember, $"{stepId}'s argument is not one of span, ref, result with pick, choice or today"),
         };
     }

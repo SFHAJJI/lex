@@ -428,7 +428,7 @@ test("the script deploys only a release that verifies, and only by the image's d
 
 test("the assistant's variables are the API's own: on, with the planner's settings and its key, only while configured; off otherwise", () => {
   const runtime = readFileSync(new URL("../../src/Lex.V3.Api/V3AssistantRuntime.cs", import.meta.url), "utf8");
-  const planner = readFileSync(new URL("../../src/Lex.V3.Api/AzureOpenAiAssistantPlanner.cs", import.meta.url), "utf8");
+  const planner = readFileSync(new URL("../../src/Lex.V3.Api/AzureOpenAiModel.cs", import.meta.url), "utf8");
   const constant = (source, name) => new RegExp(`internal const string ${name} = "([^"]+)";`).exec(source)?.[1];
   const names = {
     switch: constant(runtime, "SwitchVariable"), preview: constant(runtime, "PreviewVariable"), endpoint: constant(planner, "EndpointVariable"),

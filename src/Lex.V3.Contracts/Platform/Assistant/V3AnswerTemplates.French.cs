@@ -13,6 +13,14 @@ public static partial class V3AnswerTemplates
     // from this table during the other part's initialisation.
     private static V3TemplateProvenance FrenchReviewed => new(null, AgentDraft, FrenchReviewer, "2026-10-28", false);
 
+    // The bricks' French (V4): drafted by an agent on 2026-11-18, and the finals of the independent French review of the
+    // same day (one round, 56 sentences, 19 changed), applied byte for byte.
+    private static V3TemplateProvenance BricksFrenchReviewed => new(null, BricksAgentDraft, FrenchReviewer, "2026-11-18", false);
+
+    // A sentence drafted and reviewed a day later (2026-11-19: the plan line of a question call that gave nothing usable;
+    // the independent reviewer kept the draft as it was).
+    private static V3TemplateProvenance BricksFrenchReviewedLater => new(null, BricksAgentDraft, FrenchReviewer, "2026-11-19", false);
+
     private static Dictionary<string, (string Text, V3TemplateProvenance Basis)> FrenchTexts() => new(StringComparer.Ordinal)
     {
         ["action.candidate"] = ("{candidate}", FrenchReviewed),
@@ -95,5 +103,63 @@ public static partial class V3AnswerTemplates
         ["verdict.point"] = ("Non détenu par Lex\u00A0: source officielle", FrenchReviewed),
         ["verdict.refuse"] = ("Hors de ce que fait ce service", FrenchReviewed),
         ["verdict.split"] = ("Deux questions", FrenchReviewed),
+        ["notice.no_model"] = ("Aucun modèle d’IA n’a participé à cette réponse\u00A0: le code de Lex a lu votre question, cherché dans le texte qu’il détient et écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", BricksFrenchReviewed),
+        ["notice.model_described"] = ("Un modèle d’IA a décrit votre question\u00A0: ce qu’elle demande, et lesquels de vos mots désignent un acte, un article ou un sujet. Le code de Lex a choisi les opérations à exécuter à partir de cette description, les a exécutées et a écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", BricksFrenchReviewed),
+        ["notice.model_assisted"] = ("Un modèle d’IA a aidé à trouver les passages\u00A0: parmi les lignes que le code de Lex lui a fournies, il a désigné celles qui répondent à votre question. Il n’a écrit aucune phrase de cette réponse\u00A0: le code de Lex a vérifié chaque ligne désignée et écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", BricksFrenchReviewed),
+        ["plan.bricks.term"] = ("Lex a lu vos mots «\u00A0{words}\u00A0» comme le terme «\u00A0{term}\u00A0» de son vocabulaire de l’assurance.", BricksFrenchReviewed),
+        ["plan.bricks.kind.definition"] = ("Réponse cherchée\u00A0: une définition.", BricksFrenchReviewed),
+        ["plan.bricks.kind.rule"] = ("Réponse cherchée\u00A0: une règle, avec ses conditions et ses exceptions.", BricksFrenchReviewed),
+        ["plan.bricks.kind.duration"] = ("Réponse cherchée\u00A0: un délai ou une durée.", BricksFrenchReviewed),
+        ["plan.bricks.kind.date"] = ("Réponse cherchée\u00A0: une date ou un moment.", BricksFrenchReviewed),
+        ["plan.bricks.kind.amount"] = ("Réponse cherchée\u00A0: un montant ou un taux.", BricksFrenchReviewed),
+        ["plan.bricks.kind.list"] = ("Réponse cherchée\u00A0: une liste.", BricksFrenchReviewed),
+        ["plan.bricks.kind.reference"] = ("Réponse cherchée\u00A0: la disposition qui le prévoit.", BricksFrenchReviewed),
+        ["plan.bricks.kind.text"] = ("Réponse cherchée\u00A0: les passages qui en traitent.", BricksFrenchReviewed),
+        ["plan.bricks.scope"] = ("Texte lu\u00A0: {work}, tel qu’il se lisait le {date} (articles\u00A0: {articles}\u00A0; lignes\u00A0: {lines}).", BricksFrenchReviewed),
+        ["plan.bricks.rule_question"] = ("Votre question porte sur la règle, sans élément d’un cas personnel\u00A0: Lex cite la règle et ne dit pas si elle s’applique à une situation.", BricksFrenchReviewed),
+        ["plan.bricks.detector.title"] = ("Articles dont l’intitulé contient le terme\u00A0: {articles}.", BricksFrenchReviewed),
+        ["plan.bricks.detector.keyword"] = ("Lignes contenant une forme du terme\u00A0: {lines}\u00A0; articles concernés\u00A0: {articles}.", BricksFrenchReviewed),
+        ["plan.bricks.detector.cooccurrence"] = ("Lignes où le terme figure avec la partie nommée dans votre question ou avec une valeur\u00A0: {lines}\u00A0; articles concernés\u00A0: {articles}.", BricksFrenchReviewed),
+        ["plan.bricks.detector.type_pattern"] = ("Lignes ayant aussi la forme de la réponse cherchée\u00A0: {lines}\u00A0; articles concernés\u00A0: {articles}.", BricksFrenchReviewed),
+        ["plan.bricks.route.definition"] = ("Le texte définit ce terme\u00A0: Lex a lu la ligne qui le définit.", BricksFrenchReviewed),
+        ["plan.bricks.route.fact"] = ("Une ligne se détache nettement et a la forme de la réponse\u00A0: Lex la cite sans interroger de modèle d’IA.", BricksFrenchReviewed),
+        ["plan.bricks.model.none"] = ("Aucun modèle d’IA n’a été interrogé.", BricksFrenchReviewed),
+        ["plan.bricks.model.question"] = ("Un modèle d’IA a décrit votre question (type de réponse, termes). Il n’a choisi aucune opération.", BricksFrenchReviewed),
+        ["plan.bricks.model.arbiter"] = ("Un modèle d’IA a attribué un rôle à chaque passage trouvé (principal, complémentaire, écarté). Il ne pouvait ni ajouter de passage ni écrire de texte.", BricksFrenchReviewed),
+        ["plan.bricks.model.extraction"] = ("Un modèle d’IA a désigné, parmi les lignes fournies, celles qui répondent à votre question. Le code de Lex a vérifié chacune dans le texte avant de l’afficher.", BricksFrenchReviewed),
+        ["plan.bricks.model.question_unavailable"] = ("Un modèle d’IA a été interrogé pour décrire votre question et n’a pas donné de réponse utilisable\u00A0: le code de Lex a cherché vos propres mots.", BricksFrenchReviewedLater),
+        ["plan.bricks.model.unavailable"] = ("Le modèle d’IA qui classe les passages n’a pas donné de réponse utilisable\u00A0: Lex montre les passages trouvés par son code, dans l’ordre établi par ce code.", BricksFrenchReviewed),
+        ["plan.bricks.pass.sweep_cases"] = ("La règle renvoie aux cas prévus par la loi sans les nommer\u00A0: Lex a parcouru tout le texte pour les relever.", BricksFrenchReviewed),
+        ["plan.bricks.pass.wider_context"] = ("Une première lecture a donné une réponse partielle\u00A0: Lex a relu l’article entier.", BricksFrenchReviewed),
+        ["plan.bricks.pass.retry"] = ("Une première réponse du modèle d’IA a été refusée par les contrôles de Lex\u00A0: Lex a redemandé avec les seules lignes du meilleur passage.", BricksFrenchReviewed),
+        ["answer.definition"] = ("Le texte définit ce terme. Voici la ligne qui le définit\u00A0:", BricksFrenchReviewed),
+        ["answer.rule"] = ("La règle, dans les termes du texte\u00A0:", BricksFrenchReviewed),
+        ["answer.rule_cases"] = ("Cas prévus par le texte, relevés dans ce texte\u00A0:", BricksFrenchReviewed),
+        ["answer.value"] = ("Le texte l’énonce ainsi\u00A0:", BricksFrenchReviewed),
+        ["answer.value_words"] = ("Écrit sur cette ligne\u00A0: «\u00A0{value}\u00A0».", BricksFrenchReviewed),
+        ["answer.several"] = ("Ce texte donne plusieurs réponses selon le cas. Chacune est citée avec son article\u00A0:", BricksFrenchReviewed),
+        ["answer.list"] = ("Ce que Lex a relevé dans ce texte\u00A0:", BricksFrenchReviewed),
+        ["answer.passages"] = ("Les passages de ce texte qui traitent de votre question\u00A0:", BricksFrenchReviewed),
+        ["answer.candidates"] = ("Lex a trouvé ces passages sans les départager davantage. Les plus proches\u00A0:", BricksFrenchReviewed),
+        ["answer.more_articles"] = ("Autres articles de ce texte où le terme figure\u00A0:", BricksFrenchReviewed),
+        ["answer.term_usage"] = ("Lignes de ce texte où ce terme figure\u00A0: {lines}\u00A0; articles concernés\u00A0: {articles}.", BricksFrenchReviewed),
+        ["law.extract_heading"] = ("{work}, article {anchor}, «\u00A0{heading}\u00A0», tel qu’il se lisait le {date}", BricksFrenchReviewed),
+        ["caveat.conditions_apply"] = ("Des conditions s’appliquent\u00A0: elles figurent dans les lignes citées.", BricksFrenchReviewed),
+        ["caveat.left_to_contract"] = ("Sur ce point, le texte renvoie au contrat\u00A0: il ne fixe pas lui-même de valeur.", BricksFrenchReviewed),
+        ["caveat.cases_from_sweep"] = ("Cette liste vient d’un relevé des mots du terme dans le texte\u00A0; un cas rédigé autrement peut y manquer.", BricksFrenchReviewed),
+        ["caveat.list_from_sweep"] = ("Cette liste vient d’un relevé dans le texte\u00A0; un élément rédigé autrement peut y manquer.", BricksFrenchReviewed),
+        ["caveat.general_and_special"] = ("Une règle générale et une règle spéciale portent sur ce point\u00A0; les deux sont citées.", BricksFrenchReviewed),
+        ["caveat.not_defined"] = ("Lex n’a pas trouvé de définition de ce terme dans ce texte\u00A0; voici les passages qui l’emploient.", BricksFrenchReviewed),
+        ["caveat.vocabulary_incomplete"] = ("Le vocabulaire de Lex sur ce sujet n’est pas complet\u00A0: un passage rédigé autrement peut exister.", BricksFrenchReviewed),
+        ["note.law_term"] = ("Vous avez écrit «\u00A0{words}\u00A0»\u00A0; le terme du texte est «\u00A0{term}\u00A0».", BricksFrenchReviewed),
+        ["note.word_not_in_act"] = ("Le mot «\u00A0{words}\u00A0» de votre question ne figure nulle part dans ce texte.", BricksFrenchReviewed),
+        ["absence.sweep_heading"] = ("Lex a parcouru le texte de {work} (lignes\u00A0: {lines}\u00A0; articles\u00A0: {articles}), tel qu’il se lisait le {date}, à la recherche de ces termes\u00A0:", BricksFrenchReviewed),
+        ["absence.term_count"] = ("Lignes contenant «\u00A0{term}\u00A0»\u00A0: {lines}\u00A0; articles concernés\u00A0: {articles}.", BricksFrenchReviewed),
+        ["absence.terms_nowhere"] = ("Aucun de ces termes ne figure dans ce texte. Cela indique ce que contient ce texte, et non ce que prévoit un contrat.", BricksFrenchReviewed),
+        ["absence.words_not_found"] = ("Lex n’a pas trouvé ces mots dans ce texte, et son vocabulaire sur ce sujet n’est pas complet\u00A0: cela ne montre pas que le texte est muet.", BricksFrenchReviewed),
+        ["absence.no_answer_in_lines"] = ("Lex a trouvé des lignes sur ce sujet, mais aucune ne donne de réponse du type demandé. Les plus proches\u00A0:", BricksFrenchReviewed),
+        ["absence.act_not_held"] = ("Votre question nomme un acte\u00A0: {name}. Lex ne détient pas encore le texte de cet acte.", BricksFrenchReviewed),
+        ["absence.text_not_held"] = ("Lex détient la notice de {work}, mais aucun texte qu’il puisse en montrer à cette date.", BricksFrenchReviewed),
+        ["direct.greeting"] = ("Bonjour. Posez une question sur un texte de droit luxembourgeois ou européen que Lex détient\u00A0; Lex répond en citant le texte.", BricksFrenchReviewed),
     };
 }

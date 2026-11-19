@@ -46,7 +46,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
       'This is an automated assistant that shows published legal texts. It does not give legal advice or apply the law to your situation. Do not type names, health details or other personal details.',
     preview: 'Preview: not yet reviewed by a lawyer or by independent annotators.',
     processor:
-      'Your question, with the e-mail addresses, phone numbers, bank account numbers and identity numbers that Lex\'s code recognises removed, is sent to Microsoft\'s Azure OpenAI service (EU data zone), which plans which of Lex\'s operations to run; nothing else about you is sent. Microsoft does not use it to train models; for abuse monitoring, Microsoft may keep it for up to 30 days. Lex keeps nothing.',
+      'Your question, with the e-mail addresses, phone numbers, bank account numbers and identity numbers that Lex\'s code recognises removed, is sent to Microsoft\'s Azure OpenAI service (EU data zone), which describes the question or marks lines of law that Lex\'s code found, unless Lex\'s code answers it alone; nothing else about you is sent. Microsoft does not use it to train models; for abuse monitoring, Microsoft may keep it for up to 30 days. Lex keeps nothing.',
     inputLabel: 'Your question',
     submit: 'Ask',
     contextLabel: 'Kept from your last answer',
@@ -116,7 +116,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     workTime: 'Time: {seconds} s',
     workCost: 'Cost: about {cost} € a question',
     rawPlan: 'Raw plan',
-    workPlanner: 'Planner: {planner}',
+    workPlanner: 'Engine: {planner}',
     workRegistry: 'MLflow registry: {model}, version {version}',
     // No version of the build that answered is in this page's copy of the registry: it is registered when it is put live.
     workRegistryNone: 'MLflow registry: {model} (this build is registered when it is put live)',
@@ -134,7 +134,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockExampleThree: 'What does Article 5 of the GDPR say?',
     dockExampleThreeCaption: 'an article of an EU regulation',
     dockDoes: 'What it does.',
-    dockDoesText: 'One AI model call plans the search. Code checks the plan, runs it and writes the answer from the text.',
+    dockDoesText: 'Code reads your question, finds the lines of the text and writes the answer from them. An AI model may describe a question or rank passages; it writes nothing you read.',
     dockDoesNot: 'What it does not do.',
     dockDoesNotText: 'It gives no advice on your situation, and when it does not find the article it says so.',
     dockHowLink: 'How an answer is built, with the measured results',
@@ -199,6 +199,57 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockComposerSome: '{count} quotes identical to the text',
     dockComposerNone: 'nothing quoted, every sentence from a template',
     dockPlanNote: 'The model plans; it never writes the answer.',
+    dockStageQuestion: 'Question',
+    dockStageRoute: 'Route',
+    dockStageRetrieval: 'Retrieval',
+    dockStageArbiter: 'Ranking',
+    dockStageExtraction: 'Extraction',
+    dockStageChecks: 'Checks',
+    dockQuestionNone: 'no term of the dictionary read',
+    dockQuestionOne: '1 term of the dictionary read; looking for {kind}',
+    dockQuestionSome: '{count} terms of the dictionary read; looking for {kind}',
+    dockKindDefinition: 'a definition',
+    dockKindRule: 'a rule',
+    dockKindDuration: 'a period',
+    dockKindDate: 'a date',
+    dockKindAmount: 'an amount',
+    dockKindList: 'a list',
+    dockKindReference: 'a provision',
+    dockKindText: 'passages',
+    dockRouteDefinition: 'a term the law defines: its line, no model',
+    dockRouteFact: 'one line clearly leads: no model',
+    dockRouteRule: 'a rule and its cases',
+    dockRouteList: 'a list: the whole text swept',
+    dockRouteOpen: 'passages found, then read',
+    dockRouteAbsence: 'nothing to quote: the sweep is shown',
+    dockRouteNotHeld: 'a text Lex does not hold',
+    dockRouteGreeting: 'not a question on the law',
+    dockRouteOwnCase: 'a personal case: refused, the law beside it',
+    dockRetrievalFound: 'the term is on {lines} lines, in {articles} articles; {kept} kept',
+    dockRetrievalNone: 'no line of the text holds the term',
+    dockRetrievalLine: 'the defining line, by its place in the text',
+    dockRetrievalSkipped: 'no text read',
+    dockArbiterLine: 'main: {primary}; supporting: {supporting}; set aside: {others}',
+    dockExtractionLine: 'lines pointed at: {count}, each checked in the text',
+    dockChecksLine: 'quotes identical to the text: {count}',
+    dockBricksNote: 'A model may rank passages and point at lines; it never writes the answer.',
+    dockBricksNoModel: 'No AI model was asked for this answer.',
+    dockDescribedNote: 'A model describes the question; code chooses what to run and writes the answer.',
+    dockNoModelUsed: 'An AI model was asked and gave no usable answer; code answered alone.',
+    dockQuestionDescribed: 'described by an AI model: {asks}',
+    dockQuestionByCode: 'read by code alone: your words are searched as written',
+    dockQuestionCited: 'read by code alone: the act and the article you cite',
+    dockAsksCited: 'an article or an act is cited',
+    dockAsksSubject: 'words on a subject',
+    dockAsksVersions: 'the versions of an act',
+    dockAsksRecord: 'the record of an act',
+    dockAsksOnDate: 'an act on a date',
+    dockAsksCompared: 'an act compared between two dates',
+    dockAsksPeriod: 'what changed in a period',
+    dockAsksIdentifier: 'an exact identifier',
+    dockAsksNothing: 'nothing to look up',
+    dockAsksAnd: '; ',
+    dockSaidLabel: 'What Lex found',
     dockSeePlan: 'See the plan',
     dockHidePlan: 'Hide the plan',
     dockPlanHeading: 'The plan, as returned',
@@ -223,7 +274,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
       'Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.',
     preview: 'Phase d’essai : l’assistant n’a pas encore été examiné par un avocat ni par des annotateurs indépendants.',
     processor:
-      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui planifie les opérations de Lex à exécuter ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours. Lex ne conserve rien.',
+      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui décrit la question ou désigne des lignes de loi que le code de Lex a trouvées, sauf si le code de Lex y répond seul ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours. Lex ne conserve rien.',
     inputLabel: 'Votre question',
     submit: 'Demander',
     contextLabel: 'Repris de la dernière réponse',
@@ -290,7 +341,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     workTime: 'Temps : {seconds} s',
     workCost: 'Coût : environ {cost} € par question',
     rawPlan: 'Plan brut',
-    workPlanner: 'Planificateur : {planner}',
+    workPlanner: 'Moteur : {planner}',
     workRegistry: 'Registre MLflow : {model}, version {version}',
     workRegistryNone: 'Registre MLflow : {model} (ce déploiement est enregistré à sa mise en service)',
     dockPreview: 'aperçu, pas un conseil juridique',
@@ -304,7 +355,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockExampleThree: 'Que dit l’article 5 du RGPD ?',
     dockExampleThreeCaption: 'un article d’un règlement de l’UE',
     dockDoes: 'Ce qu’il fait.',
-    dockDoesText: 'Un appel à un modèle d’IA planifie la recherche. Le code vérifie le plan, l’exécute et écrit la réponse à partir du texte.',
+    dockDoesText: 'Le code lit votre question, trouve les lignes du texte et en tire la réponse. Un modèle d’IA peut décrire une question ou classer des passages\u00A0; il n’écrit rien de ce que vous lisez.',
     dockDoesNot: 'Ce qu’il ne fait pas.',
     dockDoesNotText: 'Il ne donne aucun conseil sur votre situation et, quand il ne trouve pas l’article, il le dit.',
     dockHowLink: 'Comment une réponse est construite, avec les résultats mesurés',
@@ -369,6 +420,57 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockComposerSome: '{count} citations identiques au texte',
     dockComposerNone: 'rien de cité, chaque phrase tirée d’une formule fixe',
     dockPlanNote: 'Le modèle planifie ; il n’écrit jamais la réponse.',
+    dockStageQuestion: 'Question',
+    dockStageRoute: 'Aiguillage',
+    dockStageRetrieval: 'Recherche',
+    dockStageArbiter: 'Classement',
+    dockStageExtraction: 'Extraction',
+    dockStageChecks: 'Contrôles',
+    dockQuestionNone: 'aucun terme du dictionnaire reconnu',
+    dockQuestionOne: '1 terme du dictionnaire reconnu\u00A0; réponse cherchée\u00A0: {kind}',
+    dockQuestionSome: '{count} termes du dictionnaire reconnus\u00A0; réponse cherchée\u00A0: {kind}',
+    dockKindDefinition: 'une définition',
+    dockKindRule: 'une règle',
+    dockKindDuration: 'un délai',
+    dockKindDate: 'une date',
+    dockKindAmount: 'un montant',
+    dockKindList: 'une liste',
+    dockKindReference: 'une disposition',
+    dockKindText: 'des passages',
+    dockRouteDefinition: 'terme défini par la loi\u00A0: sa ligne, sans modèle',
+    dockRouteFact: 'une ligne se détache nettement\u00A0: sans modèle',
+    dockRouteRule: 'une règle et ses cas',
+    dockRouteList: 'une liste\u00A0: tout le texte parcouru',
+    dockRouteOpen: 'passages trouvés, puis lus',
+    dockRouteAbsence: 'rien à citer\u00A0: le relevé est montré',
+    dockRouteNotHeld: 'un texte que Lex ne détient pas',
+    dockRouteGreeting: 'pas une question sur le droit',
+    dockRouteOwnCase: 'un cas personnel\u00A0: refusé, la loi à côté',
+    dockRetrievalFound: 'le terme figure sur {lines} lignes, dans {articles} articles\u00A0; {kept} retenues',
+    dockRetrievalNone: 'aucune ligne du texte ne contient le terme',
+    dockRetrievalLine: 'la ligne de définition, par sa place dans le texte',
+    dockRetrievalSkipped: 'aucun texte lu',
+    dockArbiterLine: 'principaux\u00A0: {primary}\u00A0; complémentaires\u00A0: {supporting}\u00A0; écartés\u00A0: {others}',
+    dockExtractionLine: 'lignes désignées\u00A0: {count}, chacune vérifiée dans le texte',
+    dockChecksLine: 'citations identiques au texte\u00A0: {count}',
+    dockBricksNote: 'Un modèle peut classer des passages et désigner des lignes\u00A0; il n’écrit jamais la réponse.',
+    dockBricksNoModel: 'Aucun modèle d’IA n’a été interrogé pour cette réponse.',
+    dockDescribedNote: 'Un modèle décrit la question\u00A0; le code choisit quoi exécuter et écrit la réponse.',
+    dockNoModelUsed: 'Un modèle d’IA a été interrogé et n’a pas donné de réponse utilisable\u00A0; le code a répondu seul.',
+    dockQuestionDescribed: 'décrite par un modèle d’IA\u00A0: {asks}',
+    dockQuestionByCode: 'lue par le code seul\u00A0: vos mots sont cherchés tels quels',
+    dockQuestionCited: 'lue par le code seul\u00A0: l’acte et l’article que vous citez',
+    dockAsksCited: 'un article ou un acte est cité',
+    dockAsksSubject: 'des mots sur un sujet',
+    dockAsksVersions: 'les versions d’un acte',
+    dockAsksRecord: 'la fiche d’un acte',
+    dockAsksOnDate: 'un acte à une date',
+    dockAsksCompared: 'un acte comparé entre deux dates',
+    dockAsksPeriod: 'ce qui a changé sur une période',
+    dockAsksIdentifier: 'un identifiant exact',
+    dockAsksNothing: 'rien à chercher',
+    dockAsksAnd: '\u00A0; ',
+    dockSaidLabel: 'Ce que Lex a trouvé',
     dockSeePlan: 'Voir le plan',
     dockHidePlan: 'Masquer le plan',
     dockPlanHeading: 'Le plan, tel que renvoyé',
@@ -671,9 +773,96 @@ export function dockTurnOf(asked, locale) {
 
 /** The kind of a checked answer: clarify, the advice boundary (a refuse), an answer when it quotes the law, else not found. */
 export function dossierKind(view) {
-  if (view.verdict === 'clarify') return 'clarify';
   if (view.verdict === 'refuse') return 'advice';
-  return view.parts.some((part) => part.blocks.some((block) => block.kind === 'quote')) ? 'answer' : 'notfound';
+  const quotes = view.parts.some((part) => part.blocks.some((block) => block.kind === 'quote'));
+  // A bricks answer (plan /2) that quotes nothing still says something in the server's own sentences (a sweep that proves
+  // an absence, a text Lex does not hold, a greeting): the dock shows those sentences, kind `said`.
+  if (isObject(view.trace?.plan?.bricks) && view.trace.plan.bricks.route !== 'operations') return quotes ? 'answer' : 'said';
+  if (view.verdict === 'clarify') return 'clarify';
+  return quotes ? 'answer' : 'notfound';
+}
+
+/**
+ * The bricks record of an answer the tables gave (its trace's plan /2), or null for an answer of operations: one a model
+ * described and code mapped to operations (`questionCallOf`), or one from before the bricks, which a model planned.
+ */
+export function bricksOf(dossier) {
+  const bricks = dossier?.trace?.plan?.bricks;
+  return isObject(bricks) && bricks.route !== 'operations' ? bricks : null;
+}
+
+/**
+ * For an answer of operations under plan /2: how the question was read, `{ outcome, asks }`. `outcome` is `described` when
+ * a model described the question (then `asks` holds what it said each part asks), else why code read it alone
+ * (`not_wired`, `failed`, `refused`). Null for a bricks answer and for an answer from before the bricks.
+ */
+export function questionCallOf(dossier) {
+  const bricks = dossier?.trace?.plan?.bricks;
+  if (!isObject(bricks) || bricks.route !== 'operations') return null;
+  const asks = (Array.isArray(bricks.described) ? bricks.described : []).map((part) => part?.asks).filter((value) => typeof value === 'string');
+  const outcome = ['described', 'not_wired', 'failed', 'refused', 'cited'].includes(bricks.question_call) ? bricks.question_call : 'not_wired';
+  return Object.freeze({ outcome, asks: Object.freeze(outcome === 'described' ? asks : []) });
+}
+
+/** The sentence under the stages: what a model did for this answer, in one line. */
+export function builtNote(dossier, rows, locale) {
+  const copy = panelCopy(locale);
+  const call = questionCallOf(dossier);
+  if (bricksOf(dossier) === null && call === null) return copy.dockPlanNote;
+  if (rows.some((row) => row.model && row.key !== 'question')) return copy.dockBricksNote;
+  if (rows.some((row) => row.model)) return copy.dockDescribedNote;
+  return call === null || call.outcome === 'not_wired' || call.outcome === 'cited' ? copy.dockBricksNoModel : copy.dockNoModelUsed;
+}
+
+/** A quotation's lines: its text cut where a line of the law starts (`breaks`), each trimmed; one line when it has none. */
+export function quoteLines(quote) {
+  const text = typeof quote?.text === 'string' ? quote.text : '';
+  const breaks = Array.isArray(quote?.breaks) ? quote.breaks.filter((at) => Number.isInteger(at) && at > 0 && at < text.length) : [];
+  const lines = [];
+  let from = 0;
+  for (const at of [...breaks, text.length]) {
+    const line = text.slice(from, at).trim();
+    if (line.length > 0) lines.push(line);
+    from = at;
+  }
+  return Object.freeze(lines);
+}
+
+/**
+ * What a bricks answer says, in its own order, for the dock to draw: `line` (a sentence that introduces or concludes),
+ * `quote` (a line of the law, with its article's heading and date as its heading sentence carries them), `value` (the
+ * words written on the quoted line), `remark` (a caveat, a note on the reader's words, an official source) and `more`
+ * (further articles to read). Every text is the server's own sentence or the law's own words; nothing is composed here.
+ */
+export function bricksBody(dossier) {
+  const body = [];
+  let heading = null;
+  for (const block of (dossier?.parts ?? []).flatMap((part) => part.blocks ?? [])) {
+    if (block?.kind === 'claim') {
+      const id = String(block.template_id ?? '');
+      if (id === 'law.extract_heading' || id === 'law.quote_heading') {
+        heading = block;
+      } else if (id === 'answer.value_words') {
+        body.push(Object.freeze({ type: 'value', text: block.text }));
+      } else if (id.startsWith('caveat.') || id.startsWith('note.') || id === 'law.official_source' && heading === null && !body.some((entry) => entry.type === 'quote')) {
+        body.push(Object.freeze({ type: 'remark', text: block.text }));
+      } else if (!id.startsWith('law.') && !id.startsWith('boundary.')) {
+        body.push(Object.freeze({ type: 'line', text: block.text, template: id }));
+      }
+    } else if (block?.kind === 'quote') {
+      const fact = (name) => heading?.facts?.find((candidate) => candidate?.name === name)?.value ?? null;
+      body.push(Object.freeze({ type: 'quote', quote: block, lines: quoteLines(block), heading: fact('heading'), date: fact('date') }));
+      heading = null;
+    } else if (block?.kind === 'action' && block.operation_id === 'evidence_bundle' && typeof block.parameters?.article === 'string') {
+      const article = Object.freeze({ identifier: block.parameters.identifier, article: block.parameters.article, date: block.parameters.date ?? null });
+      const last = body.at(-1);
+      if (last?.type === 'more') last.articles.push(article);
+      else body.push({ type: 'more', articles: [article] });
+    } else if (block?.kind === 'handoff' && typeof block.claim?.text === 'string') {
+      body.push(Object.freeze({ type: 'remark', text: block.claim.text }));
+    }
+  }
+  return Object.freeze(body);
 }
 
 /** The quotation the answer card shows: the first in the interface's held language, else the first. Null when none. */
@@ -726,9 +915,9 @@ export function searchedWords(dossier, question) {
 
 /** The plan in a few words, from its operations (`plannedOperations`): "search, then read the article". */
 function planLine(trace, copy) {
-  const said = plannedOperations(trace).map(({ operation, followUp }) => {
+  const said = plannedOperations(trace).map(({ operation, followUp, article }) => {
     if (operation === 'search') return copy.dockOpSearch;
-    if (operation === 'evidence_bundle') return followUp ? copy.dockOpRead : copy.dockOpText;
+    if (operation === 'evidence_bundle') return followUp || article ? copy.dockOpRead : copy.dockOpText;
     if (operation === 'as_of') return copy.dockOpText;
     if (operation === 'dossier' || operation === 'timeline') return copy.dockOpVersions;
     if (operation === 'article_history') return copy.dockOpHistory;
@@ -756,19 +945,81 @@ function executionLine(trace, copy) {
 export function stageRows(dossier, locale) {
   const copy = panelCopy(locale);
   const trace = dossier?.trace ?? {};
+  const bricks = bricksOf(dossier);
+  if (bricks !== null) return bricksStageRows(dossier, bricks, copy);
   const masked = maskedCount(trace.question ?? '');
   const quotes = Number.isInteger(dossier?.gates?.quotes)
     ? dossier.gates.quotes
     : (dossier?.parts ?? []).flatMap((part) => part.blocks ?? []).filter((block) => block?.kind === 'quote').length;
   const masking = masked === 0 ? copy.dockMaskNone : masked === 1 ? copy.dockMaskOne : fill(copy.dockMaskSome, { count: masked });
   const composer = quotes === 0 ? copy.dockComposerNone : quotes === 1 ? copy.dockComposerOne : fill(copy.dockComposerSome, { count: quotes });
+  // Under plan /2 a model describes the question and code chooses the operations; before the bricks a model planned them.
+  const call = questionCallOf(dossier);
+  const asked = {
+    article_or_act_cited: copy.dockAsksCited, words_on_a_subject: copy.dockAsksSubject, versions_of_an_act: copy.dockAsksVersions,
+    record_of_an_act: copy.dockAsksRecord, act_on_a_date: copy.dockAsksOnDate, two_dates_compared: copy.dockAsksCompared,
+    changes_in_a_period: copy.dockAsksPeriod, exact_identifier: copy.dockAsksIdentifier, nothing_to_look_up: copy.dockAsksNothing,
+  };
+  const planning = call === null
+    ? [Object.freeze({ key: 'planner', name: copy.dockStagePlanner, line: planLine(trace, copy), model: true })]
+    : [
+      Object.freeze({
+        key: 'question',
+        name: copy.dockStageQuestion,
+        line: call.outcome === 'described' && call.asks.length > 0
+          ? fill(copy.dockQuestionDescribed, { asks: call.asks.map((asks) => asked[asks] ?? copy.dockAsksSubject).join(copy.dockAsksAnd) })
+          : call.outcome === 'cited' ? copy.dockQuestionCited : copy.dockQuestionByCode,
+        model: call.outcome === 'described' && call.asks.length > 0,
+      }),
+      Object.freeze({ key: 'route', name: copy.dockStageRoute, line: planLine(trace, copy), model: false }),
+    ];
   return Object.freeze([
     Object.freeze({ key: 'masking', name: copy.dockStageMasking, line: masking, model: false }),
-    Object.freeze({ key: 'planner', name: copy.dockStagePlanner, line: planLine(trace, copy), model: true }),
+    ...planning,
     Object.freeze({ key: 'validator', name: copy.dockStageValidator, line: copy.dockValidatorAccepted, model: false }),
     Object.freeze({ key: 'execution', name: copy.dockStageExecution, line: executionLine(trace, copy), model: false }),
     Object.freeze({ key: 'composer', name: copy.dockStageComposer, line: composer, model: false }),
   ]);
+}
+
+/**
+ * The stages of a bricks answer (V4), each read from the bricks record in the answer's trace: masking, the question's row,
+ * the route code chose, retrieval, then the two model steps only when a model was asked, and the checks. A stage is tagged
+ * `model` only when a model call is recorded for it.
+ */
+function bricksStageRows(dossier, bricks, copy) {
+  const masked = maskedCount(dossier?.trace?.question ?? '');
+  const masking = masked === 0 ? copy.dockMaskNone : masked === 1 ? copy.dockMaskOne : fill(copy.dockMaskSome, { count: masked });
+  const kinds = { definition: copy.dockKindDefinition, rule: copy.dockKindRule, duration: copy.dockKindDuration, date: copy.dockKindDate, amount: copy.dockKindAmount, list: copy.dockKindList, reference: copy.dockKindReference, text: copy.dockKindText };
+  const terms = (Array.isArray(bricks.concepts) ? bricks.concepts.length : 0) + (Array.isArray(bricks.roles) ? bricks.roles.length : 0);
+  const kind = kinds[bricks.kind] ?? copy.dockKindText;
+  const question = terms === 0 ? copy.dockQuestionNone : terms === 1 ? fill(copy.dockQuestionOne, { kind }) : fill(copy.dockQuestionSome, { count: terms, kind });
+  const routes = { definition: copy.dockRouteDefinition, fact: copy.dockRouteFact, rule: copy.dockRouteRule, list: copy.dockRouteList, open: copy.dockRouteOpen, absence: copy.dockRouteAbsence, not_held: copy.dockRouteNotHeld, greeting: copy.dockRouteGreeting, own_case: copy.dockRouteOwnCase };
+  const found = (Array.isArray(bricks.detectors) ? bricks.detectors : []).find((detector) => detector?.id === 'keyword');
+  const candidates = Array.isArray(bricks.candidates) ? bricks.candidates : [];
+  const retrieval = bricks.route === 'definition' ? copy.dockRetrievalLine
+    : typeof bricks.work !== 'string' || !Number.isInteger(bricks.lines) ? copy.dockRetrievalSkipped
+    : found === undefined || found.lines === 0 ? copy.dockRetrievalNone
+    : fill(copy.dockRetrievalFound, { lines: found.lines, articles: found.articles, kept: candidates.length });
+  const calls = (Array.isArray(bricks.model_calls) ? bricks.model_calls : []).map((call) => call?.step);
+  const quotes = Number.isInteger(dossier?.gates?.quotes) ? dossier.gates.quotes : 0;
+  const rows = [
+    { key: 'masking', name: copy.dockStageMasking, line: masking, model: false },
+    { key: 'question', name: copy.dockStageQuestion, line: question, model: calls.includes('question') },
+    { key: 'route', name: copy.dockStageRoute, line: routes[bricks.route] ?? copy.dockRouteOpen, model: false },
+    { key: 'retrieval', name: copy.dockStageRetrieval, line: retrieval, model: false },
+  ];
+  if (calls.includes('arbiter')) {
+    const count = (role) => candidates.filter((candidate) => candidate?.role === role).length;
+    rows.push({ key: 'arbiter', name: copy.dockStageArbiter, line: fill(copy.dockArbiterLine, { primary: count('primary'), supporting: count('supporting'), others: count('tangential') + count('discarded') }), model: true });
+  }
+  if (calls.includes('extraction')) {
+    // The lines the model pointed at: an item code added to them (`by: code`) is not the model's.
+    const pointed = (Array.isArray(bricks.answer?.items) ? bricks.answer.items : []).filter((item) => item?.by !== 'code').length;
+    rows.push({ key: 'extraction', name: copy.dockStageExtraction, line: fill(copy.dockExtractionLine, { count: pointed }), model: true });
+  }
+  rows.push({ key: 'checks', name: copy.dockStageChecks, line: quotes === 0 ? copy.dockComposerNone : fill(copy.dockChecksLine, { count: quotes }), model: false });
+  return Object.freeze(rows.map((row) => Object.freeze(row)));
 }
 
 /** A number of seconds or euros as the dock writes it in `locale` (1,6 in French, 1.6 in English). */

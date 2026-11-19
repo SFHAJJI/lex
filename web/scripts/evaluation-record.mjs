@@ -3,26 +3,26 @@
 
 export const EVALUATION_RECORD = Object.freeze({
   "dev": {
-    "run": "20261115-r12-live-register-2",
-    "runId": "f09d6f549e804f60a5bc8889686399d1",
-    "date": "2026-11-15",
-    "servingCommit": "b635bdb8c495680c34c3e79f6f7eb1bc99bc2ac8",
-    "plannerId": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+    "run": "20261119-v4-final-dev",
+    "runId": "52a93d8c0cbe467785f531d6d208f4a7",
+    "date": "2026-11-19",
+    "servingCommit": "5e02ec30c1bd5250404430d7728f3e86c4e34dce",
+    "plannerId": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
     "modelDeployment": "gpt-4.1-mini",
     "cases": 56,
-    "rightArticle": 17,
+    "rightArticle": 36,
     "wrongArticle": 0,
-    "notFound": 25,
-    "wronglyRefused": 5,
+    "notFound": 10,
+    "wronglyRefused": 1,
     "rightBehaviour": 9,
     "wrongBehaviour": 0,
-    "quotes": 25,
+    "quotes": 64,
     "quoteVerifiedRate": 1,
-    "replaySameVerdict": 0.9464285714285714,
-    "replaySamePlan": 0.6666666666666666,
-    "p50": 1.4430200000060722,
-    "p95": 3.2357646000455134,
-    "costEur": 0.0010916644444444444,
+    "replaySameVerdict": 1,
+    "replaySamePlan": 0.82,
+    "p50": 2.116708000015933,
+    "p95": 4.255861899931915,
+    "costEur": 0.00193831,
     "questions": [
       {
         "id": "lu-code-civil-art1",
@@ -154,36 +154,36 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "ins-claim-declaration-fr",
         "question": "Dans quel délai l'assuré doit-il déclarer un sinistre à l'assureur ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-premium-default-fr",
         "question": "Que se passe-t-il en cas de défaut de paiement de la prime d'assurance ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-risk-aggravation-fr",
         "question": "Le preneur d'assurance doit-il déclarer l'aggravation du risque en cours de contrat ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-intentional-omission-fr",
         "question": "Quelles sont les conséquences d'une omission intentionnelle dans la déclaration du risque ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-termination-after-claim-fr",
         "question": "L'assureur peut-il résilier le contrat d'assurance après un sinistre ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-withdrawal-distance-fr",
@@ -203,57 +203,57 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "ins-overinsurance-bad-faith-fr",
         "question": "Que prévoit la loi sur le contrat d'assurance en cas de surassurance de mauvaise foi ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-age-error-life-fr",
         "question": "Que se passe-t-il en cas d'erreur sur l'âge de l'assuré dans une assurance sur la vie ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-cover-start-fr",
         "question": "Quand la garantie d'un contrat d'assurance prend-elle effet ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-injured-party-right-fr",
         "question": "La personne lésée a-t-elle un droit propre contre l'assureur de responsabilité ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-legal-protection-counsel-fr",
         "question": "En protection juridique, l'assuré a-t-il le libre choix de ses conseils ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-language-fr",
         "question": "Dans quelle langue se font les communications entre le preneur d'assurance et l'assureur ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-war-fr",
         "question": "L'assureur répond-il des sinistres causés par la guerre ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-coinsurance-fr",
         "question": "La coassurance implique-t-elle la solidarité entre les coassureurs ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-art44-number-fr",
@@ -273,22 +273,22 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "ins-art11-number-en",
         "question": "What does Article 11 of the Luxembourg law of 27 July 1997 on insurance contracts say?",
         "language": "en",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-prescription-concept-en",
         "question": "What is the limitation period for actions arising from an insurance contract under Luxembourg law?",
         "language": "en",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-claim-declaration-en",
         "question": "Within what time must the insured notify the insurer of a claim under Luxembourg insurance law?",
         "language": "en",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ins-advice-refused-fr",
@@ -322,8 +322,8 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "gdpr-erasure-concept-fr",
         "question": "Que prévoit le RGPD sur le droit à l'effacement ?",
         "language": "fr",
-        "verdict": "assistant_v3_unavailable",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "gdpr-portability-concept-en",
@@ -336,8 +336,8 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "gdpr-breach-notification-concept-fr",
         "question": "Que dit le RGPD sur la notification à l'autorité de contrôle d'une violation de données à caractère personnel ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "gdpr-consent-conditions-concept-en",
@@ -385,8 +385,8 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "aiact-literacy-concept-en",
         "question": "What does the AI Act require on AI literacy?",
         "language": "en",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "dora-art19-number-en",
@@ -406,109 +406,109 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "dora-ict-risk-framework-concept-en",
         "question": "What does DORA say about the ICT risk management framework?",
         "language": "en",
-        "verdict": "point",
+        "verdict": "clarify",
         "outcome": "not_found"
       },
       {
         "id": "dora-incident-reporting-concept-fr",
         "question": "Que prévoit DORA pour la notification des incidents majeurs liés aux TIC ?",
         "language": "fr",
-        "verdict": "point",
+        "verdict": "clarify",
         "outcome": "not_found"
       }
     ]
   },
   "heldout": {
-    "run": "20261114-r10-live",
-    "runId": "8ed565592d134925ac1622bf27aa6cd5",
-    "date": "2026-11-14",
-    "servingCommit": "54c3d665ceeee4a588a9c2c0b34d2aa72c3016b4",
-    "plannerId": "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58",
+    "run": "20261119-v4-local-unseen",
+    "runId": "bd58850fb71b45cf8e127a8c84ca6753",
+    "date": "2026-11-19",
+    "servingCommit": "ff17009a956bf924b2ac0783c34c8a445bed5a94",
+    "plannerId": "lex-v4-bricks/gpt-4.1-mini/prompt-b2f677687022",
     "modelDeployment": "gpt-4.1-mini",
     "cases": 15,
-    "rightArticle": 0,
-    "wrongArticle": 0,
-    "notFound": 9,
-    "wronglyRefused": 6,
+    "rightArticle": 10,
+    "wrongArticle": 1,
+    "notFound": 3,
+    "wronglyRefused": 1,
     "rightBehaviour": 0,
     "wrongBehaviour": 0,
-    "quotes": 0,
+    "quotes": 26,
     "quoteVerifiedRate": 1,
     "replaySameVerdict": 1,
-    "replaySamePlan": 0.75,
-    "p50": 1.5227220999950077,
-    "p95": 1.901979400019627,
-    "costEur": 0.0010760375000000001,
+    "replaySamePlan": 0.8571428571428571,
+    "p50": 2.4205606000032276,
+    "p95": 4.260496400063857,
+    "costEur": 0.0023919285714285718,
     "questions": [
       {
         "id": "ho-01",
         "question": "Dans quel délai l'assuré doit-il déclarer un sinistre ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-02",
         "question": "Que se passe-t-il si le preneur d'assurance ne paie pas sa prime ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-03",
         "question": "L'assureur peut-il résilier le contrat après un sinistre ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-04",
         "question": "Que prévoit la loi en cas d'aggravation du risque en cours de contrat ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-05",
         "question": "Comment s'applique la règle proportionnelle en cas de sous-assurance ?",
         "language": "fr",
-        "verdict": "clarify",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-06",
         "question": "La personne lésée a-t-elle un droit propre contre l'assureur de responsabilité civile ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-07",
         "question": "Dans quel délai le preneur d'une assurance vie peut-il se rétracter ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-08",
         "question": "Quelles informations l'assureur doit-il fournir avant la conclusion du contrat ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-09",
         "question": "Qui reçoit le capital d'une assurance vie lorsqu'aucun bénéficiaire n'est désigné ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "wrong_article"
       },
       {
         "id": "ho-10",
         "question": "What does the GDPR say about the right to erasure?",
         "language": "en",
-        "verdict": "assistant_v3_unavailable",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-11",
@@ -535,14 +535,14 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "ho-14",
         "question": "Quelles sont les obligations des déployeurs de systèmes d'IA à haut risque selon l'AI Act ?",
         "language": "fr",
-        "verdict": "point",
-        "outcome": "not_found"
+        "verdict": "answer",
+        "outcome": "right_article"
       },
       {
         "id": "ho-15",
         "question": "Under DORA, how must a financial entity report a major ICT-related incident?",
         "language": "en",
-        "verdict": "point",
+        "verdict": "clarify",
         "outcome": "not_found"
       }
     ]
