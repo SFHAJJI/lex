@@ -9,7 +9,14 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 /// <param name="Kind">The kind of answer expected: its pattern is one of the detectors.</param>
 /// <param name="UsedKeywords">The rows of the dictionary the question's own words matched (a reader's word that matched is swept too).</param>
 /// <param name="Literals">The question's own words that no table read, folded ("chaque", "annee"): found on a line, they count for it.</param>
-public sealed record V4Brief(IReadOnlyList<string> Concepts, string? Role, string Kind, IReadOnlyList<int> UsedKeywords, IReadOnlyList<string>? Literals = null);
+/// <param name="Words">The question's own words (its matching copy), for the heading a question writes out whole.</param>
+public sealed record V4Brief(
+    IReadOnlyList<string> Concepts,
+    string? Role,
+    string Kind,
+    IReadOnlyList<int> UsedKeywords,
+    IReadOnlyList<string>? Literals = null,
+    IReadOnlyList<V4Word>? Words = null);
 
 /// <summary>
 /// One candidate of the audit table (brick I): a line, the detectors that found it, the words that matched, its place in the
@@ -150,6 +157,26 @@ public static class V4Retrieval
     public const double Margin = 3.0;
 
     /// <summary>Runs the detectors of a brief on one act's tables and fills the audit table.</summary>
+    /// <summary>Whether <paramref name="words"/> hold <paramref name="run"/> as one unbroken run.</summary>
+    private static bool Holds(List<string> words, List<string> run)
+    {
+        for (var at = 0; at + run.Count <= words.Count; at++)
+        {
+            var same = true;
+            for (var offset = 0; offset < run.Count && same; offset++)
+            {
+                same = string.Equals(words[at + offset], run[offset], StringComparison.Ordinal);
+            }
+
+            if (same)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static V4RetrievalResult Run(V4Brief brief, V4ActTables tables, V4Dictionary dictionary)
     {
         ArgumentNullException.ThrowIfNull(brief);
@@ -187,6 +214,14 @@ public static class V4Retrieval
         // key the question used ("Absence de bénéficiaire", "Délai de prescription") is the article asked for.
         var exact = tables.Articles
             .Where(article => usedKeys.Any(keyword => keyword.Key.Length == article.HeadingWords.Count && keyword.Key.Occurrences(article.HeadingWords).Any(static occurrence => occurrence.First == 0)))
+            .Select(static article => article.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // The question writes an article's heading out whole ("en cas d'erreur sur l'âge de l'assuré"): the author wrote
+        // that title and the reader repeated it, so the article under it is the one asked for, whatever else its lines hold.
+        var said = (brief.Words ?? []).Select(static word => V4Text.Stem(word.Text)).ToList();
+        var quoted = tables.Articles
+            .Where(article => article.HeadingWords.Count >= 2 && Holds(said, article.HeadingWords.Select(static word => V4Text.Stem(word.Text)).ToList()))
             .Select(static article => article.Id)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -248,7 +283,8 @@ public static class V4Retrieval
                 continue;
             }
 
-            var inTitled = titled.Contains(article.Id);
+            var inQuoted = quoted.Contains(article.Id);
+            var inTitled = titled.Contains(article.Id) || inQuoted;
             var leadLine = tables.TextLinesOf(article).FirstOrDefault();
             foreach (var line in tables.TextLinesOf(article))
             {
@@ -268,7 +304,8 @@ public static class V4Retrieval
                 // A line is a candidate when it holds a word of the concept; or when it stands under a heading that does, and
                 // has the form of the answer or the words the law answers with (the rule often sits under the heading without
                 // repeating its word).
-                if (!holds && !(inTitled && (typed || answers)))
+                var leads = ReferenceEquals(line, leadLine);
+                if (!holds && !(inTitled && (typed || answers)) && !(inQuoted && leads))
                 {
                     continue;
                 }
@@ -285,7 +322,13 @@ public static class V4Retrieval
                 if (inTitled)
                 {
                     detectors.Add("title");
-                    score += exact.Contains(article.Id) ? 6.0 : named.Contains(article.Id) ? 4.0 : 2.0;
+                    score += exact.Contains(article.Id) || inQuoted ? 6.0 : named.Contains(article.Id) ? 4.0 : 2.0;
+                    if (inQuoted && leads)
+                    {
+                        detectors.Add("heading_quoted");
+                        score += 5.0;
+                    }
+
                     if (special.Contains(article.Id) && !bothInHeading.Contains(article.Id))
                     {
                         detectors.Add("special_heading");
@@ -293,7 +336,7 @@ public static class V4Retrieval
                     }
 
                     // The first paragraph under a heading that names the concept states the article's own rule.
-                    if (holds && ReferenceEquals(line, leadLine))
+                    if ((holds || inQuoted) && leads)
                     {
                         detectors.Add("article_lead");
                         score += 1.5;

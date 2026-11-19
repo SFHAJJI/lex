@@ -1,8 +1,8 @@
 // The dock's reading of a bricks answer (V4, plan /2), held to answers the engine itself made: `bricks-answers.json` holds
-// eight dossiers the pipeline answered over the test corpus of the law of 27 July 1997 on the insurance contract, on
+// nine dossiers the pipeline answered over the test corpus of the law of 27 July 1997 on the insurance contract, on
 // 18/11/2026 (a definition, a rule and its cases, an absence shown by its sweep, two answers by scope, a refusal with the
-// law beside it, a greeting; then two answers of operations: a cited article a scripted model described, and a question
-// code searched alone). A .NET test (BricksTests) fails when the file is not what the engine answers. What is checked: every word drawn is the server's sentence or the law's own; one line
+// law beside it, a greeting; then three answers of operations: a cited article of a law the index names, opened by code;
+// a cited article a scripted model described; and a question code searched alone). A .NET test (BricksTests) fails when the file is not what the engine answers. What is checked: every word drawn is the server's sentence or the law's own; one line
 // of the law is quoted, not the whole article; the stages are the bricks', tagged "AI model" only when a call is recorded.
 
 import assert from 'node:assert/strict';
@@ -30,7 +30,7 @@ async function dock() {
 }
 
 test('every sample is an answer_dossier/1 the panel accepts, and carries the bricks record in its trace', () => {
-  const operations = ['searched', 'described'];
+  const operations = ['searched', 'described', 'cited'];
   for (const [name, dossier] of Object.entries(answers)) {
     assert.doesNotThrow(() => validateDossier(dossier), name);
     assert.equal(dossier.trace.plan.bricks.version, 'lex-v4-bricks/1', name);
@@ -61,6 +61,14 @@ test('an answer of operations says who read the question: a model described it, 
   assert.ok(searched.every((row) => row.model === false), 'no model took part');
   assert.equal(searched[1].line, EN.dockQuestionByCode);
   assert.equal(builtNote(answers.searched, searched, 'en'), EN.dockBricksNoModel);
+  // A cited article of a law Lex knows by name: code read the act and the article, and no model was asked.
+  assert.deepEqual(questionCallOf(answers.cited), { outcome: 'cited', asks: [] });
+  assert.equal(dockTurnOf(asked(answers.cited), 'fr').kind, 'answer');
+  const cited = stageRows(answers.cited, 'fr');
+  assert.ok(cited.every((row) => row.model === false));
+  assert.equal(cited[1].line, FR.dockQuestionCited);
+  assert.equal(cited[2].line, 'lire l’article');
+  assert.equal(builtNote(answers.cited, cited, 'fr'), FR.dockBricksNoModel);
   const failed = structuredClone(answers.searched);
   failed.trace.plan.bricks.question_call = 'failed';
   assert.equal(builtNote(failed, stageRows(failed, 'en'), 'en'), EN.dockNoModelUsed, 'a model that was asked and gave nothing is not "no model was asked"');

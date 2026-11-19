@@ -107,7 +107,7 @@ test('How it works shows the MLflow registry as MLflow holds it, the stability, 
   const dev = EVALUATION_RECORD.dev;
   assert.ok(page.includes(`the same verdict ${Math.floor(100 * dev.replaySameVerdict + 0.5)} % of the time and the same plan ${Math.floor(100 * dev.replaySamePlan + 0.5)} %`));
   const heldout = EVALUATION_RECORD.heldout;
-  const said = /(\d+) refused by the advice rule, (\d+) not found, (\d+) with no plan from the model/.exec(page);
+  const said = /(\d+) refused by the advice rule, (\d+) not found, (\d+) with no answer in time/.exec(page);
   assert.ok(said !== null, 'the held-out misses, by kind');
   assert.equal(Number(said[1]) + Number(said[2]) + Number(said[3]), heldout.cases - heldout.rightArticle - heldout.wrongArticle);
   // The API's description, the public code and the two schedules, linked.

@@ -235,7 +235,7 @@ test('how this answer was built: five stages from the trace, the AI model on the
   const escape = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#x27;');
   assert.ok(markup.includes(`<pre class="lx-dock-json" translate="no" data-dock-json="plan">${escape(JSON.stringify(turn.dossier.trace.plan, null, 2))}</pre>`), 'trace.plan exactly as returned');
   assert.ok(markup.includes(`<pre class="lx-dock-json" translate="no" data-dock-json="steps">${escape(JSON.stringify(turn.dossier.trace.steps, null, 2))}</pre>`), 'trace.steps exactly as returned');
-  assert.ok(shown(markup).includes(`Planner: ${plannerName(PLANNER)}`), 'the planner by name');
+  assert.ok(shown(markup).includes(`Engine: ${plannerName(PLANNER)}`), 'the engine by name');
   assert.ok(markup.includes('href="/en/evidence.html#registry"'), 'the MLflow registry line');
   // Closed, the plan is one action away and not in the page.
   const closed = renderToStaticMarkup(h(DockView, { page: 'live-text', shown: turn }));

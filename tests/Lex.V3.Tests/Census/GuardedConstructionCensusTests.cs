@@ -60,11 +60,10 @@ public sealed class GuardedConstructionCensusTests
     {
         var expected = new[]
             {
-                "Lex.V3.Api.AzureOpenAiAssistantPlanner: constructor internal instance "
-                    + "Lex.V3.Api.AzureOpenAiAssistantPlanner::.ctor, "
-                    + "constructor private static Lex.V3.Api.AzureOpenAiAssistantPlanner::.cctor, "
-                    + "method internal static "
-                    + "Lex.V3.Api.AzureOpenAiAssistantPlanner::FromEnvironment",
+                "Lex.V3.Api.AzureOpenAiModel: constructor internal instance "
+                    + "Lex.V3.Api.AzureOpenAiModel::.ctor, "
+                    + "constructor private static Lex.V3.Api.AzureOpenAiModel::.cctor, "
+                    + "method internal static Lex.V3.Api.AzureOpenAiModel::FromEnvironment",
                 "Lex.V3.Api.SyntheticApiState: constructor private instance "
                     + "Lex.V3.Api.SyntheticApiState::.ctor, "
                     + "constructor private static Lex.V3.Api.SyntheticApiState::.cctor, "
@@ -397,6 +396,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4DispatchInput::Deconstruct, "
                     + "constructor internal instance "
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionRow::.ctor, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionRow::With, "
                     + "method public static "
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionParser::Parse",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4RetrievalResult: constructor "

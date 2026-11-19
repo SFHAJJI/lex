@@ -76,7 +76,10 @@ test('the panel is hidden: the module admits only that, and only the assistant p
   // name, which it shows only then (`LiveHome.jsx`). No other module reaches the panel.
   // Since the owner's brief of 2026-11-15 the assistant is also docked beside every main page (`AssistantDock.jsx`, which reads
   // the panel's copy and rules from its module); it never draws the old panel itself.
-  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx', 'AssistantDock.jsx'];
+  // Since V4, How it works follows one recorded answer through the stages its own trace records: `how-answer.mjs` reads the
+  // rows from the panel's module (`stageRows`), so the page and the assistant say the same thing of an answer. It draws no
+  // control and none of the panel: the next test holds every built page to that.
+  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx', 'AssistantDock.jsx', 'how-answer.mjs'];
   for (const directory of ['app', 'scripts']) {
     for (const name of await readdir(join(web, directory))) {
       if (!/\.(mjs|jsx)$/.test(name) || reaching.includes(name)) continue;
@@ -192,9 +195,12 @@ test('the privacy notice says what the assistant sends, to which processor, and 
     assert.ok(section.processor.includes(processor) && section.processor.includes(entity), 'the processor, named');
     assert.match(section.processor, /30 (days|jours)/, 'what the processor may keep, and for how long');
     assert.doesNotMatch(section.processor, /modified abuse monitoring|surveillance des abus modifi/, 'only the retention case that holds');
-    // What goes with the question is said, as AzureOpenAiAssistantPlanner.RequestBody sends it (the review of #1022).
-    assert.match(section.processor, /language of the answer|langue de la réponse/);
-    assert.match(section.processor, /operations|opérations de Lex/);
+    // What goes with the question is said, as the bricks' calls send it (V4QuestionCall.Call, V4Generation: the masked
+    // question, where its dates stand, lines of the published law and Lex's own lists; the review of #1022).
+    assert.match(section.processor, /lines of the published law|lignes du droit publié/);
+    assert.match(section.processor, /terms of its dictionary|termes de son dictionnaire/);
+    assert.match(section.processor, /does not answer alone|ne répond pas seul/, 'a question code answers alone is not sent');
+    assert.doesNotMatch(section.processor, /to plan which|planifier/, 'no model plans');
     assert.doesNotMatch(section.processor, /Nothing else is sent|Rien d’autre n’est envoyé/, 'nothing else about the reader, not nothing else at all');
   }
 });

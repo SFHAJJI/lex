@@ -293,39 +293,43 @@ The machine gates' harness, in the tests, checks again with code of its own:
 Each gate has a deliberate-failure control. The harness runs over a small replay set that is **drafted by an agent; not D4
 or D1; not a switch-on gate** (R36, R37 and R39 need people's sets).
 
-## 12. The planner over Azure OpenAI (the owner's order of 2026-10-28)
+## 12. The model over Azure OpenAI (the owner's order of 2026-10-28; since V4 it plans nothing)
 
-`AzureOpenAiAssistantPlanner` (`src/Lex.V3.Api`) is the planner for the demonstration.
+`AzureOpenAiModel` (`src/Lex.V3.Api`) is the model the bricks of §13 ask. Until 2026-11-19 the same deployment planned
+(`lex-v3-assistant-planner-prompt/2`, a plan /1 under the wire schema `V3AssistantPlanWire`); that prompt, that schema and
+the planner's call are retired. A plan /1 is still read, validated and composed (§5, §7): a trace made before the bricks
+replays to its own bytes.
 
-**The call.** It sends one chat-completions request to the deployment the environment names. Strict structured outputs hold
-the answer to `V3AssistantPlanWire.Schema()`, which is generated from the grammar of §5. Arguments are written as an array of
-`{name, source}` there, because strict mode cannot say an optional member. `V3AssistantPlanWire.ToPlanJson` maps that array
-to the grammar's object and changes nothing else. The validator then judges the result, with no repair.
+**The call.** One chat-completions request per step of the bricks (the question call, the arbiter, the extraction), at
+temperature 0, with the step's fixed instruction, its typed input, and strict structured outputs that hold the reply to
+the step's closed form. Code reads every reply against that form, with no repair (§13).
 
 **Configuration**, from the environment only:
 - `LEX_ASSISTANT_ENDPOINT` (`https://<resource>.openai.azure.com`), `LEX_ASSISTANT_DEPLOYMENT` and
   `LEX_ASSISTANT_API_VERSION`;
 - the key, `LEX_ASSISTANT_KEY`, from a Container Apps secret, which is never logged, echoed or written;
 - `LEX_ASSISTANT_EUR_PER_MILLION_INPUT` and `LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT`, the token prices. The defaults are 5 and
-  20 EUR, a driver default. **TODO (driver):** set both from the deployment's price list.
+  20 EUR, a driver default; the deployment sets its own.
 
-**What is sent** (R33): the masked question, the answer locale, the opaque references, the search languages, the operation
-list, and the versioned system prompt `assistant-planner-prompt.md` (`lex-v3-assistant-planner-prompt/1`). The prompt
-explains the operations and the verdict vocabulary. It never asks for visible text. Nothing of the request's headers,
-address, agent or history is sent: the planner is never handed them. This is the public process's one network client, and
-`PublicRequestRecordingTests` pins it to that file.
+**What is sent** (R33): the question after masking and, beside it, only what Lex itself holds: the names of the dates
+the question writes with the words they stand for, the search languages, concepts of the dictionary, and lines of
+published law. Never an address, a user agent, a cookie or an earlier question: the bricks are
+never handed them. This is the public process's one network client, and `PublicRequestRecordingTests` pins it to that
+file.
 
 **Failure:** a timeout of about 6 s, an HTTP error (a 429 included), a refusal by the model, or an answer cut short or
-filtered. Each gives the switched-off card, and search keeps working.
+filtered. None gives the switched-off card any more: the bricks go on with what code found (§13), and the answer says
+that no model took part.
 
-**Cost:** the response's `usage` at the configured prices, counted toward the per-answer ceiling and the monthly cap.
+**Cost:** the response's `usage` at the configured prices, summed over the calls of one answer and counted toward the
+per-answer ceiling and the monthly cap.
 
-**The live gates:** `V3AssistantMountTests.TheGatesOverTheRealPlannerWhenAskedTo` runs only when
-`LEX_ASSISTANT_GATES_LIVE=1` and the deployment is configured, and never in CI.
-- It runs each drafted case five times (R40).
-- It reports quote fidelity, non-template sentences, trace replay, latency p95 and cost per ask.
-- The report goes to `LEX_ASSISTANT_GATES_REPORT` or the temporary folder, never into the repository.
-- It runs over `LEX_ASSISTANT_GATES_MOUNT` when that is set, else over the fixture.
+**The live checks**, never in CI:
+- `AzureOpenAiModelLiveTests` (`LEX_ASSISTANT_PLANNER_LIVE=1`): what the real model points at for a citation and for a
+  subject outside the dictionary, through the bricks;
+- `V3AssistantMountTests.TheGatesOverTheRealPlannerWhenAskedTo` (`LEX_ASSISTANT_GATES_LIVE=1`): each drafted case five
+  times (R40), reporting quote fidelity, non-template sentences, trace replay, latency p95 and cost per ask, to
+  `LEX_ASSISTANT_GATES_REPORT` or the temporary folder, over `LEX_ASSISTANT_GATES_MOUNT` when set, else the fixture.
 
 **The processor sentences** (drafts, shown only when the assistant is switched on):
 - the panel's line under R44's notice (`processor` in `web/scripts/assistant-panel.mjs`);
@@ -365,16 +369,40 @@ Then the switch-on release, on its exact tuple:
 ## 13. The bricks (V4, 2026-11-18): `lex-v3-assistant-plan/2` and `lex-v4-bricks/1`
 
 The owner's go of 2026-11-18 (STATUS-WEB.md). The design is `C:\lex-v3\V4-PLAN-2026-11-18.md`: Lex laid on the bricks of
-Kezhan and Angela Shi's series, insurance first. This section is the contract of what was built; everything above it
-still holds for an answer the planner model plans (§12).
+Kezhan and Angela Shi's series, insurance first. This section is the contract of what was built. No model plans any
+more: every plan a new answer runs is written by code, as a plan /2.
 
 **Where the bricks stand.** Behind the one seam, `IAssistantPlanner` (`V4BricksPlanner`, `Bricks/`). Code reads the
 question into a typed row (`V4QuestionParser`: the matching copy, the dictionary lookup, the acts named, the cues for the
 kind of answer), decides the route (`V4Dispatcher.Decide`), finds lines of the law by filters on two tables
 (`V4Retrieval` over `V4ActTables`), and writes a plan /2. A model is asked only to give each candidate it was given a
 role (the arbiter) and to point at lines it was given (the extraction); code checks every reply before use
-(`V4Generation.Validate`). A question the bricks do not answer (it cites an article, asks how the law changed, or names
-nothing of the insurance dictionary) goes to the planner of §12, unchanged.
+(`V4Generation.Validate`).
+
+**A question the tables do not read** (it cites an article, asks how the law changed, or names nothing of the insurance
+dictionary) is answered by Lex's operations, as before the bricks, but code chooses them:
+
+- **A citation code reads itself.** One article, by its number, of an act the corpus index names, on today or the one
+  date asked: code opens it (`evidence_bundle` with the act's address and the article's identifier from its own
+  tables). No model and no search (`question_call: cited`).
+- **The question call** (`V4QuestionCall`, brick C's step 6), for every other such question: the model describes the
+  question in a closed form. Per part (one, or two): what it asks, from a closed list (`article_or_act_cited`,
+  `words_on_a_subject`, `versions_of_an_act`, `record_of_an_act`, `act_on_a_date`, `two_dates_compared`,
+  `changes_in_a_period`, `exact_identifier`, `nothing_to_look_up`); the words of the question that are the citation, the
+  act or the subject, copied; the language; the name of a date, a range or a context chip; whether it is about a
+  person's own case; and, for a question on private insurance in words the dictionary lacks, the one concept of the
+  dictionary it is about. **It names no operation.** Code finds each copy in the question (as written, else under the
+  matching fold, which keeps every position) and uses the reader's own words at that place; words the question does not
+  hold are ignored, and so is a date, a range or a chip that is no reference's name. Code then maps what a part asks to
+  operations by a fixed table (`PlanJson`), makes a citation whole (the article and the act given apart are one
+  citation; a date inside an act's name never ends it), holds a range to the operation's cap, and searches the words on
+  a date only when the question asks one. When the model names a concept, the tables answer, as for any question, under
+  code's own advice boundary.
+- **No description.** With no model wired, a call that fails, or a reply outside its form, nothing is repaired and
+  nothing is asked again: code searches the reader's own words (`question_call: not_wired`, `failed` or `refused`).
+
+Such a plan is a plan /2 of route `operations`: the operations of §5, composed as §7 composes them, with the record
+below saying who read the question.
 
 **The tables** (`Bricks/`, all code, no model):
 
@@ -420,8 +448,16 @@ a case of the reader's own (je, mon, ma, mes, nous, notre, "dans mon cas"), and 
 "L'assureur peut-il résilier le contrat ?" is answered by quoting the rule; "Mon assureur peut-il résilier mon contrat ?"
 is refused as before, with the law beside it. The answer says which it did (`plan.bricks.rule_question`).
 
-**The notices.** An answer of the bricks says what a model did: `notice.no_model` when none was asked,
-`notice.model_assisted` when one ranked or pointed. `notice.assembled_by_model` stays on an answer the planner of §12 plans.
+**The notices.** Every answer says what a model did for it: `notice.no_model` when no model took part,
+`notice.model_described` when one described the question, `notice.model_assisted` when one ranked candidates or pointed
+at lines (both, when both happened). `notice.assembled_by_model` stays on a plan /1, that is, on a replay of a trace made
+before the bricks.
 
-**What leaves the server** is still the masked question, and now lines of published law with it (the candidates, the
-context), to the same deployment under the same key and deadline. Nothing of a question is stored.
+**What is counted** (the owner's decision 5 of 2026-11-18): beside the buckets of §8, the route, the concepts of the
+dictionary a question was read as, the way an answer was "not found" and the steps a model was asked for. Every key is a
+token of a closed list or an identifier of the dictionary; the reader's words are in none. The counters are in memory
+and read by no one yet.
+
+**What leaves the server** is the masked question and, with it, lines of published law (the candidates, the context),
+concepts of the dictionary and the names of the question's dates, to the same deployment under the same key and
+deadline; and nothing at all for a question code answers alone. Nothing of a question is stored.

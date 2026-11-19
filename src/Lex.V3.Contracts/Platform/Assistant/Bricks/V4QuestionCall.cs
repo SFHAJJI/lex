@@ -386,7 +386,13 @@ public static class V4QuestionCall
     /// </summary>
     /// <param name="outcome">One of <see cref="Outcomes"/>; "described" exactly when <paramref name="asked"/> is given.</param>
     /// <param name="asked">The call a model answered and its reply, or null when code described the question.</param>
-    public static string PlanJson(V3PlannerInput input, IReadOnlyList<V4DescribedPart> parts, string outcome, (V4ModelCall Call, V4ModelReply Reply, string ModelId)? asked)
+    /// <param name="readingDates">The dates of the question that are dates to read the law on (<see cref="V4Dispatcher.ReadingDates"/>); null when every date it writes is one.</param>
+    public static string PlanJson(
+        V3PlannerInput input,
+        IReadOnlyList<V4DescribedPart> parts,
+        string outcome,
+        (V4ModelCall Call, V4ModelReply Reply, string ModelId)? asked,
+        IReadOnlyCollection<string>? readingDates = null)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(parts);
@@ -462,8 +468,11 @@ public static class V4QuestionCall
             // The language is one this mount searches: the one described when it is, else the mount's first.
             var language = input.SearchLanguages.Contains(part.Language, StringComparer.Ordinal) ? part.Language : input.SearchLanguages.Count > 0 ? input.SearchLanguages[0] : "fra";
 
+            // The date a part reads the law on: a date reference the question holds, unless code reads it as part of an
+            // act's name ("law of 27 July 1997"), which is no date to read anything on; or the date chip of the last answer.
             JsonObject DateSource() =>
-                part.Date != "today" && references.TryGetValue(part.Date, out var kind) && kind is "date" or "context_date"
+                part.Date != "today" && references.TryGetValue(part.Date, out var kind) &&
+                    (kind == "context_date" || (kind == "date" && readingDates?.Contains(part.Date) != false))
                     ? new JsonObject { ["ref"] = part.Date }
                     : new JsonObject { ["today"] = true };
             var rangeName = part.Range.EndsWith(".from", StringComparison.Ordinal) ? part.Range[..^5] : part.Range.EndsWith(".to", StringComparison.Ordinal) ? part.Range[..^3] : part.Range;

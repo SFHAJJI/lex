@@ -1,12 +1,13 @@
-// How it works, first screen (the owner's brief of 2026-11-15, V5How): one real answer followed through the six stages,
-// every value read from the recorded answer (`how-answer-record.mjs`), never typed: whether anything was masked (the
-// question the trace names against the question sent), the language and the date the code read, the advice cues it found,
-// the plan the model returned and the span it points at, whether the plan ran, each operation run with its parameters,
+// How it works, first screen (the owner's brief of 2026-11-15, V5How): one real answer followed through its stages, every
+// value read from the recorded answer (`how-answer-record.mjs`), never typed: whether anything was masked (the question the
+// trace names against the question sent), the language and the date the code read, the advice cues it found, the stages
+// as the answer's own trace records them (the same rows the assistant's panel draws: which were code, which a model),
 // and the gates' counts. Data and pure functions only; `ReferencePages.jsx` lays it out with the chrome table's words.
 
+import { bricksOf, stageRows } from './assistant-panel.mjs';
 import { actTitleOf, articleNumberOf } from './law-page.mjs';
 
-/** The model a planner identity names (`azure-openai/gpt-4.1-mini/prompt-…` is `gpt-4.1-mini`), or null. */
+/** The model a planner identity names (`lex-v4-bricks/gpt-4.1-mini/prompt-…` is `gpt-4.1-mini`), or null. */
 export function plannerModel(plannerId) {
   const match = /^[^/]+\/([^/]+)\//u.exec(String(plannerId ?? ''));
   return match === null ? null : match[1];
@@ -83,22 +84,21 @@ function layout(value, column, name, width) {
 }
 
 /**
- * The six stages of one recorded answer (`record`: `{ request, envelope, act }`), as the page says them:
+ * One recorded answer (`record`: `{ request, envelope, act }`) as the page follows it, in `locale`'s words:
  *
- *   masked     the question the model was given, when it differs from the question sent; null when nothing was masked
+ *   masked     the question after masking, when it differs from the question sent; null when nothing was masked
  *   language   the answer's language, as the code read it (`fr`)
  *   date       `{ today, date }`: the date the code read (`today` when the question gives none)
  *   cues       how many advice cues the code found
- *   model      the planner's model; `span` the characters of the question the search step points at, `[from, to]`
- *   plan       the plan's steps and follow-ups as returned, as compact JSON
- *   accepted   whether the plan ran (a refused plan runs no step)
- *   runs       each operation run, in order: `{ kind: 'search', query }`, `{ kind: 'single' }` before a follow-up the search
- *              allowed, `{ kind: 'read', article, date }`, or `{ kind: 'other', operation }`
+ *   model      the model the answer's engine may ask (its planner identity names it)
+ *   rows       the answer's stages, each `{ key, name, line, model }`, exactly as the assistant's own panel reads them from
+ *              the trace (`stageRows`): the bricks' stages for an answer the tables gave, the stages of operations otherwise
  *   gates      `{ quotes, outside, notes }`: quotations, strings outside the templates, disclosures shown with the quotes
- *   answer     `{ article, shortened, identifier, anchor, date }`: the article quoted and where the text page opens it
+ *   answer     `{ kind, article, shortened, identifier, anchor, date, lines, cases }`: the first article quoted and where the
+ *              text page opens it, how many lines of the law the answer quotes and how many of them are cases of a rule
  *   act        the act's own title and its language (`fra`)
  */
-export function howAnswerStages(record) {
+export function howAnswerStages(record, locale) {
   const value = record?.envelope?.result?.value;
   const trace = value?.trace;
   if (value === undefined || value === null || trace === undefined || trace === null) throw new Error('the recorded answer carries no trace');
@@ -106,39 +106,27 @@ export function howAnswerStages(record) {
   const rendered = value.plan?.rendered ?? [];
   const dated = rendered.find((claim) => /^plan\.date_/u.test(claim.template_id ?? '')) ?? null;
   const dateFact = dated?.facts?.find((fact) => fact.kind === 'calendar_date')?.value ?? trace.today;
-  const search = trace.plan.steps.find((step) => step.operation_id === 'search') ?? null;
-  const quote = value.parts.flatMap((part) => part.blocks).find((block) => block.kind === 'quote') ?? null;
-  const runs = [];
-  for (const step of trace.steps.filter((one) => one.fired)) {
-    if (step.operation_id === 'search') runs.push({ kind: 'search', query: step.parameters.query });
-    else {
-      const followUp = trace.plan.follow_ups.find((one) => one.step_id === step.step_id) ?? null;
-      if (followUp?.condition === 'on_single_article') runs.push({ kind: 'single' });
-      if (step.operation_id === 'evidence_bundle' && typeof step.parameters.article === 'string') {
-        runs.push({ kind: 'read', article: articleNumberOf(step.parameters.article), date: step.parameters.date });
-      } else {
-        runs.push({ kind: 'other', operation: step.operation_id });
-      }
-    }
-  }
+  const quotes = value.parts.flatMap((part) => part.blocks).filter((block) => block.kind === 'quote');
+  const quote = quotes[0] ?? null;
+  const bricks = bricksOf(value);
   return Object.freeze({
     question: asked,
     masked: trace.question === asked ? null : trace.question,
     language: trace.answer_locale,
-    date: Object.freeze({ today: dated?.template_id === 'plan.date_today', date: dateFact }),
+    date: Object.freeze({ today: dated === null || dated.template_id === 'plan.date_today', date: dateFact }),
     cues: value.parts.reduce((sum, part) => sum + (part.cues?.length ?? 0), 0),
     model: plannerModel(trace.planner_id),
-    span: search?.arguments?.query?.span ?? null,
-    plan: compactJson({ steps: trace.plan.steps, follow_ups: trace.plan.follow_ups }),
-    accepted: trace.steps.some((step) => step.fired),
-    runs: Object.freeze(runs),
+    rows: stageRows(value, locale),
     gates: Object.freeze({ quotes: value.gates.quotes, outside: value.gates.non_template_strings, notes: value.gates.disclosures }),
     answer: quote === null ? null : Object.freeze({
+      kind: bricks?.answer?.kind ?? 'operations',
       article: articleNumberOf(quote.anchor),
       shortened: quote.shortened === true,
       identifier: quote.work,
       anchor: quote.anchor,
       date: quote.from,
+      lines: quotes.length,
+      cases: (bricks?.answer?.items ?? []).filter((item) => item?.role === 'case').length,
     }),
     act: Object.freeze({ title: actTitleOf(record.act.title).replace(/\.$/u, ''), language: record.act.language }),
   });

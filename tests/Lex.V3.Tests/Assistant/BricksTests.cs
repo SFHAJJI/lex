@@ -616,7 +616,8 @@ public sealed class BricksTests
         }
 
         StringAssert.Contains(model.Calls[0].System, "has already identified the line that states the general rule");
-        CollectionAssert.AreEqual(new[] { "art_39", "art_22", "art_13" }, dossier.Quotes.Select(static quote => quote.Anchor).ToArray());
+        CollectionAssert.AreEqual(new[] { "art_39", "art_13", "art_22", "art_34", "art_41" }, dossier.Quotes.Select(static quote => quote.Anchor).ToArray(),
+            "the model pointed at two cases; the lines that state a case in the same direct form are cases too, and code adds them, in the order of the text");
         CollectionAssert.Contains(dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), V3AnswerTemplates.NoticeModelAssisted);
         var lines = dossier.PlanLines.Select(static line => line.TemplateId).ToArray();
         CollectionAssert.Contains(lines, V3AnswerTemplates.PlanBricksModelExtraction);

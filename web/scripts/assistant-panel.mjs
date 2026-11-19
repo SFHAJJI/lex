@@ -46,7 +46,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
       'This is an automated assistant that shows published legal texts. It does not give legal advice or apply the law to your situation. Do not type names, health details or other personal details.',
     preview: 'Preview: not yet reviewed by a lawyer or by independent annotators.',
     processor:
-      'Your question, with the e-mail addresses, phone numbers, bank account numbers and identity numbers that Lex\'s code recognises removed, is sent to Microsoft\'s Azure OpenAI service (EU data zone), which plans which of Lex\'s operations to run; nothing else about you is sent. Microsoft does not use it to train models; for abuse monitoring, Microsoft may keep it for up to 30 days. Lex keeps nothing.',
+      'Your question, with the e-mail addresses, phone numbers, bank account numbers and identity numbers that Lex\'s code recognises removed, is sent to Microsoft\'s Azure OpenAI service (EU data zone), which describes the question or marks lines of law that Lex\'s code found, unless Lex\'s code answers it alone; nothing else about you is sent. Microsoft does not use it to train models; for abuse monitoring, Microsoft may keep it for up to 30 days. Lex keeps nothing.',
     inputLabel: 'Your question',
     submit: 'Ask',
     contextLabel: 'Kept from your last answer',
@@ -116,7 +116,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     workTime: 'Time: {seconds} s',
     workCost: 'Cost: about {cost} € a question',
     rawPlan: 'Raw plan',
-    workPlanner: 'Planner: {planner}',
+    workPlanner: 'Engine: {planner}',
     workRegistry: 'MLflow registry: {model}, version {version}',
     // No version of the build that answered is in this page's copy of the registry: it is registered when it is put live.
     workRegistryNone: 'MLflow registry: {model} (this build is registered when it is put live)',
@@ -134,7 +134,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockExampleThree: 'What does Article 5 of the GDPR say?',
     dockExampleThreeCaption: 'an article of an EU regulation',
     dockDoes: 'What it does.',
-    dockDoesText: 'One AI model call plans the search. Code checks the plan, runs it and writes the answer from the text.',
+    dockDoesText: 'Code reads your question, finds the lines of the text and writes the answer from them. An AI model may describe a question or rank passages; it writes nothing you read.',
     dockDoesNot: 'What it does not do.',
     dockDoesNotText: 'It gives no advice on your situation, and when it does not find the article it says so.',
     dockHowLink: 'How an answer is built, with the measured results',
@@ -238,6 +238,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockNoModelUsed: 'No AI model took part in this answer.',
     dockQuestionDescribed: 'described by an AI model: {asks}',
     dockQuestionByCode: 'read by code alone: your words are searched as written',
+    dockQuestionCited: 'read by code alone: the act and the article you cite',
     dockAsksCited: 'an article or an act is cited',
     dockAsksSubject: 'words on a subject',
     dockAsksVersions: 'the versions of an act',
@@ -273,7 +274,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
       'Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.',
     preview: 'Phase d’essai : l’assistant n’a pas encore été examiné par un avocat ni par des annotateurs indépendants.',
     processor:
-      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui planifie les opérations de Lex à exécuter ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours. Lex ne conserve rien.',
+      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui indique ce qu’elle demande ou désigne des lignes de loi que le code de Lex a trouvées, sauf si le code de Lex y répond seul ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours. Lex ne conserve rien.',
     inputLabel: 'Votre question',
     submit: 'Demander',
     contextLabel: 'Repris de la dernière réponse',
@@ -340,7 +341,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     workTime: 'Temps : {seconds} s',
     workCost: 'Coût : environ {cost} € par question',
     rawPlan: 'Plan brut',
-    workPlanner: 'Planificateur : {planner}',
+    workPlanner: 'Moteur : {planner}',
     workRegistry: 'Registre MLflow : {model}, version {version}',
     workRegistryNone: 'Registre MLflow : {model} (ce déploiement est enregistré à sa mise en service)',
     dockPreview: 'aperçu, pas un conseil juridique',
@@ -354,7 +355,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockExampleThree: 'Que dit l’article 5 du RGPD ?',
     dockExampleThreeCaption: 'un article d’un règlement de l’UE',
     dockDoes: 'Ce qu’il fait.',
-    dockDoesText: 'Un appel à un modèle d’IA planifie la recherche. Le code vérifie le plan, l’exécute et écrit la réponse à partir du texte.',
+    dockDoesText: 'Le code lit votre question, trouve les lignes du texte et en tire la réponse. Un modèle d’IA peut décrire une question ou classer des passages\u00A0; il n’écrit rien de ce que vous lisez.',
     dockDoesNot: 'Ce qu’il ne fait pas.',
     dockDoesNotText: 'Il ne donne aucun conseil sur votre situation et, quand il ne trouve pas l’article, il le dit.',
     dockHowLink: 'Comment une réponse est construite, avec les résultats mesurés',
@@ -458,6 +459,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockNoModelUsed: 'Aucun modèle d’IA n’a contribué à cette réponse.',
     dockQuestionDescribed: 'décrite par un modèle d’IA\u00A0: {asks}',
     dockQuestionByCode: 'lue par le code seul\u00A0: vos mots sont cherchés tels quels',
+    dockQuestionCited: 'lue par le code seul\u00A0: l’acte et l’article que vous citez',
     dockAsksCited: 'un article ou un acte est cité',
     dockAsksSubject: 'des mots sur un sujet',
     dockAsksVersions: 'les versions d’un acte',
@@ -798,7 +800,7 @@ export function questionCallOf(dossier) {
   const bricks = dossier?.trace?.plan?.bricks;
   if (!isObject(bricks) || bricks.route !== 'operations') return null;
   const asks = (Array.isArray(bricks.described) ? bricks.described : []).map((part) => part?.asks).filter((value) => typeof value === 'string');
-  const outcome = ['described', 'not_wired', 'failed', 'refused'].includes(bricks.question_call) ? bricks.question_call : 'not_wired';
+  const outcome = ['described', 'not_wired', 'failed', 'refused', 'cited'].includes(bricks.question_call) ? bricks.question_call : 'not_wired';
   return Object.freeze({ outcome, asks: Object.freeze(outcome === 'described' ? asks : []) });
 }
 
@@ -809,7 +811,7 @@ export function builtNote(dossier, rows, locale) {
   if (bricksOf(dossier) === null && call === null) return copy.dockPlanNote;
   if (rows.some((row) => row.model && row.key !== 'question')) return copy.dockBricksNote;
   if (rows.some((row) => row.model)) return copy.dockDescribedNote;
-  return call === null || call.outcome === 'not_wired' ? copy.dockBricksNoModel : copy.dockNoModelUsed;
+  return call === null || call.outcome === 'not_wired' || call.outcome === 'cited' ? copy.dockBricksNoModel : copy.dockNoModelUsed;
 }
 
 /** A quotation's lines: its text cut where a line of the law starts (`breaks`), each trimmed; one line when it has none. */
@@ -913,9 +915,9 @@ export function searchedWords(dossier, question) {
 
 /** The plan in a few words, from its operations (`plannedOperations`): "search, then read the article". */
 function planLine(trace, copy) {
-  const said = plannedOperations(trace).map(({ operation, followUp }) => {
+  const said = plannedOperations(trace).map(({ operation, followUp, article }) => {
     if (operation === 'search') return copy.dockOpSearch;
-    if (operation === 'evidence_bundle') return followUp ? copy.dockOpRead : copy.dockOpText;
+    if (operation === 'evidence_bundle') return followUp || article ? copy.dockOpRead : copy.dockOpText;
     if (operation === 'as_of') return copy.dockOpText;
     if (operation === 'dossier' || operation === 'timeline') return copy.dockOpVersions;
     if (operation === 'article_history') return copy.dockOpHistory;
@@ -966,7 +968,7 @@ export function stageRows(dossier, locale) {
         name: copy.dockStageQuestion,
         line: call.outcome === 'described' && call.asks.length > 0
           ? fill(copy.dockQuestionDescribed, { asks: call.asks.map((asks) => asked[asks] ?? copy.dockAsksSubject).join(copy.dockAsksAnd) })
-          : copy.dockQuestionByCode,
+          : call.outcome === 'cited' ? copy.dockQuestionCited : copy.dockQuestionByCode,
         model: call.outcome === 'described' && call.asks.length > 0,
       }),
       Object.freeze({ key: 'route', name: copy.dockStageRoute, line: planLine(trace, copy), model: false }),

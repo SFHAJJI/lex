@@ -371,7 +371,7 @@ function Stage({ index, name, model, sentence, children, stage }) {
 }
 
 /**
- * How it works, first screen (V5How): on the left the recorded answer (`how-answer-record.mjs`) through its six stages, each
+ * How it works, first screen (V5How): on the left the recorded answer (`how-answer-record.mjs`) through its stages, each
  * value read from the answer, and the answer itself with the link that opens it on the text page; on the right the test
  * questions' outcomes, the held-out result, the time and cost per answer, and the decisions with what each costs.
  */
@@ -379,25 +379,35 @@ function FirstScreen({ values }) {
   const copy = liveChrome();
   const page = copy.evidence;
   const decisions = copy.decisions;
-  const stages = howAnswerStages(HOW_ANSWER_RECORD);
+  const stages = howAnswerStages(HOW_ANSWER_RECORD, CHROME_LOCALE);
   const run = EVALUATION_RECORD.dev;
   const asked = stages.language === 'fr' || stages.language === 'en' || stages.language === 'de' ? stages.language : undefined;
-  const statute = stages.act.language === 'fra' ? 'fr' : undefined;
   const words = (text) => <span lang={asked}>{text}</span>;
-  const parse = [
+  // What each stage's record shows under its own line: what the code read of the question, and the gates' counts.
+  const read = [
     say(page.parseLanguage, { language: page.languages[stages.language] ?? stages.language }),
     stages.date.today ? say(page.parseToday, { date: numericDate(stages.date.date) }) : say(page.parseDate, { date: numericDate(stages.date.date) }),
     stages.cues === 0 ? page.parseNoCues : say(page.parseCues, { count: count(stages.cues) }),
-  ].join('\n');
-  const runs = stages.runs.map((one, index) => {
-    const line = one.kind === 'search' ? <Say template={page.runSearch} values={{ query: words(one.query) }} />
-      : one.kind === 'single' ? `  ${page.runSingle}`
-        : one.kind === 'read' ? <Say template={page.runRead} values={{ article: one.article, title: <span lang={statute}>{stages.act.title}</span>, date: numericDate(one.date) }} />
-          : say(page.runOther, { operation: one.operation });
-    return <Fragment key={index}>{index > 0 ? '\n' : null}{line}</Fragment>;
-  });
+  ];
+  const checked = [
+    say(page.composeQuotes, { count: count(stages.gates.quotes) }),
+    say(page.composeOutside, { count: count(stages.gates.outside) }),
+    say(page.composeNotes, { count: count(stages.gates.notes) }),
+  ];
+  const recordOf = (row) => (row.key === 'masking' ? (stages.masked === null ? page.maskNone : <Say template={page.maskDone} values={{ question: words(stages.masked) }} />)
+    : row.key === 'question' ? [row.line, ...read].join('\n')
+      : row.key === 'checks' || row.key === 'composer' ? checked.join('\n')
+        : row.line);
+  const sentenceOf = (row) => (row.key === 'masking' ? page.maskText
+    : row.model ? `${page.stageTexts[row.key] ?? ''} ${say(page.modelLine, { model: stages.model })}`.trim()
+      : page.stageTexts[row.key] ?? '');
   const answer = stages.answer;
   const open = answer === null ? null : textHref({ identifier: answer.identifier, article: answer.anchor }, CHROME_LOCALE);
+  const statute = stages.act.language === 'fra' ? 'fr' : undefined;
+  const answerSentence = answer === null ? null
+    : answer.kind === 'rule' ? <Say template={page.answerRule} values={{ article: answer.article, cases: count(answer.cases), title: <span lang={statute}>{stages.act.title}</span> }} />
+      : answer.kind === 'operations' ? say(answer.shortened ? page.answerPart : page.answerFull, { article: answer.article })
+        : say(page.answerLines, { count: count(answer.lines) });
   return (
     <div className="lx-how-first">
       <div className="lx-how-flow" data-reference-section="answer">
@@ -405,35 +415,16 @@ function FirstScreen({ values }) {
         <p className="lx-how-intro">{page.answerIntro}</p>
         <p className="lx-how-bubble" lang={asked}>{stages.question}</p>
         <ol className="lx-how-stages" data-recorded={HOW_ANSWER_RECORD.recordedAt}>
-          <Stage index="1" stage="mask" name={page.stages.mask} sentence={page.maskText}>
-            {stages.masked === null ? page.maskNone : <Say template={page.maskDone} values={{ question: words(stages.masked) }} />}
-          </Stage>
-          <Stage index="2" stage="parse" name={page.stages.parse} sentence={page.parseText}>{parse}</Stage>
-          <Stage
-            index="3"
-            stage="plan"
-            name={page.stages.plan}
-            model
-            sentence={`${say(page.modelLine, { model: stages.model })}${stages.span === null ? '' : ` ${say(page.planSpan, { from: count(stages.span[0]), to: count(stages.span[1]) })}`}`}
-          >
-            {stages.plan}
-          </Stage>
-          <Stage index="4" stage="check" name={page.stages.check} sentence={page.checkText}>{stages.accepted ? page.checkAccepted : page.checkRejected}</Stage>
-          <Stage index="5" stage="run" name={page.stages.run} sentence={page.runText}>{runs}</Stage>
-          <Stage index="6" stage="compose" name={page.stages.compose} sentence={page.composeText}>
-            {[
-              say(page.composeQuotes, { count: count(stages.gates.quotes) }),
-              say(page.composeOutside, { count: count(stages.gates.outside) }),
-              say(page.composeNotes, { count: count(stages.gates.notes) }),
-            ].join('\n')}
-          </Stage>
+          {stages.rows.map((row, at) => (
+            <Stage key={row.key} index={String(at + 1)} stage={row.key} name={row.name} model={row.model} sentence={sentenceOf(row)}>{recordOf(row)}</Stage>
+          ))}
         </ol>
         {answer === null ? null : (
           <div className="lx-how-answer" data-answer="">
             <span className="lx-how-n" aria-hidden="true" />
             <p className="lx-how-answer-label">{page.answerLabel}</p>
             <p className="lx-how-body">
-              {say(answer.shortened ? page.answerPart : page.answerFull, { article: answer.article })}
+              {answerSentence}
               {' '}
               {open === null ? null : <a href={open} data-open-answer="">{page.answerOpen}</a>}
             </p>
@@ -511,7 +502,7 @@ export function EvidenceBody() {
         </Block>
         <Block id="architecture" heading={page.architectureHeading} wide>
           <p className="lx-how-lane">{page.questionLane}</p>
-          <Flow name="question" steps={page.questionSteps} accent="plan" />
+          <Flow name="question" steps={page.questionSteps} accent="rank" />
           <p className="lx-how-lane">{page.releaseLane}</p>
           <Flow name="release" steps={page.releaseSteps} accent="owner" />
           <p className="lx-how-line">{page.hosting}</p>

@@ -93,8 +93,9 @@ public static class V4Bricks
 
         // With no description from a model (none is wired, the call failed, its reply left its closed form), nothing is
         // repaired and nothing is asked again: code searches the reader's own words, and the answer says no model took part.
+        var readingDates = V4Dispatcher.ReadingDates(row, input.Dates).Select(static date => date.Ref).ToList();
         V4PlanOutcome ReadByCode(string outcome, long cost) =>
-            new(V4QuestionCall.PlanJson(planner, V4QuestionCall.ByCode(planner, row), outcome, null), cost, own.Reason + "+question_" + outcome);
+            new(V4QuestionCall.PlanJson(planner, V4QuestionCall.ByCode(planner, row), outcome, null, readingDates), cost, own.Reason + "+question_" + outcome);
 
         if (model is null)
         {
@@ -146,7 +147,7 @@ public static class V4Bricks
             parts = parts.Select(static part => part.Asks == "act_on_a_date" ? part with { Asks = "words_on_a_subject", Words = part.Words ?? part.Act, Act = null } : part).ToList();
         }
 
-        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", (call, reply, model.ModelId)), reply.CostMicroEuros, "route:operations");
+        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", (call, reply, model.ModelId), readingDates), reply.CostMicroEuros, "route:operations");
     }
 
     /// <summary>
@@ -305,8 +306,14 @@ public static class V4Bricks
         {
             var concepts = row.Concepts.Count > 0 ? row.Concepts.Select(static read => read.Concept).ToList() : row.Roles.Select(static read => read.Concept).ToList();
             var role = row.Concepts.Count > 0 ? row.Roles.FirstOrDefault()?.Concept : null;
-            var brief = new V4Brief(concepts, role, decision.Kind, row.Concepts.Concat(row.Roles).Select(static read => read.Keyword).ToList(),
-                row.Unmatched.Select(unmatched => row.Folded[unmatched.Start..unmatched.End]).ToList());
+            // The keywords the question used: the one the lookup read each concept by, and every other word of the same
+            // concept the question also writes ("assurance sur la vie" and "erreur sur l'âge" in one question).
+            var used = row.Concepts.Concat(row.Roles).Select(static read => read.Keyword)
+                .Concat(row.Concepts.SelectMany(read => dictionary.KeywordsOf(read.Concept, "law", "reader")).Where(keyword => keyword.Key.In(row.Words)).Select(static keyword => keyword.Row))
+                .Distinct()
+                .ToList();
+            var brief = new V4Brief(concepts, role, decision.Kind, used,
+                row.Unmatched.Select(unmatched => row.Folded[unmatched.Start..unmatched.End]).ToList(), row.Words);
             retrieval = V4Retrieval.Run(brief, tables, dictionary);
             draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", retrieval.Candidates.Count == 0 ? "no_candidate" : "candidates_found"));
             AssembleByCode(draft, decision, retrieval, row, dictionary);
@@ -834,6 +841,42 @@ public static class V4Bricks
             }
 
             kept.Add(item);
+        }
+
+        if (pinnedRule is not null)
+        {
+            // A line that states a case in the direct form of the rule asked ("l'assureur peut résilier le contrat", in an
+            // article of its own) is a case whether or not the model pointed at it: code is sure of the form, and a model
+            // that names two cases of five has not listed the cases. The cases are then shown in the order of the text.
+            foreach (var candidate in supporting.Where(static candidate => candidate.Detectors.Contains("direct_form")))
+            {
+                if (kept.Count >= V3AssistantPipeline.MaximumQuotes)
+                {
+                    break;
+                }
+
+                if (!kept.Any(item => item.Line.Article == candidate.Line.Article))
+                {
+                    kept.Add(new V4Generation.Checked(candidate.Line, "case", null));
+                }
+            }
+
+            kept = kept.Where(static item => item.Role != "case")
+                .Concat(kept.Where(static item => item.Role == "case").OrderBy(item => tables.Article(item.Line.Article)!.Position).ThenBy(static item => item.Line.Index))
+                .ToList();
+        }
+
+        if (kind is "duration" or "amount" && shortlist.Count > 0)
+        {
+            // The line code itself ranks first, under a heading that names what is asked and with a value of the kind asked
+            // written on it, is quoted whether or not the model pointed at it: the general rule is said before a special
+            // regime, and a model that prefers the special one has not answered the question asked. Two values are then
+            // shown as two, each with its article (several_by_scope).
+            var lead = shortlist[0];
+            if (lead.Values.Count > 0 && lead.Detectors.Contains("keyword") && lead.Detectors.Contains("title") && kept.All(item => item.Line.Id != lead.Line.Id))
+            {
+                kept.Insert(0, new V4Generation.Checked(lead.Line, "value", lead.Values[0]));
+            }
         }
 
         if (draft.AnswerKind == "text")

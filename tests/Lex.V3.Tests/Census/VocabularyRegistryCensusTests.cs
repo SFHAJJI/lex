@@ -124,19 +124,21 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation: ArbiterReasons=11, "
-                    + "ArbiterRoles=4, Fragments=6, ModelCaveats=3, const ArbiterPrompt, "
+                    + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const ArbiterPrompt, "
                     + "const ExtractionBase, static property ArbiterSchema, "
                     + "static property ExtractionSchema, static property PromptsSha256",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Patterns: const Number, "
                     + "const NumberWords, const Tens, const Units",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionCall: Asks=9, Outcomes=5, "
+                    + "TitleOpeners=11, const Prompt, static property PromptSha256",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionParser: GreetingWords=28, "
                     + "StopWords=135",
-                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval: Modals=12",
-                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Text: Table=592",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval: Modals=22",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Text: Table=592, const LatinBases",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerGates: ConsolidatedKinds=3",
-                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=272, "
-                    + "Definitions=136, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=272, "
-                    + "Ids=136, LanguageCodes=4, const AbsenceActNotHeld, "
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=274, "
+                    + "Definitions=137, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=274, "
+                    + "Ids=137, LanguageCodes=4, const AbsenceActNotHeld, "
                     + "const AbsenceNoAnswerInLines, const AbsenceSweepHeading, "
                     + "const AbsenceTermCount, const AbsenceTermsNowhere, const AbsenceTextNotHeld, "
                     + "const AbsenceWordsNotFound, const ActionCandidate, const ActionOpenWork, "
@@ -167,23 +169,23 @@ public sealed class VocabularyRegistryCensusTests
                     + "const LawIntervalLu, const LawIntervalLuOpen, const LawOfficialSource, "
                     + "const LawPermalink, const LawQuoteHeading, const LawQuoteShortened, "
                     + "const NoteLawTerm, const NoteWordNotInAct, const NoticeAssembledByModel, "
-                    + "const NoticeInput, const NoticeModelAssisted, const NoticeNoModel, "
-                    + "const NoticeNotLegalAdvice, const NoticePreview, const PlanArticleHistory, "
-                    + "const PlanAsOf, const PlanBricksDetectorCooccurrence, "
-                    + "const PlanBricksDetectorKeyword, const PlanBricksDetectorTitle, "
-                    + "const PlanBricksDetectorTypePattern, const PlanBricksKindAmount, "
-                    + "const PlanBricksKindDate, const PlanBricksKindDefinition, "
-                    + "const PlanBricksKindDuration, const PlanBricksKindList, "
-                    + "const PlanBricksKindReference, const PlanBricksKindRule, "
-                    + "const PlanBricksKindText, const PlanBricksModelArbiter, "
-                    + "const PlanBricksModelExtraction, const PlanBricksModelNone, "
-                    + "const PlanBricksModelQuestion, const PlanBricksModelUnavailable, "
-                    + "const PlanBricksPassRetry, const PlanBricksPassSweepCases, "
-                    + "const PlanBricksPassWider, const PlanBricksRouteDefinition, "
-                    + "const PlanBricksRouteFact, const PlanBricksRuleQuestion, "
-                    + "const PlanBricksScope, const PlanBricksTerm, const PlanChangesInPeriod, "
-                    + "const PlanDateToday, const PlanDiff, const PlanDossier, "
-                    + "const PlanEvidenceBundle, const PlanEvidenceBundleArticle, "
+                    + "const NoticeInput, const NoticeModelAssisted, const NoticeModelDescribed, "
+                    + "const NoticeNoModel, const NoticeNotLegalAdvice, const NoticePreview, "
+                    + "const PlanArticleHistory, const PlanAsOf, "
+                    + "const PlanBricksDetectorCooccurrence, const PlanBricksDetectorKeyword, "
+                    + "const PlanBricksDetectorTitle, const PlanBricksDetectorTypePattern, "
+                    + "const PlanBricksKindAmount, const PlanBricksKindDate, "
+                    + "const PlanBricksKindDefinition, const PlanBricksKindDuration, "
+                    + "const PlanBricksKindList, const PlanBricksKindReference, "
+                    + "const PlanBricksKindRule, const PlanBricksKindText, "
+                    + "const PlanBricksModelArbiter, const PlanBricksModelExtraction, "
+                    + "const PlanBricksModelNone, const PlanBricksModelQuestion, "
+                    + "const PlanBricksModelUnavailable, const PlanBricksPassRetry, "
+                    + "const PlanBricksPassSweepCases, const PlanBricksPassWider, "
+                    + "const PlanBricksRouteDefinition, const PlanBricksRouteFact, "
+                    + "const PlanBricksRuleQuestion, const PlanBricksScope, const PlanBricksTerm, "
+                    + "const PlanChangesInPeriod, const PlanDateToday, const PlanDiff, "
+                    + "const PlanDossier, const PlanEvidenceBundle, const PlanEvidenceBundleArticle, "
                     + "const PlanFollowUpSingleArticle, const PlanFollowUpSingleWork, "
                     + "const PlanHeading, const PlanResolve, const PlanSearch, "
                     + "const PlanSearchDated, const PlanSplit, const PlanTimeline, "
@@ -204,8 +206,6 @@ public sealed class VocabularyRegistryCensusTests
                     + "DateSources=2, FollowUpOperations=5, Grammar=9, IdentifierSources=3, "
                     + "RangeSources=1, ResultOnly=1, SpanOnly=1, AllowedOperations=9, const Schema, "
                     + "const Schema2",
-                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanWire: FollowUpOperations=5, "
-                    + "StepOperations=7, const SchemaName",
                 "Lex.V3.Contracts.Platform.Assistant.V3HandoffRegistry: Bytes=2566, Entries=4, "
                     + "const Resource, const Schema, const SchemaResource, static property Sha256",
                 "Lex.V3.Contracts.Platform.V3ClaimTemplates: ByIdValue=4, All=4, "
