@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -36,10 +36,11 @@ freeze of 2026-11-14 on the engine, the planner prompt, the templates and the se
   the disclosures, the gates and the replay are the existing ones; a quote of one line passes `QuoteBound` unchanged.
 - **Working checklist** (updated as slices land): [x] bricks library and dictionary; [x] plan /2, extracts, new wordings (EN,
   FR, the French reviewed by an independent AI reviewer); [x] corpus adapter and the bricks planner in the API; [x] the
-  advice boundary narrowed (decision 4); [x] model calls: the arbiter, the extraction; [ ] the question call in place of the
-  planner for the questions the bricks do not answer, and the old planner retired; [x] the dock's answer card; [ ] How it
+  advice boundary narrowed (decision 4); [x] model calls: the arbiter, the extraction; [x] the question call in place of the
+  planner for the questions the bricks do not answer, and the old planner retired; [x] the dock's answer card; [x] How it
   works, the privacy notice and the Developers page rewritten for V4; [x] lex-eval: the insurance set (79 questions, each
-  expectation checked against the law's text); [ ] the 56 again, the ladder; [ ] release, gate, live.
+  expectation checked against the law's text); [x] the 56 again, against the live baseline, and the held-out 15; [ ]
+  release, gate, live.
 
 ### Slice 1 (2026-11-18, `api/v4-bricks`): the bricks answer insurance questions; the planner keeps the rest
 
@@ -112,6 +113,125 @@ and How it works, the privacy notice and the Developers page are rewritten for w
 - Public sentences changed: two new notices (`notice.no_model`, `notice.model_assisted`) and 54 other wordings; the list is
   `V3AnswerTemplates.cs` under "The bricks (V4)". How it works, the privacy notice and the Developers page still describe
   the planner alone; they are rewritten with the next slice, before anything is released.
+
+### Slice 2 (2026-11-19, `api/v4-bricks`): no model plans any more
+
+**What is built** (`docs/ANSWER-DOSSIER-1.md` §12 and §13 are the contract; `docs/ARCHITECTURE.md` is the page a reader
+starts from):
+
+- **The question call in place of the planner** (`V4QuestionCall`, brick C's step 6). A question the tables do not read is
+  described by the model in a closed form: what each part asks (nine kinds, none of them an operation), the words of the
+  question that are the citation, the act or the subject, copied, the language, the name of a date, a range or a chip,
+  whether it is a person's own case, and one concept of the dictionary when the question is on insurance in words the
+  dictionary lacks. Code finds each copy in the question and uses the reader's own words at that place, maps what a part
+  asks to operations by a fixed table, and writes a plan /2 of route `operations` that the existing composer lays out.
+  When the model names a concept, the tables answer, as for any question.
+- **The planner is retired:** `assistant-planner-prompt.md`, `V3AssistantPlanWire` and the planner's call are removed with
+  their tests. `AzureOpenAiModel` (the renamed class, still the one network client of the public process) only answers the
+  bricks' three calls. A plan /1 is still read, validated and composed, so a trace made before the bricks replays to its
+  bytes.
+- **A citation code reads itself** (ours, the fast path of a reference): one article, by its number, of an act the corpus
+  index names ("Que dit l'article 39 de la loi sur le contrat d'assurance ?", in French or in English) is opened by code.
+  No model, no search, about 0.2 s.
+- **No description is not the end:** with no model wired, a call that fails or a reply outside its form, code searches the
+  reader's own words and the answer says that no model took part (`notice.no_model`); when a model was asked and gave
+  nothing usable, the answer's plan says that too (`plan.bricks.model.question_unavailable`). The switched-off card is no
+  longer what a model's failure gives.
+- **What every answer says of the model:** `notice.no_model`, `notice.model_described` (new) or `notice.model_assisted`,
+  and both of the last two when both happened. The record says which lines code added to those a model pointed at.
+- **The site says what the engine does:** How it works follows one recorded answer through its own stages (the same rows
+  the assistant's panel reads from the trace: `how-answer.mjs` now reads `stageRows`), the architecture strip, the system
+  card, the decisions' card on the model ("Code first; a model only where code cannot decide"), the limits, the
+  Developers page's `ask`, the panel's processor line and the privacy notice's processor sentence (what is sent, and that a
+  question code answers alone is not sent), and one dated line under "Continuous improvement" (18/11: two insurance
+  questions of a reader got no answer; 19/11: the engine rebuilt). The legal texts' date is 19/11/2026. French: four
+  rounds by an independent AI reviewer (50 sentences, 3 changed; 6, 1 changed; 4, 1 changed; 1, changed), applied byte
+  for byte.
+- **Counted, never kept** (decision 5): the route, the concepts read, the kind of absence and the model steps, as tokens
+  of closed lists, in memory. No endpoint reads them yet.
+
+**What the real model and the evaluations showed that no unit test had** (each now has its test and its rule in code):
+
+1. Asked for positions, the model counted badly ("si l'ac" for a span) and wrote a span of no length for "none": the
+   reader then refused the whole description. The description now copies the reader's words and code finds them; what
+   cannot be used is read as absent.
+2. The model gave the article and the act apart, and stopped a citation at the date in the act's name. Two rules of code
+   make a citation whole.
+3. A search with a date takes about 28 s on the live site today (measured on Release 14: "période d'essai" with today's
+   date, 28 s; without a date, the same search answers in about 2 s). A plan now gives a search a date only when the
+   question asks one, and a date inside an act's name is not one. **The slow dated search is the engine's own and is not
+   corrected here** (recorded for the owner below).
+4. The model pointed at a special regime (life insurance, art. 105) where code's own first line was the general rule
+   (art. 22): the line code ranks first under the heading asked, with a value of the kind asked, is now always quoted.
+5. For a rule, the model named two cases of five: a line that states a case in the direct form of the rule asked is a
+   case whether or not the model pointed at it.
+6. A question that writes an article's heading out whole ("erreur sur l'âge de l'assuré") got the neighbouring article:
+   the heading a question writes out is a detector of its own, and of two headings written out, the one the act writes
+   least is what is asked.
+7. **The advice boundary.** The release gate's set caught an English question on the reader's own case answered ("My
+   insurer says my claim is time-barred, is it right?": the dictionary reads "time-barred", and no cue of R15 is in it).
+   Before the bricks the planner's own judgement refused it. Now: a question that carries a mark of the reader's own case
+   and no cue is shown to the model, as before, and a part it calls a person's case is refused with the law beside it;
+   the reader as the subject of the question's own verb ("suis-je couvert ?") is refused by code; with no model to ask,
+   such a question is refused too.
+8. A question on DORA was answered with article 26 of the insurance law ("notification", "incidents"): a question that
+   names an act of another domain (an acronym in capitals that no table reads, a code, an EU instrument by its number,
+   an act named by its date) is not the tables'.
+9. **The held-out run was first scored 11 wrong of 15.** The held-out file writes an article as its number and an answer
+   carries the publisher's anchor ("26", "art_26"): the scorer now reads both as the article (lex-eval, with its test).
+   Asked again on the same build: 10 right of 15, 1 wrong.
+10. That one wrong answer had read only a branch of insurance. A general rule was written from that result, without
+    reading the question: a branch read alone, beside words no table reads, is not answered by the tables. **The
+    held-out set is therefore spent**, the page says so, and a new one is an owner item.
+11. That rule's first form cost one right answer of the release gate's set on the next build ("La personne lésée
+    a-t-elle un droit propre contre l'assureur de responsabilité ?": the dictionary reads "droit propre", a key of
+    liability insurance, and the rule took "responsabilité", a word of the branch's own name, for a foreign word). A
+    word of the read concept's own keys is no foreign word; the question is now a test.
+12. One unit test in four full runs failed on a loaded machine: a pattern's match, bounded at 250 ms, was held that long
+    by the machine and its timeout failed the whole answer (the switched-off card on the site). One bound of two
+    seconds now holds for every pattern of the assistant (`V4Text.PatternTimeout`): it still stops a pattern that
+    would not end on a hostile question, and a stall is no longer one.
+
+**Measures** (this PC, the local server on mount d4, the real model gpt-4.1-mini, 2026-11-19; the runs are in
+`C:\lex-v3\lex-eval\runs` and `C:\lex-v3\lex-eval-heldout\runs`):
+
+- The insurance set (79 questions, each expecting a line of the law):
+  `20261119-v4-final-insurance` (each asked once): 64 right, 0 wrong, 0 not found, 15 rightly handled without an
+  article, 0 wrongly handled, 0 errors; verdict right on 1.000, the right line on 1.000 of those that expect one; 126
+  quotations all verified; p50 0.54 s, p95 4.69 s.
+- The 56 development questions, the release gate's set, against `baselines/live.jsonl` (what the live releases passed):
+  `20261119-v4-final-dev`: 36 right articles (17 on the live baseline), 0 wrong, 10 not found, 1 refused by mistake, 9
+  rightly handled without an article, 0 errors; every gate passed (no wrong article on the insurance suite, no case
+  the baseline passed failing, 64 quotations all verified, no sentence outside the templates); asked twice, the same
+  verdict 1.000 and the same plan 0.820; p50 2.12 s, p95 4.26 s.
+- The 15 held-out questions, before any rule was written from them (`20261119-v4-local-unseen`):
+  10 right of 15 (none on the live site), 1 wrong (ho-09), 3 not found, 1 refused by mistake, p50 2.4 s; the run was
+  first scored 11 wrong by the scorer's own defect (item 9).
+
+**Driver decisions (reversible), recorded here:**
+
+- The advice boundary of a question the tables answer is code's own (its cues and the marks of a case of the reader's
+  own, decision 4(i)); item 7 above is how a mark with no cue is judged. On the operations path a part the model calls a
+  person's case is refused, as before.
+- `how-answer.mjs` reads the stage rows from the assistant panel's module; the test that keeps the hidden panel out of
+  other pages names it, and the test after it still holds every built page to carrying no panel and no control.
+- The web tests' sample answers are a module the engine's own test writes and checks
+  (`web/scripts/bricks-answers-record.mjs`, `BricksTests.TheAnswersTheWebsTestsDrawAreTheEnginesOwn`).
+- The record on How it works is an answer of the release candidate on this PC, said so in the file; it is recorded again
+  from the live site after the release. The page's measured figures in this release are the candidate's runs on this PC
+  (same code, data and model); the live runs replace them at the next release.
+- lex-eval: a request with no answer in 30 s is an error of that case and the run goes on (it stopped the whole run).
+
+**Owner items this slice raises** (taken as recommended, on the owner's standing go; each is reversible):
+
+- **Public and legal sentences changed:** the privacy notice's sentence on the assistant's processor (what is sent and
+  why; a question code answers alone is not sent), the panel's processor line, How it works, the decisions' card on the
+  model, the Developers page's `ask`. The owner reads them on the candidate's screenshots.
+- **A new held-out set**, written by someone who has not seen the dictionary (the present one is spent, item 10).
+- **The dated search's 28 seconds** on the live site (any search with a date, Release 14 included) is a defect of the
+  search, for the data lane's next slice.
+- **The dictionary's first rows** are still to be confirmed by the owner, and a person who knows insurance law named
+  (decision 1). The EU insurance texts are still not held (decision 6).
 
 ## Release 14 is live on the owner's exception to the promotion gate (sole driver, 2026-11-16)
 
