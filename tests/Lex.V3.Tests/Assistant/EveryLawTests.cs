@@ -27,7 +27,9 @@ public sealed class EveryLawTests
             {"work": "/lu-legilux/code-travail", "title": "Code du travail", "names": ["code du travail"], "articles": 1188,
              "words": {"salarie": 5.0, "employe": 4.0, "licenci": 4.0, "preavi": 1.5, "conge": 3.0}},
             {"work": "/lu-legilux/code-civil", "title": "Code civil", "names": ["code civil"], "articles": 2300,
-             "words": {"mariage": 5.0, "bail": 2.5, "vente": 3.0, "conge": 3.0}}
+             "words": {"mariage": 5.0, "bail": 2.5, "vente": 3.0, "conge": 3.0}},
+            {"work": "/lu-legilux/code-essai", "title": "Code d'essai", "names": ["code d essai"], "articles": 300,
+             "words": {"garde": 6.0, "astrein": 5.0}}
           ]
         }
         """;
@@ -64,6 +66,43 @@ public sealed class EveryLawTests
             return new V4ArticleSource(article.Id, text, Sha(text), tokens.ToJsonString());
         }).ToList());
 
+    // A big act written for this test: thirty parts of ten articles, numbered as a code numbers them ("L. 117-4": the part
+    // 117), with no heading anywhere, as the mount holds the codes. One article answers the question in the law's own
+    // words ("astreinte"); the question says it in everyday ones ("garde").
+    private const string BigWork = "code-essai";
+    private const string BigAddress = "/lu-legilux/" + BigWork;
+    private static readonly string BigState = new('d', 64);
+
+    private static readonly string[] BigThemes =
+    [
+        "congés annuels", "salaires minimaux", "apprentissage", "détachement", "garde des enfants", "jours fériés", "délégations", "préavis",
+        "chômage partiel", "sécurité", "médecine", "harcèlement", "télétravail", "essai", "intérim", "pauses", "astreintes", "formation", "retraite",
+        "égalité", "transferts", "faillites", "inspections", "amendes", "conventions", "grèves", "stages", "étudiants", "saisonniers", "archives",
+    ];
+
+    private static readonly (string Id, string[] Pieces)[] BigArticles = Enumerable.Range(1, 30).SelectMany(static part => Enumerable.Range(1, 10).Select(article =>
+    {
+        var number = (100 + part).ToString(System.Globalization.CultureInfo.InvariantCulture) + "-" + article.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var text = part == 17 && article == 4
+            ? "Le salarié d'astreinte reçoit une indemnité fixée par la convention collective applicable."
+            : part == 5
+                ? "La garde des enfants le week-end est organisée selon la règle " + article.ToString(System.Globalization.CultureInfo.InvariantCulture) + " du présent chapitre."
+                : "Les dispositions sur les " + BigThemes[part - 1] + " suivent la règle " + article.ToString(System.Globalization.CultureInfo.InvariantCulture) + " du présent chapitre.";
+        return ("art_l_" + number, new[] { "Art. L. " + number + ".", text });
+    })).ToArray();
+
+    private static readonly V4ActTables Big = V4ActTables.Build(
+        BigAddress,
+        BigState,
+        "2024-01-01",
+        "fra",
+        BigArticles.Select(static article =>
+        {
+            var text = string.Concat(article.Pieces);
+            var tokens = new JsonArray(article.Pieces.Select(static piece => (JsonNode)new JsonObject { ["kind"] = "text", ["text"] = piece }).ToArray());
+            return new V4ArticleSource(article.Id, text, Sha(text), tokens.ToJsonString());
+        }).ToList());
+
     /// <summary>A corpus that holds the lease act and no other.</summary>
     private sealed class Corpus : IV4Corpus
     {
@@ -74,7 +113,9 @@ public sealed class EveryLawTests
             Asked.Add(work);
             return work == LeaseWork
                 ? new V4ActAtDate(Lease, new V4ActFacts(work, "held", Lease.Date, null, 1, Lease.Summary.Articles, Lease.Summary.Lines))
-                : new V4ActAtDate(null, new V4ActFacts(work, "text_not_available", null, null, 0, 0, 0));
+                : work == BigWork
+                    ? new V4ActAtDate(Big, new V4ActFacts(work, "held", Big.Date, null, 1, Big.Summary.Articles, Big.Summary.Lines))
+                    : new V4ActAtDate(null, new V4ActFacts(work, "text_not_available", null, null, 0, 0, 0));
         }
 
         public bool HoldsEuAct(string celex) => false;
@@ -90,20 +131,22 @@ public sealed class EveryLawTests
         }
 
         var article = parameters.RootElement.GetProperty("article").GetString()!;
-        var text = string.Concat(LeaseArticles.Single(candidate => candidate.Id == article).Pieces);
-        var permalink = LeaseAddress + "/" + Lease.Date + "/fra/" + LeaseState;
+        var big = parameters.RootElement.GetProperty("identifier").GetString()!.EndsWith(BigWork, StringComparison.Ordinal);
+        var (pieces, act, state, address, key) = big ? (BigArticles, Big, BigState, BigAddress, BigWork) : (LeaseArticles, Lease, LeaseState, LeaseAddress, LeaseWork);
+        var text = string.Concat(pieces.Single(candidate => candidate.Id == article).Pieces);
+        var permalink = address + "/" + act.Date + "/fra/" + state;
         var value = JsonSerializer.SerializeToElement(new
         {
             publisher = "lu-legilux",
-            work_key = LeaseWork,
+            work_key = key,
             requested_identifier = parameters.RootElement.GetProperty("identifier").GetString(),
             states = new[]
             {
                 new
                 {
                     language = "fra",
-                    applicability_date = Lease.Date,
-                    state_sha256 = LeaseState,
+                    applicability_date = act.Date,
+                    state_sha256 = state,
                     date_role = "applicability",
                     state_kind = "consolidation",
                     permalink,
@@ -260,13 +303,13 @@ public sealed class EveryLawTests
         CollectionAssert.AreEqual(new[] { "outline", "extraction" }, bricks.GetProperty("model_calls").EnumerateArray().Select(static call => call.GetProperty("step").GetString()).ToArray());
         Assert.AreEqual(0, bricks.GetProperty("concepts").GetArrayLength(), "no word is said to be an insurance term");
 
-        // The outline call was given the closed list: the act by its title, the two articles the pre-filter kept.
+        // The outline call was given the closed list: the act by its title and, the act being small, every article of it.
         var outline = model.Calls.Single(static call => call.Step == "outline");
         using (var sent = JsonDocument.Parse(outline.User))
         {
             var act = sent.RootElement.GetProperty("acts").EnumerateArray().Single();
             Assert.AreEqual("Loi du 21 septembre 2006 sur le bail à usage d'habitation", act.GetProperty("act").GetString());
-            Assert.AreEqual(2, act.GetProperty("articles").GetArrayLength());
+            Assert.AreEqual(5, act.GetProperty("articles").GetArrayLength());
         }
 
         Assert.AreEqual(V4Generation.OutlinePrompt, outline.System, "the same instruction as the outline reading's");
@@ -321,6 +364,118 @@ public sealed class EveryLawTests
         }
     }
     [TestMethod]
+    public void ABigActIsReadByItsPartsFirstAndTheArticlesOfThePartsNamedReachTheOutlineCall()
+    {
+        // Thirty parts of ten articles, no heading. The article that answers says "astreinte"; the reader says "garde".
+        const string question = "Garde le week-end : combien est payé le travailleur ?";
+        Assert.IsNull(Exit(question, Index, out var routed));
+        Assert.AreEqual(BigAddress, routed.Single().Act.Work);
+
+        // The parts, as the article numbers say them: code only.
+        var parts = Index.Sections(Big);
+        Assert.AreEqual(30, parts.Count);
+        Assert.AreEqual(("l117", 10, "L. 117-1 à L. 117-10"), (parts[16].Key, parts[16].Articles.Count, parts[16].Range));
+        StringAssert.Contains(parts[16].Words, "astreinte", "the words that mark the part among the others");
+        Assert.AreEqual(0, Index.Sections(Lease).Count, "a small act has no parts");
+
+        // An act that numbers its articles in one run is cut in runs of twenty consecutive articles.
+        var plain = V4ActTables.Build("/lu-legilux/code-suite", new string('e', 64), "2024-01-01", "fra", Enumerable.Range(1, 130).Select(static number =>
+        {
+            var label = "Art. " + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
+            var body = "La règle " + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + " du présent code s'applique.";
+            var pieces = new JsonArray(new JsonObject { ["kind"] = "text", ["text"] = label }, new JsonObject { ["kind"] = "text", ["text"] = body });
+            return new V4ArticleSource("art_" + number.ToString(System.Globalization.CultureInfo.InvariantCulture), label + body, Sha(label + body), pieces.ToJsonString());
+        }).ToList());
+        var runs = Index.Sections(plain);
+        Assert.AreEqual(7, runs.Count);
+        Assert.AreEqual(("run2", 20, "21 à 40"), (runs[1].Key, runs[1].Articles.Count, runs[1].Range));
+        Assert.AreEqual(10, runs[6].Articles.Count, "the last run holds what is left");
+        Assert.AreEqual("l233", V4LawIndex.SectionKey("art_l_233-4", 0));
+        Assert.AreEqual("710", V4LawIndex.SectionKey("art_710-5", 0));
+        Assert.IsNull(V4LawIndex.SectionKey("art_1382", 0));
+
+        // The question's words alone do not reach the article: the thirty best by them do not hold it.
+        var lexical = Index.Prefilter(Big, Index.Tokens(question), V4Bricks.EveryLawBeside, null);
+        Assert.IsFalse(lexical.Any(static entry => entry.Article.Id == "art_l_117-4"));
+
+        var model = new BricksFixture.Model(
+            call =>
+            {
+                using var sent = JsonDocument.Parse(call.User);
+                if (call.Step == "sections")
+                {
+                    var named = sent.RootElement.GetProperty("acts").EnumerateArray().SelectMany(static act => act.GetProperty("parts").EnumerateArray())
+                        .Where(static part => part.GetProperty("words").GetString()!.Contains("astreinte", StringComparison.Ordinal))
+                        .Select(static part => (JsonNode)part.GetProperty("id").GetString()!).ToArray();
+                    return new JsonObject { ["sections"] = new JsonArray(named) }.ToJsonString();
+                }
+
+                if (call.Step != "extraction")
+                {
+                    return "{}";
+                }
+
+                var line = sent.RootElement.GetProperty("lines").EnumerateArray().First(static candidate => candidate.GetProperty("text").GetString()!.StartsWith("Le salarié d'astreinte", StringComparison.Ordinal));
+                return new JsonObject
+                {
+                    ["found"] = true,
+                    ["complete"] = false,
+                    ["items"] = new JsonArray(new JsonObject { ["line"] = line.GetProperty("id").GetString(), ["role"] = "passage", ["value"] = string.Empty }),
+                    ["caveats"] = new JsonArray(),
+                }.ToJsonString();
+            },
+            call =>
+            {
+                using var sent = JsonDocument.Parse(call.User);
+                var named = sent.RootElement.GetProperty("acts").EnumerateArray().SelectMany(static act => act.GetProperty("articles").EnumerateArray())
+                    .Where(static article => article.GetProperty("heading").GetString()!.Contains("astreinte", StringComparison.Ordinal))
+                    .Select(static article => (JsonNode)article.GetProperty("id").GetString()!).ToArray();
+                return new JsonObject { ["articles"] = new JsonArray(named) }.ToJsonString();
+            });
+        var dossier = Answered(Ask(question, model, everyLaw: true));
+
+        var quote = dossier.Quotes.Single();
+        Assert.AreEqual((BigAddress, "art_l_117-4"), (quote.Work, quote.Anchor));
+        CollectionAssert.Contains(Templates(dossier), V3AnswerTemplates.AnswerCandidates, "candidates, never asserted");
+        CollectionAssert.AreEqual(new[] { "sections", "outline", "extraction" }, model.Calls.Where(static call => call.Step != "question").Select(static call => call.Step).ToArray());
+        CollectionAssert.AreEqual(new[] { "sections", "outline", "extraction" }, Bricks(dossier).GetProperty("model_calls").EnumerateArray().Select(static call => call.GetProperty("step").GetString()).ToArray(), "each call is in the record");
+
+        // The parts call: the instruction, the closed list of the thirty parts, each by its range, its first words and its words.
+        var sections = model.Calls.Single(static call => call.Step == "sections");
+        Assert.AreEqual(V4Generation.SectionPrompt, sections.System);
+        using (var sent = JsonDocument.Parse(sections.User))
+        {
+            var act = sent.RootElement.GetProperty("acts").EnumerateArray().Single();
+            Assert.AreEqual("Code d'essai", act.GetProperty("act").GetString());
+            Assert.AreEqual(30, act.GetProperty("parts").GetArrayLength());
+            Assert.AreEqual(("S1", "L. 101-1 à L. 101-10"), (act.GetProperty("parts")[0].GetProperty("id").GetString(), act.GetProperty("parts")[0].GetProperty("articles").GetString()));
+        }
+
+        // The outline call: the ten articles of the part named, and beside them at most thirty of the rest, in the order of
+        // the document.
+        using (var sent = JsonDocument.Parse(model.Calls.Single(static call => call.Step == "outline").User))
+        {
+            var given = sent.RootElement.GetProperty("acts").EnumerateArray().Single().GetProperty("articles").EnumerateArray().Select(static article => article.GetProperty("heading").GetString()!).ToArray();
+            Assert.IsTrue(given.Length is > 10 and <= 10 + V4Bricks.EveryLawBeside, given.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Assert.AreEqual(10, given.Count(static heading => heading.Contains("astreinte", StringComparison.Ordinal)), "the whole part named");
+            Assert.IsTrue(given.Any(static heading => heading.Contains("garde des enfants", StringComparison.Ordinal)), "and the articles that hold the question's words");
+        }
+
+        // A reply that names a part that was not given is not used: the act is then read by the question's words alone,
+        // and what the parts call gave is in the trace of the first answer.
+        var inventing = new BricksFixture.Model(static call => call.Step == "sections" ? """{"sections":["S31"]}""" : "{}", static _ => """{"articles":[]}""");
+        var unanswered = Answered(Ask(question, inventing, everyLaw: true));
+        Assert.AreEqual("every_law_outline_names_nothing+sections_unreadable", Bricks(unanswered).GetProperty("wider").GetString());
+        Assert.IsNull(V4Generation.ReadSections("""{"sections":["S31"]}""", 30, 4));
+        CollectionAssert.AreEqual(new[] { 2, 0 }, V4Generation.ReadSections("""{"sections":["S3","S1","S3"]}""", 30, 4));
+
+        // The answer replays to its bytes, with no planner and no model.
+        using var document = JsonDocument.Parse(dossier.ToUtf8());
+        var replayed = V3AssistantPipeline.Replay(document.RootElement.GetProperty("trace").GetRawText(), static _ => Execute, BricksFixture.Environment);
+        CollectionAssert.AreEqual(dossier.ToUtf8(), Answered(replayed.Outcome!).ToUtf8());
+    }
+
+    [TestMethod]
     public void WhenTheWiderReadingFindsNothingTheFirstAnswerStands()
     {
         const string question = "Quelles sont les règles sur l'adaptation du loyer d'un logement ?";
@@ -331,13 +486,27 @@ public sealed class EveryLawTests
         var pointing = new BricksFixture.Model(static call => call.Step == "extraction" ? """{"found":false,"complete":false,"items":[],"caveats":[]}""" : "{}", static _ => """{"articles":["A2"]}""");
         var inventing = new BricksFixture.Model(static _ => "{}", static _ => """{"articles":["A9"]}""");
         var failing = new BricksFixture.Model(static call => call.Step == "question" ? "{}" : throw new HttpRequestException("down"), static _ => throw new HttpRequestException("down"));
-        foreach (var model in new[] { naming, pointing, inventing, failing })
+        Assert.IsFalse(Bricks(off).TryGetProperty("wider", out _), "switched off, the record says nothing of a wider reading");
+        foreach (var (model, why) in new[]
+                 {
+                     (naming, "every_law_outline_names_nothing"),
+                     (pointing, "every_law_reading_found_nothing"),
+                     (inventing, "every_law_outline_unreadable"),
+                     (failing, "every_law_outline_unreadable"),
+                 })
         {
             var dossier = Answered(Ask(question, model, everyLaw: true));
             Assert.AreEqual(off.Verdict, dossier.Verdict);
             CollectionAssert.AreEqual(Templates(off), Templates(dossier));
             Assert.AreEqual(0, dossier.Quotes.Count());
+
+            // The first answer's own trace says how the wider reading ended.
+            Assert.AreEqual(why, Bricks(dossier).GetProperty("wider").GetString());
         }
+
+        // A stop of code is said the same way: the question asks a decision on the reader's own facts.
+        var stopped = Answered(Ask("Mon propriétaire a augmenté mon loyer, est-ce légal ?", naming, everyLaw: true));
+        Assert.AreEqual("every_law_asks_application", Bricks(stopped).GetProperty("wider").GetString());
     }
 
     // ---- The switch --------------------------------------------------------------------------------------------------------
@@ -353,7 +522,8 @@ public sealed class EveryLawTests
         Assert.AreNotEqual(before.PlannerId, on.PlannerId, "switched on, the law index is part of its identity");
 
         var input = new V3PlannerInput(question, V3AnswerLocale.Fr, [], ["fra"], BricksFixture.Today);
-        Assert.IsNull(off.PlanWider(input, CancellationToken.None));
+        Assert.IsNull(off.PlanWider(input, CancellationToken.None, out var offReason));
+        Assert.IsNull(offReason, "switched off, there is no wider reading to say anything of");
         Assert.AreEqual(before.Plan(input, CancellationToken.None).PlanJson, off.Plan(input, CancellationToken.None).PlanJson);
         Assert.AreEqual(before.Plan(input, CancellationToken.None).PlanJson, on.Plan(input, CancellationToken.None).PlanJson, "the first plan is the same plan, on or off");
 
@@ -446,6 +616,13 @@ public sealed class EveryLawTests
         Assert.IsTrue(laws.Acts.Count > 100, "every Luxembourg act held, not a handful");
         Assert.IsTrue(laws.Acts.All(static act => act.Work.StartsWith("/lu-legilux/", StringComparison.Ordinal)), "EU acts keep Lex's own operations");
         Assert.AreEqual(64, laws.Sha256.Length);
+
+        // And the alias file made beside it (everyday word, the law's words), of the same stem rule: used to find articles
+        // inside an act, never to route to one.
+        Assert.AreEqual(64, V4LawIndex.AliasesSha256!.Length);
+        var extended = laws.Extended(laws.Tokens("acheter une voiture"));
+        CollectionAssert.Contains(extended, "vente", "the law's word for the reader's");
+        Assert.AreEqual("acheter", extended[0], "the question's own tokens first");
         Assert.IsTrue(laws.ArticleKeep * laws.MaxActs <= 240, "the outline call stays small: at most 240 lines of about 110 characters");
     }
 

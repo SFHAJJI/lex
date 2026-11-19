@@ -30,7 +30,7 @@ public sealed class V4BricksPlanner(IV4Corpus corpus, IV4Model? model, bool ever
     /// </summary>
     public string PlannerId { get; } = "lex-v4-bricks/" + (model?.ModelId ?? "code-only") + "/prompt-" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
         V4PlanRecord.Version + "\n" + V4Generation.PromptsSha256 + "\n" + V4QuestionCall.PromptSha256 + "\n" + V4Dictionary.Insurance.Sha256 + "\n" + V4CorpusIndex.Insurance.Sha256 +
-        (everyLaw && (laws ?? V4LawIndex.Embedded) is { } index ? "\n" + index.Sha256 : string.Empty) +
+        (everyLaw && (laws ?? V4LawIndex.Embedded) is { } index ? "\n" + index.Sha256 + "\n" + V4Generation.SectionPromptSha256 + "\n" + (V4LawIndex.AliasesSha256 ?? string.Empty) : string.Empty) +
         (answerCheck ? "\n" + V4Generation.AnswerCheckSha256 : string.Empty))))[..12];
 
     public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)
@@ -57,9 +57,10 @@ public sealed class V4BricksPlanner(IV4Corpus corpus, IV4Model? model, bool ever
     /// index, or null when the switch is off, the question is not one it reads, or nothing was found. What the calls cost is
     /// reported either way.
     /// </summary>
-    public V3PlannerOutput? PlanWider(V3PlannerInput input, CancellationToken cancellationToken)
+    public V3PlannerOutput? PlanWider(V3PlannerInput input, CancellationToken cancellationToken, out string? reason)
     {
         ArgumentNullException.ThrowIfNull(input);
+        reason = null;
         if (_laws is null || model is null || input.Today is not { } today)
         {
             return null;
@@ -70,6 +71,7 @@ public sealed class V4BricksPlanner(IV4Corpus corpus, IV4Model? model, bool ever
             _corpus,
             model,
             cancellationToken);
+        reason = outcome.Reason;
         return outcome.PlanJson is null && outcome.CostMicroEuros == 0 ? null : new V3PlannerOutput(outcome.PlanJson ?? string.Empty, outcome.CostMicroEuros);
     }
 }

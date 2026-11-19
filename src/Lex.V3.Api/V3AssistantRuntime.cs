@@ -297,10 +297,17 @@ internal sealed class V3AssistantRuntime
         /// The wider reading, when the planner has one: under the same deadline and the same ceiling as a plan, with its own
         /// reservation. A reading over the ceiling, or one that fails, is not used, and the first answer stands.
         /// </summary>
-        public V3PlannerOutput? PlanWider(V3PlannerInput input, CancellationToken cancellationToken)
+        public V3PlannerOutput? PlanWider(V3PlannerInput input, CancellationToken cancellationToken, out string? reason)
         {
-            if (inner is not IAssistantWiderPlanner wider || !runtime.TryReserve())
+            reason = null;
+            if (inner is not IAssistantWiderPlanner wider)
             {
+                return null;
+            }
+
+            if (!runtime.TryReserve())
+            {
+                reason = "wider_cap_reached";
                 return null;
             }
 
@@ -309,7 +316,7 @@ internal sealed class V3AssistantRuntime
             V3PlannerOutput? output;
             try
             {
-                output = wider.PlanWider(input, deadline.Token);
+                output = wider.PlanWider(input, deadline.Token, out reason);
             }
             catch
             {
@@ -318,7 +325,13 @@ internal sealed class V3AssistantRuntime
             }
 
             runtime.Settle(output?.CostMicroEuros ?? 0);
-            return output is null || output.CostMicroEuros > PerAnswerCeilingMicroEuros ? null : output;
+            if (output is not null && output.CostMicroEuros > PerAnswerCeilingMicroEuros)
+            {
+                reason = "wider_over_ceiling";
+                return null;
+            }
+
+            return output;
         }
 
         public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)

@@ -540,7 +540,14 @@ public sealed class V4LawIndex
     /// idf(w) * min(count of w in the text, 3). Each with the line shown of it: its heading, else its text around the
     /// first word of the question it holds.
     /// </summary>
-    public List<V4OutlineArticle> Prefilter(V4ActTables tables, IReadOnlyList<string> questionTokens)
+    public List<V4OutlineArticle> Prefilter(V4ActTables tables, IReadOnlyList<string> questionTokens) =>
+        Prefilter(tables, questionTokens, ArticleKeep, null);
+
+    /// <summary>
+    /// The same, with the number kept said by the caller and, when <paramref name="admit"/> is given, among the articles it
+    /// admits only: the best <paramref name="keep"/> of them by the same score, in the order of the document.
+    /// </summary>
+    public List<V4OutlineArticle> Prefilter(V4ActTables tables, IReadOnlyList<string> questionTokens, int keep, Func<V4Article, bool>? admit)
     {
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(questionTokens);
@@ -549,7 +556,12 @@ public sealed class V4LawIndex
         var scored = new List<(double Score, int Position)>(total);
         for (var position = 0; position < total; position++)
         {
-            var (_, heading, text) = counts.Articles[position];
+            var (candidate, heading, text) = counts.Articles[position];
+            if (admit is not null && !admit(candidate))
+            {
+                continue;
+            }
+
             var score = 0.0;
             foreach (var token in questionTokens)
             {
@@ -565,10 +577,11 @@ public sealed class V4LawIndex
             scored.Add((score, position));
         }
 
-        if (total > ArticleKeep)
+        keep = Math.Max(0, keep);
+        if (scored.Count > keep)
         {
             scored.Sort(static (left, right) => left.Score != right.Score ? right.Score.CompareTo(left.Score) : left.Position.CompareTo(right.Position));
-            scored.RemoveRange(ArticleKeep, scored.Count - ArticleKeep);
+            scored.RemoveRange(keep, scored.Count - keep);
             scored.Sort(static (left, right) => left.Position.CompareTo(right.Position));
         }
 
@@ -581,6 +594,275 @@ public sealed class V4LawIndex
         }
 
         return kept;
+    }
+
+    // ---- The parts of a big act (code only). The mount holds an act's articles and no heading of its books, titles or
+    // chapters; a code that numbers its articles by its parts says them in the numbers ("L. 233-4": book 2, title 3,
+    // chapter 3; "710-5" in the companies law). A part is the run of articles that share the number before the hyphen.
+
+    private readonly ConditionalWeakTable<V4ActTables, List<V4LawSection>> _sections = new();
+
+    /// <summary>
+    /// The parts of an act as its article numbers say them, in the order of the document, each with what a reader of a
+    /// table of contents would be shown of it: the range of its articles, how its first article begins, and the words that
+    /// mark it among the other parts. When the numbers say no parts (fewer than six in ten articles carry one, or fewer
+    /// than five parts: the Code civil and the Code pénal number their articles in one run), the parts are runs of
+    /// <see cref="RunLength"/> consecutive articles, with keys that start with <c>run</c>. Empty for an act of fewer than
+    /// five runs.
+    /// </summary>
+    public IReadOnlyList<V4LawSection> Sections(V4ActTables tables)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        if (_sections.TryGetValue(tables, out var made))
+        {
+            return made;
+        }
+
+        made = SectionsOf(tables, drop: 0, run: 0);
+        if (made.Count > 250)
+        {
+            made = SectionsOf(tables, drop: 1, run: 0);
+        }
+
+        // A code that numbers its articles in one run (the Code civil, the Code pénal) is cut in runs of consecutive
+        // articles: its books and chapters are runs of the document too, and a run is shown as a part is.
+        if (made.Count == 0)
+        {
+            made = SectionsOf(tables, drop: 0, run: RunLength);
+        }
+
+        _sections.AddOrUpdate(tables, made);
+        return made;
+    }
+
+    /// <summary>The part an article's identifier names ("art_l_233-4": "l233"; "art_710-5": "710"), or null when it names none.</summary>
+    internal static string? SectionKey(string id, int drop)
+    {
+        var at = id.StartsWith("article_", StringComparison.Ordinal) ? 8 : id.StartsWith("art_", StringComparison.Ordinal) ? 4 : id.StartsWith("art", StringComparison.Ordinal) ? 3 : -1;
+        if (at < 0 || at >= id.Length)
+        {
+            return null;
+        }
+
+        var letter = string.Empty;
+        if (char.IsAsciiLetterLower(id[at]) && at + 1 < id.Length && (id[at + 1] == '_' || char.IsAsciiDigit(id[at + 1])))
+        {
+            letter = id[at].ToString();
+            at += id[at + 1] == '_' ? 2 : 1;
+        }
+
+        var start = at;
+        while (at < id.Length && char.IsAsciiDigit(id[at]))
+        {
+            at++;
+        }
+
+        var digits = at - start;
+        if (digits < 3 || at >= id.Length || id[at] != '-')
+        {
+            return null;
+        }
+
+        return letter + id[start..(at - Math.Min(drop, digits - 2))];
+    }
+
+    /// <summary>How many consecutive articles make a part of an act whose numbers say none.</summary>
+    public const int RunLength = 20;
+
+    private List<V4LawSection> SectionsOf(V4ActTables tables, int drop, int run)
+    {
+        var order = new List<string>();
+        var groups = new Dictionary<string, List<V4Article>>(StringComparer.Ordinal);
+        var all = 0;
+        var keyed = 0;
+        foreach (var article in tables.Articles)
+        {
+            if (article.Status == "empty")
+            {
+                continue;
+            }
+
+            all++;
+            if ((run > 0 ? "run" + (((all - 1) / run) + 1).ToString(CultureInfo.InvariantCulture) : SectionKey(article.Id, drop)) is not { } key)
+            {
+                continue;
+            }
+
+            keyed++;
+            if (!groups.TryGetValue(key, out var group))
+            {
+                group = [];
+                groups[key] = group;
+                order.Add(key);
+            }
+
+            group.Add(article);
+        }
+
+        if (order.Count < 5 || keyed * 10 < all * 6)
+        {
+            return [];
+        }
+
+        // The words of each part, and in how many parts each word stands.
+        var words = new List<Dictionary<string, (int Articles, string Surface)>>(order.Count);
+        var standing = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var key in order)
+        {
+            var held = new Dictionary<string, (int Articles, string Surface)>(StringComparer.Ordinal);
+            foreach (var article in groups[key])
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var line in tables.TextLinesOf(article))
+                {
+                    foreach (var (token, start, end) in TokensAt(line.Text))
+                    {
+                        if (token.Length >= 4 && seen.Add(token))
+                        {
+                            held[token] = held.TryGetValue(token, out var before) ? (before.Articles + 1, before.Surface) : (1, line.Text[start..end].ToLowerInvariant());
+                        }
+                    }
+                }
+            }
+
+            foreach (var token in held.Keys)
+            {
+                standing[token] = standing.GetValueOrDefault(token) + 1;
+            }
+
+            words.Add(held);
+        }
+
+        var sections = new List<V4LawSection>(order.Count);
+        for (var at = 0; at < order.Count; at++)
+        {
+            var articles = groups[order[at]];
+            var marked = new List<(double Score, string Token, string Surface)>();
+            foreach (var (token, (count, surface)) in words[at])
+            {
+                marked.Add((count * Math.Log(1 + ((double)order.Count / standing[token])), token, surface));
+            }
+
+            marked.Sort(static (left, right) => left.Score != right.Score ? right.Score.CompareTo(left.Score) : string.CompareOrdinal(left.Token, right.Token));
+            var marks = new List<string>();
+            foreach (var (_, _, surface) in marked)
+            {
+                if (marks.Count < 10 && !marks.Contains(surface, StringComparer.Ordinal))
+                {
+                    marks.Add(surface);
+                }
+            }
+
+            string? starts = null;
+            foreach (var article in articles)
+            {
+                foreach (var line in tables.TextLinesOf(article))
+                {
+                    starts ??= Window(line.Text, 0);
+                    break;
+                }
+
+                if (starts is not null)
+                {
+                    break;
+                }
+            }
+
+            var first = Numbered(articles[0]);
+            var last = Numbered(articles[^1]);
+            sections.Add(new V4LawSection(order[at], articles.AsReadOnly(), first == last ? first : first + " à " + last, starts ?? string.Empty, string.Join(", ", marks)));
+        }
+
+        return sections;
+    }
+
+    private static string Numbered(V4Article article)
+    {
+        var label = (article.Label ?? article.Id).Trim().TrimEnd('.').Trim();
+        return label.StartsWith("Art.", StringComparison.OrdinalIgnoreCase) ? label[4..].Trim() : label.StartsWith("Article", StringComparison.OrdinalIgnoreCase) ? label[7..].Trim() : label;
+    }
+
+    // ---- Everyday words and the law's words (aliases.json, made beside the index: "virer" is "licenciement" in the code).
+
+    private const string AliasResource = "Lex.V3.Contracts.Assistant.Bricks.LawAliases.json";
+
+    private static readonly Lazy<(Dictionary<string, string[]> Map, string StemRule, string Sha256)?> AliasValue = new(LoadAliases);
+
+    /// <summary>The digest of the alias file this build carries, or null when it carries none of the schema.</summary>
+    public static string? AliasesSha256 => AliasValue.Value?.Sha256;
+
+    private static (Dictionary<string, string[]> Map, string StemRule, string Sha256)? LoadAliases()
+    {
+        using var stream = typeof(V4LawIndex).Assembly.GetManifestResourceStream(AliasResource);
+        if (stream is null)
+        {
+            return null;
+        }
+
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        var bytes = memory.ToArray();
+        try
+        {
+            using var document = JsonDocument.Parse(bytes);
+            var root = document.RootElement;
+            if (root.GetProperty("schema").GetString() != "lex-v4-law-aliases/1")
+            {
+                return null;
+            }
+
+            var map = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            foreach (var alias in root.GetProperty("aliases").EnumerateObject())
+            {
+                var targets = new List<string>();
+                foreach (var target in alias.Value.EnumerateArray())
+                {
+                    if (target.GetString() is { Length: > 0 } word)
+                    {
+                        targets.Add(word);
+                    }
+                }
+
+                map[alias.Name] = [.. targets];
+            }
+
+            return (map, root.GetProperty("stem_rule").GetString() ?? string.Empty, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The question's tokens with, after them, the law's words for each everyday word the alias file knows, each once.
+    /// Used to find articles inside an act, never to route to one. The tokens themselves when the build carries no alias
+    /// file of this index's stem rule.
+    /// </summary>
+    public List<string> Extended(IReadOnlyList<string> tokens)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+        var extended = new List<string>(tokens);
+        if (AliasValue.Value is not { } aliases || aliases.StemRule != StemRule)
+        {
+            return extended;
+        }
+
+        foreach (var token in tokens)
+        {
+            if (aliases.Map.TryGetValue(token, out var targets))
+            {
+                foreach (var target in targets)
+                {
+                    if (!extended.Contains(target, StringComparer.Ordinal))
+                    {
+                        extended.Add(target);
+                    }
+                }
+            }
+        }
+
+        return extended;
     }
 
     /// <summary>The text of an article around the first word of the question it holds, about <see cref="BriefLength"/> characters; else its first words.</summary>
@@ -639,3 +921,10 @@ public sealed class V4LawIndex
         return (start > 0 ? "… " : string.Empty) + text[start..end].Trim() + (end < text.Length ? " …" : string.Empty);
     }
 }
+
+/// <summary>A part of a big act, as its article numbers say it: its articles in order, and what is shown of it in place of a heading.</summary>
+/// <param name="Key">The number the articles share ("l233", "710"), or "run" and the place of a run of consecutive articles.</param>
+/// <param name="Range">The first and the last article, by their labels.</param>
+/// <param name="Starts">How the first article of the part begins.</param>
+/// <param name="Words">The words that mark the part among the others, the most telling first.</param>
+public sealed record V4LawSection(string Key, IReadOnlyList<V4Article> Articles, string Range, string Starts, string Words);

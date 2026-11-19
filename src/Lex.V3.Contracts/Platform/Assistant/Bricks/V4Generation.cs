@@ -163,6 +163,110 @@ public static class V4Generation
         return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
     }
 
+    // ---- The parts call (every law, 2026-11-19): a big code is read by its parts before it is read by its articles, as a
+    // reader goes down a table of contents ("hierarchical retrieval by table of contents" [7quater]). The mount holds no
+    // heading of a book, a title or a chapter, so each part is shown by the range of its articles, by how its first
+    // article begins and by the words that mark it among the other parts (V4LawIndex.Sections).
+
+    /// <summary>The instruction of the parts call. Its digest is part of the planner's identity when the wider reading is on.</summary>
+    public const string SectionPrompt = """
+        You route a reader's question to the parts of a law. You are given, for each act, its parts in the order of the
+        document. For each part: its "id", "articles" (the range of its articles), "starts" (how its first article begins)
+        and "words" (the words that mark the part among the others).
+        - Return the ids of the parts whose articles may state the rule that answers the question, the most likely first.
+          Name a part by its "id" (S1, S2, ...). Use only ids given.
+        - The reader's everyday words are often not the law's words: think of what the law calls the thing asked
+          ("virer" is "licenciement", "caution" is "garantie locative"), and of where a code would put that rule.
+        - A question worded for a person's own case is routed like the general question behind it. You never say what
+          applies to that person.
+        - If no part given can hold the answer, return no part. Never guess from outside what is shown.
+        """;
+
+    private static string SectionSchema { get; } = new JsonObject
+    {
+        ["type"] = "object",
+        ["additionalProperties"] = false,
+        ["required"] = new JsonArray("sections"),
+        ["properties"] = new JsonObject
+        {
+            ["sections"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+        },
+    }.ToJsonString();
+
+    /// <summary>The digest of the parts call's instruction and form.</summary>
+    public static string SectionPromptSha256 { get; } =
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(SectionPrompt + "\n" + SectionSchema)));
+
+    /// <summary>
+    /// The parts call: the question, how many parts may be named at most, and for each big act its parts by a short id.
+    /// The second value gives, for each id, the act (by its place in <paramref name="acts"/>) and the part.
+    /// </summary>
+    public static (V4ModelCall Call, List<(int Act, V4LawSection Section)> Ids) SectionCall(string question, IReadOnlyList<(string Title, IReadOnlyList<V4LawSection> Sections)> acts, int most)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        ArgumentNullException.ThrowIfNull(acts);
+        var ids = new List<(int, V4LawSection)>();
+        var given = new JsonArray();
+        for (var at = 0; at < acts.Count; at++)
+        {
+            var parts = new JsonArray();
+            foreach (var section in acts[at].Sections)
+            {
+                ids.Add((at, section));
+                parts.Add(new JsonObject
+                {
+                    ["id"] = "S" + ids.Count.ToString(CultureInfo.InvariantCulture),
+                    ["articles"] = section.Range,
+                    ["starts"] = section.Starts,
+                    ["words"] = section.Words,
+                });
+            }
+
+            given.Add(new JsonObject { ["act"] = acts[at].Title, ["parts"] = parts });
+        }
+
+        var user = new JsonObject { ["question"] = question, ["at_most"] = most, ["acts"] = given };
+        return (new V4ModelCall("sections", SectionPrompt, user.ToJsonString(Relaxed), "lex_v4_sections", SectionSchema, 80), ids);
+    }
+
+    /// <summary>
+    /// Reads the parts call's reply: the places (from zero) of the parts it names among the <paramref name="given"/>, each
+    /// once, in its order, at most <paramref name="most"/>. Null when the reply is not of the form or names an id that was
+    /// not given: nothing of it is kept.
+    /// </summary>
+    public static List<int>? ReadSections(string content, int given, int most)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("sections", out var sections) || sections.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var picks = new List<int>();
+            foreach (var entry in sections.EnumerateArray())
+            {
+                var id = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
+                if (id is null || id.Length < 2 || id[0] != 'S' || !int.TryParse(id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > given)
+                {
+                    return null;
+                }
+
+                if (!picks.Contains(number - 1) && picks.Count < most)
+                {
+                    picks.Add(number - 1);
+                }
+            }
+
+            return picks;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string OutlineSchema { get; } = new JsonObject
     {
         ["type"] = "object",

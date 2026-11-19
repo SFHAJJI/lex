@@ -437,6 +437,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::ComposeBricks, "
                     + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Marked, "
+                    + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Run, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Wider",

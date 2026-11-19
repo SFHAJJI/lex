@@ -197,7 +197,9 @@ public static partial class V3AssistantPipeline
         // nothing, or anything of it fails, the first answer stands. A replay's planner offers none, so a trace replays as is.
         if (dossier is not null && planner is IAssistantWiderPlanner wider && QuotedNothing(validation.Plan!, dossier))
         {
-            dossier = Wider(wider, input, context, locale.Value, execute, environment, cancellationToken) ?? dossier;
+            // When it gives nothing, the first answer stands, and its trace says how the wider reading ended.
+            dossier = Wider(wider, input, context, locale.Value, execute, environment, cancellationToken, out var why)
+                ?? (why is null ? dossier : Marked(output.PlanJson!, why, planner.PlannerId, context, locale.Value, execute, environment) ?? dossier);
         }
 
         return dossier is null

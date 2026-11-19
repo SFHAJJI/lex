@@ -5,10 +5,13 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 /// <summary>
 /// The wider reading (the owner's order of 2026-11-19: "every Luxembourg act, candidates only"). When Lex's own operations
 /// quoted nothing for a question, code routes it to the acts of the law index whose words it holds
-/// (<see cref="V4LawIndex.Route"/>), code keeps the articles of those acts that hold its words
-/// (<see cref="V4LawIndex.Prefilter"/>), and the two calls of the outline reading are made over that closed list: a model
-/// names articles by ids it was given, then points at lines it was given; code checks both and cuts the quotes from the
-/// stored text. Whatever is found is shown as candidates, never as the answer.
+/// (<see cref="V4LawIndex.Route"/>). A small act is given whole to the outline call; a big code is read by its parts
+/// first (<see cref="V4LawIndex.Sections"/>: a model names parts by ids it was given), and the articles of the parts
+/// named go to the outline call with the articles of the rest that best hold the question's words
+/// (<see cref="V4LawIndex.Prefilter(V4ActTables, IReadOnlyList{string}, int, Func{V4Article, bool}?)"/>). Then the two calls
+/// of the outline reading are made over that closed list: a model names articles by ids it was given, then points at
+/// lines it was given; code checks both and cuts the quotes from the stored text. Whatever is found is shown as
+/// candidates, never as the answer.
 /// </summary>
 /// <remarks>
 /// It is asked only behind the switch (<see cref="V4PlanInput.EveryLaw"/>), only after Lex's own operations ended on a
@@ -19,6 +22,21 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 public static partial class V4Bricks
 {
     private const RegexOptions EveryLawOptions = RegexOptions.CultureInvariant | RegexOptions.Compiled;
+
+    /// <summary>An act of at most this many articles is given whole to the outline call; a bigger one is read by its parts first.</summary>
+    internal const int EveryLawSmallAct = 250;
+
+    /// <summary>How many parts of one big act the parts call may name.</summary>
+    internal const int EveryLawSectionsNamed = 4;
+
+    /// <summary>How many articles of the rest of a big act are given beside the articles of the parts named: the best by the question's words.</summary>
+    internal const int EveryLawBeside = 30;
+
+    /// <summary>How many articles of a big act are given when it has no parts, or none was named: the best by the question's words.</summary>
+    internal const int EveryLawNoParts = 120;
+
+    /// <summary>The most lines one outline call holds.</summary>
+    internal const int EveryLawLines = 400;
 
     // An EU act, by a name people give it, by its kind, by its number, or by its subject where the only text is the Union's.
     // The tables are built for Luxembourg acts in French only: an EU act keeps Lex's own operations.
@@ -307,8 +325,14 @@ public static partial class V4Bricks
         var reading = V4Dispatcher.ReadingDates(row, input.Dates);
         var dateRef = reading.Count == 1 ? reading[0].Ref : "today";
         var date = reading.Count == 1 ? reading[0].Iso : input.Today;
-        var tokens = laws.Tokens(question);
-        var held = new List<(string Title, V4ActTables Tables, IReadOnlyList<V4OutlineArticle> Articles)>();
+
+        // The words articles are found by inside an act: the question's, and the law's words for its everyday ones.
+        var tokens = laws.Extended(laws.Tokens(question));
+
+        // An article whose identifier a plan cannot name (a range of repealed articles, "art_518_à_520") is not offered.
+        static bool Nameable(V4Article article) => V3AssistantPlanValidator.IsArticleId(article.Id);
+
+        var opened = new List<(string Title, V4ActTables Tables, List<V4OutlineArticle> All, IReadOnlyList<V4LawSection> Sections)>();
         var latest = new Dictionary<V4ActTables, string>(ReferenceEqualityComparer.Instance);
         foreach (var kept in routed)
         {
@@ -328,42 +352,128 @@ public static partial class V4Bricks
                 continue;
             }
 
-            // An article whose identifier a plan cannot name (a range of repealed articles, "art_518_à_520") is not offered.
-            var articles = new List<V4OutlineArticle>();
-            foreach (var entry in laws.Prefilter(tables, tokens))
-            {
-                if (V3AssistantPlanValidator.IsArticleId(entry.Article.Id))
-                {
-                    articles.Add(entry);
-                }
-            }
-
-            if (articles.Count == 0)
+            var all = laws.Prefilter(tables, tokens, int.MaxValue, Nameable);
+            if (all.Count == 0)
             {
                 continue;
             }
 
-            held.Add((kept.Act.Title, tables, articles));
+            // A big act is read by its parts first, when its article numbers say them (V4LawIndex.Sections).
+            opened.Add((kept.Act.Title, tables, all, all.Count > EveryLawSmallAct ? laws.Sections(tables) : []));
             if (at.Facts.TextStatus == "latest_held" && at.Facts.VersionFrom is { } from)
             {
                 latest[tables] = from;
             }
         }
 
-        if (held.Count == 0)
+        if (opened.Count == 0)
         {
             return new V4PlanOutcome(null, 0, "every_law_no_act_held");
         }
 
         var draft = new Draft { Route = "open", AnswerKind = "text" };
 
+        // Step 0, for the big acts with parts: the model names parts of the closed list, by ids it was given; code checks
+        // the ids. Said in the reason, so that a reading that ends on nothing says what the parts call gave.
+        var partsOf = new Dictionary<int, HashSet<string>>();
+        var sectioned = string.Empty;
+        var withParts = new List<(string Title, IReadOnlyList<V4LawSection> Sections)>();
+        var placeOf = new List<int>();
+        for (var at = 0; at < opened.Count; at++)
+        {
+            if (opened[at].Sections.Count > 0)
+            {
+                withParts.Add((opened[at].Title, opened[at].Sections));
+                placeOf.Add(at);
+            }
+        }
+
+        if (withParts.Count > 0)
+        {
+            var most = Math.Min(8, EveryLawSectionsNamed * withParts.Count);
+            var (parts, partIds) = V4Generation.SectionCall(question, withParts, most);
+            var answered = Ask(draft, model, parts, cancellationToken);
+            var chosen = answered is null ? null : V4Generation.ReadSections(answered.Content, partIds.Count, most);
+            sectioned = chosen is null ? "+sections_unreadable" : chosen.Count == 0 ? "+sections_named_nothing" : "+sections_named";
+            foreach (var pick in chosen ?? [])
+            {
+                var (act, section) = partIds[pick];
+                if (!partsOf.TryGetValue(placeOf[act], out var set))
+                {
+                    set = new HashSet<string>(StringComparer.Ordinal);
+                    partsOf[placeOf[act]] = set;
+                }
+
+                foreach (var article in section.Articles)
+                {
+                    set.Add(article.Id);
+                }
+            }
+        }
+
+        // What the outline call is given of each act, in the order of the document: every article of a small act; of a big
+        // act, every article of the parts named and, beside them, the articles of the rest of the act that best hold the
+        // question's words (a deterministic union [9B]); of a big act with no part named, or none to name, its best
+        // articles by the question's words. One call holds at most EveryLawLines lines: an act that would pass it gives
+        // its best lines by the question's words.
+        var held = new List<(string Title, V4ActTables Tables, IReadOnlyList<V4OutlineArticle> Articles)>();
+        var room = EveryLawLines;
+        for (var at = 0; at < opened.Count && room > 0; at++)
+        {
+            var (title, tables, all, _) = opened[at];
+            List<V4OutlineArticle> given;
+            if (all.Count <= EveryLawSmallAct)
+            {
+                given = all;
+            }
+            else if (partsOf.TryGetValue(at, out var named) && named.Count > 0)
+            {
+                var beside = new HashSet<string>(StringComparer.Ordinal);
+                // Beside the parts a model named: thirty articles by the question's words when the parts are the code's own
+                // (its numbers say them); the full hundred and twenty when they are runs cut by code, which a chapter may straddle.
+                var runs = opened[at].Sections.Count > 0 && opened[at].Sections[0].Key.StartsWith("run", StringComparison.Ordinal);
+                foreach (var entry in laws.Prefilter(tables, tokens, runs ? EveryLawNoParts : EveryLawBeside, article => Nameable(article) && !named.Contains(article.Id)))
+                {
+                    beside.Add(entry.Article.Id);
+                }
+
+                given = laws.Prefilter(tables, tokens, int.MaxValue, article => Nameable(article) && (named.Contains(article.Id) || beside.Contains(article.Id)));
+            }
+            else
+            {
+                given = laws.Prefilter(tables, tokens, EveryLawNoParts, Nameable);
+            }
+
+            if (given.Count > room)
+            {
+                var within = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var entry in given)
+                {
+                    within.Add(entry.Article.Id);
+                }
+
+                given = laws.Prefilter(tables, tokens, room, article => within.Contains(article.Id));
+            }
+
+            if (given.Count > 0)
+            {
+                room -= given.Count;
+                held.Add((title, tables, given));
+            }
+        }
+
+        if (held.Count == 0)
+        {
+            return new V4PlanOutcome(null, draft.Cost, "every_law_no_act_held" + sectioned);
+        }
+
         // Step 1: the model names articles of the closed list, by ids it was given.
         var (outline, ids) = V4Generation.OutlineCallOf(question, held);
-        var named = Ask(draft, model, outline, cancellationToken);
-        var picks = named is null ? null : V4Generation.ReadOutline(named.Content, ids.Count);
+        var named1 = Ask(draft, model, outline, cancellationToken);
+        var picks = named1 is null ? null : V4Generation.ReadOutline(named1.Content, ids.Count);
         if (picks is null || picks.Count == 0)
         {
-            return new V4PlanOutcome(null, draft.Cost, picks is null ? "every_law_outline_unreadable" : "every_law_outline_names_nothing");
+            return new V4PlanOutcome(null, draft.Cost, (cancellationToken.IsCancellationRequested ? "every_law_deadline" : picks is null ? "every_law_outline_unreadable" : "every_law_outline_names_nothing") + sectioned);
         }
 
         // One act answers: the act of the first article named; the articles named of another act are left.
@@ -437,7 +547,7 @@ public static partial class V4Bricks
 
         if (lines.Count == 0)
         {
-            return new V4PlanOutcome(null, draft.Cost, "every_law_articles_hold_no_line");
+            return new V4PlanOutcome(null, draft.Cost, "every_law_articles_hold_no_line" + sectioned);
         }
 
         // Step 2: the extraction points at the lines that answer, among those lines only; code checks each.
@@ -447,7 +557,7 @@ public static partial class V4Bricks
         var items = extraction is null ? null : V4Generation.Validate(extraction, "text", lines, out _);
         if (items is null || items.Count == 0)
         {
-            return new V4PlanOutcome(null, draft.Cost, items is null ? "every_law_reading_refused" : "every_law_reading_found_nothing");
+            return new V4PlanOutcome(null, draft.Cost, (cancellationToken.IsCancellationRequested ? "every_law_deadline" : items is null ? "every_law_reading_refused" : "every_law_reading_found_nothing") + sectioned);
         }
 
         // One passage per article, the most direct first, as the model gave them.
@@ -483,7 +593,7 @@ public static partial class V4Bricks
         }
 
         var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, "answer", "text", scope.Work, []);
-        return new V4PlanOutcome(AsCandidates(json), draft.Cost, "route:every_law", Articles: quoted);
+        return new V4PlanOutcome(AsCandidates(json), draft.Cost, "route:every_law" + sectioned, Articles: quoted);
     }
 
     private static bool Holds(List<V4Article> articles, string id)
