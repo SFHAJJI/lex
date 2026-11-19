@@ -1,5 +1,5 @@
 // One real answer, recorded for How it works (the owner's brief of 2026-11-15, section 5: one real question followed
-// through its stages). Captured on 2026-11-19 at 00:37 UTC by one request to the API at `origin` below,
+// through its stages). Captured on 2026-11-19 at 02:53 UTC by one request to the API at `origin` below,
 // POST /api/v3/ask with the body `request` (ask/1's request: the question alone). The origin is the release candidate on the driver's PC (the same code, data and model as the release); the record is made again from the live site once the release serves.
 //
 // `envelope` is the answer as served, whole and unedited. `act` is the title the dossier of the same act gives the version
@@ -7,7 +7,7 @@
 // only. Do not edit: record again with the same two requests (C:\lex-v3\driver-scripts\make-how-record.py), and date it.
 
 export const HOW_ANSWER_RECORD = Object.freeze({
-  "recordedAt": "2026-11-19T00:37:45Z",
+  "recordedAt": "2026-11-19T02:53:32Z",
   "origin": "http://127.0.0.1:5080",
   "request": {
     "operation_id": "ask",
@@ -19,7 +19,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "context": {
       "commits": {
         "index_builder_source_commit": "bfb839839ea7d49cec79e8525275968d1000be8e",
-        "serving_runtime_source_commit": "ff17009a956bf924b2ac0783c34c8a445bed5a94"
+        "serving_runtime_source_commit": "5e02ec30c1bd5250404430d7728f3e86c4e34dce"
       },
       "freshness": {
         "channels": [
@@ -43,7 +43,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "index_built_at": "2026-11-12T15:22:06Z",
         "last_checked_against_publisher": null,
         "maximum_data_age_days": 30,
-        "observed_at": "2026-11-19T00:37:45.0859504Z",
+        "observed_at": "2026-11-19T02:53:32.6053017Z",
         "stale": false,
         "upstream_health": "stale"
       },
@@ -62,7 +62,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "refusal": null,
     "registry_schema": "lex-v3-operation-registry/2",
     "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
-    "request_ref": "http_6f26bda871390be591761fa50ba2d7b32307f3da55b6132e29c16363f6350051",
+    "request_ref": "http_e1731661d2ae895c3a783c775fded402ca5c889b1a404c1cf29eca4654eaa8a0",
     "result": {
       "object_type": "answer_dossier",
       "schema": "lex-v3-ask-result/1",
@@ -1045,7 +1045,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
           }
         ],
         "plan": {
-          "plan_sha256": "a4b21bf0871132621c831f5bbdc0be124a1655845131231d5104d6ba022ad2d4",
+          "plan_sha256": "2f6aa46ec7cb4332523aef8862d9283912d47582e4fd6e701d86dc62c3c3268f",
           "rendered": [
             {
               "facts": [],
@@ -1633,7 +1633,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
                   "lines": 192
                 }
               ],
-              "dictionary": "c548165bc2130b45d2e3a40ebd8c58b3e31d87d2c4aaf953d978c7ea7a6427cc",
+              "dictionary": "c1eae52ec71ed8996ff97c6a750640a868d291ccdb45a9168008bd5e236582ef",
               "kind": "rule",
               "lines": 913,
               "model_calls": [
@@ -1847,8 +1847,8 @@ export const HOW_ANSWER_RECORD = Object.freeze({
               }
             ]
           },
-          "plan_sha256": "a4b21bf0871132621c831f5bbdc0be124a1655845131231d5104d6ba022ad2d4",
-          "planner_id": "lex-v4-bricks/gpt-4.1-mini/prompt-b2f677687022",
+          "plan_sha256": "2f6aa46ec7cb4332523aef8862d9283912d47582e4fd6e701d86dc62c3c3268f",
+          "planner_id": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
           "question": "L'assureur peut-il résilier le contrat ?",
           "question_sha256": "2a094f04c96b7354989c119fdeb4274cb56bd2275ae3cdb82eacffe9f961b580",
           "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
@@ -1934,7 +1934,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
               "verdict": "answer"
             }
           ],
-          "templates_sha256": "dacdc3c60a1e1f15caf1eac946f83660b4c8287a06bfe43659a0a05608e67002",
+          "templates_sha256": "897d4624f96b148a379d398723c331810c7de59b75ee1ffcc2637339d9b31a62",
           "today": "2026-11-19"
         },
         "verdict": "answer"
@@ -1956,6 +1956,6 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "identifier": "/lu-legilux/loi-1997-07-27-n10"
       }
     },
-    "request_ref": "http_5684068507e9308ea062786587f1aaf52c6b0ec1de2c2a69eae5621bcec82d93"
+    "request_ref": "http_78fcf0a4225f1d2ecb2720235a926c5fdcdc0b556949093783f5ca9e3c18d100"
   }
 });
