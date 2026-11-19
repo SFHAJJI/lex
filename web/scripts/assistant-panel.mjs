@@ -204,6 +204,8 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockStageRoute: 'Route',
     dockStageRetrieval: 'Retrieval',
     dockStageArbiter: 'Ranking',
+    dockStageOutline: 'Table of contents',
+    dockOutlineLine: 'articles to read named by their headings',
     dockStageExtraction: 'Extraction',
     dockStageChecks: 'Checks',
     dockQuestionNone: 'no term of the dictionary read',
@@ -427,6 +429,8 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockStageRoute: 'Aiguillage',
     dockStageRetrieval: 'Recherche',
     dockStageArbiter: 'Classement',
+    dockStageOutline: 'Table des matières',
+    dockOutlineLine: 'articles à lire désignés d’après leurs intitulés',
     dockStageExtraction: 'Extraction',
     dockStageChecks: 'Contrôles',
     dockQuestionNone: 'aucun terme du dictionnaire reconnu',
@@ -1074,6 +1078,10 @@ function bricksStageRows(dossier, bricks, copy) {
   if (calls.includes('arbiter')) {
     const count = (role) => candidates.filter((candidate) => candidate?.role === role).length;
     rows.push({ key: 'arbiter', name: copy.dockStageArbiter, line: fill(copy.dockArbiterLine, { primary: count('primary'), supporting: count('supporting'), others: count('tangential') + count('discarded') }), model: true });
+  }
+  if (calls.includes('outline')) {
+    // The second reading (2026-11-19): a model named, in the acts' tables of contents, the articles that were then read.
+    rows.push({ key: 'outline', name: copy.dockStageOutline, line: copy.dockOutlineLine, model: true });
   }
   if (calls.includes('extraction')) {
     // The lines the model pointed at: an item code added to them (`by: code`) is not the model's.

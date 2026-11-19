@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -27,6 +28,22 @@ public sealed record V4IndexAct(
 {
     /// <summary>The act's address on this site.</summary>
     public string Address => "/" + Publisher + "/" + Work;
+
+    /// <summary>
+    /// The act as published, at the publisher's own address, for an act of the Luxembourg publisher named by its kind, its
+    /// date and its number ("loi-2003-04-16-n2"); null for any other.
+    /// </summary>
+    public string? Official
+    {
+        get
+        {
+            var parts = Work.Split('-');
+            return Publisher == "lu-legilux" && parts.Length == 5 && parts[1].Length == 4 && parts[2].Length == 2 && parts[3].Length == 2 &&
+                parts.All(static part => part.Length > 0 && part.All(static character => char.IsAsciiLetterOrDigit(character)))
+                ? "http://data.legilux.public.lu/eli/etat/leg/" + string.Join('/', parts) + "/jo"
+                : null;
+        }
+    }
 }
 
 /// <summary>An EU act of the domain by the names people give it, with its official address: held or not is read from the mount.</summary>
@@ -54,10 +71,14 @@ public sealed class V4CorpusIndex
     private readonly HashSet<string> _terms;
 
     private readonly V4Key[] _otherDomain;
+    private readonly V4Key[] _domain;
+    private readonly V4Key[] _domainEnglish;
 
-    private V4CorpusIndex(string version, string sha256, List<V4IndexAct> acts, List<V4IndexEuAct> euActs, List<string> otherDomainWords)
+    private V4CorpusIndex(string version, string sha256, List<V4IndexAct> acts, List<V4IndexEuAct> euActs, List<string> otherDomainWords, List<string> domainWords, List<string> domainWordsEnglish)
     {
+        _domainEnglish = domainWordsEnglish.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
         _otherDomain = otherDomainWords.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
+        _domain = domainWords.Concat(domainWordsEnglish).Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
         Version = version;
         Sha256 = sha256;
         Acts = acts.OrderBy(static act => act.Order).ToList().AsReadOnly();
@@ -96,6 +117,24 @@ public sealed class V4CorpusIndex
     /// </summary>
     public bool OtherDomain(IReadOnlyList<V4Word> words) => _otherDomain.Any(key => key.In(words));
 
+    /// <summary>
+    /// Whether a question holds a word of this domain (<c>domain_words</c>: "assurance", "sinistre", "prime", "voiture"...):
+    /// what lets the outline be read for a question no dictionary key reads, and keeps it shut for every other subject.
+    /// </summary>
+    public bool InDomain(IReadOnlyList<V4Word> words) => _domain.Any(key => key.In(words));
+
+    /// <summary>
+    /// The language of the domain's words a question holds ("fr" for <c>domain_words</c>, "en" for <c>domain_words_en</c>),
+    /// when they are of one language only, else null.
+    /// </summary>
+    public string? LanguageOfDomainWords(IReadOnlyList<V4Word> words)
+    {
+        ArgumentNullException.ThrowIfNull(words);
+        var english = _domainEnglish.Any(key => key.In(words));
+        var french = _domain.Except(_domainEnglish).Any(key => key.In(words));
+        return french == english ? null : french ? "fr" : "en";
+    }
+
     /// <summary>The acts a question names by a short name of the index, the longest name first.</summary>
     public List<V4ActMention> Mentions(IReadOnlyList<V4Word> words)
     {
@@ -120,8 +159,38 @@ public sealed class V4CorpusIndex
             }
         }
 
+        // An act named by its date in figures ("L. 27.07.1997", "loi du 27/07/97"): three numbers one sign apart that are
+        // the date of exactly one act of the index.
+        for (var at = 0; at + 2 < words.Count; at++)
+        {
+            if (taken[at] || taken[at + 1] || taken[at + 2] || words[at + 1].Start - words[at].End != 1 || words[at + 2].Start - words[at + 1].End != 1 ||
+                !Figure(words[at].Text, 2, out var day) || !Figure(words[at + 1].Text, 2, out var month) || !(Figure(words[at + 2].Text, 4, out var year) && words[at + 2].Text.Length is 2 or 4))
+            {
+                continue;
+            }
+
+            if (words[at + 2].Text.Length == 2)
+            {
+                year += year > 30 ? 1900 : 2000;
+            }
+
+            var iso = string.Create(CultureInfo.InvariantCulture, $"{year:D4}-{month:D2}-{day:D2}");
+            var dated = Acts.Where(act => act.Date == iso).ToList();
+            if (dated.Count == 1)
+            {
+                taken[at] = taken[at + 1] = taken[at + 2] = true;
+                mentions.Add(new V4ActMention(dated[0].Work, null, words[at].Start, words[at + 2].End));
+            }
+        }
+
         mentions.Sort(static (left, right) => left.Start.CompareTo(right.Start));
         return mentions;
+
+        static bool Figure(string text, int most, out int value)
+        {
+            value = 0;
+            return text.Length <= most && text.All(static letter => letter is >= '0' and <= '9') && int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
+        }
     }
 
     private static V4CorpusIndex Load()
@@ -170,6 +239,8 @@ public sealed class V4CorpusIndex
         }
 
         var other = root.GetProperty("domains").EnumerateArray().SelectMany(static domain => Strings(domain, "other_domain_words")).ToList();
-        return new V4CorpusIndex(root.GetProperty("version").GetString()!, Convert.ToHexStringLower(SHA256.HashData(utf8)), acts, euActs, other);
+        var domain = root.GetProperty("domains").EnumerateArray().SelectMany(static entry => Strings(entry, "domain_words")).ToList();
+        var domainEnglish = root.GetProperty("domains").EnumerateArray().SelectMany(static entry => Strings(entry, "domain_words_en")).ToList();
+        return new V4CorpusIndex(root.GetProperty("version").GetString()!, Convert.ToHexStringLower(SHA256.HashData(utf8)), acts, euActs, other, domain, domainEnglish);
     }
 }

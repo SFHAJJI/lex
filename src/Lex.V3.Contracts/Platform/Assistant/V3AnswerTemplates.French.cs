@@ -127,6 +127,9 @@ public static partial class V3AnswerTemplates
         ["plan.bricks.model.question"] = ("Un modèle d’IA a décrit votre question (type de réponse, termes). Il n’a choisi aucune opération.", BricksFrenchReviewed),
         ["plan.bricks.model.arbiter"] = ("Un modèle d’IA a attribué un rôle à chaque passage trouvé (principal, complémentaire, écarté). Il ne pouvait ni ajouter de passage ni écrire de texte.", BricksFrenchReviewed),
         ["plan.bricks.model.extraction"] = ("Un modèle d’IA a désigné, parmi les lignes fournies, celles qui répondent à votre question. Le code de Lex a vérifié chacune dans le texte avant de l’afficher.", BricksFrenchReviewed),
+        ["plan.bricks.model.outline"] = ("Un modèle d’IA a désigné, dans les tables des matières des textes que Lex lit sur ce sujet, les articles à lire. Il ne pouvait désigner que des articles de ces tables.", BricksFrenchReviewedLater),
+        ["note.latest_held"] = ("Dernière version détenue\u00A0: {date}. Lex ne détient pas de version plus récente de ce texte.", BricksFrenchReviewedLater),
+        ["caveat.not_your_case"] = ("Le texte ne dit pas comment il s’applique à votre situation.", BricksFrenchReviewedLater),
         ["plan.bricks.model.question_unavailable"] = ("Un modèle d’IA a été interrogé pour décrire votre question et n’a pas donné de réponse utilisable\u00A0: le code de Lex a cherché vos propres mots.", BricksFrenchReviewedLater),
         ["plan.bricks.model.unavailable"] = ("Le modèle d’IA qui classe les passages n’a pas donné de réponse utilisable\u00A0: Lex montre les passages trouvés par son code, dans l’ordre établi par ce code.", BricksFrenchReviewed),
         ["plan.bricks.pass.sweep_cases"] = ("La règle renvoie aux cas prévus par la loi sans les nommer\u00A0: Lex a parcouru tout le texte pour les relever.", BricksFrenchReviewed),
@@ -160,6 +163,9 @@ public static partial class V3AnswerTemplates
         ["absence.no_answer_in_lines"] = ("Lex a trouvé des lignes sur ce sujet, mais aucune ne donne de réponse du type demandé. Les plus proches\u00A0:", BricksFrenchReviewed),
         ["absence.act_not_held"] = ("Votre question nomme un acte\u00A0: {name}. Lex ne détient pas encore le texte de cet acte.", BricksFrenchReviewed),
         ["absence.text_not_held"] = ("Lex détient la notice de {work}, mais aucun texte qu’il puisse en montrer à cette date.", BricksFrenchReviewed),
+        ["absence.article_not_held"] = ("L’article {anchor} existe mais Lex n’en détient pas le texte.", BricksFrenchReviewedLater),
+        ["clarify.no_context"] = ("Lex ne voit pas à quoi se rapporte votre question. Posez-la en entier, en nommant le texte ou le sujet\u00A0: Lex répond en citant le texte.", BricksFrenchReviewedLater),
+        ["clarify.one_word"] = ("Un mot seul ne dit pas à Lex ce que vous voulez savoir. Posez une question complète\u00A0: Lex répond en citant le texte.", BricksFrenchReviewedLater),
         ["direct.greeting"] = ("Bonjour. Posez une question sur un texte de droit luxembourgeois ou européen que Lex détient\u00A0; Lex répond en citant le texte.", BricksFrenchReviewed),
     };
 }

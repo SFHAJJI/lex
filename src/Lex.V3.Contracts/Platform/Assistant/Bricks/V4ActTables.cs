@@ -9,6 +9,12 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 public sealed record V4ArticleSource(string PublisherId, string Text, string TextSha256, string TokensJson);
 
 /// <summary>
+/// An article of the publisher's document whose text Lex does not hold, between two articles it holds: its identifier as
+/// the two neighbours give it ("art_16" between "art_15" and "art_17"). Only a place whose number can be deduced is kept.
+/// </summary>
+public sealed record V4ArticleNotHeld(string Id, string After, string Before);
+
+/// <summary>
 /// One line of an act (brick B, <c>line_df</c>): a piece of an article at a position inside the article's stored text. The
 /// lines of an article, in order, cover that text; a quote of a line is "these characters at this position", which is what the
 /// gate <c>QuoteBound</c> checks.
@@ -204,7 +210,62 @@ public sealed class V4ActTables
     /// Builds the tables of one version of one act from its articles, in the publisher's order. An article whose pieces do
     /// not give back its stored text exactly is kept whole (status unbound) and is never quoted by line.
     /// </summary>
-    public static V4ActTables Build(string work, string stateSha256, string date, string language, IReadOnlyList<V4ArticleSource> sources)
+    /// <summary>The articles of the document that are not held and whose number the neighbours give; empty when none is known.</summary>
+    public IReadOnlyList<V4ArticleNotHeld> NotHeld { get; private init; } = [];
+
+    private static readonly Regex NeighbourId = new(@"^art_(?<n>\d+)(?<first>er)?(?:-(?<k>\d+))?$", Options, Timeout);
+
+    /// <summary>
+    /// The articles missing from a version, read from the places its held articles take in the publisher's document: one
+    /// place missing between two held articles whose numbers leave room for exactly one ("art_15", "art_17": "art_16";
+    /// "art_32", "art_32-2": "art_32-1"; "art_23-1", "art_23-3": "art_23-2"). Any other gap names no article.
+    /// </summary>
+    public static IReadOnlyList<V4ArticleNotHeld> NotHeldAmong(IReadOnlyList<(string Id, int Position)> held)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        var found = new List<V4ArticleNotHeld>();
+        var ordered = held.OrderBy(static article => article.Position).ToList();
+        for (var at = 0; at + 1 < ordered.Count; at++)
+        {
+            var (after, before) = (ordered[at], ordered[at + 1]);
+            if (before.Position - after.Position != 2)
+            {
+                continue;
+            }
+
+            var (left, right) = (NeighbourId.Match(after.Id), NeighbourId.Match(before.Id));
+            if (!left.Success || !right.Success)
+            {
+                continue;
+            }
+
+            var (n, m) = (int.Parse(left.Groups["n"].Value, CultureInfo.InvariantCulture), int.Parse(right.Groups["n"].Value, CultureInfo.InvariantCulture));
+            int? k = left.Groups["k"].Success ? int.Parse(left.Groups["k"].Value, CultureInfo.InvariantCulture) : null;
+            int? j = right.Groups["k"].Success ? int.Parse(right.Groups["k"].Value, CultureInfo.InvariantCulture) : null;
+            string? id = null;
+            if (k is null && j is null && m == n + 2)
+            {
+                id = "art_" + (n + 1).ToString(CultureInfo.InvariantCulture);
+            }
+            else if (m == n && k is null && j == 2)
+            {
+                id = "art_" + n.ToString(CultureInfo.InvariantCulture) + "-1";
+            }
+            else if (m == n && k is { } low && j == low + 2)
+            {
+                id = "art_" + n.ToString(CultureInfo.InvariantCulture) + "-" + (low + 1).ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (id is not null && held.All(article => article.Id != id))
+            {
+                found.Add(new V4ArticleNotHeld(id, after.Id, before.Id));
+            }
+        }
+
+        return found.AsReadOnly();
+    }
+
+    public static V4ActTables Build(string work, string stateSha256, string date, string language, IReadOnlyList<V4ArticleSource> sources, IReadOnlyList<V4ArticleNotHeld>? notHeld = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(work);
         ArgumentNullException.ThrowIfNull(stateSha256);
@@ -328,7 +389,7 @@ public sealed class V4ActTables
             numbering.AsReadOnly(),
             labels.AsReadOnly(),
             "article");
-        return new V4ActTables(work, stateSha256, date, language, articles, lines, definitions, references, summary);
+        return new V4ActTables(work, stateSha256, date, language, articles, lines, definitions, references, summary) { NotHeld = notHeld ?? [] };
     }
 
     private static V4Line NewLine(V4ArticleSource source, int index, string kind, string? point, int offset, int length)

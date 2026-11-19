@@ -22,6 +22,20 @@ internal static class BricksFixture
 
     internal static string StateSha256 => Loaded.Value.State;
 
+    /// <summary>The fixture's act with articles declared not held between two it holds (the brief of 2026-11-19, work item 3).</summary>
+    internal static V4ActTables TablesWith(params V4ArticleNotHeld[] notHeld)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Bricks", Work + ".fra.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var root = document.RootElement;
+        var sources = root.GetProperty("articles").EnumerateArray().Select(static article => new V4ArticleSource(
+            article.GetProperty("publisher_id").GetString()!,
+            article.GetProperty("text").GetString()!,
+            article.GetProperty("text_sha256").GetString()!,
+            article.GetProperty("tokens").GetRawText())).ToList();
+        return V4ActTables.Build(root.GetProperty("work").GetString()!, root.GetProperty("state_sha256").GetString()!, root.GetProperty("applicability_date").GetString()!, "fra", sources, notHeld);
+    }
+
     private static (V4ActTables, Dictionary<string, (string, string)>, string, string) Load()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Bricks", Work + ".fra.json");
@@ -48,11 +62,18 @@ internal static class BricksFixture
 
         public HashSet<string> EuActsHeld { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>The act's last version ended before the date asked: its tables are the latest version held.</summary>
+        public bool LatestHeld { get; init; }
+
+        /// <summary>The tables served, when a test declares articles not held; the fixture's own otherwise.</summary>
+        public V4ActTables? Served { get; init; }
+
         public V4ActAtDate Act(string work, string date)
         {
             Asked.Add(work + "@" + date);
+            var tables = Served ?? Tables;
             return work == Work
-                ? new V4ActAtDate(Tables, new V4ActFacts(work, "held", Tables.Date, null, 11, Tables.Summary.Articles, Tables.Summary.Lines))
+                ? new V4ActAtDate(tables, new V4ActFacts(work, LatestHeld ? "latest_held" : "held", tables.Date, null, 11, tables.Summary.Articles, tables.Summary.Lines))
                 : new V4ActAtDate(null, new V4ActFacts(work, "text_not_available", null, null, 0, 0, 0));
         }
 
@@ -60,14 +81,33 @@ internal static class BricksFixture
     }
 
     /// <summary>A model that answers what a test scripts for each step, and records what it was sent.</summary>
-    internal sealed class Model(Func<V4ModelCall, string> reply) : IV4Model
+    /// <param name="outline">
+    /// What the outline call answers (the second reading, 2026-11-19). A test that does not script it gets a model that names
+    /// no article of the tables of contents, so the tables' own answer stands as it did; those calls are kept apart.
+    /// </param>
+    internal sealed class Model(Func<V4ModelCall, string> reply, Func<V4ModelCall, string>? outline = null) : IV4Model
     {
         public List<V4ModelCall> Calls { get; } = [];
+
+        /// <summary>The outline calls answered by the default (no article named).</summary>
+        public List<V4ModelCall> Outlines { get; } = [];
 
         public string ModelId => "scripted-model";
 
         public V4ModelReply Complete(V4ModelCall call, CancellationToken cancellationToken)
         {
+            if (call.Step == "outline")
+            {
+                if (outline is null)
+                {
+                    Outlines.Add(call);
+                    return new V4ModelReply("{\"articles\":[]}", 1500, 10, 100);
+                }
+
+                Calls.Add(call);
+                return new V4ModelReply(outline(call), 1500, 100, 100);
+            }
+
             Calls.Add(call);
             return new V4ModelReply(reply(call), 1500, 1000, 100);
         }

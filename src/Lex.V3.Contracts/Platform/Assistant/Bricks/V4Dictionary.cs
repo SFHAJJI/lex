@@ -23,7 +23,15 @@ public sealed record V4Concept(
     IReadOnlyList<string> UsualAnswer,
     bool ValueRequired,
     bool Complete,
-    bool Branch = false);
+    bool Branch = false)
+{
+    /// <summary>
+    /// The articles of the home act where the law treats the concept, when the dictionary names them (`articles`): what
+    /// lets an answer say that one of them exists and is not held (the motor law's article 16, the Fonds de Garantie's
+    /// mission). Empty for most concepts.
+    /// </summary>
+    public IReadOnlyList<string> Articles { get; init; } = [];
+}
 
 /// <summary>One keyword of a concept (brick D, the table <c>concept_keywords</c>).</summary>
 /// <param name="Row">The row's number in the file's order: what a trace names instead of the words.</param>
@@ -125,6 +133,20 @@ public sealed class V4Dictionary
 
     public V4Keyword? Keyword(int row) => row >= 0 && row < Keywords.Count ? Keywords[row] : null;
 
+    /// <summary>
+    /// The language of the dictionary's keywords a text holds, when they are of one language only ("fr" or "en"), else
+    /// null: what decides a question of one or two words the function words leave undetermined ("garantie").
+    /// </summary>
+    public string? LanguageOfWords(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var words = V4Text.Words(V4Text.Fold(text));
+        var found = Keywords.Where(static keyword => !keyword.Pattern && keyword.Language is "fr" or "en")
+            .Where(keyword => V4Key.Read(keyword.Keyword) is { } key && key.In(words))
+            .Select(static keyword => keyword.Language).Distinct(StringComparer.Ordinal).ToList();
+        return found is [var only] ? only : V4CorpusIndex.Insurance.LanguageOfDomainWords(words);
+    }
+
     public V4AnswerType? AnswerType(string id) => AnswerTypes.FirstOrDefault(type => type.Id == id);
 
     /// <summary>The keywords of a concept of the given kinds of word, in the file's order.</summary>
@@ -211,7 +233,10 @@ public sealed class V4Dictionary
                 Strings(element, "usual_answer"),
                 element.GetProperty("value_required").GetBoolean(),
                 element.GetProperty("complete").GetBoolean(),
-                element.TryGetProperty("branch", out var branch) && branch.ValueKind == JsonValueKind.True));
+                element.TryGetProperty("branch", out var branch) && branch.ValueKind == JsonValueKind.True)
+            {
+                Articles = Strings(element, "articles"),
+            });
             foreach (var (member, language, word, priority, weight, source) in new[]
                      {
                          ("law_fr", "fr", "law", "primary", 1.0, "law_text"),

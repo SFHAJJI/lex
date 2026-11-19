@@ -144,7 +144,20 @@ public static partial class V3AssistantPipeline
             return new V3AskPresented(V3AskPresentationResult.AssistantUnavailable, V3AskOutcomeReason.QuestionRejected);
         }
 
-        var locale = request.AnswerLocale ?? V3AssistantParsers.LocaleFor(V3AssistantParsers.LanguageOf(intake.Text));
+        // A question the function words leave undetermined ("garantie") is read in the language of the dictionary's
+        // keywords it holds, when they are of one language only (2026-11-19: "garantie" was answered in English).
+        var language = V3AssistantParsers.LanguageOf(intake.Text);
+        if (language == V3QuestionLanguage.Undetermined)
+        {
+            language = Bricks.V4Dictionary.Insurance.LanguageOfWords(intake.Text) switch
+            {
+                "fr" => V3QuestionLanguage.French,
+                "en" => V3QuestionLanguage.English,
+                _ => language,
+            };
+        }
+
+        var locale = request.AnswerLocale ?? V3AssistantParsers.LocaleFor(language);
         if (locale is null)
         {
             return new V3AskPresented(V3AskPresentationResult.LocalizationUnavailable, V3AskOutcomeReason.LocaleUnavailable);
@@ -348,7 +361,7 @@ public static partial class V3AssistantPipeline
                     break;
                 case V3ArgumentSourceKind.Corpus:
                     value = source.Corpus!;
-                    kind = name == "identifier" ? V3AnswerSlotKind.IdentifierText : V3AnswerSlotKind.Anchor;
+                    kind = name == "identifier" ? V3AnswerSlotKind.IdentifierText : name == "date" ? V3AnswerSlotKind.CalendarDate : V3AnswerSlotKind.Anchor;
                     break;
                 default:
                     throw new InvalidOperationException("Not an argument source.");

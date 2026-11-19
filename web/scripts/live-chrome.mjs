@@ -1564,6 +1564,7 @@ const EN = Object.freeze({
       route: "Fixed rules choose the path from what was read: a defined term, one fact, a rule and its cases, a list, a text Lex does not hold, a personal case. No model chooses.",
       retrieval: "Code finds the lines of the text that hold the term, and ranks them by signals it can show: the heading, who acts, the form of a rule.",
       arbiter: "An AI model sorts the lines code found into main, supporting and set aside. It adds none.",
+      outline: "An AI model reads the tables of contents of the texts on the subject and names the articles to read. It can name only articles of those tables.",
       extraction: "An AI model points at the lines that answer, by their numbers. It writes no word; code checks every line it points at.",
       checks: "Every sentence comes from a fixed template; the law is quoted, never rephrased. The answer is released only if every quote is identical to the stored text.",
       validator: "The plan code wrote is checked against the list of allowed operations. A plan that does not fit is rejected, never repaired.",

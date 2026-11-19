@@ -93,6 +93,31 @@ public static partial class V3AssistantPipeline
 
     private static V3AnswerFact Count(string name, int value) => new(name, V3AnswerSlotKind.Count, value.ToString(CultureInfo.InvariantCulture));
 
+    /// <summary>
+    /// What is said of articles that exist in the publisher's document and are not held: one sentence an article, the
+    /// act's own address at the publisher, and the publisher's site. A list, and a method of its own: an iterator or a
+    /// closure here would add a compiler-named class to what the census pins.
+    /// </summary>
+    private static List<V3DossierBlock> ArticlesNotHeld(V4PlanRecord record, V3AnswerLocale locale)
+    {
+        var said = new List<V3DossierBlock>();
+        foreach (var article in record.NotHeld)
+        {
+            said.Add(Claim(V3AnswerTemplates.AbsenceArticleNotHeld, locale, Fact("anchor", V3AnswerSlotKind.Anchor, article)));
+        }
+
+        foreach (var act in V4CorpusIndex.Insurance.Acts)
+        {
+            if (act.Address == record.Work && act.Official is { } official)
+            {
+                said.Add(Claim(V3AnswerTemplates.LawOfficialSource, locale, Fact("uri", V3AnswerSlotKind.Uri, official)));
+            }
+        }
+
+        said.AddRange(OfficialSources(["lu-legilux"], locale));
+        return said;
+    }
+
     private static V3AnswerDossier? ComposeBricks(
         V3AssistantPlan plan,
         V3PlanContext context,
@@ -111,8 +136,12 @@ public static partial class V3AssistantPipeline
         var part = plan.Parts[0];
         var cues = V3AssistantParsers.ApplicationCues(question, part.Span.Start, part.Span.End);
         var application = AsksApplication(question, part, cues);
+        // The general rule behind a question worded for the reader's own case (the record's caveat `not_your_case`, written
+        // only with lines to quote): the lines are the answer, said not to say how they apply to the reader. A plan without
+        // that caveat (every plan made before 2026-11-19) is refused as it was, so an older trace replays to its bytes.
+        var general = application && record.Items.Count > 0 && record.AnswerCaveats.Contains("not_your_case");
         var dictionary = V4Dictionary.Insurance;
-        var date = record.DateRef == "today" ? environment.Today : context.Value(record.DateRef, "date") ?? environment.Today;
+        var date = record.LatestHeld ?? (record.DateRef == "today" ? environment.Today : context.Value(record.DateRef, "date") ?? environment.Today);
 
         var quoteNumber = 0;
         string NextQuoteId() => "q" + (++quoteNumber).ToString(CultureInfo.InvariantCulture);
@@ -188,7 +217,7 @@ public static partial class V3AssistantPipeline
 
         var blocks = new List<V3DossierBlock>();
         V3AssistantVerdict verdict;
-        if (application)
+        if (application && !general && record.Kind != "greeting")
         {
             // The descriptive maximum (S4-A05): the law the bricks found, verbatim and dated, beside the refusal; nothing else.
             verdict = V3AssistantVerdict.Refuse;
@@ -201,7 +230,11 @@ public static partial class V3AssistantPipeline
         else if (record.Kind == "greeting")
         {
             verdict = V3AssistantVerdict.Clarify;
-            blocks.Add(Claim(V3AnswerTemplates.DirectGreeting, locale));
+            blocks.Add(Claim(
+                record.Route != "clarify" ? V3AnswerTemplates.DirectGreeting
+                : record.AnswerCaveats.Contains("refers_to_earlier") ? V3AnswerTemplates.ClarifyNoContext
+                : V3AnswerTemplates.ClarifyOneWord,
+                locale));
         }
         else if (record.Kind == "not_held")
         {
@@ -219,6 +252,10 @@ public static partial class V3AssistantPipeline
         {
             switch (record.Absence)
             {
+                case "article_not_held" when record.Work is not null && record.NotHeld.Count > 0:
+                    verdict = V3AssistantVerdict.Point;
+                    blocks.AddRange(ArticlesNotHeld(record, locale));
+                    break;
                 case "text_not_held" when record.Work is not null:
                     verdict = V3AssistantVerdict.Point;
                     blocks.Add(Claim(V3AnswerTemplates.AbsenceTextNotHeld, locale, Fact("work", V3AnswerSlotKind.WorkAddress, record.Work)));
@@ -278,7 +315,21 @@ public static partial class V3AssistantPipeline
             }
         }
 
-        if (!application)
+        // An article right before or after one the answer quotes exists in the publisher's document and is not held: said
+        // after the quotations, with the act's official address (the owner's brief of 2026-11-19, work item 3).
+        if (record.Kind != "absence" && record.Items.Count > 0 && record.NotHeld.Count > 0 && record.Work is not null)
+        {
+            blocks.AddRange(ArticlesNotHeld(record, locale));
+        }
+
+        // An act whose last version ended before the date asked is read in the latest version held, and the answer says so
+        // above its first quotation (the owner's brief of 2026-11-19, work item 2).
+        if (record.LatestHeld is not null && record.Items.Count > 0)
+        {
+            blocks.Insert(0, Claim(V3AnswerTemplates.NoteLatestHeld, locale, Date("date", record.LatestHeld)));
+        }
+
+        if (!application || general)
         {
             if (record.Usage is { } usage)
             {
@@ -305,6 +356,7 @@ public static partial class V3AssistantPipeline
                     "list_from_sweep" => V3AnswerTemplates.CaveatListFromSweep,
                     "general_and_special" => V3AnswerTemplates.CaveatGeneralAndSpecial,
                     "vocabulary_incomplete" => V3AnswerTemplates.CaveatVocabularyIncomplete,
+                    "not_your_case" => V3AnswerTemplates.CaveatNotYourCase,
                     _ => null,
                 };
                 if (template is not null)
@@ -344,7 +396,7 @@ public static partial class V3AssistantPipeline
         // What a model did, as it was: it described the question (it named the concept the reader's words are about), it
         // marked lines among those code gave it, both, or nothing.
         var described = record.ModelSteps.Contains("question");
-        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "extraction");
+        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "outline" or "extraction");
         if (described)
         {
             notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeModelDescribed, locale));
@@ -481,6 +533,7 @@ public static partial class V3AssistantPipeline
                 {
                     "question" => V3AnswerTemplates.PlanBricksModelQuestion,
                     "arbiter" => V3AnswerTemplates.PlanBricksModelArbiter,
+                    "outline" => V3AnswerTemplates.PlanBricksModelOutline,
                     "extraction" => V3AnswerTemplates.PlanBricksModelExtraction,
                     _ => null,
                 };

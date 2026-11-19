@@ -41,8 +41,98 @@ public static class V4Dispatcher
         Options, Timeout);
 
     // A question on how the law changed: Lex's own operations (diff, changes_in_period, timeline) answer these.
+    // Words that are about a text's own life whatever stands beside them ("historique", "version", "abrogé").
+    private static readonly Regex PointerPattern = new(
+        @"\btel(?:le)?s? que (?:vise|defini|prevu)e?s? (?:par|a) l'article (\d+(?:er)?(?:-\d+)?)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>
+    /// The article a definition points at in place of defining ("tel que visé par l'article 15"), read in the clause of
+    /// the folded defining line that opens with the term; null when the clause points nowhere.
+    /// </summary>
+    public static string? PointedArticle(string folded, string term)
+    {
+        ArgumentNullException.ThrowIfNull(folded);
+        ArgumentException.ThrowIfNullOrEmpty(term);
+        foreach (var clause in folded.Split(';'))
+        {
+            var at = clause.IndexOf(term, StringComparison.Ordinal);
+            if (at < 0 || at > 12)
+            {
+                continue;
+            }
+
+            // A pointer and nothing after it: "tel que visé à l'article 43, point 14, de la loi modifiée du 7 décembre
+            // 2015" points into another act and is not followed.
+            var match = PointerPattern.Match(clause, at);
+            return match.Success && clause.AsSpan(match.Index + match.Length).Trim().IsEmpty ? "art_" + match.Groups[1].Value : null;
+        }
+
+        return null;
+    }
+
+    // An act named by its kind and a date ("loi du 31 février 2020", "loi belge du 4 avril 2014"), and a question put to
+    // Lex itself ("remplaces-tu un avocat", "qui es-tu", "ton prompt"): read on the folded question.
+    private static readonly Regex DatedActPattern = new(
+        @"\b(?:lois?|reglement|directive|arrete|ordonnance|law|act|regulation)\b(?:\s+[\p{L}-]+){0,3}?\s+(?:du|de|of)\s+\d{1,2}(?:er)?\s+\p{L}+\s+\d{4}\b",
+        RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    private static readonly Regex ToLexPattern = new(
+        @"(?:\b|-)(?:tu|toi|ton|ta|tes)\b|\b(?:avez|etes|detenez|couvrez)-vous\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    // A question that asks for an opinion or a choice ("la meilleure assurance auto"), and one that leaves its subject
+    // unsaid ("a-t-il le droit de me faire ça ?"): no article of an act states what is asked.
+    private static readonly Regex OpinionPattern = new(
+        @"\b(?:meilleure?s?|pires?|moins chere?s?|recommande\w*|conseille\w*|best|cheapest|recommend\w*)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    private static readonly Regex UnsaidPattern = new(@"\b(?:ca|cela|ceci)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    // A follow-up that only an earlier answer gives a meaning to: "et ...", "pourquoi", "tu es sûr", "en anglais", "ce n'est
+    // pas ce que j'ai demandé", "l'article complet" or "le texte officiel" with nothing named, "me le résumer".
+    private static readonly Regex ShortFollowUp = new(@"^\s*(?:et|pourquoi|why|and)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    private static readonly Regex EarlierAnswer = new(
+        @"^\s*(?:tu es sur|vous etes sur|t'es sur|en anglais|en francais|in english|in french|ce n'est pas|c'est faux|are you sure)\b" +
+        @"|\b(?:l'article|le texte|la loi|cet article|ce texte|cette loi|le paragraphe|the article|this article|the text|this text)\b(?!\s*(?:\d|du\b|de la\b|de l'|des\b|sur\b|n[°o]|no\b|of\b|on\b))" +
+        @"|\b(?:me|nous)\s+(?:le|la|les)\s+(?:resumer|expliquer|traduire|montrer|donner|redonner)\b|\b(?:resume|resumez|explique|expliquez|traduis|traduisez)-(?:le|la|les)\b",
+        RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>
+    /// Whether the question is a follow-up that only an earlier answer gives a meaning to: it names no act, no subject of
+    /// the dictionary and no article, and reads as "et …", "pourquoi", "tu es sûr", "en anglais", "l'article complet".
+    /// </summary>
+    public static bool AsksOfAnEarlierAnswer(V4QuestionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        // "Et …", "Pourquoi …" only when short: "Et si l'acheteur de la police ne règle plus rien ?" is a question.
+        return row.Acts.Count == 0 && row.Concepts.Count == 0 && !CitesArticle(row) &&
+            (EarlierAnswer.IsMatch(row.Folded) || (ShortFollowUp.IsMatch(row.Folded) && row.Words.Count <= 4));
+    }
+
+    /// <summary>Whether the folded question asks for an opinion or a choice between offers.</summary>
+    public static bool AsksAnOpinion(string folded) => OpinionPattern.IsMatch(folded);
+
+    /// <summary>Whether the folded question points at its subject without saying it ("ça", "cela").</summary>
+    public static bool LeavesItsSubjectUnsaid(string folded) => UnsaidPattern.IsMatch(folded);
+
+    /// <summary>Whether the folded question names an act by its kind and a date.</summary>
+    public static bool NamesAnActByItsDate(string folded) => DatedActPattern.IsMatch(folded);
+
+    /// <summary>Whether the folded question is put to Lex itself, in the second person singular.</summary>
+    public static bool AddressesLex(string folded) => ToLexPattern.IsMatch(folded);
+
     private static readonly Regex ChangePattern = new(
-        @"(?<![\p{L}])(?:modifi\w*|change\w*|changement\w*|evolu\w*|historique|versions?|difference\w*|compar\w*|avant et apres|amend\w*|changed|history|differ\w*|abroge\w*|repealed)(?![\p{L}])",
+        @"(?<![\p{L}])(?:historique|versions?|avant et apres|amend\w*|history|abroge\w*|abrogations?|repealed)(?![\p{L}])",
+        Options, Timeout);
+
+    // Words that say a change of anything ("modifier les conditions générales", "changer d'assureur", "la différence entre
+    // l'assuré et le preneur"): they ask how the law changed only beside a word for a text, or a year (the reader's set of
+    // 2026-11-19: four such questions on the content of the law were sent to the comparison of versions).
+    private static readonly Regex LooseChangePattern = new(
+        @"(?<![\p{L}])(?:modifi\w*|change\w*|changement\w*|evolu\w*|difference\w*|compar\w*|changed|differ\w*)(?![\p{L}])",
+        Options, Timeout);
+
+    private static readonly Regex TextOrYearPattern = new(
+        @"(?<![\p{L}\d])(?:loi|lois|texte|textes|article|articles|art|reglement|reglements|code|directive|law|laws|act|regulation|legislation|(?:19|20)\d{2})(?![\p{L}\d])",
         Options, Timeout);
 
     // The number an article is cited by: "l'article 39", "art. 62-3", "article 1er", "article 15 bis".
@@ -159,7 +249,7 @@ public static class V4Dispatcher
     public static bool AsksChange(V4QuestionRow row, int dates)
     {
         ArgumentNullException.ThrowIfNull(row);
-        return dates >= 2 || ChangePattern.IsMatch(row.Folded);
+        return dates >= 2 || ChangePattern.IsMatch(row.Folded) || (LooseChangePattern.IsMatch(row.Folded) && TextOrYearPattern.IsMatch(row.Folded));
     }
 
     /// <summary>
