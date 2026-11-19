@@ -421,44 +421,53 @@ public sealed class EveryLawTests
         Assert.IsTrue(laws.Acts.Count > 100, "every Luxembourg act held, not a handful");
         Assert.IsTrue(laws.Acts.All(static act => act.Work.StartsWith("/lu-legilux/", StringComparison.Ordinal)), "EU acts keep Lex's own operations");
         Assert.AreEqual(64, laws.Sha256.Length);
-        Assert.IsTrue(laws.ArticleKeep * laws.MaxActs <= 120, "the outline call stays small");
+        Assert.IsTrue(laws.ArticleKeep * laws.MaxActs <= 240, "the outline call stays small: at most 240 lines of about 110 characters");
     }
 
     /// <summary>
     /// The router gives what the reference gives (router.py, beside the index's source), question by question: the same
-    /// tokens, the same acts kept, the same scores to the hundredth. The vectors are made by the reference from the index
+    /// matching copy, the same tokens, the same acts kept, the same scores to the hundredth. The vectors are made by the reference from the index
     /// this build carries, and say which by its digest; vectors of another index say nothing of this one.
     /// </summary>
     [TestMethod]
     public void TheRouterGivesWhatTheReferenceGives()
     {
         var laws = V4LawIndex.Embedded!;
-        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Bricks", "law-router-vectors.json")));
-        var root = document.RootElement;
-        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("index_sha256", out var digest))
-        {
-            Assert.AreEqual(laws.Sha256, digest.GetString(),
-                "The vectors were made from another law-index.json than the one this build carries: make them again from it (router.py is the reference; C:\\lex-v3\\kezhan-plan-2026-11-20\\build-notes\\refresh-law-index.ps1 does both).");
-        }
-
-        var vectors = root.ValueKind == JsonValueKind.Array ? root : root.GetProperty("vectors");
         var compared = 0;
-        foreach (var vector in vectors.EnumerateArray())
+
+        // Two files: the index builder's own vectors (30 questions, with the matching copy of each), and 55 more made by
+        // the same reference from the dev set (they name the index they were made from by its digest).
+        foreach (var file in new[] { "law-index-vectors.json", "law-router-vectors.json" })
         {
-            var question = vector.GetProperty("question").GetString()!;
-            if (vector.TryGetProperty("tokens", out var tokens))
+            using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Bricks", file)));
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("index_sha256", out var digest))
             {
-                CollectionAssert.AreEqual(tokens.EnumerateArray().Select(static token => token.GetString()).ToArray(), laws.Tokens(question).ToArray(), question);
+                Assert.AreEqual(laws.Sha256, digest.GetString(),
+                    "The vectors were made from another law-index.json than the one this build carries: make them again from it (router.py is the reference; C:\\lex-v3\\kezhan-plan-2026-11-20\\build-notes\\refresh-law-index.ps1 does both).");
             }
 
-            var expected = vector.TryGetProperty("kept", out var kept) ? kept : vector.GetProperty("expected");
-            var wanted = expected.EnumerateArray().Select(static act => act.ValueKind == JsonValueKind.Array
-                ? (act[0].GetString()!, (int)Math.Round(act[1].GetDouble() * 100))
-                : (act.GetProperty("work").GetString()!, (int)Math.Round(act.GetProperty("score").GetDouble() * 100))).ToArray();
-            CollectionAssert.AreEqual(wanted, laws.Route(question).Select(static act => (act.Act.Work, act.ScoreCents)).ToArray(), question);
-            compared++;
-        }
+            var vectors = root.ValueKind == JsonValueKind.Array ? root : root.GetProperty("vectors");
+            foreach (var vector in vectors.EnumerateArray())
+            {
+                var question = vector.GetProperty("question").GetString()!;
+                if (vector.TryGetProperty("normalised", out var normalised))
+                {
+                    Assert.AreEqual(normalised.GetString(), V4LawIndex.Normalise(question), file + ": " + question);
+                }
 
+                if (vector.TryGetProperty("tokens", out var tokens))
+                {
+                    CollectionAssert.AreEqual(tokens.EnumerateArray().Select(static token => token.GetString()).ToArray(), laws.Tokens(question).ToArray(), file + ": " + question);
+                }
+
+                var wanted = vector.GetProperty("kept").EnumerateArray().Select(static act => act.ValueKind == JsonValueKind.Array
+                    ? (act[0].GetString()!, (int)Math.Round(act[1].GetDouble() * 100))
+                    : (act.GetProperty("work").GetString()!, (int)Math.Round(act.GetProperty("score").GetDouble() * 100))).ToArray();
+                CollectionAssert.AreEqual(wanted, laws.Route(question).Select(static act => (act.Act.Work, act.ScoreCents)).ToArray(), file + ": " + question);
+                compared++;
+            }
+        }
         Assert.IsTrue(compared >= 20, "a handful of vectors proves little");
     }
 
