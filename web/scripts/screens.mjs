@@ -2,6 +2,8 @@
 // their answers load, saved as PNG. Runs only on GitHub's runners (never on the driver's PC: no local browser). Asks the public
 // site what any reader may ask; the assistant is asked the questions listed here, as a reader would ask them.
 // Release 14 (the owner's brief of 2026-11-15): the V4 pages and the brief's ten acceptance checks, French and English.
+// Release 15 (the bricks, 2026-11-19): the two questions of 2026-11-18 as their reader typed them, an absence, a question on
+// the reader's own case (refused, the law beside it), and the same in English.
 // Usage: node web/scripts/screens.mjs <origin> <out directory>
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,7 +21,11 @@ const ASK = (question) => `(() => { const input = document.getElementById('lx-do
   input.dispatchEvent(new Event('input', { bubbles: true })); input.form.requestSubmit(); return 'asked'; })()`;
 const FR_FOUND = "Quel est le délai de prescription d'un contrat d'assurance ?";
 const EN_FOUND = "What does Article 5 of the GDPR say?";
-const NONE = "Que se passe-t-il en cas d'erreur sur l'âge de l'assuré dans une assurance sur la vie ?";
+const NONE = "C'est quoi la franchise ?";
+const FIRST = { fr: "c'est quoi une personne lésé", en: "What is an injured party?" };
+const SECOND = { fr: "l'assureur peut résilier le contrat de façon unilatérale ?", en: "Can the insurer terminate the contract?" };
+const OWN = { fr: "Mon assureur peut-il résilier mon contrat ?", en: "Can my insurer terminate my contract?" };
+const AGE = "Que se passe-t-il en cas d'erreur sur l'âge de l'assuré dans une assurance sur la vie ?";
 const CLARIFY = "Quel est le délai de préavis pour résilier un contrat d'assurance ?";
 const CITATION = "Loi du 27 juillet 1997 sur le contrat d'assurance, article 38, 1er juin 2012";
 // [name, path, width, height, mobile, whole page, what to do once loaded, how long to wait after it]
@@ -35,7 +41,13 @@ for (const lang of ["fr", "en"]) {
     [`${lang}-07-find-citation-opens-art38--1366x768`, `/${lang}${find(CITATION)}`, 1366, 768, false, false, null, 8000],
     [`${lang}-08-ask-citation-no-model--1366x768`, `/${lang}${text("&article=art_44")}`, 1366, 768, false, false, ASK(CITATION), 20000],
     [`${lang}-09-ask-clarify--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(CLARIFY), 20000],
-    [`${lang}-10-ask-not-found--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(NONE), 20000],
+    [`${lang}-10-ask-absence--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(NONE), 20000],
+    [`${lang}-19-ask-first-question--1366x768`, `/${lang}/`, 1366, 768, false, false, ASK(FIRST[lang]), 20000],
+    [`${lang}-20-ask-second-question--1366x768`, `/${lang}/`, 1366, 768, false, false, ASK(SECOND[lang]), 24000],
+    [`${lang}-21-ask-own-case-refused--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(OWN[lang]), 22000],
+    [`${lang}-22-ask-heading-written-out--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(AGE), 22000],
+    [`${lang}-first-question--1366-whole`, `/${lang}/`, 1366, 768, false, true, ASK(FIRST[lang]), 20000],
+    [`${lang}-second-question--1366-whole`, `/${lang}/`, 1366, 768, false, true, ASK(SECOND[lang]), 24000],
     [`${lang}-11-gdpr--1366x768`, `/${lang}/text.html?text=32016R0679&article=005`, 1366, 768, false, false, null, 0],
     [`${lang}-12-changes--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, null, 0],
     [`${lang}-13-how-it-works--1366x768`, `/${lang}/evidence.html`, 1366, 768, false, false, null, 0],
