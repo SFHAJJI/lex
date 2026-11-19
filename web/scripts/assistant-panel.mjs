@@ -611,8 +611,9 @@ export async function actTitlesOf(dossier, fetchImpl) {
 }
 
 /**
- * The Luxembourg act a bricks answer read and names by its address in a sentence of its own (an absence: "Lex went through
- * the text of /lu-legilux/..."): the record's `work`. Null for another publisher's act or an answer of another kind.
+ * The Luxembourg act a bricks answer read, which a sentence of its own may name by its address (a text Lex cannot show:
+ * "Lex holds the record of /lu-legilux/..."; an absence names the act by its title since 2026-11-19): the record's `work`.
+ * Null for another publisher's act or an answer of another kind.
  */
 export function bricksWork(dossier) {
   const work = dossier?.trace?.plan?.bricks?.work;

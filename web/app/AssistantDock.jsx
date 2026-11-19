@@ -234,8 +234,9 @@ function BricksBody({ turn, copy, locale, onText, beside = false }) {
   const opening = answerOpening(turn, locale);
   return body.map((entry, at) => {
     if (entry.type === 'line') {
-      // A sentence that names the act by its address (an absence's sweep) says its title once the title is read; until
-      // then, and when the title cannot be read, "this act" in the answer's language: never the address.
+      // A sentence that names the act by its address (a text Lex cannot show) says its title once the title is read; until
+      // then, and when the title cannot be read, "this act" in the answer's language: never the address. A sentence that
+      // names the act by its title (an absence, since 2026-11-19) holds no address and is shown as the server wrote it.
       const around = aroundAddress(entry.text, bricksWork(turn.dossier));
       const named = turn.workTitle?.title
         ? <>{QUOTE_OPEN}<span lang={tagOf(turn.workTitle.language)}>{turn.workTitle.title}</span>{QUOTE_CLOSE}</>

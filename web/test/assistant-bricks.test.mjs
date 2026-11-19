@@ -1,6 +1,6 @@
 // The dock's reading of a bricks answer (V4, plan /2), held to answers the engine itself made: `bricks-answers-record.mjs` holds
 // nine dossiers the pipeline answered over the test corpus of the law of 27 July 1997 on the insurance contract, on
-// 18/11/2026 (a definition, a rule and its cases, an absence shown by its sweep, two answers by scope, a refusal with the
+// 18/11/2026 (a definition, a rule and its cases, an absence said in one sentence that names the law by its title, two answers by scope, a refusal with the
 // law beside it, a greeting; then three answers of operations: a cited article of a law the index names, opened by code;
 // a cited article a scripted model described; and a question code searched alone). A .NET test (BricksTests) fails when the file is not what the engine answers. What is checked: every word drawn is the server's sentence or the law's own; one line
 // of the law is quoted, not the whole article; the stages are the bricks', tagged "AI model" only when a call is recorded.
@@ -22,6 +22,26 @@ const FR = ASSISTANT_PANEL_COPY.fr;
 const asked = (dossier) => (dossier.verdict === 'refuse'
   ? { state: 'refusal', envelope: { refusal: { code: 'advice_boundary', helpful_payload: { answer_dossier: dossier } } } }
   : { state: 'success', envelope: { result: { object_type: 'answer_dossier', value: dossier } } });
+
+// The one sentence of a bricks answer that still names its act by its address: Lex holds the act's notice and no text to
+// show (`absence.text_not_held`, whose fact `work` is the address). The samples' corpus holds the text of its one law, so
+// this answer is made by hand from the absence sample: the server's French template word for word
+// (`V3AnswerTemplates.French.cs`), the block and the record as `V3AssistantPipeline.Bricks.cs` writes them.
+function textNotHeld() {
+  const dossier = structuredClone(BRICKS_ANSWERS.absence);
+  const work = dossier.trace.plan.bricks.work;
+  dossier.verdict = 'point';
+  dossier.parts[0].verdict = 'point';
+  dossier.trace.plan.bricks.answer.absence = 'text_not_held';
+  dossier.parts[0].blocks = [{
+    kind: 'claim',
+    template_id: 'absence.text_not_held',
+    locale: 'fr',
+    facts: [{ name: 'work', kind: 'work_address', value: work }],
+    text: `Lex détient la notice de ${work}, mais aucun texte qu’il puisse en montrer à cette date.`,
+  }];
+  return dossier;
+}
 
 let dockModule;
 async function dock() {
@@ -135,12 +155,12 @@ test('the rule is shown first, then its cases, each a line with its own article;
   assert.ok(!body.some((entry) => typeof entry.text === 'string' && /^(Oui|Non)\b/u.test(entry.text)));
 });
 
-test('an absence shows the sweep and what it proves; a greeting says one sentence', () => {
+test('an absence is one plain sentence on what the text contains, with no address and no count; a greeting says one sentence', () => {
   const absence = bricksBody(answers.absence);
   assert.ok(absence.every((entry) => entry.type === 'line'));
-  assert.match(absence[0].text, /lignes\u00A0: 913\u00A0; articles\u00A0: 147/u);
-  assert.equal(absence[1].text, 'Lignes contenant «\u00A0franchise\u00A0»\u00A0: 0\u00A0; articles concernés\u00A0: 0.');
-  assert.equal(absence.at(-1).template, 'absence.terms_nowhere');
+  assert.ok(!absence.some((entry) => /\/lu-legilux\//u.test(entry.text)), 'no internal address is shown to the reader');
+  assert.ok(!absence.some((entry) => /articles concernés/u.test(entry.text)), 'no zero-count line');
+  assert.equal(absence.at(-1).template, 'absence.terms_nowhere_in_act');
   assert.deepEqual(bricksBody(answers.greeting).map((entry) => entry.template), ['direct.greeting']);
 });
 
@@ -199,24 +219,39 @@ test('the dock draws a bricks answer: the lead line marked, each case with its a
   const said = { id: 't2', kind: 'said', question: 'C\'est quoi la franchise ?', dossier: answers.absence, servingCommit: null };
   const absence = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: said }));
   assert.match(absence, /data-dock-card="said"/u);
-  assert.match(absence, /Aucun de ces termes ne figure dans ce texte\./u);
-  assert.ok(!absence.includes(FR.dockNotFound), 'an absence proved by a sweep is not the card of a search that found nothing');
-
-  // The absence's sentence names the act it read by its address. The card never shows the address (2026-11-19: no raw
-  // identifier on a page): "this act", in the answer's language, until the act's title is read, then the title.
-  // (Release 16's candidate: the title was never asked for, the card being of the kind `said`, not `answer`.)
+  // The absence is the server's one sentence, whole: it names the law by its title, and holds no address and no count.
   const address = bricksWork(answers.absence);
-  assert.equal(workTitleToRead(said, null), address, 'a card that quotes nothing asks for the title of the act it read');
-  assert.equal(workTitleToRead({ ...said, workTitle: null }, null), null, 'asked once: a title that could not be read is not asked again');
-  assert.equal(workTitleToRead({ ...said, kind: 'advice' }, null), null);
-  assert.equal(workTitleToRead(said, { identifier: address, article: 'art_1er' }), null, 'an answer that opens a text names it by its quotation');
-  assert.ok(!absence.includes(address), 'with no title read, the address is not in sight');
-  assert.match(absence, /Lex a parcouru le texte de cet acte \(lignes/u, 'the act is "cet acte" until its title is read');
-  const unread = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'en', shown: { ...said, workTitle: null } }));
-  assert.ok(!unread.includes(address) && unread.includes('le texte de cet acte'), 'a title that could not be read: still no address, and the answer\'s language (French), not the page\'s');
-  const titled = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...said, workTitle: { title: 'Loi du 27 juillet 1997 sur le contrat d\'assurance', language: 'fra' } } }));
+  const sentence = 'Aucun des termes que Lex connaît pour ce sujet ne figure dans le texte «\u00A0loi du 27 juillet 1997 sur le contrat d\'assurance\u00A0», tel qu’il se lisait le 18 novembre 2026\u00A0: cela indique ce que contient ce texte, et non ce que prévoit un contrat.';
+  assert.deepEqual(bricksBody(answers.absence).map((entry) => entry.text), [sentence]);
+  assert.ok(absence.includes(`<p class="lx-dock-line">${sentence.replace('\'', '&#x27;')}</p>`), 'the sentence as the server wrote it, with the law\'s name');
+  assert.equal((absence.match(/class="lx-dock-line"/gu) ?? []).length, 1, 'one sentence, and no line of counts');
+  assert.ok(!absence.includes(address) && !absence.includes('/lu-legilux/'), 'no address in sight');
+  assert.ok(!absence.includes(FR.dockThisAct), 'the law is named: nothing stands in for a name');
+  assert.ok(!/Lignes contenant|articles concernés|Lex a parcouru/u.test(absence), 'no sweep and no zero count');
+  assert.ok(!absence.includes(FR.dockNotFound), 'an absence proved by a sweep is not the card of a search that found nothing');
+  // A title read for this card changes nothing in it: the sentence already names the law.
+  const again = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...said, workTitle: { title: 'Loi du 27 juillet 1997 sur le contrat d\'assurance', language: 'fra' } } }));
+  assert.equal(again, absence);
+
+  // A sentence that does name its act by its address (a text Lex holds the notice of and cannot show): the card never
+  // shows the address (2026-11-19: no raw identifier on a page): "this act", in the answer's language, until the act's
+  // title is read, then the title. (Release 16's candidate: the title was never asked for, the card being of the kind
+  // `said`, not `answer`.)
+  const held = { ...dockTurnOf(asked(textNotHeld()), 'fr'), id: 't4', question: 'Que dit ce texte ?' };
+  assert.equal(held.kind, 'said', 'a text Lex cannot show is said in the server\'s sentence');
+  assert.equal(bricksWork(held.dossier), address);
+  assert.equal(workTitleToRead(held, null), address, 'a card that quotes nothing asks for the title of the act it read');
+  assert.equal(workTitleToRead({ ...held, workTitle: null }, null), null, 'asked once: a title that could not be read is not asked again');
+  assert.equal(workTitleToRead({ ...held, kind: 'advice' }, null), null);
+  assert.equal(workTitleToRead(held, { identifier: address, article: 'art_1er' }), null, 'an answer that opens a text names it by its quotation');
+  const untitled = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: held }));
+  assert.ok(!untitled.includes(address), 'with no title read, the address is not in sight');
+  assert.match(untitled, /<p class="lx-dock-line">Lex détient la notice de cet acte, mais aucun texte qu’il puisse en montrer à cette date\.<\/p>/u, 'the act is "cet acte" until its title is read');
+  const unread = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'en', shown: { ...held, workTitle: null } }));
+  assert.ok(!unread.includes(address) && unread.includes('la notice de cet acte'), 'a title that could not be read: still no address, and the answer\'s language (French), not the page\'s');
+  const titled = renderToStaticMarkup(h(DockView, { page: 'live-home', locale: 'fr', shown: { ...held, workTitle: { title: 'Loi du 27 juillet 1997 sur le contrat d\'assurance', language: 'fra' } } }));
   assert.ok(!titled.includes(address), 'the address is no longer in sight');
-  assert.match(titled, /Lex a parcouru le texte de «[^<]*<span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance<\/span>/u);
+  assert.match(titled, /Lex détient la notice de «[^<]*<span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance<\/span>[^<]*», mais aucun texte/u);
 
   // A refusal shows the law's lines its answer holds beside it (the plan's dispatcher, route 1: "Lex's refusal with the law
   // shown beside it"): the lines alone, each with its article and a way to it, none marked as an answer to the reader's case.
@@ -249,13 +284,19 @@ test('the dock\'s new words are in both copy tables', () => {
 });
 
 test('an answer that names the act it read by its address: the act\'s title is read from its dossier, with the browser\'s own fetch in a page', async () => {
-  // The absence of the engine's own samples names its act by its address, in the server's sentence.
+  // The absence of the engine's own samples records the act it read, and its sentence names that act by its title: no
+  // sentence of it holds the address (the server's wording since 2026-11-19).
   const absence = answers.absence;
   const address = bricksWork(absence);
   assert.equal(address, '/lu-legilux/loi-1997-07-27-n10');
-  const line = bricksBody(absence).find((entry) => entry.type === 'line' && entry.text.includes(address));
-  assert.ok(line, 'a sentence of the absence names the act by its address');
+  assert.ok(bricksBody(absence).every((entry) => aroundAddress(entry.text, address) === null), 'no sentence of the absence holds the address');
+  // The sentences that do: the engine's own line of the plan on the text it read, and the answer on a text it cannot show.
+  const scope = absence.plan.rendered.find((block) => block.template_id === 'plan.bricks.scope');
+  assert.deepEqual(aroundAddress(scope.text, address), ['Texte lu\u00A0: ', ', tel qu’il se lisait le 18 novembre 2026 (articles\u00A0: 147\u00A0; lignes\u00A0: 913).']);
+  const line = bricksBody(textNotHeld()).find((entry) => entry.type === 'line' && entry.text.includes(address));
+  assert.equal(line?.template, 'absence.text_not_held', 'the sentence on a text Lex cannot show names the act by its address');
   const around = aroundAddress(line.text, address);
+  assert.deepEqual(around, ['Lex détient la notice de ', ', mais aucun texte qu’il puisse en montrer à cette date.']);
   assert.equal(around[0] + address + around[1], line.text);
   assert.equal(aroundAddress('no address here', address), null);
   assert.equal(aroundAddress(line.text, null), null);
