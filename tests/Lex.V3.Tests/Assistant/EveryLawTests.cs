@@ -424,7 +424,7 @@ public sealed class EveryLawTests
     /// <summary>
     /// The router gives what the reference gives (router.py, beside the index's source), question by question: the same
     /// tokens, the same acts kept, the same scores to the hundredth. The vectors are made by the reference from the index
-    /// this build carries; vectors of another version of the index say nothing of this one.
+    /// this build carries, and say which by its digest; vectors of another index say nothing of this one.
     /// </summary>
     [TestMethod]
     public void TheRouterGivesWhatTheReferenceGives()
@@ -432,9 +432,10 @@ public sealed class EveryLawTests
         var laws = V4LawIndex.Embedded!;
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Bricks", "law-router-vectors.json")));
         var root = document.RootElement;
-        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("index_version", out var version) && version.GetString() != laws.Version)
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("index_sha256", out var digest))
         {
-            Assert.Inconclusive("The vectors are of index " + version.GetString() + " and the build carries " + laws.Version + ": make them again with the index.");
+            Assert.AreEqual(laws.Sha256, digest.GetString(),
+                "The vectors were made from another law-index.json than the one this build carries: make them again from it (router.py is the reference; C:\\lex-v3\\kezhan-plan-2026-11-20\\build-notes\\refresh-law-index.ps1 does both).");
         }
 
         var vectors = root.ValueKind == JsonValueKind.Array ? root : root.GetProperty("vectors");
