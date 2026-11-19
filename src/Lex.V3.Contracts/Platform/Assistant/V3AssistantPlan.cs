@@ -644,10 +644,13 @@ public static class V3AssistantPlanValidator
         return (sha, extracts.AsReadOnly());
     }
 
-    /// <summary>Whether a text has the form of an act's address on this site ("/lu-legilux/loi-1997-07-27-n10").</summary>
+    /// <summary>
+    /// Whether a text has the form of an act's address on this site ("/lu-legilux/loi-1997-07-27-n10",
+    /// "/lu-legilux/code-procedure_civile": two codes of the corpus write an underscore in their key).
+    /// </summary>
     public static bool IsWorkAddress(string value) =>
         value is not null && value.Length is >= 14 and <= 120 && value.StartsWith("/lu-legilux/", StringComparison.Ordinal) &&
-        value.AsSpan(12).IndexOfAnyExcept("abcdefghijklmnopqrstuvwxyz0123456789-") < 0;
+        value.AsSpan(12).IndexOfAnyExcept("abcdefghijklmnopqrstuvwxyz0123456789-_") < 0;
 
     /// <summary>Whether a text has the form of an article's publisher identifier ("art_39", "art_62-3", "article_15-1").</summary>
     public static bool IsArticleId(string value) =>

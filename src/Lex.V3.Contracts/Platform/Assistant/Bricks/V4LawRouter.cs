@@ -124,7 +124,16 @@ public sealed class V4LawIndex
 
         using var memory = new MemoryStream();
         stream.CopyTo(memory);
-        return Read(memory.ToArray());
+        try
+        {
+            return Read(memory.ToArray());
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            // A file that is not of the schema leaves the build with no law index: the wider reading is then off, and
+            // the assistant answers as it did. A test holds the file to its schema, so this is not met in a release.
+            return null;
+        }
     }
 
     /// <summary>Reads an index from its bytes, refusing a file that is not of the schema.</summary>
@@ -357,6 +366,50 @@ public sealed class V4LawIndex
         return found;
     }
 
+    /// <summary>The numbers of the acts a question writes a name of, as whole words of its matching copy.</summary>
+    private HashSet<int> NamedIn(string question)
+    {
+        var normalised = Normalise(question);
+        var padded = " " + normalised + " ";
+        var named = new HashSet<int>();
+        foreach (var word in normalised.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (_names.TryGetValue(word, out var list))
+            {
+                foreach (var (name, act) in list)
+                {
+                    if (!named.Contains(act) && padded.Contains(" " + name + " ", StringComparison.Ordinal))
+                    {
+                        named.Add(act);
+                    }
+                }
+            }
+        }
+
+        return named;
+    }
+
+    /// <summary>
+    /// The acts a question names, whatever their score: what is read when the question names a code or a law, and
+    /// nothing else is. In the order of the index, at most <see cref="MaxActs"/>.
+    /// </summary>
+    public List<V4RoutedAct> Named(string question)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        var numbers = new List<int>(NamedIn(question));
+        numbers.Sort();
+        var acts = new List<V4RoutedAct>();
+        foreach (var number in numbers)
+        {
+            if (acts.Count < MaxActs)
+            {
+                acts.Add(new V4RoutedAct(Acts[number], NameBonusCents, true));
+            }
+        }
+
+        return acts;
+    }
+
     /// <summary>
     /// The acts kept for a question, the best first: the sum of the weights of the question's distinct tokens, a bonus once
     /// when the question writes one of the act's names as whole words; ties by address; the acts at or above the floor and
@@ -377,23 +430,7 @@ public sealed class V4LawIndex
             }
         }
 
-        var normalised = Normalise(question);
-        var padded = " " + normalised + " ";
-        var named = new HashSet<int>();
-        foreach (var word in normalised.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (_names.TryGetValue(word, out var list))
-            {
-                foreach (var (name, act) in list)
-                {
-                    if (!named.Contains(act) && padded.Contains(" " + name + " ", StringComparison.Ordinal))
-                    {
-                        named.Add(act);
-                    }
-                }
-            }
-        }
-
+        var named = NamedIn(question);
         foreach (var act in named)
         {
             cents[act] = cents.GetValueOrDefault(act) + NameBonusCents;

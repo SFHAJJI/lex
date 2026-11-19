@@ -184,25 +184,23 @@ public static partial class V4Bricks
             }
         }
 
-        // An act named (a code, a law by its date, an act of the insurance index): only that act is read, when the index
-        // knows it by that name; an act it does not know by name is never guessed from the other words.
-        var indexed = new HashSet<string>(StringComparer.Ordinal);
+        // An act named (a code, a law by its date, an act of the insurance index): only that act is read, when the law
+        // index knows it by that name or holds it, whatever its words weigh; an act the index does not know by name is
+        // never guessed from the other words of the question.
+        var mentioned = false;
         foreach (var act in row.Acts)
         {
-            if (act.Work is not null)
-            {
-                indexed.Add("/lu-legilux/" + act.Work);
-            }
+            mentioned |= act.Work is not null;
         }
 
-        if (indexed.Count > 0 || CodeNamedPattern.IsMatch(row.Folded) || V4Dispatcher.NamesAnActByItsDate(row.Folded))
+        if (mentioned || CodeNamedPattern.IsMatch(row.Folded) || V4Dispatcher.NamesAnActByItsDate(row.Folded))
         {
-            var named = new List<V4RoutedAct>();
-            foreach (var act in kept)
+            var named = laws.Named(row.Question);
+            foreach (var act in row.Acts)
             {
-                if (act.Named || indexed.Contains(act.Act.Work))
+                if (act.Work is not null && laws.Act("/lu-legilux/" + act.Work) is { } held && named.Count < laws.MaxActs && !Routed(named, held.Work))
                 {
-                    named.Add(act);
+                    named.Add(new V4RoutedAct(held, laws.NameBonusCents, true));
                 }
             }
 
@@ -213,7 +211,6 @@ public static partial class V4Bricks
 
             kept = named;
         }
-
         if (kept.Count == 0)
         {
             return "every_law_router_keeps_nothing";
@@ -221,6 +218,19 @@ public static partial class V4Bricks
 
         routed = kept;
         return null;
+    }
+
+    private static bool Routed(List<V4RoutedAct> acts, string work)
+    {
+        foreach (var act in acts)
+        {
+            if (act.Act.Work == work)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool InADictionaryAbbreviation(string word)
@@ -296,7 +306,16 @@ public static partial class V4Bricks
                 continue;
             }
 
-            var articles = laws.Prefilter(tables, tokens);
+            // An article whose identifier a plan cannot name (a range of repealed articles, "art_518_à_520") is not offered.
+            var articles = new List<V4OutlineArticle>();
+            foreach (var entry in laws.Prefilter(tables, tokens))
+            {
+                if (V3AssistantPlanValidator.IsArticleId(entry.Article.Id))
+                {
+                    articles.Add(entry);
+                }
+            }
+
             if (articles.Count == 0)
             {
                 continue;
