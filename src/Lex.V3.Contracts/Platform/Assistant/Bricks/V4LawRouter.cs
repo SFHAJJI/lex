@@ -740,7 +740,9 @@ public sealed class V4LawIndex
             var marked = new List<(double Score, string Token, string Surface)>();
             foreach (var (token, (count, surface)) in words[at])
             {
-                marked.Add((count * Math.Log(1 + ((double)order.Count / standing[token])), token, surface));
+                // A word that stands in one article only says little of a part of several articles.
+                var weight = count >= 2 || articles.Count < 4 ? 1.0 : 0.25;
+                marked.Add((weight * count * Math.Log(1 + ((double)order.Count / standing[token])), token, surface));
             }
 
             marked.Sort(static (left, right) => left.Score != right.Score ? right.Score.CompareTo(left.Score) : string.CompareOrdinal(left.Token, right.Token));
@@ -758,8 +760,11 @@ public sealed class V4LawIndex
             {
                 foreach (var line in tables.TextLinesOf(article))
                 {
-                    starts ??= Window(line.Text, 0);
-                    break;
+                    if (Lead(Flat(line.Text)) is { Length: >= 25 } lead)
+                    {
+                        starts = Window(lead, 0);
+                        break;
+                    }
                 }
 
                 if (starts is not null)
@@ -778,7 +783,10 @@ public sealed class V4LawIndex
 
     private static string Numbered(V4Article article)
     {
-        var label = (article.Label ?? article.Id).Trim().TrimEnd('.').Trim();
+        // The label as published may carry the opening of an amendment mark after the number ("L. 010-1.\n(").
+        var label = article.Label ?? article.Id;
+        var cut = label.IndexOfAny(['\n', '\r', '(']);
+        label = (cut > 0 ? label[..cut] : label).Trim().TrimEnd('.').Trim();
         return label.StartsWith("Art.", StringComparison.OrdinalIgnoreCase) ? label[4..].Trim() : label.StartsWith("Article", StringComparison.OrdinalIgnoreCase) ? label[7..].Trim() : label;
     }
 
@@ -869,19 +877,71 @@ public sealed class V4LawIndex
     private string Around(V4ActTables tables, V4Article article, HashSet<string> asked)
     {
         string? first = null;
+        string? any = null;
         foreach (var line in tables.TextLinesOf(article))
         {
-            first ??= line.Text;
-            foreach (var (token, start, _) in TokensAt(line.Text))
+            var text = Flat(line.Text);
+            any ??= text;
+            if (first is null && Lead(text) is { Length: >= 25 } lead)
+            {
+                first = lead;
+            }
+
+            foreach (var (token, start, _) in TokensAt(text))
             {
                 if (asked.Contains(token))
                 {
-                    return Window(line.Text, start);
+                    return Window(text, start);
                 }
             }
         }
 
-        return first is null ? string.Empty : Window(first, 0);
+        return (first ?? any) is { } shown ? Window(shown, 0) : string.Empty;
+    }
+
+    // The mark of an amending act that the publisher's text carries before an article's own words ("L. 4 juin 2020 ) Le
+    // droit de former ..."): not what the article says, and never the line shown of it.
+    private static readonly System.Text.RegularExpressions.Regex AmendmentMark = new(
+        @"^(?:[()\s]*(?:L\.|Loi|Règl\.|R\.|Arr\.)\s[^()]{0,60}\d{4}\s*\)[()\s]*)+",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200));
+
+    /// <summary>A text on one line: every run of white space is one space.</summary>
+    private static string Flat(string text)
+    {
+        var flat = new StringBuilder(text.Length);
+        var space = false;
+        foreach (var character in text)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                space = flat.Length > 0;
+            }
+            else
+            {
+                if (space)
+                {
+                    flat.Append(' ');
+                }
+
+                space = false;
+                flat.Append(character);
+            }
+        }
+
+        return flat.ToString();
+    }
+
+    /// <summary>A flat line without the mark of an amending act it starts with.</summary>
+    private static string Lead(string flat)
+    {
+        try
+        {
+            return AmendmentMark.Replace(flat, string.Empty, 1).TrimStart(')', '(', ' ');
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return flat;
+        }
     }
 
     private static string Window(string text, int match)
