@@ -102,7 +102,9 @@ public sealed class AssistantRuntimeTests
 
         Assert.AreEqual(V3AssistantRuntime.MonthlyCapMicroEuros / V3AssistantRuntime.PerAnswerCeilingMicroEuros, answers, "a reported cost is never counted above the ceiling");
         Assert.IsTrue(runtime.CapReached);
-        Assert.AreEqual(V3AssistantRuntime.MonthlyCapMicroEuros, runtime.SpentMicroEuros);
+        // Every answer counted at the ceiling: the cap is reached when one more would pass it (0.03 EUR does not divide 20 EUR).
+        Assert.AreEqual(answers * V3AssistantRuntime.PerAnswerCeilingMicroEuros, runtime.SpentMicroEuros);
+        Assert.IsTrue(V3AssistantRuntime.MonthlyCapMicroEuros - runtime.SpentMicroEuros < V3AssistantRuntime.PerAnswerCeilingMicroEuros);
         time.Now = new DateTimeOffset(2026, 11, 1, 0, 0, 1, TimeSpan.Zero);
         Assert.IsFalse(runtime.CapReached, "the cap is per month");
         Assert.AreEqual(0, runtime.SpentMicroEuros);

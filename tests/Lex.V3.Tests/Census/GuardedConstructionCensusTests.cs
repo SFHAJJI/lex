@@ -356,6 +356,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4ActTables::Build, "
                     + "method public static "
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation::OutlineCall, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation::OutlineCallOf, "
                     + "1 compiler-generated",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Candidate: constructor internal "
                     + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4Candidate::.ctor, "
@@ -388,6 +390,14 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::.cctor, "
                     + "method public static Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::Read, "
                     + "9 compiler-generated",
+                "Lex.V3.Contracts.Platform.Assistant.Bricks.V4LawIndex: constructor private "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4LawIndex::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4LawIndex::.cctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4LawIndex::Load, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4LawIndex::Read",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord: constructor private "
                     + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord::.ctor, "
                     + "constructor private static "
@@ -427,7 +437,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::ComposeBricks, "
                     + "method private static "
-                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Run",
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Run, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Wider",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate: constructor private "
                     + "instance Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate::.ctor, "
                     + "constructor private static "

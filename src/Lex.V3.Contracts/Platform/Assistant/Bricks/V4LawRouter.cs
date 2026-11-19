@@ -420,21 +420,15 @@ public sealed class V4LawIndex
 
         return kept;
     }
-}
 
-/// <summary>
-/// The article pre-filter (code only): inside one act the router kept, the articles whose heading or text hold the
-/// question's words, scored as the reference scores them, so that the outline call is given a short list of a long code.
-/// </summary>
-public static class V4LawRouter
-{
+    // ---- The article pre-filter (code only): inside one act the router kept, the articles whose heading or text hold the
+    // question's words, scored as the reference scores them, so that the outline call is given a short list of a long code.
+
     /// <summary>About how many characters of an article with no heading the outline call is shown.</summary>
     public const int BriefLength = 110;
 
-    private sealed class Counts(V4LawIndex index, List<(V4Article Article, HashSet<string> Heading, Dictionary<string, int> Text)> articles, Dictionary<string, int> holding)
+    private sealed class Counts(List<(V4Article Article, HashSet<string> Heading, Dictionary<string, int> Text)> articles, Dictionary<string, int> holding)
     {
-        public V4LawIndex Index { get; } = index;
-
         public List<(V4Article Article, HashSet<string> Heading, Dictionary<string, int> Text)> Articles { get; } = articles;
 
         /// <summary>For each word, in how many articles the heading or the text hold it.</summary>
@@ -442,11 +436,11 @@ public static class V4LawRouter
     }
 
     // The counts of a version of an act are made once: the tables of a version are kept by the mount, and these with them.
-    private static readonly ConditionalWeakTable<V4ActTables, Counts> Kept = new();
+    private readonly ConditionalWeakTable<V4ActTables, Counts> _counts = new();
 
-    private static Counts CountsOf(V4LawIndex index, V4ActTables tables)
+    private Counts CountsOf(V4ActTables tables)
     {
-        if (Kept.TryGetValue(tables, out var made) && ReferenceEquals(made.Index, index))
+        if (_counts.TryGetValue(tables, out var made))
         {
             return made;
         }
@@ -463,7 +457,7 @@ public static class V4LawRouter
             var heading = new HashSet<string>(StringComparer.Ordinal);
             if (!string.IsNullOrWhiteSpace(article.Heading))
             {
-                foreach (var (token, _, _) in index.TokensAt(article.Heading))
+                foreach (var (token, _, _) in TokensAt(article.Heading))
                 {
                     heading.Add(token);
                 }
@@ -472,7 +466,7 @@ public static class V4LawRouter
             var text = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var line in tables.TextLinesOf(article))
             {
-                foreach (var (token, _, _) in index.TokensAt(line.Text))
+                foreach (var (token, _, _) in TokensAt(line.Text))
                 {
                     text[token] = text.GetValueOrDefault(token) + 1;
                 }
@@ -494,24 +488,23 @@ public static class V4LawRouter
             articles.Add((article, heading, text));
         }
 
-        made = new Counts(index, articles, holding);
-        Kept.AddOrUpdate(tables, made);
+        made = new Counts(articles, holding);
+        _counts.AddOrUpdate(tables, made);
         return made;
     }
 
     /// <summary>
     /// The articles of an act the outline call is given, in the order of the document: all of them when the act holds at
-    /// most <see cref="V4LawIndex.ArticleKeep"/>, else the best by score (ties by the order of the document). idf(w) =
+    /// most <see cref="ArticleKeep"/>, else the best by score (ties by the order of the document). idf(w) =
     /// ln(1 + N / df(w)); score = sum over the question's distinct tokens of idf(w) * (3 if w is in the heading) +
     /// idf(w) * min(count of w in the text, 3). Each with the line shown of it: its heading, else its text around the
     /// first word of the question it holds.
     /// </summary>
-    public static List<V4OutlineArticle> Prefilter(V4LawIndex index, V4ActTables tables, IReadOnlyList<string> questionTokens)
+    public List<V4OutlineArticle> Prefilter(V4ActTables tables, IReadOnlyList<string> questionTokens)
     {
-        ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(questionTokens);
-        var counts = CountsOf(index, tables);
+        var counts = CountsOf(tables);
         var total = counts.Articles.Count;
         var scored = new List<(double Score, int Position)>(total);
         for (var position = 0; position < total; position++)
@@ -532,10 +525,10 @@ public static class V4LawRouter
             scored.Add((score, position));
         }
 
-        if (total > index.ArticleKeep)
+        if (total > ArticleKeep)
         {
             scored.Sort(static (left, right) => left.Score != right.Score ? right.Score.CompareTo(left.Score) : left.Position.CompareTo(right.Position));
-            scored.RemoveRange(index.ArticleKeep, scored.Count - index.ArticleKeep);
+            scored.RemoveRange(ArticleKeep, scored.Count - ArticleKeep);
             scored.Sort(static (left, right) => left.Position.CompareTo(right.Position));
         }
 
@@ -544,20 +537,20 @@ public static class V4LawRouter
         foreach (var (_, position) in scored)
         {
             var article = counts.Articles[position].Article;
-            kept.Add(new V4OutlineArticle(article, string.IsNullOrWhiteSpace(article.Heading) ? Around(index, tables, article, asked) : article.Heading));
+            kept.Add(new V4OutlineArticle(article, string.IsNullOrWhiteSpace(article.Heading) ? Around(tables, article, asked) : article.Heading));
         }
 
         return kept;
     }
 
     /// <summary>The text of an article around the first word of the question it holds, about <see cref="BriefLength"/> characters; else its first words.</summary>
-    private static string Around(V4LawIndex index, V4ActTables tables, V4Article article, HashSet<string> asked)
+    private string Around(V4ActTables tables, V4Article article, HashSet<string> asked)
     {
         string? first = null;
         foreach (var line in tables.TextLinesOf(article))
         {
             first ??= line.Text;
-            foreach (var (token, start, _) in index.TokensAt(line.Text))
+            foreach (var (token, start, _) in TokensAt(line.Text))
             {
                 if (asked.Contains(token))
                 {

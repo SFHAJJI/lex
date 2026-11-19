@@ -6,7 +6,7 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 /// The wider reading (the owner's order of 2026-11-19: "every Luxembourg act, candidates only"). When Lex's own operations
 /// quoted nothing for a question, code routes it to the acts of the law index whose words it holds
 /// (<see cref="V4LawIndex.Route"/>), code keeps the articles of those acts that hold its words
-/// (<see cref="V4LawRouter.Prefilter"/>), and the two calls of the outline reading are made over that closed list: a model
+/// (<see cref="V4LawIndex.Prefilter"/>), and the two calls of the outline reading are made over that closed list: a model
 /// names articles by ids it was given, then points at lines it was given; code checks both and cuts the quotes from the
 /// stored text. Whatever is found is shown as candidates, never as the answer.
 /// </summary>
@@ -45,12 +45,11 @@ public static partial class V4Bricks
 
     private static readonly Regex CapitalsPattern = new(@"(?<![\p{L}\d])\p{Lu}[\p{Lu}\d]{2,}(?![\p{L}\d])", EveryLawOptions, V4Text.PatternTimeout);
 
-    // Capitals of everyday life that name no act: a kind of contract, a tax, a company form, an administration.
-    private static readonly HashSet<string> EverydayCapitals = new(StringComparer.Ordinal)
-    {
-        "cdd", "cdi", "tva", "sarl", "sas", "sci", "asbl", "snc", "scs", "pme", "rcs", "lbr", "cns", "cnap", "ccss", "adem", "itm",
-        "cnpd", "revis", "rmg", "ssm", "pacs", "aed", "acd", "sicav", "opc", "fis", "cedies", "cae", "ctie",
-    };
+    // Capitals of everyday life that name no act: a kind of contract, a tax, a company form, an administration. A pattern,
+    // not a set: a static collection here would be a registry of its own for the census to pin.
+    private static readonly Regex EverydayCapitalsPattern = new(
+        "^(?:cdd|cdi|tva|sarl|sas|sci|asbl|snc|scs|pme|rcs|lbr|cns|cnap|ccss|adem|itm|cnpd|revis|rmg|ssm|pacs|aed|acd|sicav|opc|fis|cedies|cae|ctie)$",
+        EveryLawOptions, V4Text.PatternTimeout);
 
     /// <summary>
     /// Why the wider reading is not made for a question, or null when it is, with the acts the router kept. Code only: no
@@ -67,10 +66,26 @@ public static partial class V4Bricks
             return "every_law_not_a_question";
         }
 
-        // A question asked beside an earlier answer (a context chip) is read in that answer's act, by Lex's own operations.
-        if ((input.References?.Count ?? 0) > 0 || V4Dispatcher.AsksOfAnEarlierAnswer(row))
+        // A question asked beside an earlier answer (a context chip: an act, a date) is read in that answer's act, by
+        // Lex's own operations. The dates the question itself writes are references too, and are not that.
+        var chips = false;
+        foreach (var reference in input.References ?? [])
+        {
+            chips |= reference.Kind.StartsWith("context_", StringComparison.Ordinal);
+        }
+
+        if (chips || V4Dispatcher.AsksOfAnEarlierAnswer(row))
         {
             return "every_law_refers_to_earlier";
+        }
+
+        // What Lex's own operations refuse stays refused: a question that asks to apply the law (a cue of R15 that is no
+        // question on the rule), and a decision asked on the reader's own facts (the owner's point 2).
+        var question = row.Question;
+        var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
+        if ((cues.Count > 0 && !V4Boundary.RuleQuestion(question, 0, question.Length, cues)) || V4Boundary.DecidesOwnFacts(question, 0, question.Length))
+        {
+            return "every_law_asks_application";
         }
 
         if (V4Dispatcher.CitesArticle(row))
@@ -137,7 +152,7 @@ public static partial class V4Bricks
             foreach (Match match in CapitalsPattern.Matches(row.Question))
             {
                 var word = V4LawIndex.Normalise(match.Value);
-                if (EverydayCapitals.Contains(word) || laws.NamesWord(word) || InADictionaryAbbreviation(word) || InAnActNamed(row, match.Index, match.Index + match.Length))
+                if (EverydayCapitalsPattern.IsMatch(word) || laws.NamesWord(word) || InADictionaryAbbreviation(word) || InAnActNamed(row, match.Index, match.Index + match.Length))
                 {
                     continue;
                 }
@@ -214,8 +229,8 @@ public static partial class V4Bricks
 
     /// <summary>
     /// The wider reading of a question: a plan /2 that quotes candidates of one act the router kept, or none with the
-    /// reason. Every answer it gives is of kind <c>candidates</c>; a decision asked on the reader's own facts is refused with
-    /// the passages beside the refusal, and a question worded for the reader's case carries <c>not_your_case</c>.
+    /// reason. Every answer it gives is of kind <c>candidates</c>, and a question worded for the reader's case carries
+    /// <c>not_your_case</c>; what asks to apply the law or to decide on the reader's own facts is never read here.
     /// </summary>
     public static V4PlanOutcome PlanEveryLaw(V4PlanInput input, IV4Corpus corpus, IV4Model? model, CancellationToken cancellationToken)
     {
@@ -258,7 +273,7 @@ public static partial class V4Bricks
                 continue;
             }
 
-            var articles = V4LawRouter.Prefilter(laws, tables, tokens);
+            var articles = laws.Prefilter(tables, tokens);
             if (articles.Count == 0)
             {
                 continue;
@@ -393,23 +408,17 @@ public static partial class V4Bricks
             }
         }
 
-        // The advice boundary, as the outline reading draws it: a decision on the person's own facts is refused, the lines
-        // found shown beside the refusal; a question worded for the reader's case is answered by the general rule, said
-        // not to say how it applies to the reader.
+        // The advice boundary: a question that asks to apply the law, or to decide on the reader's own facts, never comes
+        // here (EveryLawExit). A question worded for the reader's case is answered by the general rule, said not to say
+        // how it applies to the reader, as the outline reading says it.
         var cues = V3AssistantParsers.ApplicationCues(question, 0, question.Length);
         var ruleQuestion = cues.Count > 0 && V4Boundary.RuleQuestion(question, 0, question.Length, cues);
-        var decides = V4Boundary.DecidesOwnFacts(question, 0, question.Length);
-        var personal = V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0;
-        if (decides)
-        {
-            draft.Caveats.Remove("not_your_case");
-        }
-        else if (((cues.Count > 0 && !ruleQuestion) || personal) && !draft.Caveats.Contains("not_your_case"))
+        if (V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0 && !draft.Caveats.Contains("not_your_case"))
         {
             draft.Caveats.Add("not_your_case");
         }
 
-        var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, decides ? "refuse" : "answer", "text", scope.Work, []);
+        var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, "answer", "text", scope.Work, []);
         return new V4PlanOutcome(AsCandidates(json), draft.Cost, "route:every_law", Articles: quoted);
     }
 
