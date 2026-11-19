@@ -13,15 +13,15 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: #1063 (V4, the bricks) merged on 2026-11-19. Served at law.soufien.lu since 2026-11-19 about 04:27
-  UTC, publicly: Release 15 `v3-20261119T030608Z-405abff0d226` (serving commit 405abff0: V4, the bricks of the owner's
-  go of 2026-11-18: code reads the question with a dictionary of the law's terms, finds the lines and quotes them, and
-  no model plans), over Release 4's data (derive `d4-20261113-bfb83983`, rule set `lu-release-4`), built and signed on
-  Azure, promoted by the evaluation gate (36 right articles of 56, 0 wrong, 10 not found, 1 refused by mistake, 9
-  rightly handled without an article, 0 errors; 63 quotations all verified; asked twice, the same verdict 1.000; p50
-  0.95 s, p95 2.49 s); MLflow lex-assistant version 11, aliases `champion` and `serving`. Release 14 is kept,
-  deactivated, for rollback. Detail in STATUS-WEB.md. The required checks: `dotnet` (the whole solution), `web`,
-  `canon-windows`, `journeys` and `image-conditions`.
+- `v3/integration`: #1067 (the owner's brief "make it work", his points 1 and 2, step 3) merged on 2026-11-19. Served at
+  law.soufien.lu since 2026-11-19 about 15:27 UTC, on the owner's word: Release 18 `v3-20261119T124726Z-a07cf1887ce3`
+  (serving commit a07cf188), over Release 4's data (derive `d4-20261113-bfb83983`), built and signed on Azure, promoted
+  by the evaluation gate (36 right articles of 56, 0 wrong, every quotation verified); MLflow lex-assistant version 14,
+  aliases `champion` and `serving`; backed up (14 objects verified). On the owner's 80 verified `tune` questions it gives
+  47 right, 0 wrong, 30 not found (15 of them candidates shown, not asserted), 3 refused; on his 40 no-article questions,
+  34 (live in the morning: 25, 4, 32, 19 and 22). Release 17 (`v3-20261119T064913Z-c8303625e476`, web only, live from
+  11:52 UTC, backed up) is deactivated and kept for rollback. Detail in STATUS-WEB.md. The required checks: `dotnet`
+  (the whole solution), `web`, `canon-windows`, `journeys` and `image-conditions`.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
@@ -123,7 +123,7 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 Only money, legal or public claims, credentials and going live (ruling 7):
 - The owner's brief of 2026-11-19 ("make it work"; STATUS-WEB.md, first section). Served today: Release 16
   (`v3-20261119T050837Z-0af7de23ab55`, since 06:47 UTC). The brief's slice is built and prepared as the next release
-  and is not live: **going live with it is the owner's word.** With it, the owner's to decide: (1) the stronger model
+  and went live as Release 18 on 2026-11-19 about 15:27 UTC, on **the owner's word** ("Yes go live"). With it, the owner's to decide: (1) the stronger model
   the brief asks for the second reading (a `gpt-4.1` deployment on the same Azure resource: creating it was refused to
   the driver; about five times the cost of an answer, so the per-answer ceiling of 0.02 EUR must rise with it);
   (2) whether an answer may carry one sentence written by a model (not built; five examples in
