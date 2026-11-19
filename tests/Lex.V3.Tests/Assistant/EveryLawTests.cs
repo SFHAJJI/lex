@@ -406,6 +406,9 @@ public sealed class EveryLawTests
         Assert.IsNull(Exit("Quel préavis pour le licenciement d'un salarié en CDI ?", Index, out var labour));
         Assert.AreEqual("/lu-legilux/code-travail", labour.Single().Act.Work);
         Assert.IsNull(Exit("Un bail, ça peut durer combien de temps au maximum ?", Index, out _), "a subject said, then pointed at");
+        Assert.IsNull(Exit("Qui est responsable des réparations d'un logement en location ?", Index, out _), "a question on a rule, not on a person");
+        Assert.IsNull(Exit("J'habite en France et je travaille au Luxembourg, quel préavis pour un salarié ?", Index, out _), "a place is not another country's law");
+        Assert.AreEqual("every_law_another_country", Exit("Que dit le Code des assurances français sur le loyer ?", Index, out _));
         Assert.IsNull(Exit("Que dit le Code civil sur le bail ?", Index, out var named));
         Assert.AreEqual("/lu-legilux/code-civil", named.Single().Act.Work, "the act named, and not the act with the heavier words");
     }

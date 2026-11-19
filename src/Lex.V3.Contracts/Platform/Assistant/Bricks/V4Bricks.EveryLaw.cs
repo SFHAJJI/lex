@@ -36,15 +36,20 @@ public static partial class V4Bricks
     private static readonly Regex AboutLexPattern = new(
         @"(?<![\p{L}])(?:lex|chatbot|une\s+reponse|cette\s+reponse|ta\s+reponse|tes\s+reponses|an\s+answer\s+cost|this\s+site|ce\s+site)(?![\p{L}])", EveryLawOptions, V4Text.PatternTimeout);
 
-    // Not a question on what a text provides: the weather, who a person is. A short hand list; the outline call's own
+    // Not a question on what a text provides: the weather, who holds an office ("qui est le directeur de ..."; "qui est
+    // responsable de ..." is a question on a rule and is not stopped). A short hand list; the outline call's own
     // rule ("return no article ... never guess") is what stands behind it.
     private static readonly Regex NoRulePattern = new(
-        @"(?<![\p{L}])(?:quel\s+temps\s+fait|meteo|weather)(?![\p{L}])|^\s*(?:qui\s+est|qui\s+sont|who\s+is|who\s+are)(?![\p{L}])", EveryLawOptions, V4Text.PatternTimeout);
+        @"(?<![\p{L}])(?:quel\s+temps\s+fait|meteo|weather)(?![\p{L}])" +
+        @"|^\s*qui\s+est\s+(?:le|la|l')\s*(?:directeur|directrice|president|presidente|ministre|pdg|patron|patronne|chef|maire|bourgmestre|premier)(?![\p{L}])" +
+        @"|^\s*who\s+is\s+the\s+(?:ceo|director|president|minister|head|mayor|prime|boss|chair)(?![\p{L}])",
+        EveryLawOptions, V4Text.PatternTimeout);
 
-    // The law of another country ("le droit allemand", "loi belge du ...", "en France"): Lex holds Luxembourg's.
+    // The law of another country ("le droit allemand", "loi belge du ..."): Lex holds Luxembourg's. A place ("j'habite
+    // en France et je travaille au Luxembourg") and a language ("la loi en français") are not that.
     private static readonly Regex OtherCountryPattern = new(
-        @"(?<![\p{L}])(?:droit|loi|lois|code|legislation|law)\s+(?:[a-z']+\s+){0,3}?(?:allemande?s?|belges?|francaise?s?|suisses?|neerlandaise?s?|german|french|belgian|swiss|dutch)(?![\p{L}])" +
-        @"|(?<![\p{L}])(?:en|in)\s+(?:france|belgique|allemagne|suisse|belgium|germany|switzerland)(?![\p{L}])|(?<![\p{L}])(?:german|french|belgian|swiss)\s+law(?![\p{L}])",
+        @"(?<![\p{L}])(?:droit|loi|lois|code|legislation|law)\s+(?:[a-z']+\s+){0,3}?(?<!en\s)(?:allemande?s?|belges?|francaise?s?|suisses?|neerlandaise?s?|german|french|belgian|swiss|dutch)(?![\p{L}])" +
+        @"|(?<![\p{L}])(?:german|french|belgian|swiss|dutch)\s+law(?![\p{L}])",
         EveryLawOptions, V4Text.PatternTimeout);
 
     // What is not legislation and is not in the corpus: a regulator's circular, case law.
@@ -211,6 +216,7 @@ public static partial class V4Bricks
 
             kept = named;
         }
+
         if (kept.Count == 0)
         {
             return "every_law_router_keeps_nothing";
