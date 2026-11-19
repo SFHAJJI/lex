@@ -4,7 +4,38 @@ Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
-## V4, the bricks: the owner's go of 2026-11-18 (sole driver, in progress)
+## Release 15 is live: V4, the bricks (sole driver, 2026-11-19)
+
+- **Release 15** (`v3-20261119T030608Z-405abff0d226`, built and signed on Azure from #1063's 405abff0; revision
+  `ca-lex-v3--v3-20261119t030608z-405abff0d226-ee052a13`), over Release 4's data (the same mount as Release 14). The
+  pull request had its one review (Codex: one blocking finding, the failing `image-conditions` check, a census pin
+  that held only in a Debug build; repaired in b38fab7f) and was merged on five green checks (bae327b4). The release
+  job was launched at the pull request's head while its last checks ran (the owner's order of 2026-11-19, 03:20:
+  results over ceremony, within 18 hours); nothing was promoted before the merge.
+- **On the candidate, at its own address:** the deployment's probes passed; the two questions of 2026-11-18 answered
+  ("c'est quoi une personne lésé": the defining line of art. 1er, no model, 0.6 s; "l'assureur peut résilier le
+  contrat de façon unilatérale ?": art. 39's rule and four cases, 3.4 s); two-address PASS; then the evaluation gate,
+  every gate passed: 36 right articles of 56, 0 wrong, 10 not found, 1 refused by mistake, 9 rightly handled without
+  an article, 0 errors; 63 quotations all verified; asked twice, the same verdict 1.000; p50 0.95 s, p95 2.49 s. The
+  gate's script moved all traffic at about 04:27 UTC.
+- **On the live site:** the two questions answer with the same lines (0.2 s and 2.9 s); the 79 insurance questions,
+  each asked once, give 64 right articles, 0 wrong and 15 rightly handled without an article, 125 quotations all
+  verified (`20261119-r15-live-insurance`); the pages answer and say the new figures. Release 14 is deactivated and
+  kept for rollback. MLflow version 11 holds `champion` (the gate) and `serving`. The backup is verified
+  (`driver-scripts/release-15/backup-r15.log`: 14 objects by SHA-256). The nightly check's baseline in lex-eval is
+  raised to what Release 15 passed twice (45 of 56 questions, from 26).
+- **Screenshots on the runner** (`ops/screens-r15`): 56 shots, French and English, 1366 by 768 and phone, none failed,
+  no other language in sight: the two questions, a personal case refused, a word the law does not use, How it works
+  with the new figures. Seen there, for a next slice: a refusal's card does not show the lines the answer holds beside
+  it; an answer no model took part in still prints the average cost; the law page marks the whole article, not the
+  quoted line; an absence names the act by its address.
+- **What the pages' figures are:** the release candidate's runs on the driver's PC (36 right articles of 56; the How
+  it works answer), as slice 2 records; the gate's run on Azure above agrees with them. They are recorded again from
+  the live site at the next release.
+- **Open, for the owner** (slice 2 below lists them): the dictionary's first rows and a person who knows insurance
+  law; a new held-out set; the EU insurance texts' publisher run; the dated search's 28 seconds.
+
+## V4, the bricks: the owner's go of 2026-11-18 (sole driver; live as Release 15 on 2026-11-19)
 
 `api/v4-bricks`. The plan is `C:\lex-v3\V4-PLAN-2026-11-18.md` (the surgical changes in every brick, as Kezhan and Angela Shi
 would build Lex, insurance first; the reading notes are in `C:\lex-v3\v4-reading-notes`). **The owner's words, 2026-11-18:**
@@ -39,8 +70,8 @@ freeze of 2026-11-14 on the engine, the planner prompt, the templates and the se
   advice boundary narrowed (decision 4); [x] model calls: the arbiter, the extraction; [x] the question call in place of the
   planner for the questions the bricks do not answer, and the old planner retired; [x] the dock's answer card; [x] How it
   works, the privacy notice and the Developers page rewritten for V4; [x] lex-eval: the insurance set (79 questions, each
-  expectation checked against the law's text); [x] the 56 again, against the live baseline, and the held-out 15; [ ]
-  release, gate, live.
+  expectation checked against the law's text); [x] the 56 again, against the live baseline, and the held-out 15; [x]
+  release, gate, live (Release 15, 2026-11-19).
 
 ### Slice 1 (2026-11-18, `api/v4-bricks`): the bricks answer insurance questions; the planner keeps the rest
 
