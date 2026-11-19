@@ -89,7 +89,7 @@ the contract):
   ("s'appliquent toutes deux"; "le texte ne définit pas").
 
 **First measure on the insurance set** (`C:\lex-v3\lex-eval\cases\lex-insurance-v1.jsonl`, 79 questions, each expectation
-checked against the law's text by `C:\lex-v3etrieval-proto-2026-11-18\make_insurance_cases.py`; local server on mount d4,
+checked against the law's text by `C:\lex-v3\retrieval-proto-2026-11-18\make_insurance_cases.py`; local server on mount d4,
 real model, 2026-11-18): verdict right on 0.937, the right line quoted on 0.776 of those that expect one, 104 quotations all
 verified, no sentence outside the templates, p50 0.7 s, p95 5.0 s. What it found was fixed in the detectors (the heading the
 question names, an article's lead line, a special heading, two concepts in one heading, the question's literal words) and

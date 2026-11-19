@@ -1518,8 +1518,8 @@ const EN = Object.freeze({
       words: Object.freeze({
         title: "Search on the words of the law, no vector database.",
         gain: "every result can be explained by the words it holds.",
-        cost: "questions phrased in other words than the law’s are often missed.",
-        note: "Open problem: {heldoutRight} of {heldoutCases} unseen questions get the right article.",
+        cost: "outside the dictionary’s domain, a question phrased in other words than the law’s is often missed.",
+        note: "Measured: {heldoutRight} of {heldoutCases} unseen questions get the right article.",
       }),
       oneCall: Object.freeze({
         title: "Code first; a model only where code cannot decide.",
@@ -1662,6 +1662,7 @@ const EN = Object.freeze({
       first: "11/11 to 13/11: right verdicts on the first test set from {firstPercent} % to {fifthPercent} %, over three prompt and search versions (registry versions 1 to 5).",
       incident: "13/11: article 70 quoted instead of 44 on the live site. The question joined the test set; search now ranks whole words and headings first; 14/11: no wrong article left on the test set.",
       gate: "14/11: the release gate caught a plan quoting article 57 for the start of cover. Since 15/11 a nightly check watches the live site between releases.",
+      bricks: "18/11: two insurance questions of a reader got no answer, because the law says it in other words. 19/11: the engine rebuilt. Code reads a question against a dictionary of the law’s own terms and quotes the line that answers; no model plans an answer any more.",
     }),
     qualityHeading: "Evaluation: the {cases} test questions, as of {devDate}",
     counts: Object.freeze({
@@ -1672,7 +1673,7 @@ const EN = Object.freeze({
       rightBehaviour: "rightly handled without an article (refusal, question back, text not held)",
     }),
     stability: "Asked twice, the same verdict {sameVerdict} % of the time and the same plan {samePlan} %: a model’s reply can vary, so the gates check the outcome.",
-    heldout: "Unseen questions, never used to tune Lex: {heldoutRight} right articles of {heldoutCases}. {heldoutRefused} refused by the advice rule, {heldoutNotFound} not found, {heldoutNoPlan} with no answer in time.",
+    heldout: "Unseen questions, not used to tune Lex before this run: {heldoutRight} right articles of {heldoutCases}, {heldoutWrong} wrong. {heldoutRefused} refused by the advice rule, {heldoutNotFound} not found, {heldoutNoPlan} with no answer in time. One rule was written from this result, so a new unseen set is needed.",
     gateRule: "One wrong article on the insurance questions, or one passing question that fails, blocks a release.",
     everyQuestion: "All {cases} questions, one by one",
     maskedEmail: "[e-mail address masked]",
@@ -1703,7 +1704,7 @@ const EN = Object.freeze({
     }),
     limitsHeading: "Limits",
     limits: Object.freeze({
-      words: "Questions in other words than the law’s are often not found: {heldoutRight} of {heldoutCases} unseen questions.",
+      words: "A question in other words than the law’s can still be missed: {heldoutRight} of {heldoutCases} unseen questions got the right article.",
       advice: "The advice rule also refuses general questions phrased “must the insured…”.",
       translation: "No translation: an English question about a law held in French finds nothing.",
       variance: "A model’s reply can vary from one run to the next: code checks every reply, and the gates check the outcome.",

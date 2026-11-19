@@ -110,10 +110,12 @@ public static class V4QuestionParser
         "doivent", "ceci", "ceux", "chez", "contre", "vers", "sera", "etait", "ete", "avait", "ainsi", "cas", "loi", "lois",
         "article", "articles", "texte", "droit", "dire", "dit", "savoir", "existe", "possible", "contrat", "contrats", "assurance",
         "assurances", "facon", "maniere", "quelqu", "chose", "juste", "vraiment", "luxembourg", "luxembourgeois", "luxembourgeoise",
+        "passe", "passer", "prevoit", "prevoient", "arrive", "arriver", "devient", "deviennent", "concernant", "propos",
         // English.
         "about", "after", "also", "been", "before", "between", "could", "does", "from", "have", "into", "must", "should", "than",
         "that", "their", "them", "then", "there", "these", "this", "those", "under", "what", "when", "where", "which", "while",
         "will", "with", "would", "your", "contract", "insurance", "says", "said", "tell", "show", "many", "much", "long", "according",
+        "happens", "happen", "provide", "provides", "regarding", "concerning",
     };
 
     /// <summary>The row of a question, by code alone.</summary>
@@ -220,7 +222,7 @@ public static class V4QuestionParser
 public static class V4Boundary
 {
     private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase;
-    private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan Timeout = V4Text.PatternTimeout;
 
     private static readonly Regex Marker = new(
         @"(?<![\p{L}\d])(?:je|moi|mon|ma|mes|mien|mienne|miens|miennes|nous|notre|nos|tu|toi|ton|ta|tes|me|te)(?![\p{L}\d])" +
@@ -235,6 +237,21 @@ public static class V4Boundary
         @"|(?<![\p{L}\d])(?:dis|dites|montre|montrez|explique|expliquez|indique|indiquez|donne|donnez|cite|citez)-(?:moi|nous)(?![\p{L}])" +
         @"|(?<![\p{L}\d])(?:tell|show|give|remind)\s+(?:me|us)(?![\p{L}])|(?<![\p{L}\d])explain\s+to\s+(?:me|us)(?![\p{L}])",
         Options, Timeout);
+
+    // The reader is the subject of the question's own verb ("suis-je couvert", "ai-je droit", "est-ce que je peux", "am I
+    // covered", "can I"): by its grammar, a question on the reader's own case.
+    private static readonly Regex Oneself = new(
+        @"(?<![\p{L}\d])(?:suis|ai|vais|serai|serais|aurai|aurais|puis|peux|dois|devrai|devrais|pourrai|pourrais|veux|risque|perds)-je(?![\p{L}])" +
+        @"|(?<![\p{L}\d])est-ce\s+que\s+j(?:e(?![\p{L}])|['’])" +
+        @"|(?<![\p{L}\d])(?:am|can|could|do|did|will|would|should|must|may|shall|have)\s+(?-i:I)(?![\p{L}\d'’])",
+        Options, Timeout);
+
+    /// <summary>Whether the reader is the subject of the question's own verb in <c>text[start, end)</c>: a case of the reader's own, by its grammar.</summary>
+    public static bool AsksOfOneself(string text, int start, int end)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return Oneself.IsMatch(text[start..end]);
+    }
 
     private static readonly Regex Number = new(@"\d+", Options, Timeout);
     private static readonly Regex Citation = new(@"(?:art(?:icle)?s?\.?|loi|règlement|reglement|directive|code|§|paragraphe|point|alinéa|alinea|n°|no)\s*(?:du\s+|de\s+la\s+)?[\d\s./\-,et()UECE]*$", Options, Timeout);

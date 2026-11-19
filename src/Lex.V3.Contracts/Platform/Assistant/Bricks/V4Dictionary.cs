@@ -9,6 +9,10 @@ namespace Lex.V3.Contracts.Platform.Assistant.Bricks;
 /// <param name="Definition">One sentence, so a model can choose between two concepts that share a word. Never shown to a reader.</param>
 /// <param name="ValueRequired">A line counts for this concept only next to a value (rule 5: prescription, rétractation).</param>
 /// <param name="Complete">Whether the word set is judged complete: only then may zero hits support "the act does not use these terms".</param>
+/// <param name="Branch">
+/// The concept is a branch of insurance ("assurance sur la vie", "assurance de la responsabilité"): a whole part of the law.
+/// It says where a question stands, not what it asks.
+/// </param>
 public sealed record V4Concept(
     string Id,
     string Kind,
@@ -18,7 +22,8 @@ public sealed record V4Concept(
     IReadOnlyList<string> HomeActs,
     IReadOnlyList<string> UsualAnswer,
     bool ValueRequired,
-    bool Complete);
+    bool Complete,
+    bool Branch = false);
 
 /// <summary>One keyword of a concept (brick D, the table <c>concept_keywords</c>).</summary>
 /// <param name="Row">The row's number in the file's order: what a trace names instead of the words.</param>
@@ -205,7 +210,8 @@ public sealed class V4Dictionary
                 Strings(element, "home_acts"),
                 Strings(element, "usual_answer"),
                 element.GetProperty("value_required").GetBoolean(),
-                element.GetProperty("complete").GetBoolean()));
+                element.GetProperty("complete").GetBoolean(),
+                element.TryGetProperty("branch", out var branch) && branch.ValueKind == JsonValueKind.True));
             foreach (var (member, language, word, priority, weight, source) in new[]
                      {
                          ("law_fr", "fr", "law", "primary", 1.0, "law_text"),

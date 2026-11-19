@@ -157,8 +157,8 @@ public static class V4Retrieval
     public const double Margin = 3.0;
 
     /// <summary>Runs the detectors of a brief on one act's tables and fills the audit table.</summary>
-    /// <summary>Whether <paramref name="words"/> hold <paramref name="run"/> as one unbroken run.</summary>
-    private static bool Holds(List<string> words, List<string> run)
+    /// <summary>Where <paramref name="words"/> hold <paramref name="run"/> as one unbroken run: the first word's place, or -1.</summary>
+    private static int RunAt(List<string> words, List<string> run)
     {
         for (var at = 0; at + run.Count <= words.Count; at++)
         {
@@ -170,11 +170,35 @@ public static class V4Retrieval
 
             if (same)
             {
-                return true;
+                return at;
             }
         }
 
-        return false;
+        return -1;
+    }
+
+    private static bool Holds(List<string> words, List<string> run) => RunAt(words, run) >= 0;
+
+    /// <summary>
+    /// The headings of the act (of two words or more) that the question writes out whole, each with where its words stand
+    /// in the question: the article, the first word and how many.
+    /// </summary>
+    public static List<(string Article, int First, int Count)> HeadingsWrittenOut(V4ActTables tables, IReadOnlyList<V4Word> words)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(words);
+        var said = words.Select(static word => V4Text.Stem(word.Text)).ToList();
+        var found = new List<(string, int, int)>();
+        foreach (var article in tables.Articles.Where(static article => article.HeadingWords.Count >= 2))
+        {
+            var at = RunAt(said, article.HeadingWords.Select(static word => V4Text.Stem(word.Text)).ToList());
+            if (at >= 0)
+            {
+                found.Add((article.Id, at, article.HeadingWords.Count));
+            }
+        }
+
+        return found;
     }
 
     public static V4RetrievalResult Run(V4Brief brief, V4ActTables tables, V4Dictionary dictionary)

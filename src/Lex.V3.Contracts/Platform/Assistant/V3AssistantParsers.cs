@@ -39,7 +39,8 @@ public static class V3AssistantParsers
 
     private const char MaskCharacter = '•';
     private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
-    private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
+    // One bound for every pattern of the assistant (see its remarks: a stall is not a hostile question).
+    private static readonly TimeSpan Timeout = Bricks.V4Text.PatternTimeout;
 
     private static readonly Regex[] IdentifierPatterns =
     [

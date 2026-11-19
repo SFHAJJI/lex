@@ -160,6 +160,7 @@ export function measured() {
     expecting: count(dev.rightArticle + dev.wrongArticle + dev.notFound + dev.wronglyRefused),
     unanswered: count(dev.notFound + dev.wronglyRefused),
     heldoutRight: count(heldout.rightArticle),
+    heldoutWrong: count(heldout.wrongArticle),
     heldoutCases: count(heldout.cases),
     heldoutDate: numericDate(heldout.date),
     devDate: numericDate(dev.date),

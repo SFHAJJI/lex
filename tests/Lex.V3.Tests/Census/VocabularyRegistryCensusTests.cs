@@ -132,7 +132,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionCall: Asks=9, Outcomes=5, "
                     + "TitleOpeners=11, const Prompt, static property PromptSha256",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionParser: GreetingWords=28, "
-                    + "StopWords=135",
+                    + "StopWords=151",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval: Modals=22",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Text: Table=592, const LatinBases",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerGates: ConsolidatedKinds=3",

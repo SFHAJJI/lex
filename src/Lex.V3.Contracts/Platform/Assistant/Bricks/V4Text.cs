@@ -10,6 +10,14 @@ public readonly record struct V4Word(string Text, int Start, int End);
 /// </summary>
 public static class V4Text
 {
+    /// <summary>
+    /// The longest one match of a pattern may run. It bounds a pattern that would backtrack without end on a hostile
+    /// question; it is not a budget for an ordinary match, which takes microseconds. It was 250 ms, and a match that a
+    /// loaded machine or a collection pause held for that long failed the whole answer (seen once in the tests on
+    /// 2026-11-19, the machine running three other suites): two seconds keeps the bound and leaves a stall room.
+    /// </summary>
+    public static readonly TimeSpan PatternTimeout = TimeSpan.FromSeconds(2);
+
     private static readonly char[] Table = BuildTable();
 
     /// <summary>
@@ -201,4 +209,19 @@ public sealed class V4Key
 
     /// <summary>Whether the key is anywhere in a text's words.</summary>
     public bool In(IReadOnlyList<V4Word> words) => Occurrences(words).Any();
+
+    /// <summary>Whether this folded word is one of the key's own words (as itself, by its stem, or by the key's prefix).</summary>
+    public bool Writes(string word)
+    {
+        ArgumentNullException.ThrowIfNull(word);
+        for (var position = 0; position < _words.Length; position++)
+        {
+            if (Meets(position, word))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

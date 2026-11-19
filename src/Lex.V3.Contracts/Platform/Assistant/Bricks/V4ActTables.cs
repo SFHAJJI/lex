@@ -81,7 +81,7 @@ public sealed record V4ParsingSummary(
 public sealed class V4ActTables
 {
     private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
-    private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan Timeout = V4Text.PatternTimeout;
 
     private static readonly Regex LabelPattern = new(@"^\s*art\w{0,6}\.?\s*(?:[0-9]|[LRDA]\.?\s*[0-9])", Options | RegexOptions.IgnoreCase, Timeout);
     private static readonly Regex CanonicalLabel = new(@"^\s*(?:Article|Art\.?)\s", Options, Timeout);

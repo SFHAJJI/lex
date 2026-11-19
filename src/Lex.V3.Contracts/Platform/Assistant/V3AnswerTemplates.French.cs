@@ -17,6 +17,10 @@ public static partial class V3AnswerTemplates
     // same day (one round, 56 sentences, 19 changed), applied byte for byte.
     private static V3TemplateProvenance BricksFrenchReviewed => new(null, BricksAgentDraft, FrenchReviewer, "2026-11-18", false);
 
+    // A sentence drafted and reviewed a day later (2026-11-19: the plan line of a question call that gave nothing usable;
+    // the independent reviewer kept the draft as it was).
+    private static V3TemplateProvenance BricksFrenchReviewedLater => new(null, BricksAgentDraft, FrenchReviewer, "2026-11-19", false);
+
     private static Dictionary<string, (string Text, V3TemplateProvenance Basis)> FrenchTexts() => new(StringComparer.Ordinal)
     {
         ["action.candidate"] = ("{candidate}", FrenchReviewed),
@@ -123,7 +127,7 @@ public static partial class V3AnswerTemplates
         ["plan.bricks.model.question"] = ("Un modèle d’IA a décrit votre question (type de réponse, termes). Il n’a choisi aucune opération.", BricksFrenchReviewed),
         ["plan.bricks.model.arbiter"] = ("Un modèle d’IA a attribué un rôle à chaque passage trouvé (principal, complémentaire, écarté). Il ne pouvait ni ajouter de passage ni écrire de texte.", BricksFrenchReviewed),
         ["plan.bricks.model.extraction"] = ("Un modèle d’IA a désigné, parmi les lignes fournies, celles qui répondent à votre question. Le code de Lex a vérifié chacune dans le texte avant de l’afficher.", BricksFrenchReviewed),
-        ["plan.bricks.model.question_unavailable"] = ("Un modèle d’IA a été interrogé pour décrire votre question et n’a pas donné de réponse utilisable\u00A0: le code de Lex a cherché vos propres mots.", BricksFrenchReviewed),
+        ["plan.bricks.model.question_unavailable"] = ("Un modèle d’IA a été interrogé pour décrire votre question et n’a pas donné de réponse utilisable\u00A0: le code de Lex a cherché vos propres mots.", BricksFrenchReviewedLater),
         ["plan.bricks.model.unavailable"] = ("Le modèle d’IA qui classe les passages n’a pas donné de réponse utilisable\u00A0: Lex montre les passages trouvés par son code, dans l’ordre établi par ce code.", BricksFrenchReviewed),
         ["plan.bricks.pass.sweep_cases"] = ("La règle renvoie aux cas prévus par la loi sans les nommer\u00A0: Lex a parcouru tout le texte pour les relever.", BricksFrenchReviewed),
         ["plan.bricks.pass.wider_context"] = ("Une première lecture a donné une réponse partielle\u00A0: Lex a relu l’article entier.", BricksFrenchReviewed),

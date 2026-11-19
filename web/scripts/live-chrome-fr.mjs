@@ -2018,8 +2018,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       words: Object.freeze({
         title: 'Chercher avec les mots de la loi, sans base de données vectorielle.',
         gain: 'chaque résultat s’explique par les mots qu’il contient.',
-        cost: 'une question posée avec d’autres mots que ceux de la loi est souvent manquée.',
-        note: 'Problème ouvert : {heldoutRight} des {heldoutCases} questions inédites reçoivent le bon article.',
+        cost: 'hors du domaine du dictionnaire, une question posée avec d’autres mots que ceux de la loi est souvent manquée.',
+        note: 'Mesuré : {heldoutRight} des {heldoutCases} questions inédites reçoivent le bon article.',
       }),
       oneCall: Object.freeze({
         title: 'Le code d’abord ; un modèle seulement là où le code ne peut pas trancher.',
@@ -2147,7 +2147,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       passed: 'réussis',
       failed: 'échoués',
     }),
-    registryTags: 'Chaque version porte son moteur (le modèle sollicité et la version des instructions, du dictionnaire et de la liste des actes), le code qui l’a servie, l’instantané des données et le résultat des contrôles. Son évaluation journalise les paramètres, les métriques et ces fichiers : {artifacts}.',
+    registryTags: 'Chaque version porte son moteur (le modèle interrogé et la version des instructions, du dictionnaire et de la liste des actes), le code qui l’a servie, l’instantané des données et le résultat des contrôles. Son évaluation journalise les paramètres, les métriques et ces fichiers : {artifacts}.',
     registryCode: 'Le code qui journalise chaque évaluation et enregistre chaque version',
     supervisionHeading: 'Supervision',
     supAvailability: 'Disponibilité, vérifiée depuis l’extérieur d’Azure à intervalles réguliers : l’état du service, les pages, un appel à l’API et le certificat TLS. Deux échecs ouvrent un incident.',
@@ -2160,6 +2160,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       first: 'Du 11/11 au 13/11 : bons verdicts sur le premier jeu de test de {firstPercent} % à {fifthPercent} %, en trois versions du prompt et de la recherche (versions 1 à 5 du registre).',
       incident: '13/11 : article 70 cité au lieu du 44 sur le site en ligne. La question a rejoint le jeu de test ; la recherche classe désormais les mots entiers et les intitulés d’abord ; 14/11 : plus aucun article faux sur le jeu de test.',
       gate: '14/11 : le contrôle de mise en ligne a arrêté un plan citant l’article 57 pour la prise d’effet de la garantie. Depuis le 15/11, un contrôle de nuit surveille le site entre deux mises en ligne.',
+      bricks: '18/11 : deux questions d’un lecteur sur l’assurance sont restées sans réponse, parce que la loi le dit avec d’autres mots. 19/11 : le moteur est reconstruit. Le code lit la question à l’aide d’un dictionnaire des termes mêmes de la loi et cite la ligne qui répond ; plus aucun modèle ne planifie de réponse.',
     }),
     qualityHeading: 'Évaluation : les {cases} questions de test, au {devDate}',
     counts: Object.freeze({
@@ -2170,7 +2171,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       rightBehaviour: 'bien traitées sans article (refus, précision, texte non détenu)',
     }),
     stability: 'Posée deux fois, une question reçoit le même verdict {sameVerdict} % du temps et le même plan {samePlan} % : la réponse d’un modèle peut varier, les contrôles vérifient donc le résultat.',
-    heldout: 'Questions inédites, jamais utilisées pour régler Lex : le bon article {heldoutRight} fois sur {heldoutCases}. {heldoutRefused} refusées par la règle du conseil, {heldoutNotFound} pas trouvées, {heldoutNoPlan} sans réponse à temps.',
+    heldout: 'Questions inédites, non utilisées pour régler Lex avant cette évaluation : le bon article {heldoutRight} fois sur {heldoutCases}, un article faux {heldoutWrong} fois. Refusées par la règle du conseil : {heldoutRefused} ; pas trouvées : {heldoutNotFound} ; sans réponse à temps : {heldoutNoPlan}. Une règle a été écrite à partir de ce résultat : il faut donc un nouveau jeu de questions inédites.',
     gateRule: 'Un article faux sur les questions d’assurance, ou une question réussie qui échoue, bloque la mise en ligne.',
     everyQuestion: 'Les {cases} questions, une par une',
     maskedEmail: '[adresse électronique masquée]',
@@ -2201,7 +2202,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     limitsHeading: 'Limites',
     limits: Object.freeze({
-      words: 'Une question posée avec d’autres mots que ceux de la loi est souvent manquée : {heldoutRight} des {heldoutCases} questions inédites.',
+      words: 'Une question posée avec d’autres mots que ceux de la loi peut encore être manquée : {heldoutRight} des {heldoutCases} questions inédites ont reçu le bon article.',
       advice: 'La règle du conseil refuse aussi des questions générales tournées « l’assuré doit-il… ».',
       translation: 'Pas de traduction : une question en anglais sur une loi détenue en français ne trouve rien.',
       variance: 'La réponse d’un modèle peut varier d’une fois à l’autre : le code vérifie chaque réponse, et les contrôles vérifient le résultat.',

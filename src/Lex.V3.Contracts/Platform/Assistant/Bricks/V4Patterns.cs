@@ -14,7 +14,7 @@ public readonly record struct V4Value(string Type, int Start, int Length);
 public static class V4Patterns
 {
     private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
-    private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan Timeout = V4Text.PatternTimeout;
 
     private const string Units = "un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|dix-sept|dix-huit|dix-neuf";
     private const string Tens = "vingt|trente|quarante|cinquante|soixante-dix|soixante|quatre-vingt-dix|quatre-vingts?|cent";

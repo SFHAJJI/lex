@@ -129,8 +129,17 @@ public static class V4Bricks
         var ownCase = false;
         if (!row.Greeting && V3AssistantParsers.ApplicationCues(question, 0, question.Length).Count == 0 && V4Boundary.PersonalMarkers(question, 0, question.Length).Count > 0)
         {
-            Describe();
-            ownCase = parts is null || parts.Any(static part => part.OwnCase);
+            // The reader as the subject of the question's own verb ("suis-je couvert ?", "am I covered?") is a case of the
+            // reader's own by its grammar: code is sure, and no model is asked for it.
+            if (V4Boundary.AsksOfOneself(question, 0, question.Length))
+            {
+                ownCase = true;
+            }
+            else
+            {
+                Describe();
+                ownCase = parts is null || parts.Any(static part => part.OwnCase);
+            }
         }
 
         var own = ByTheTables(input, row, corpus, model, cancellationToken, asked, ownCase);
@@ -151,7 +160,7 @@ public static class V4Bricks
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
         // words the dictionary lacks. Then the tables answer, as for any question, under the boundary above.
-        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { } concept)
+        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { Branch: false } concept)
         {
             var span = described.Words ?? described.Span;
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
@@ -354,6 +363,30 @@ public static class V4Bricks
             var brief = new V4Brief(concepts, role, decision.Kind, used,
                 row.Unmatched.Select(unmatched => row.Folded[unmatched.Start..unmatched.End]).ToList(), row.Words);
             retrieval = V4Retrieval.Run(brief, tables, dictionary);
+
+            // A branch of insurance ("assurance sur la vie") says where a question stands, not what it asks. Read alone,
+            // beside words of the question that are foreign to the tables, it is half a reading: the tables would answer
+            // with some line of that branch. The question call names the subject among the dictionary's concepts, or Lex's
+            // search looks for the words.
+            if (row.Concepts.Count > 0 && row.Concepts.All(read => dictionary.Concept(read.Concept)!.Branch))
+            {
+                // What the tables did read of the question: the keys of the concept it writes, a heading it writes out
+                // whole, and any word of the concept's own keys ("responsabilité" in "l'assureur de responsabilité", beside
+                // "droit propre": the branch named in another turn of phrase is no foreign word).
+                var keys = row.Concepts.SelectMany(read => dictionary.KeywordsOf(read.Concept, "law", "reader")).ToList();
+                var runs = keys
+                    .SelectMany(keyword => keyword.Key.Occurrences(row.Words))
+                    .Concat(V4Retrieval.HeadingsWrittenOut(tables, row.Words).Select(static heading => (heading.First, heading.Count)))
+                    .Select(run => (row.Words[run.First].Start, row.Words[run.First + run.Count - 1].End))
+                    .ToList();
+                bool Foreign(V4Span word) =>
+                    !runs.Any(run => run.Start <= word.Start && run.End >= word.End) &&
+                    !keys.Any(keyword => keyword.Key.Writes(row.Folded[word.Start..word.End]));
+                if (row.Unmatched.Any(Foreign))
+                {
+                    return new V4PlanOutcome(null, 0, "nothing_of_the_dictionary");
+                }
+            }
             draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", retrieval.Candidates.Count == 0 ? "no_candidate" : "candidates_found"));
             AssembleByCode(draft, decision, retrieval, row, dictionary);
             var leftToContract = draft.Absence == "no_answer_in_lines" && draft.Caveats.Contains("left_to_contract");

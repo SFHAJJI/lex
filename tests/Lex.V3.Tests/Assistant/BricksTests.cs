@@ -1375,6 +1375,72 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void TheReaderAsTheSubjectOfTheQuestionsOwnVerbIsACaseOfTheReadersOwnAndNoModelIsAskedForIt()
+    {
+        foreach (var question in new[] { "À partir de quand suis-je couvert après la signature ?", "Am I covered if the premium is paid late?", "Est-ce que je suis couvert dès la signature ?", "Suis-je couvert si je ne paie pas ma prime ?" })
+        {
+            Assert.IsTrue(V4Boundary.AsksOfOneself(question, 0, question.Length), question);
+            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question)).Verdict, question);
+            Assert.AreEqual(V3AssistantVerdict.Refuse, Answered(BricksFixture.Ask(question, new BricksFixture.Model(static _ => "not a description"))).Verdict, question);
+        }
+
+        // Where the dictionary reads the question, the tables show the law beside the refusal and no model is asked at all.
+        var never = new BricksFixture.Model(static _ => throw new InvalidOperationException("no model is asked"));
+        var beside = Answered(BricksFixture.Ask("Suis-je couvert si je ne paie pas ma prime ?", never));
+        Assert.AreEqual((V3AssistantVerdict.Refuse, 0), (beside.Verdict, never.Calls.Count));
+        Assert.IsTrue(beside.Quotes.Any(), "the law beside the refusal");
+
+        foreach (var question in new[] { "Que se passe-t-il si je ne paie pas ma prime ?", "L'assureur peut-il résilier le contrat ?", "What happens if I do not pay?", "Pouvez-vous me dire ce qu'est une personne lésée ?" })
+        {
+            Assert.IsFalse(V4Boundary.AsksOfOneself(question, 0, question.Length) && !question.Contains("if I", StringComparison.Ordinal), question);
+        }
+    }
+
+    [TestMethod]
+    public void ABranchOfInsuranceReadAloneBesideWordsNoTableReadsIsNotAnsweredByTheTables()
+    {
+        // "assurance sur la vie" names a whole part of the law. With other words of the question unread, the tables would
+        // answer with some line of that part: the question call names the subject, or the words are searched.
+        const string question = "En assurance sur la vie, que devient le capital en cas de saisie par un créancier ?";
+        var row = Row(question);
+        Assert.IsTrue(row.Concepts.Count > 0 && row.Concepts.All(read => Dictionary.Concept(read.Concept)!.Branch), "only a branch is read");
+        Assert.IsTrue(row.Unmatched.Count > 0, "and words no table reads");
+        var intake = V3AssistantParsers.Intake(question)!;
+        var outcome = V4Bricks.Plan(new V4PlanInput(intake.Masked, V3AnswerLocale.Fr, BricksFixture.Today, [], [], ["fra"]), new BricksFixture.Corpus(), null, CancellationToken.None);
+        Assert.AreEqual("nothing_of_the_dictionary+question_not_wired", outcome.Reason);
+
+        // The model names the subject among the dictionary's concepts: the tables answer with that concept. A branch is no subject.
+        var names = new BricksFixture.Model(call => call.Step == "question"
+            ? Described("words_on_a_subject", question, words: "capital", concept: "designation_beneficiaire")
+            : throw new HttpRequestException("no other call answers in this test"));
+        var answered = Answered(BricksFixture.Ask(question, names));
+        Assert.AreEqual("designation_beneficiaire", Bricks(answered).GetProperty("concepts").EnumerateArray().Single(static concept => concept.GetProperty("source").GetString() == "model").GetProperty("id").GetString());
+        var branch = new BricksFixture.Model(_ => Described("words_on_a_subject", question, words: "capital", concept: "assurance_vie"));
+        var executor = new BricksFixture.Executor();
+        _ = BricksFixture.Ask(question, branch, executor: executor);
+        Assert.IsTrue(executor.Calls.All(static call => call.Operation == "search"), "a branch named by the model is still no subject: the words are searched");
+
+        // A branch read alone with nothing else to read is still answered by the tables ("what is life insurance?").
+        Assert.IsTrue(Dictionary.Concepts.Count(static concept => concept.Branch) >= 5);
+
+        // A word of the branch's own keys is no foreign word. "droit propre" is a key of liability insurance and
+        // "responsabilité" a word of its name, said here in another turn of phrase ("l'assureur de responsabilité"): the
+        // tables read the whole question and answer it (the release gate's set, 2026-11-19: this question fell to a search).
+        const string named = "La personne lésée a-t-elle un droit propre contre l'assureur de responsabilité ?";
+        var reading = Row(named);
+        Assert.IsTrue(reading.Concepts.All(read => Dictionary.Concept(read.Concept)!.Branch) && reading.Unmatched.Count > 0, "a branch alone, and a word outside its keys' occurrences");
+        var silent = new BricksFixture.Model(static _ => throw new HttpRequestException("no model answers in this test"));
+        var own = Answered(BricksFixture.Ask(named, silent));
+        Assert.AreEqual((V3AssistantVerdict.Answer, "art_89"), (own.Verdict, own.Quotes.First().Anchor));
+        Assert.IsFalse(silent.Calls.Any(static call => call.Step == "question"), "the tables read the question: no model is asked to describe it");
+        Assert.AreEqual("rule", Bricks(own).GetProperty("route").GetString());
+
+        // The same for a word of a reader's key said apart from it ("choisir son avocat" for the key "choisir mon avocat").
+        var lawyer = Answered(BricksFixture.Ask("L'assuré peut-il choisir son avocat en protection juridique ?", silent));
+        Assert.AreEqual((V3AssistantVerdict.Answer, "art_94"), (lawyer.Verdict, lawyer.Quotes.First().Anchor));
+    }
+
+    [TestMethod]
     public void ADateInsideAnActsNameIsNotTheDateToReadTheLawOn()
     {
         var corpus = new BricksFixture.Corpus();

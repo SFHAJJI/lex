@@ -32,7 +32,7 @@ public sealed record V4DispatchInput(
 public static class V4Dispatcher
 {
     private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.Compiled;
-    private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan Timeout = V4Text.PatternTimeout;
 
     // A cited article ("l'article 39", "art. 62-3", "art. L. 121-6") or an identifier (a CELEX, an ELI): Lex's reference
     // reader answers these, as it did before the bricks.
