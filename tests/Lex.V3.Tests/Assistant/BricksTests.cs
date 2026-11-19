@@ -1642,6 +1642,12 @@ public sealed class BricksTests
         }
 
         var claim = V3AnswerClaim.Bind(V3AnswerTemplates.ClarifyOneWord, V3AnswerLocale.Fr);
+
+        // A French word of the dictionary is answered in French, an English one in English (the brief's acceptance 5).
+        Assert.AreEqual("fr", Dictionary.LanguageOfWords("garantie"));
+        Assert.AreEqual("fr", Dictionary.LanguageOfWords("résiliation"));
+        Assert.AreEqual("en", Dictionary.LanguageOfWords("deductible"));
+        Assert.IsNull(Dictionary.LanguageOfWords("test"));
         Assert.AreEqual("Un mot seul ne dit pas à Lex ce que vous voulez savoir. Posez une question complète\u00A0: Lex répond en citant le texte.", claim.Text);
 
         // Two words are a question ("prescription assurance"), and a greeting keeps its own reply.

@@ -133,6 +133,20 @@ public sealed class V4Dictionary
 
     public V4Keyword? Keyword(int row) => row >= 0 && row < Keywords.Count ? Keywords[row] : null;
 
+    /// <summary>
+    /// The language of the dictionary's keywords a text holds, when they are of one language only ("fr" or "en"), else
+    /// null: what decides a question of one or two words the function words leave undetermined ("garantie").
+    /// </summary>
+    public string? LanguageOfWords(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var words = V4Text.Words(V4Text.Fold(text));
+        var found = Keywords.Where(static keyword => !keyword.Pattern && keyword.Language is "fr" or "en")
+            .Where(keyword => V4Key.Read(keyword.Keyword) is { } key && key.In(words))
+            .Select(static keyword => keyword.Language).Distinct(StringComparer.Ordinal).ToList();
+        return found is [var only] ? only : V4CorpusIndex.Insurance.LanguageOfDomainWords(words);
+    }
+
     public V4AnswerType? AnswerType(string id) => AnswerTypes.FirstOrDefault(type => type.Id == id);
 
     /// <summary>The keywords of a concept of the given kinds of word, in the file's order.</summary>

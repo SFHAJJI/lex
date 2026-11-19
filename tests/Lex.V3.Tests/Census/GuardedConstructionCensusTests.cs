@@ -387,7 +387,7 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private static "
                     + "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::.cctor, "
                     + "method public static Lex.V3.Contracts.Platform.Assistant.Bricks.V4Key::Read, "
-                    + "8 compiler-generated",
+                    + "9 compiler-generated",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord: constructor private "
                     + "instance Lex.V3.Contracts.Platform.Assistant.Bricks.V4PlanRecord::.ctor, "
                     + "constructor private static "

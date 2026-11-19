@@ -1,40 +1,38 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-19 at 10:35 UTC by the driver. The driver updates this file in the first pull request of each day and
+Updated 2026-11-19 at 12:24 UTC by the driver. The driver updates this file in the first pull request of each day and
 whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in STATUS-WEB.md and
 STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where Lex stands
 
-- Live: Release 16 (V4), since 06:47 UTC. Nothing of your brief "make it work" is live yet: it is built, tested and
-  prepared as the next release, and waits for your word.
-- Your 80 checked questions: this morning the live site gave 27 right, 5 wrong, 29 not found, 19 refused. The new
-  version gives 59 right, 3 wrong, 13 not found, 4 refused, 1 too slow (measured on my PC with the release's data and
-  model). An article asked in ordinary words: 49 right of 54.
-- How: when the dictionary does not know the words, an AI model picks articles in the laws' tables of contents, then
-  points at lines; code quotes them. The model writes no text. About half a cent an answer, 3 seconds, 9 at worst.
-- "Mon assureur peut-il…" now gets the general rule quoted, with a line saying the text does not say how it applies
-  to the reader; refused only when no rule is found.
-- The motor insurance law answers again, with the "Dernière version détenue" notice; an article Lex does not hold is
-  said so ("L'article 16 existe mais Lex n'en détient pas le texte", with the official link).
+- Live: Release 17 since 11:52 UTC (a refusal shows the law's lines beside it). Its answers are this morning's.
+- Your brief "make it work" is built step by step in your order, measured after each step on your 80 checked
+  questions and your 40 questions with no article. Not live: Release 18 is being built and waits for your word.
 
-## Wrong answers still there (your brief: tell you first)
+| Step | Right | Wrong | Not found | Refused | The 40 |
+|---|---|---|---|---|---|
+| Live this morning | 25 | 4 | 32 | 19 | 22 |
+| Before your points | 57 | 2 | 17 | 4 | 27 |
+| Point 2: refuse only decisions | 57 | 2 | 17 | 4 | 29 |
+| Point 1: not sure, show candidates | 49 | 1 | 26 | 4 | 28 |
+| Step 3: the "not found" groups | 48 | 0 | 29 | 3 | 34 |
 
-- "Qui doit prouver quoi en cas de sinistre ?" quotes articles 26, 27 (your label: 15, 16). "L'assureur peut-il modifier
-  les conditions générales en cours de contrat ?" quotes 60 (label: 42, 16, 17). The small model's choice; see below.
+- Only asserted answers count as right or wrong. 14 more answers show the passages as candidates ("Lex a trouvé ces
+  passages sans les départager davantage"); almost all of them hold the right article.
+- No wrong answer is left on the 80. Your bar for pages and dashboards (60 right, none wrong) is not reached: 48.
 
 ## What I decided for you (each can be undone)
 
-- One word alone ("garantie") asks for a full question. Foreign law, "Remplaces-tu un avocat ?", labour or housing
-  questions are no longer answered from the insurance law (found by your other 102 questions, now closed).
-- The test cases on a reader's own case now expect the general rule and the caution line, as you directed.
+- A decision on your own facts ("est-ce légal", "que dois-je faire", "suis-je couvert" after a stated incident) is
+  refused with the article shown; "Mon assureur peut-il résilier mon contrat ?" is answered with the article and the
+  line on your situation.
+- A birth date, a policy number and a name you type are masked before anything reads them.
+- A follow-up with nothing before it ("Tu es sûr ?") is asked to be put in full.
 
 ## What waits on you
 
-- Go live with this version: yes or no.
-- The stronger model: I was not allowed to create it. Create a "gpt-4.1" deployment on the same Azure resource, or
-  tell me to; it costs about five times more an answer, so the per-answer ceiling (2 cents) must rise too.
-- A summary sentence written by the model above the quotations: yes or no. Five examples are in the folder
-  kezhan-brief-2026-11-19 (file summary-sentence-examples.md). Not built: today no sentence comes from a model.
-- The monthly cap is 20 EUR (about 3,700 answers): keep or change. The hold-out (77 questions) is not opened: say when.
-- The Developers page still says personal questions "are refused": reword or leave.
+- Go live with Release 18 (ready around 15:30 UTC with its screenshots): yes or no.
+- The stronger model for the second reading (step 5): create it, or tell me to. It costs about five times more.
+- Answers about Lex itself ("Qui es-tu ?", "Quel modèle utilises-tu ?"): 0 of 6. They are public claims: your wording.
+- A model-written summary sentence; the monthly cap (20 EUR); the hold-out (77 questions, not opened).

@@ -4,6 +4,53 @@ Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The owner's order of 2026-11-19: his points 1 and 2, then the "not found" groups, each step measured (sole driver)
+
+The owner's message of 2026-11-19 (about 11:00 UTC): baseline first on the 40 `tune` questions with no article
+expected, scored against `expected_behaviour`; then his point 1 ("when code is not sure, show candidates or say 'not
+found', never assert"), his point 2 ("answer the general question with the article and the line 'Le texte ne dit pas
+comment il s'applique à votre situation'; refuse only a decision on the person's own facts, and still show the
+article"), the "not found" groups, the motor law, the second pass; after each step the four numbers on the 80 and the
+score on the 40; stop if the 40 get worse; no pages or dashboards before 60 right and none wrong on the 80; nothing
+live without his word. The hold-out rows are not read.
+
+- **Scoring, fixed before the first run** (`C:\lex-v3\kezhan-brief-2026-11-19\run_80.py`, `run_40.py`): on the 80,
+  right or wrong only for an asserted answer (candidates and lines shown under "no line answers" count as not found; a
+  refusal that shows an expected article counts as right for a row labelled text_not_advice); on the 40, one rule per
+  expected behaviour, written in the script.
+- **Measured end to end on the driver's PC** (the release's data and model; one run per step):
+
+  | Step | Right | Wrong | Not found | Refused | The 40 |
+  |---|---|---|---|---|---|
+  | Release 16 live (baseline) | 25 | 4 | 32 | 19 | 22 |
+  | The branch before the points (9f635fbb) | 57 | 2 | 17 | 4 | 27 |
+  | Point 2 (891e4efc) | 57 | 2 | 17 | 4 | 29 |
+  | Point 1 (7bc16545) | 49 | 1 | 26 | 4 | 28 |
+  | Step 3 (c39c23a1) | 48 | 0 | 29 | 3 | 34 |
+
+  The 40 moved down once (29 to 28): one question, "Donne-moi l'article complet", answered by Lex's search path where the
+  model's description varied between runs (point, point, clarify, point); point 1 does not touch that path. Step 3 makes
+  such follow-ups a rule of code. Point 1 turned eight right answers into candidates (each still holds the right article)
+  and the wrong article 60 into candidates.
+- **Point 2** (`V4Boundary.DecidesOwnFacts`, code, no model): a judgement, advice or a prediction on the reader's own
+  situation, "who pays / am I covered" after a fact of the reader's own, or an instruction to Lex ("réponds oui ou non",
+  "invente") is refused with the lines found beside the refusal. Lex's own search path keeps its earlier refusal of a
+  personal wording ("Dois-je garder l'attestation…" is still refused there): a next step.
+- **Point 1**: code is sure when the law's own words settle it or when the tables and the second reading land on the
+  same article; where they differ, where the second reading did not confirm the tables, or where the tables quote none
+  of the articles holding all the question's subjects, the lines are shown as candidates.
+- **Step 3**: a birth date, a policy or claim number and a name are masked by the intake (the birth date was read as the
+  date to read the law on); the burden of proof is a concept of the dictionary; two readings that agree on the tables'
+  candidate assert it; a follow-up with no earlier answer is asked to be put in full (one new sentence, French kept by
+  the independent reviewer).
+- **Release 17** (`v3-20261119T064913Z-c8303625e476`, web only, #1066) is live since 11:52 UTC: two-address PASS,
+  screenshots `ops/screens-r17` (the refusal shows article 39 beside it; the absence card of "C'est quoi la franchise ?"
+  still names the act by its address: the title fix of #1066 does not reach that card, left for a web slice), gate
+  passed (36 right of 56, 0 wrong), MLflow version 13 `champion` and `serving`, Release 16 deactivated and kept. Its
+  backup is still to run: the image file was removed from this PC for disk space before it (a note beside the release
+  folder says how to download it again).
+- **Release 18** (this branch at c39c23a1) is being built; it goes to a candidate address and waits for the owner's word.
+
 ## The owner's brief "make it work": an ordinary question gets its article (sole driver, 2026-11-19)
 
 `api/kezhan-set`, on the owner's brief of 2026-11-19 (kept with its question set under

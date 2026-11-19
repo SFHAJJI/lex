@@ -72,11 +72,13 @@ public sealed class V4CorpusIndex
 
     private readonly V4Key[] _otherDomain;
     private readonly V4Key[] _domain;
+    private readonly V4Key[] _domainEnglish;
 
-    private V4CorpusIndex(string version, string sha256, List<V4IndexAct> acts, List<V4IndexEuAct> euActs, List<string> otherDomainWords, List<string> domainWords)
+    private V4CorpusIndex(string version, string sha256, List<V4IndexAct> acts, List<V4IndexEuAct> euActs, List<string> otherDomainWords, List<string> domainWords, List<string> domainWordsEnglish)
     {
+        _domainEnglish = domainWordsEnglish.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
         _otherDomain = otherDomainWords.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
-        _domain = domainWords.Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
+        _domain = domainWords.Concat(domainWordsEnglish).Select(V4Key.Read).Where(static key => key is not null).Select(static key => key!).ToArray();
         Version = version;
         Sha256 = sha256;
         Acts = acts.OrderBy(static act => act.Order).ToList().AsReadOnly();
@@ -120,6 +122,18 @@ public sealed class V4CorpusIndex
     /// what lets the outline be read for a question no dictionary key reads, and keeps it shut for every other subject.
     /// </summary>
     public bool InDomain(IReadOnlyList<V4Word> words) => _domain.Any(key => key.In(words));
+
+    /// <summary>
+    /// The language of the domain's words a question holds ("fr" for <c>domain_words</c>, "en" for <c>domain_words_en</c>),
+    /// when they are of one language only, else null.
+    /// </summary>
+    public string? LanguageOfDomainWords(IReadOnlyList<V4Word> words)
+    {
+        ArgumentNullException.ThrowIfNull(words);
+        var english = _domainEnglish.Any(key => key.In(words));
+        var french = _domain.Except(_domainEnglish).Any(key => key.In(words));
+        return french == english ? null : french ? "fr" : "en";
+    }
 
     /// <summary>The acts a question names by a short name of the index, the longest name first.</summary>
     public List<V4ActMention> Mentions(IReadOnlyList<V4Word> words)
@@ -226,6 +240,7 @@ public sealed class V4CorpusIndex
 
         var other = root.GetProperty("domains").EnumerateArray().SelectMany(static domain => Strings(domain, "other_domain_words")).ToList();
         var domain = root.GetProperty("domains").EnumerateArray().SelectMany(static entry => Strings(entry, "domain_words")).ToList();
-        return new V4CorpusIndex(root.GetProperty("version").GetString()!, Convert.ToHexStringLower(SHA256.HashData(utf8)), acts, euActs, other, domain);
+        var domainEnglish = root.GetProperty("domains").EnumerateArray().SelectMany(static entry => Strings(entry, "domain_words_en")).ToList();
+        return new V4CorpusIndex(root.GetProperty("version").GetString()!, Convert.ToHexStringLower(SHA256.HashData(utf8)), acts, euActs, other, domain, domainEnglish);
     }
 }
