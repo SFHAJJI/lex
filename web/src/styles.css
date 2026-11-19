@@ -3619,6 +3619,7 @@ html[data-layout="v4"] .lx-para { display: flex; }
 html[data-layout="v4"] .lx-para-marker { flex: 0 0 26px; font-family: var(--lx-sans); font-size: 15px; font-weight: 600; padding-top: 3px; }
 html[data-layout="v4"] .lx-para p { margin: 0; flex: 1 1 auto; }
 html[data-layout="v4"] .lx-article-highlighted .lx-article-body p { background: var(--lx-quote); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+html[data-layout="v4"] .lx-article-body .lx-para-quoted p { background: var(--lx-quote); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 html[data-layout="v4"] .lx-without-text { margin: 0; font-family: var(--lx-sans); font-size: 14px; color: var(--lx-muted); }
 html[data-layout="v4"] .lx-skeleton { height: 14px; margin: 18px 0 0; border-radius: 4px; background: var(--lx-panel); }
 html[data-layout="v4"] .lx-skeleton-short { width: 60%; }

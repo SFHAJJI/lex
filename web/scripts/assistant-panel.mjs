@@ -170,6 +170,7 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockBuilt: 'How this answer was built',
     dockBuiltFoot: '{seconds} s, about €{cost}',
     dockBuiltCost: 'about €{cost}',
+    dockBuiltSeconds: '{seconds} s',
     dockStageMasking: 'Masking',
     dockStagePlanner: 'Planner',
     dockStageValidator: 'Validator',
@@ -391,6 +392,7 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockBuilt: 'Comment cette réponse a été construite',
     dockBuiltFoot: '{seconds} s, environ {cost} €',
     dockBuiltCost: 'environ {cost} €',
+    dockBuiltSeconds: '{seconds} s',
     dockStageMasking: 'Masquage',
     dockStagePlanner: 'Planificateur',
     dockStageValidator: 'Validateur',
@@ -573,13 +575,7 @@ export async function actTitlesOf(dossier, fetchImpl) {
   const titles = {};
   await Promise.all(addresses.map(async (address) => {
     try {
-      const response = await fetchImpl('/api/v3/dossier', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ operation_id: 'dossier', parameters: { identifier: address } }),
-      });
-      const envelope = await response.json();
-      const dossierView = readDossier(envelope?.result?.value);
+      const dossierView = await actDossierAt(address, fetchImpl);
       const named = actTitle(dossierView);
       // With the act's versions in one language, counted, and the year of the first (the answer's "N versions since YYYY").
       const versions = versionsOf(dossierView);
@@ -589,6 +585,44 @@ export async function actTitlesOf(dossier, fetchImpl) {
     }
   }));
   return titles;
+}
+
+/**
+ * The Luxembourg act a bricks answer read and names by its address in a sentence of its own (an absence: "Lex went through
+ * the text of /lu-legilux/..."): the record's `work`. Null for another publisher's act or an answer of another kind.
+ */
+export function bricksWork(dossier) {
+  const work = dossier?.trace?.plan?.bricks?.work;
+  return typeof work === 'string' && work.startsWith('/lu-legilux/') ? work : null;
+}
+
+/**
+ * One act's dossier as the pages read it (`readDossier`), asked by the act's address: an address an answer carries (its
+ * quotation's or its record's), never a word the reader typed. The one request the acts' titles are read from.
+ */
+async function actDossierAt(address, fetchImpl) {
+  const response = await fetchImpl('/api/v3/dossier', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ operation_id: 'dossier', parameters: { identifier: address } }),
+  });
+  const envelope = await response.json();
+  return readDossier(envelope?.result?.value);
+}
+
+/** The own title of one Luxembourg act, by its address (its dossier, asked once): `{ title, language }`, or null. */
+export async function actTitleAt(address, fetchImpl) {
+  try {
+    return actTitle(await actDossierAt(address, fetchImpl));
+  } catch {
+    return null;
+  }
+}
+
+/** A sentence that names an act by its address, cut at the address: what stands before and after. Null when it holds none. */
+export function aroundAddress(text, address) {
+  const at = typeof address === 'string' && address !== '' ? String(text).indexOf(address) : -1;
+  return at < 0 ? null : Object.freeze([String(text).slice(0, at), String(text).slice(at + address.length)]);
 }
 
 /** The panel's copy in a locale it holds, or a thrown error: it never falls back to another language (R43). */
@@ -804,6 +838,17 @@ export function questionCallOf(dossier) {
   return Object.freeze({ outcome, asks: Object.freeze(outcome === 'described' ? asks : []) });
 }
 
+/**
+ * Whether a model was asked anything for this answer. An answer of code alone (a term the law defines, a cited article, a
+ * question code refuses) made no model call, so it has no model cost to print.
+ */
+export function modelWasAsked(dossier, rows) {
+  const call = questionCallOf(dossier);
+  if (bricksOf(dossier) === null && call === null) return true;
+  if (rows.some((row) => row.model)) return true;
+  return !(call === null || call.outcome === 'not_wired' || call.outcome === 'cited');
+}
+
 /** The sentence under the stages: what a model did for this answer, in one line. */
 export function builtNote(dossier, rows, locale) {
   const copy = panelCopy(locale);
@@ -811,7 +856,7 @@ export function builtNote(dossier, rows, locale) {
   if (bricksOf(dossier) === null && call === null) return copy.dockPlanNote;
   if (rows.some((row) => row.model && row.key !== 'question')) return copy.dockBricksNote;
   if (rows.some((row) => row.model)) return copy.dockDescribedNote;
-  return call === null || call.outcome === 'not_wired' || call.outcome === 'cited' ? copy.dockBricksNoModel : copy.dockNoModelUsed;
+  return modelWasAsked(dossier, rows) ? copy.dockNoModelUsed : copy.dockBricksNoModel;
 }
 
 /** A quotation's lines: its text cut where a line of the law starts (`breaks`), each trimmed; one line when it has none. */
@@ -1029,12 +1074,15 @@ export function dockDecimal(value, locale, digits) {
 
 /**
  * The work's foot: the answer's duration as the page measured it (the trace holds none) and its cost, which the trace does
- * not hold either: the latest test run's average cost of an answer (`EVALUATION_RECORD`), said as "about".
+ * not hold either: the latest test run's average cost of an answer (`EVALUATION_RECORD`), said as "about". An answer no
+ * model was asked for (`modelAsked` false) says its duration alone: it cost no model call.
  */
-export function builtFoot(seconds, costEur, locale) {
+export function builtFoot(seconds, costEur, locale, modelAsked = true) {
   const copy = panelCopy(locale);
+  const timed = typeof seconds === 'number' && Number.isFinite(seconds);
+  if (!modelAsked) return timed ? fill(copy.dockBuiltSeconds, { seconds: dockDecimal(seconds, locale, 1) }) : '';
   const cost = dockDecimal(costEur, locale, 3);
-  return typeof seconds === 'number' && Number.isFinite(seconds)
+  return timed
     ? fill(copy.dockBuiltFoot, { seconds: dockDecimal(seconds, locale, 1), cost })
     : fill(copy.dockBuiltCost, { cost });
 }

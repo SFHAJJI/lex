@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { ASSISTANT_PANEL_COPY, bricksBody, bricksOf, builtNote, dockTurnOf, questionCallOf, quoteLines, stageRows, validateDossier } from '../scripts/assistant-panel.mjs';
+import { ASSISTANT_PANEL_COPY, actTitleAt, aroundAddress, bricksBody, bricksOf, bricksWork, builtNote, dockTurnOf, modelWasAsked, questionCallOf, quoteLines, stageRows, validateDossier } from '../scripts/assistant-panel.mjs';
 import { BRICKS_ANSWERS } from '../scripts/bricks-answers-record.mjs';
 import { bundle } from '../scripts/react-build.mjs';
 
@@ -78,6 +78,11 @@ test('an answer of operations says who read the question: a model described it, 
   reached.trace.plan.bricks.model_calls = [{ step: 'question' }];
   assert.equal(builtNote(reached, stageRows(reached, 'en'), 'en'), EN.dockDescribedNote);
   assert.equal(builtNote(answers.rule, stageRows(answers.rule, 'en'), 'en'), EN.dockBricksNoModel);
+  // The cost a card prints is a model's: an answer of code alone has none, one a model described or was asked for has.
+  assert.equal(modelWasAsked(answers.rule, stageRows(answers.rule, 'en')), false);
+  assert.equal(modelWasAsked(answers.cited, stageRows(answers.cited, 'en')), false);
+  assert.equal(modelWasAsked(answers.described, stageRows(answers.described, 'en')), true);
+  assert.equal(modelWasAsked(failed, stageRows(failed, 'en')), true, 'a model asked that gave nothing was still asked');
 
   const { DockView } = await dock();
   const turn = { id: 't3', kind: 'answer', question: "Que dit l'article 39 de la loi sur le contrat d'assurance ?", dossier: answers.described, servingCommit: null, seconds: 1.2 };
@@ -203,4 +208,25 @@ test('the dock\'s new words are in both copy tables', () => {
     assert.equal(typeof FR[key], 'string', key);
     assert.ok(FR[key].length > 0 && EN[key].length > 0, key);
   }
+});
+
+test('an answer that names the act it read by its address says the act\'s title once it is read, and the address when it is not', async () => {
+  // The absence of the engine's own samples names its act by its address, in the server's sentence.
+  const absence = answers.absence;
+  const address = bricksWork(absence);
+  assert.equal(address, '/lu-legilux/loi-1997-07-27-n10');
+  const line = bricksBody(absence).find((entry) => entry.type === 'line' && entry.text.includes(address));
+  assert.ok(line, 'a sentence of the absence names the act by its address');
+  const around = aroundAddress(line.text, address);
+  assert.equal(around[0] + address + around[1], line.text);
+  assert.equal(aroundAddress('no address here', address), null);
+  assert.equal(aroundAddress(line.text, null), null);
+  assert.equal(bricksWork({ trace: { plan: { bricks: { work: '/eu-eurlex/32016R0679' } } } }), null, 'another publisher\'s act keeps its address');
+  assert.equal(bricksWork({ trace: { plan: {} } }), null);
+
+  // The title is the act's own, read from its dossier; a dossier that cannot be read gives none, and the address stays.
+  const asked = [];
+  const none = await actTitleAt(address, async (url, init) => { asked.push([url, JSON.parse(init.body)]); throw new Error('offline'); });
+  assert.equal(none, null);
+  assert.deepEqual(asked, [['/api/v3/dossier', { operation_id: 'dossier', parameters: { identifier: address } }]]);
 });

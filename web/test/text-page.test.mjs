@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   alignParagraphs, articleNumberOf, articleParts, axisGeometry, changeIndex, cleanTitle, ownTitleOf, sameVisibleWording, versionAt, versionsOf, wordDiff,
 } from "../scripts/text-page.mjs";
-import { textHref, textStateOf } from "../scripts/text-address.mjs";
+import { marksOf, quotedParagraphs, textHref, textStateOf } from "../scripts/text-address.mjs";
 import { CompareArticle, ReadArticle, numericDate, renderLiveTextPage, typedDate } from "../.react-build/app.mjs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -132,6 +132,47 @@ test("an article reads before the versions that changed it are known, then says 
   assert.ok(before.includes("Durée des obligations") && !before.includes("Wording changed"));
   const after = renderToStaticMarkup(h(ReadArticle, { ...props, changedDates: ["2013-03-01"] }));
   assert.ok(after.includes("Wording changed on 01/03/2013"));
+});
+
+test("the line an answer quotes is marked alone in its article, and the article whole only when no paragraph meets it (Release 15's screenshots: the whole of article 1 was marked for one definition)", () => {
+  const paragraphs = [
+    { marker: null, text: "Au sens de la présente loi, on entend par:" },
+    { marker: null, text: "Personne lésée: dans une assurance de responsabilité, la personne victime d'un dommage dont l'assuré est responsable." },
+    { marker: "3.", text: "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat." },
+    { marker: "a)", text: "le preneur;" },
+  ];
+  // A quoted line marks the paragraph that is it, spaces of any kind read as one.
+  assert.deepEqual([...quotedParagraphs(paragraphs, ["Personne lésée: dans une assurance de responsabilité, la personne victime d'un dommage dont l'assuré est responsable."])], [1]);
+  assert.deepEqual([...quotedParagraphs(paragraphs, ["Hormis les cas prévus par la loi, l'assureur  ne peut résilier le contrat."])], [2]);
+  // A line that is part of a paragraph marks it; a quotation of two paragraphs marks both; a bare marker's paragraph is none.
+  assert.deepEqual([...quotedParagraphs(paragraphs, ["l'assureur ne peut résilier le contrat"])], [2]);
+  assert.deepEqual([...quotedParagraphs(paragraphs, ["Au sens de la présente loi, on entend par: Personne lésée: dans une assurance de responsabilité, la personne victime d'un dommage dont l'assuré est responsable. le preneur;"])], [0, 1]);
+  // No quotation, a short one, or one no paragraph holds: nothing is marked, and the page falls back to the whole article.
+  assert.deepEqual([...quotedParagraphs(paragraphs, [])], []);
+  assert.deepEqual([...quotedParagraphs(paragraphs, ["le preneur"])], []);
+  assert.deepEqual([...quotedParagraphs(paragraphs, ["une phrase que cet article ne contient pas"])], []);
+
+  // An answer's quotations of one text, each with its article; another text's are not this page's.
+  const quotes = [
+    { work: "/lu-legilux/loi-1997-07-27-n10", anchor: "art_39", text: "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat." },
+    { work: "/lu-legilux/loi-1997-07-27-n10", anchor: "art_13", text: "Si l'assureur apporte la preuve qu'il n'aurait en aucun cas assuré le risque, il peut résilier le contrat dans le même délai." },
+    { work: "/eu-eurlex/32016R0679", anchor: "005", text: "Personal data shall be processed lawfully." },
+  ];
+  assert.deepEqual(marksOf(quotes, "/lu-legilux/loi-1997-07-27-n10").map((mark) => mark.article), ["art_39", "art_13"]);
+
+  // Drawn: the quoted paragraph carries the mark and the article is not marked whole; with no quotation met, it is.
+  const text = "Article 39Cas, formes et effets de la résiliation1.La résiliation du contrat se fait par lettre recommandée à la poste.2.Sauf si la loi en dispose autrement, la résiliation n'a d'effet qu'à l'expiration d'un délai d'un mois.3.Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.";
+  const parts = articleParts(text);
+  const props = { entry: { id: "art_39", number: "39", textHeld: true }, article: { publisher_id: "art_39", text, language: "fra" }, parts, versions: [{ date: "2013-03-01" }], changedDates: [], identifier: "/lu-legilux/loi-1997-07-27-n10", highlighted: true, version: { date: "2013-03-01" }, onCompareOn: () => {} };
+  const line = parts.paragraphs.findIndex((paragraph) => paragraph.text.startsWith("Hormis"));
+  assert.ok(line >= 0, "the article's paragraphs hold the rule's line");
+  const marked = renderToStaticMarkup(h(ReadArticle, { ...props, quotes: ["Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat."] }));
+  assert.equal(marked.match(/lx-para lx-para-quoted/gu)?.length, 1, "one paragraph marked");
+  assert.ok(!marked.includes("lx-article-highlighted"), "the article is not marked whole beside its quoted line");
+  const whole = renderToStaticMarkup(h(ReadArticle, { ...props, quotes: ["une phrase que cet article ne contient pas"] }));
+  assert.ok(whole.includes("lx-article-highlighted") && !whole.includes("lx-para-quoted"), "no line met: the article opened is marked whole, as before");
+  const plain = renderToStaticMarkup(h(ReadArticle, { ...props, highlighted: false }));
+  assert.ok(!plain.includes("lx-article-highlighted") && !plain.includes("lx-para-quoted"));
 });
 
 test("the search page lists first the texts whose own title holds the words, the shortest first (the engine's ranking unchanged)", async () => {

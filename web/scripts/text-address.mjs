@@ -89,3 +89,32 @@ export function textStateOf(search) {
  */
 export const OPEN_EVENT = 'lex:open';
 export const DOCK_EVENT = 'lex:dock';
+// The lines of a text the answer in sight quotes (`{ identifier, marks: [{ article, text }] }`): the text page marks the
+// paragraphs that hold them, in place of the whole article. An empty list clears the marks.
+export const MARK_EVENT = 'lex:mark';
+
+/** A text as it is compared: every run of spaces (no-break ones too) as one space, trimmed. */
+const plain = (text) => String(text ?? '').replace(/[\s\u00A0\u202F]+/gu, ' ').trim();
+
+/**
+ * The paragraphs of an article an answer quotes, by their index: a paragraph that holds a quoted line, or that a quoted
+ * line holds whole (a paragraph of twelve characters or more: a bare marker is no quotation). Empty when no paragraph
+ * meets a line: the page then marks the article whole, as before.
+ */
+export function quotedParagraphs(paragraphs, quotes) {
+  const lines = (quotes ?? []).map(plain).filter((line) => line.length >= 12);
+  if (lines.length === 0) return Object.freeze([]);
+  const marked = [];
+  (paragraphs ?? []).forEach((paragraph, index) => {
+    const text = plain(paragraph?.text);
+    if (text.length > 0 && lines.some((line) => text.includes(line) || (text.length >= 12 && line.includes(text)))) marked.push(index);
+  });
+  return Object.freeze(marked);
+}
+
+/** The marks an answer's quotations make in a text: each quotation of that text with its article and its words. */
+export function marksOf(quotes, identifier) {
+  return Object.freeze((quotes ?? [])
+    .filter((quote) => quote?.work === identifier && typeof quote.anchor === 'string' && typeof quote.text === 'string')
+    .map((quote) => Object.freeze({ article: quote.anchor, text: quote.text })));
+}

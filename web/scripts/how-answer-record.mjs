@@ -1,14 +1,14 @@
 // One real answer, recorded for How it works (the owner's brief of 2026-11-15, section 5: one real question followed
-// through its stages). Captured on 2026-11-19 at 02:53 UTC by one request to the API at `origin` below,
-// POST /api/v3/ask with the body `request` (ask/1's request: the question alone). The origin is the release candidate on the driver's PC (the same code, data and model as the release); the record is made again from the live site once the release serves.
+// through its stages). Captured on 2026-11-19 at 05:00 UTC by one request to the API at `origin` below,
+// POST /api/v3/ask with the body `request` (ask/1's request: the question alone).
 //
 // `envelope` is the answer as served, whole and unedited. `act` is the title the dossier of the same act gives the version
 // the answer quotes (one dossier request, the same minute: `act.request`), since the answer names the act by its address
 // only. Do not edit: record again with the same two requests (C:\lex-v3\driver-scripts\make-how-record.py), and date it.
 
 export const HOW_ANSWER_RECORD = Object.freeze({
-  "recordedAt": "2026-11-19T02:53:32Z",
-  "origin": "http://127.0.0.1:5080",
+  "recordedAt": "2026-11-19T05:00:19Z",
+  "origin": "https://law.soufien.lu",
   "request": {
     "operation_id": "ask",
     "parameters": {
@@ -19,7 +19,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "context": {
       "commits": {
         "index_builder_source_commit": "bfb839839ea7d49cec79e8525275968d1000be8e",
-        "serving_runtime_source_commit": "5e02ec30c1bd5250404430d7728f3e86c4e34dce"
+        "serving_runtime_source_commit": "405abff0d2263fd817538c302b8936e5bcc73e17"
       },
       "freshness": {
         "channels": [
@@ -43,7 +43,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "index_built_at": "2026-11-12T15:22:06Z",
         "last_checked_against_publisher": null,
         "maximum_data_age_days": 30,
-        "observed_at": "2026-11-19T02:53:32.6053017Z",
+        "observed_at": "2026-11-19T05:00:19.7799733Z",
         "stale": false,
         "upstream_health": "stale"
       },
@@ -62,7 +62,7 @@ export const HOW_ANSWER_RECORD = Object.freeze({
     "refusal": null,
     "registry_schema": "lex-v3-operation-registry/2",
     "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
-    "request_ref": "http_e1731661d2ae895c3a783c775fded402ca5c889b1a404c1cf29eca4654eaa8a0",
+    "request_ref": "http_6cb1fb39be82226f85c016c5aa3ab26eb1a6541535cdd4e2c87ddfba3c30c5b8",
     "result": {
       "object_type": "answer_dossier",
       "schema": "lex-v3-ask-result/1",
@@ -1956,6 +1956,6 @@ export const HOW_ANSWER_RECORD = Object.freeze({
         "identifier": "/lu-legilux/loi-1997-07-27-n10"
       }
     },
-    "request_ref": "http_78fcf0a4225f1d2ecb2720235a926c5fdcdc0b556949093783f5ca9e3c18d100"
+    "request_ref": "http_f267ecd6e61508b8675c03f21d84214361fac044dfee936ac59c8e37dbd7aad6"
   }
 });
