@@ -170,13 +170,16 @@ public sealed class V4LawIndex
             }
 
             var names = new List<string>();
-            foreach (var name in element.GetProperty("names").EnumerateArray())
+            if (element.TryGetProperty("names", out var called) && called.ValueKind == JsonValueKind.Array)
             {
-                // Stored already normalised; normalised again, which changes nothing of such a name.
-                var written = Normalise(name.GetString()!);
-                if (written.Length > 0)
+                foreach (var name in called.EnumerateArray())
                 {
-                    names.Add(written);
+                    // Stored already normalised; normalised again, which changes nothing of such a name.
+                    var written = Normalise(name.GetString()!);
+                    if (written.Length > 0)
+                    {
+                        names.Add(written);
+                    }
                 }
             }
 
