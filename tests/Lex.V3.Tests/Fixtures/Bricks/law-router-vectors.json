@@ -1,0 +1,1104 @@
+{
+ "index_version": "2026-11-19.1",
+ "vectors": [
+  {
+   "question": "Mon patron veut me virer après 3 ans dans la boîte, il doit me laisser combien de temps de préavis ?",
+   "tokens": [
+    "patron",
+    "virer",
+    "ans",
+    "boite",
+    "laisser",
+    "temp",
+    "preavi"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 314.68
+    }
+   ]
+  },
+  {
+   "question": "Je veux démissionner de mon CDI, je dois prévenir combien de temps avant de partir ?",
+   "tokens": [
+    "demissi",
+    "cdi",
+    "preveni",
+    "temp",
+    "partir"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 125.39
+    },
+    {
+     "work": "/lu-legilux/loi-1979-04-16-n1",
+     "score": 80.16
+    }
+   ]
+  },
+  {
+   "question": "Une période d'essai, ça peut durer combien de temps au maximum ?",
+   "tokens": [
+    "periode",
+    "essai",
+    "durer",
+    "temp",
+    "maximum"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 128.07
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 77.59
+    }
+   ]
+  },
+  {
+   "question": "nombre de jours de congé payé par an",
+   "tokens": [
+    "nombre",
+    "jour",
+    "conge",
+    "paye"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 156.55
+    }
+   ]
+  },
+  {
+   "question": "Mes heures sup, on me les paie ou je les récupère, et à quel taux ?",
+   "tokens": [
+    "heure",
+    "sup",
+    "paie",
+    "recuper",
+    "taux"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 139.33
+    }
+   ]
+  },
+  {
+   "question": "Est-ce que mon employeur peut me licencier pendant que je suis en arrêt maladie ?",
+   "tokens": [
+    "employe",
+    "licenci",
+    "arret",
+    "maladie"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 248.79
+    }
+   ]
+  },
+  {
+   "question": "Selon le Code du travail, combien d'heures peut-on travailler au maximum par jour et par semaine ?",
+   "tokens": [
+    "travail",
+    "heure",
+    "maximum",
+    "jour",
+    "semaine"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 289.49
+    }
+   ]
+  },
+  {
+   "question": "J'ai un diplôme professionnel (DAP), est-ce que j'ai droit à un salaire minimum plus élevé ?",
+   "tokens": [
+    "diplome",
+    "profess",
+    "dap",
+    "salaire",
+    "minimum",
+    "eleve"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 152.82
+    },
+    {
+     "work": "/lu-legilux/rgd-2019-08-15-a571",
+     "score": 106.51
+    }
+   ]
+  },
+  {
+   "question": "My employer fired me without giving any reason. Can I make him tell me why, and how long do I have to ask?",
+   "tokens": [
+    "employe",
+    "fired",
+    "without",
+    "giving",
+    "reason",
+    "make",
+    "long",
+    "ask"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 167.45
+    }
+   ]
+  },
+  {
+   "question": "Je suis enceinte, est-ce que mon chef a le droit de me mettre à la porte ?",
+   "tokens": [
+    "enceint",
+    "chef",
+    "mettre",
+    "porte"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 72.08
+    },
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 65.65
+    }
+   ]
+  },
+  {
+   "question": "jours fériés légaux liste",
+   "tokens": [
+    "jour",
+    "ferie",
+    "liste"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 75.92
+    },
+    {
+     "work": "/lu-legilux/loi-2003-02-18-n2",
+     "score": 58.82
+    }
+   ]
+  },
+  {
+   "question": "Licencié après 12 ans dans la même entreprise : est-ce que j'ai droit à une prime de départ, et de combien ?",
+   "tokens": [
+    "licenci",
+    "ans",
+    "entrepr",
+    "prime",
+    "depart"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 234.53
+    }
+   ]
+  },
+  {
+   "question": "Le propriétaire me demande trois mois de caution pour l'appartement, il a le droit ?",
+   "tokens": [
+    "proprie",
+    "demande",
+    "mois",
+    "caution",
+    "apparte"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 193.71
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 178.44
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 119.62
+    }
+   ]
+  },
+  {
+   "question": "Je veux quitter mon appartement en location, je dois prévenir le propriétaire combien de temps à l'avance ?",
+   "tokens": [
+    "quitter",
+    "apparte",
+    "locatio",
+    "preveni",
+    "proprie",
+    "temp",
+    "avance"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 190.41
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 144.12
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 129.66
+    }
+   ]
+  },
+  {
+   "question": "Mon propriétaire veut reprendre l'appartement pour y loger son fils, j'ai combien de temps pour partir ?",
+   "tokens": [
+    "proprie",
+    "reprend",
+    "apparte",
+    "loger",
+    "fils",
+    "temp",
+    "partir"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 215.63
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 204.47
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 132.1
+    }
+   ]
+  },
+  {
+   "question": "Tous les combien le propriétaire peut-il augmenter le loyer, et de combien au plus ?",
+   "tokens": [
+    "proprie",
+    "augment",
+    "loyer"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 125.62
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 106.32
+    }
+   ]
+  },
+  {
+   "question": "Dans un logement loué, qui doit payer les réparations : le propriétaire ou le locataire ?",
+   "tokens": [
+    "logemen",
+    "loue",
+    "payer",
+    "reparat",
+    "proprie",
+    "locatai"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 290.55
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 269.72
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 188.42
+    }
+   ]
+  },
+  {
+   "question": "J'ai rendu les clés de l'appartement, le propriétaire a combien de temps pour me rendre ma caution ?",
+   "tokens": [
+    "rendu",
+    "cles",
+    "apparte",
+    "proprie",
+    "temp",
+    "rendre",
+    "caution"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 234.96
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 178.44
+    },
+    {
+     "work": "/lu-legilux/code-procedure_civile",
+     "score": 150.16
+    }
+   ]
+  },
+  {
+   "question": "frais d'agence immobilière location qui paie",
+   "tokens": [
+    "frai",
+    "agence",
+    "immobil",
+    "locatio",
+    "paie"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 171.06
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 135.89
+    }
+   ]
+  },
+  {
+   "question": "À partir de quel âge a-t-on le droit de se marier ?",
+   "tokens": [
+    "partir",
+    "age",
+    "marier"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 115.24
+    }
+   ]
+  },
+  {
+   "question": "Mon mari refuse de divorcer, est-ce que je peux quand même demander le divorce toute seule ?",
+   "tokens": [
+    "mari",
+    "refuse",
+    "divorce",
+    "demande",
+    "seule"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 187.0
+    }
+   ]
+  },
+  {
+   "question": "Mon père peut-il me déshériter complètement si je suis son seul enfant ?",
+   "tokens": [
+    "pere",
+    "desheri",
+    "complet",
+    "seul",
+    "enfant"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 182.5
+    }
+   ]
+  },
+  {
+   "question": "J'ai acheté une voiture d'occasion à un particulier et elle a un gros défaut qu'il m'avait caché : que dit le Code civil ?",
+   "tokens": [
+    "achete",
+    "voiture",
+    "occasio",
+    "particu",
+    "gros",
+    "defaut",
+    "cache",
+    "civil"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 221.52
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 140.88
+    }
+   ]
+  },
+  {
+   "question": "Mon voisin plante des grands arbres juste contre ma clôture, il doit respecter quelle distance ?",
+   "tokens": [
+    "voisin",
+    "plante",
+    "grand",
+    "arbre",
+    "juste",
+    "cloture",
+    "respect",
+    "distanc"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 145.61
+    },
+    {
+     "work": "/lu-legilux/loi-2002-12-19-n1",
+     "score": 106.36
+    },
+    {
+     "work": "/lu-legilux/loi-2001-04-18-n2",
+     "score": 90.64
+    }
+   ]
+  },
+  {
+   "question": "Mon fils de 12 ans a cassé la vitre du voisin avec son ballon, c'est à nous de rembourser ?",
+   "tokens": [
+    "fils",
+    "ans",
+    "casse",
+    "vitre",
+    "voisin",
+    "ballon",
+    "rembour"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 146.47
+    },
+    {
+     "work": "/lu-legilux/loi-2001-04-18-n2",
+     "score": 90.64
+    }
+   ]
+  },
+  {
+   "question": "Mon ancien propriétaire me réclame des loyers d'il y a sept ans, il peut encore ?",
+   "tokens": [
+    "ancien",
+    "proprie",
+    "reclame",
+    "loyer",
+    "sept",
+    "ans"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 151.13
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 125.62
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 106.32
+    }
+   ]
+  },
+  {
+   "question": "Mes frères refusent de vendre la maison héritée de nos parents, est-ce qu'on peut m'obliger à rester copropriétaire avec eux ?",
+   "tokens": [
+    "frere",
+    "refusen",
+    "vendre",
+    "maison",
+    "heritee",
+    "parent",
+    "obliger",
+    "rester",
+    "copropr"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 401.44
+    }
+   ]
+  },
+  {
+   "question": "Do adult children have to support their parents financially if the parents cannot make ends meet?",
+   "tokens": [
+    "adult",
+    "childre",
+    "support",
+    "parent",
+    "financi",
+    "cannot",
+    "make",
+    "ends",
+    "meet"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 153.47
+    }
+   ]
+  },
+  {
+   "question": "Nous sommes séparés, qui décide pour notre enfant : le père ou la mère ?",
+   "tokens": [
+    "separe",
+    "decide",
+    "enfant",
+    "pere",
+    "mere"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 182.5
+    }
+   ]
+  },
+  {
+   "question": "J'ai commandé des chaussures sur internet et elles ne me plaisent pas, j'ai combien de jours pour les renvoyer ?",
+   "tokens": [
+    "command",
+    "chaussu",
+    "interne",
+    "plaisen",
+    "jour",
+    "renvoye"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 80.95
+    },
+    {
+     "work": "/lu-legilux/code-procedure_penale",
+     "score": 74.11
+    },
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 65.1
+    }
+   ]
+  },
+  {
+   "question": "Ma machine à laver est tombée en panne au bout de 18 mois, est-ce que la garantie joue encore ?",
+   "tokens": [
+    "machine",
+    "laver",
+    "tombee",
+    "panne",
+    "bout",
+    "mois",
+    "garanti",
+    "joue"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-procedure_civile",
+     "score": 89.65
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 86.73
+    },
+    {
+     "work": "/lu-legilux/loi-2001-04-18-n2",
+     "score": 77.63
+    }
+   ]
+  },
+  {
+   "question": "J'ai reçu un colis que je n'ai jamais commandé, est-ce que je suis obligé de le payer ?",
+   "tokens": [
+    "recu",
+    "coli",
+    "command",
+    "oblige",
+    "payer"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 226.93
+    }
+   ]
+  },
+  {
+   "question": "I signed a consumer loan a few days ago and I regret it. Can I still cancel it?",
+   "tokens": [
+    "signed",
+    "consume",
+    "loan",
+    "days",
+    "ago",
+    "regret",
+    "still",
+    "cancel"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2010-12-17-n9",
+     "score": 97.21
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 75.18
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 70.79
+    }
+   ]
+  },
+  {
+   "question": "achat en ligne délai maximum de livraison",
+   "tokens": [
+    "achat",
+    "ligne",
+    "delai",
+    "maximum",
+    "livrais"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 143.04
+    },
+    {
+     "work": "/lu-legilux/loi-2018-04-08-a243",
+     "score": 95.69
+    }
+   ]
+  },
+  {
+   "question": "D'après le Code de la consommation, une clause abusive dans un contrat est-elle valable ?",
+   "tokens": [
+    "consomm",
+    "clause",
+    "abusive",
+    "contrat",
+    "valable"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 335.96
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 221.9
+    }
+   ]
+  },
+  {
+   "question": "Qu'est-ce que je risque si je me fais prendre à voler dans un magasin ?",
+   "tokens": [
+    "risque",
+    "fais",
+    "prendre",
+    "voler",
+    "magasin"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 81.35
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 75.18
+    },
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 74.51
+    }
+   ]
+  },
+  {
+   "question": "légitime défense",
+   "tokens": [
+    "legitim",
+    "defense"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-procedure_civile",
+     "score": 113.3
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 73.04
+    }
+   ]
+  },
+  {
+   "question": "Un type m'a donné un coup de poing dans un bar, qu'est-ce qu'il risque ?",
+   "tokens": [
+    "type",
+    "coup",
+    "poing",
+    "bar",
+    "risque"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 103.02
+    },
+    {
+     "work": "/lu-legilux/loi-2022-02-02-a49",
+     "score": 90.59
+    }
+   ]
+  },
+  {
+   "question": "Mon ex n'arrête pas de m'envoyer des messages et de me suivre, est-ce que c'est puni par la loi ?",
+   "tokens": [
+    "arrete",
+    "envoyer",
+    "message",
+    "suivre",
+    "puni"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 108.23
+    }
+   ]
+  },
+  {
+   "question": "Is it a crime to walk away without helping someone who is in serious danger?",
+   "tokens": [
+    "crime",
+    "walk",
+    "away",
+    "without",
+    "helping",
+    "someone",
+    "seriou",
+    "danger"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 96.73
+    },
+    {
+     "work": "/lu-legilux/code-procedure_penale",
+     "score": 91.57
+    }
+   ]
+  },
+  {
+   "question": "Combien d'argent faut-il mettre au minimum pour créer une SARL ?",
+   "tokens": [
+    "argent",
+    "mettre",
+    "minimum",
+    "creer",
+    "sarl"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 107.79
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 74.87
+    }
+   ]
+  },
+  {
+   "question": "Can I set up a small company in Luxembourg with just one euro of capital?",
+   "tokens": [
+    "set",
+    "small",
+    "company",
+    "euro",
+    "capital"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 148.1
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 123.0
+    },
+    {
+     "work": "/lu-legilux/loi-2010-12-17-n9",
+     "score": 93.1
+    }
+   ]
+  },
+  {
+   "question": "Je suis administrateur d'une société anonyme : est-ce qu'on peut me faire payer personnellement mes erreurs de gestion ?",
+   "tokens": [
+    "adminis",
+    "societe",
+    "anonyme",
+    "payer",
+    "personn",
+    "erreur",
+    "gestion"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2010-12-17-n9",
+     "score": 205.63
+    },
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 185.64
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 124.95
+    }
+   ]
+  },
+  {
+   "question": "Selon la loi de 1915 sur les sociétés commerciales, combien d'associés une SARL peut-elle avoir au maximum ?",
+   "tokens": [
+    "societe",
+    "commerc",
+    "associe",
+    "sarl",
+    "maximum"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 405.39
+    }
+   ]
+  },
+  {
+   "question": "J'habite au Luxembourg depuis six ans, qu'est-ce qu'il faut pour devenir luxembourgeois ?",
+   "tokens": [
+    "habite",
+    "six",
+    "ans",
+    "devenir"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2011-05-25-n1",
+     "score": 76.18
+    },
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 64.08
+    },
+    {
+     "work": "/lu-legilux/code-procedure_civile",
+     "score": 55.69
+    }
+   ]
+  },
+  {
+   "question": "Mon grand-père était luxembourgeois, est-ce que je peux avoir le passeport luxembourgeois moi aussi ?",
+   "tokens": [
+    "pere",
+    "passepo"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 94.76
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 57.1
+    }
+   ]
+  },
+  {
+   "question": "Est-ce que l'école publique est gratuite au Luxembourg ?",
+   "tokens": [
+    "ecole",
+    "publiqu",
+    "gratuit"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2016-10-28-n2",
+     "score": 62.49
+    },
+    {
+     "work": "/lu-legilux/loi-1995-01-11-n1",
+     "score": 55.15
+    },
+    {
+     "work": "/lu-legilux/loi-2018-07-13-a652",
+     "score": 51.34
+    }
+   ]
+  },
+  {
+   "question": "Que dit la Constitution sur le droit de la police d'entrer chez les gens ?",
+   "tokens": [
+    "constit",
+    "police",
+    "entrer",
+    "gens"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/constitution-1868-10-17-n1",
+     "score": 100.22
+    },
+    {
+     "work": "/lu-legilux/loi-1990-11-09-n1",
+     "score": 84.07
+    },
+    {
+     "work": "/lu-legilux/loi-1980-03-07-n1",
+     "score": 74.86
+    }
+   ]
+  },
+  {
+   "question": "On veut se pacser, où est-ce qu'il faut aller faire la démarche ?",
+   "tokens": [
+    "pacser",
+    "aller",
+    "demarch"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2004-06-25-n9",
+     "score": 54.27
+    },
+    {
+     "work": "/lu-legilux/loi-2004-07-09-n3",
+     "score": 48.52
+    },
+    {
+     "work": "/lu-legilux/loi-2015-07-30-n2",
+     "score": 47.89
+    }
+   ]
+  },
+  {
+   "question": "Faire une réclamation à la CNPD pour mes données personnelles, est-ce que ça coûte quelque chose ?",
+   "tokens": [
+    "reclama",
+    "cnpd",
+    "donnee",
+    "personn",
+    "coute",
+    "chose"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2018-08-01-a686",
+     "score": 290.23
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 228.91
+    }
+   ]
+  },
+  {
+   "question": "Œuvre d'été — L'ÉCOLE, n° 12",
+   "tokens": [
+    "oeuvre",
+    "ecole"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2008-08-29-n1",
+     "score": 50.37
+    },
+    {
+     "work": "/lu-legilux/rgd-2018-08-17-a732",
+     "score": 45.99
+    },
+    {
+     "work": "/lu-legilux/loi-2022-11-30-a588",
+     "score": 45.52
+    }
+   ]
+  },
+  {
+   "question": "Straße ǎ ñ Ça",
+   "tokens": [
+    "stra"
+   ],
+   "kept": []
+  },
+  {
+   "question": "Que dit le Code civil sur le bail ?",
+   "tokens": [
+    "civil",
+    "bail"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 236.22
+    }
+   ]
+  },
+  {
+   "question": "CODE DU TRAVAIL préavis de licenciement",
+   "tokens": [
+    "travail",
+    "preavi",
+    "licenci"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 338.63
+    }
+   ]
+  },
+  {
+   "question": "Mon propriétaire peut-il augmenter le loyer ?",
+   "tokens": [
+    "proprie",
+    "augment",
+    "loyer"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 125.62
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 106.32
+    }
+   ]
+  }
+ ]
+}

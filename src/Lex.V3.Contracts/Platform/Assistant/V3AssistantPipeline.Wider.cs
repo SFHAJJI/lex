@@ -14,24 +14,21 @@ public interface IAssistantWiderPlanner : IAssistantPlanner
 public static partial class V3AssistantPipeline
 {
     /// <summary>
-    /// Whether an answer is one the wider reading may replace: a plan of Lex's own operations that was run and ended on a
-    /// clarification or a pointer, with no quotation in it. An answer that quotes, an act itself shown, a refusal and every
-    /// answer of the bricks' own routes stand as they are: the wider reading never takes an answer away.
+    /// Whether an answer is one the wider reading may replace: a plan of Lex's own operations that was run and quoted
+    /// nothing, ending on a clarification, a pointer, or a refusal with no text beside it. An answer that quotes, an act
+    /// itself shown and every answer of the bricks' own routes stand as they are: the wider reading never takes an answer
+    /// away. Which refusals stay refusals is decided by the planner, in code (a cue of R15 that is no question on the rule,
+    /// a decision asked on the reader's own facts): for those it offers no second plan.
     /// </summary>
     private static bool QuotedNothing(V3AssistantPlan plan, V3AnswerDossier dossier)
     {
-        if (plan.Bricks is not { Kind: "operations" } || dossier.Verdict is not (V3AssistantVerdict.Clarify or V3AssistantVerdict.Point))
+        if (plan.Bricks is not { Kind: "operations" } || dossier.Verdict is not (V3AssistantVerdict.Clarify or V3AssistantVerdict.Point or V3AssistantVerdict.Refuse))
         {
             return false;
         }
 
         foreach (var part in dossier.Parts)
         {
-            if (part.Application)
-            {
-                return false;
-            }
-
             foreach (var block in part.Blocks)
             {
                 if (block is V3QuoteBlock)

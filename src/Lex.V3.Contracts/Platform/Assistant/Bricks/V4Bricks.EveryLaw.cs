@@ -32,6 +32,21 @@ public static partial class V4Bricks
         @"|(?<!\d)(?:19|20)\d{2}/\d{1,4}(?!\d)",
         EveryLawOptions, V4Text.PatternTimeout);
 
+    // A question on Lex itself that is not put in the second person ("Combien coûte une réponse ?").
+    private static readonly Regex AboutLexPattern = new(
+        @"(?<![\p{L}])(?:lex|chatbot|une\s+reponse|cette\s+reponse|ta\s+reponse|tes\s+reponses|an\s+answer\s+cost|this\s+site|ce\s+site)(?![\p{L}])", EveryLawOptions, V4Text.PatternTimeout);
+
+    // Not a question on what a text provides: the weather, who a person is. A short hand list; the outline call's own
+    // rule ("return no article ... never guess") is what stands behind it.
+    private static readonly Regex NoRulePattern = new(
+        @"(?<![\p{L}])(?:quel\s+temps\s+fait|meteo|weather)(?![\p{L}])|^\s*(?:qui\s+est|qui\s+sont|who\s+is|who\s+are)(?![\p{L}])", EveryLawOptions, V4Text.PatternTimeout);
+
+    // The law of another country ("le droit allemand", "loi belge du ...", "en France"): Lex holds Luxembourg's.
+    private static readonly Regex OtherCountryPattern = new(
+        @"(?<![\p{L}])(?:droit|loi|lois|code|legislation|law)\s+(?:[a-z']+\s+){0,3}?(?:allemande?s?|belges?|francaise?s?|suisses?|neerlandaise?s?|german|french|belgian|swiss|dutch)(?![\p{L}])" +
+        @"|(?<![\p{L}])(?:en|in)\s+(?:france|belgique|allemagne|suisse|belgium|germany|switzerland)(?![\p{L}])|(?<![\p{L}])(?:german|french|belgian|swiss)\s+law(?![\p{L}])",
+        EveryLawOptions, V4Text.PatternTimeout);
+
     // What is not legislation and is not in the corpus: a regulator's circular, case law.
     private static readonly Regex NotLegislationPattern = new(
         @"(?<![\p{L}])(?:circulaires?|circulars?|cssf|jurisprudence|case\s+law)(?![\p{L}])", EveryLawOptions, V4Text.PatternTimeout);
@@ -104,14 +119,22 @@ public static partial class V4Bricks
             return "every_law_asks_change";
         }
 
-        if (V4Dispatcher.AddressesLex(row.Folded))
+        if (V4Dispatcher.AddressesLex(row.Folded) || AboutLexPattern.IsMatch(row.Folded))
         {
             return "every_law_put_to_lex";
         }
 
-        if (V4Dispatcher.AsksAnOpinion(row.Folded) || V4Dispatcher.LeavesItsSubjectUnsaid(row.Folded))
+        // An opinion asked, or a question that is not about what a text provides (the weather, who someone is). A subject
+        // left unsaid ("ça") is not tested here: the router needs words that weigh, and "une période d'essai, ça peut
+        // durer combien de temps ?" says its subject.
+        if (V4Dispatcher.AsksAnOpinion(row.Folded) || NoRulePattern.IsMatch(row.Folded))
         {
             return "every_law_no_rule_asked";
+        }
+
+        if (OtherCountryPattern.IsMatch(row.Folded))
+        {
+            return "every_law_another_country";
         }
 
         var european = false;

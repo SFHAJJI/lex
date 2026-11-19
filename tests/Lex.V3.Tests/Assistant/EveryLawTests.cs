@@ -272,21 +272,36 @@ public sealed class EveryLawTests
     }
 
     [TestMethod]
-    public void AQuestionWordedForTheReadersCaseCarriesTheLineOnTheirSituation()
+    public void AGeneralQuestionInPersonalWordsIsShownTheRuleWithTheLineOnTheReadersSituationAndADecisionStaysRefused()
     {
-        // No cue of R15 and no decision asked: the model is asked whether it is a case of the reader's own; here it gives no
-        // description, so the part is refused, and the refusal stands (the wider reading never replaces a refusal).
-        var refused = Answered(Ask("Les règles sur le loyer de mon logement ?", Reader("Loyer", "Le loyer ne peut être adapté"), everyLaw: true));
-        Assert.AreEqual(V3AssistantVerdict.Refuse, refused.Verdict);
+        // No cue of R15 and no decision asked, in the reader's own words. Lex's own operations refuse it (no model says it
+        // is not a case of the reader's own) and quote nothing; the wider reading shows the general rule as candidates and
+        // says the text does not say how it applies to the reader (the owner's point 2: only a decision is refused).
+        const string personal = "Les règles sur le loyer de mon logement ?";
+        var off = Answered(Ask(personal, Reader("Loyer", "Le loyer ne peut être adapté"), everyLaw: false));
+        Assert.AreEqual(V3AssistantVerdict.Refuse, off.Verdict);
+        Assert.AreEqual(0, off.Quotes.Count());
 
-        // Read by the wider reading itself, the personal wording carries the caveat.
-        var outcome = V4Bricks.PlanEveryLaw(Input("Les règles sur le loyer de mon logement ?"), new Corpus(), Reader("Loyer", "Le loyer ne peut être adapté"), CancellationToken.None);
-        Assert.AreEqual("route:every_law", outcome.Reason);
-        using var plan = JsonDocument.Parse(outcome.PlanJson!);
-        CollectionAssert.Contains(plan.RootElement.GetProperty("bricks").GetProperty("answer").GetProperty("caveats").EnumerateArray().Select(static caveat => caveat.GetString()).ToArray(), "not_your_case");
-        Assert.AreEqual("candidates", plan.RootElement.GetProperty("bricks").GetProperty("answer").GetProperty("kind").GetString());
+        var on = Answered(Ask(personal, Reader("Loyer", "Le loyer ne peut être adapté"), everyLaw: true));
+        Assert.AreEqual(V3AssistantVerdict.Answer, on.Verdict);
+        Assert.AreEqual("art_2", on.Quotes.Single().Anchor);
+        CollectionAssert.Contains(Templates(on), V3AnswerTemplates.AnswerCandidates);
+        CollectionAssert.Contains(Templates(on), V3AnswerTemplates.CaveatNotYourCase);
+        CollectionAssert.Contains(Bricks(on).GetProperty("answer").GetProperty("caveats").EnumerateArray().Select(static caveat => caveat.GetString()).ToArray(), "not_your_case");
+
+        // A decision asked on the reader's own facts, and a question that asks to apply the law, stay refused: code stops
+        // them before any act is opened, and the answer is the one given with the switch off.
+        foreach (var refused in new[] { "Mon propriétaire a augmenté mon loyer, est-ce légal ?", "Puis-je résilier le bail de mon logement sans préavis ?" })
+        {
+            var model = Reader("Loyer", "Le loyer ne peut être adapté");
+            var dossier = Answered(Ask(refused, model, everyLaw: true));
+            Assert.AreEqual(V3AssistantVerdict.Refuse, dossier.Verdict, refused);
+            Assert.AreEqual(0, dossier.Quotes.Count(), refused);
+            Assert.AreEqual(0, model.Calls.Count(static call => call.Step is "outline" or "extraction"), refused);
+            Assert.AreEqual("every_law_asks_application", Exit(refused, Index, out _), refused);
+            CollectionAssert.AreEqual(Templates(Answered(Ask(refused, Reader("Loyer", "Le loyer ne peut être adapté"), everyLaw: false))), Templates(dossier), refused);
+        }
     }
-
     [TestMethod]
     public void WhenTheWiderReadingFindsNothingTheFirstAnswerStands()
     {
@@ -360,6 +375,10 @@ public sealed class EveryLawTests
             ("Que dit le Code de la route sur le loyer ?", "every_law_names_an_act_not_known"),
             ("Que prévoit SFDR sur le loyer ?", "every_law_names_capitals"),
             ("Quelle heure est-il ?", "every_law_router_keeps_nothing"),
+            ("Que dit le droit allemand sur le bail ?", "every_law_another_country"),
+            ("Quel temps fait-il à Luxembourg ?", "every_law_no_rule_asked"),
+            ("Qui est le directeur général de Foyer ?", "every_law_no_rule_asked"),
+            ("Combien coûte une réponse sur le loyer ?", "every_law_put_to_lex"),
         ];
         foreach (var (question, exit) in cases)
         {
@@ -379,6 +398,7 @@ public sealed class EveryLawTests
         // What it is made for: everyday capitals name no act, a code the index knows by its name is read alone.
         Assert.IsNull(Exit("Quel préavis pour le licenciement d'un salarié en CDI ?", Index, out var labour));
         Assert.AreEqual("/lu-legilux/code-travail", labour.Single().Act.Work);
+        Assert.IsNull(Exit("Un bail, ça peut durer combien de temps au maximum ?", Index, out _), "a subject said, then pointed at");
         Assert.IsNull(Exit("Que dit le Code civil sur le bail ?", Index, out var named));
         Assert.AreEqual("/lu-legilux/code-civil", named.Single().Act.Work, "the act named, and not the act with the heavier words");
     }
@@ -392,6 +412,43 @@ public sealed class EveryLawTests
         Assert.IsTrue(laws.Acts.All(static act => act.Work.StartsWith("/lu-legilux/", StringComparison.Ordinal)), "EU acts keep Lex's own operations");
         Assert.AreEqual(64, laws.Sha256.Length);
         Assert.IsTrue(laws.ArticleKeep * laws.MaxActs <= 120, "the outline call stays small");
+    }
+
+    /// <summary>
+    /// The router gives what the reference gives (router.py, beside the index's source), question by question: the same
+    /// tokens, the same acts kept, the same scores to the hundredth. The vectors are made by the reference from the index
+    /// this build carries; vectors of another version of the index say nothing of this one.
+    /// </summary>
+    [TestMethod]
+    public void TheRouterGivesWhatTheReferenceGives()
+    {
+        var laws = V4LawIndex.Embedded!;
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Bricks", "law-router-vectors.json")));
+        var root = document.RootElement;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("index_version", out var version) && version.GetString() != laws.Version)
+        {
+            Assert.Inconclusive("The vectors are of index " + version.GetString() + " and the build carries " + laws.Version + ": make them again with the index.");
+        }
+
+        var vectors = root.ValueKind == JsonValueKind.Array ? root : root.GetProperty("vectors");
+        var compared = 0;
+        foreach (var vector in vectors.EnumerateArray())
+        {
+            var question = vector.GetProperty("question").GetString()!;
+            if (vector.TryGetProperty("tokens", out var tokens))
+            {
+                CollectionAssert.AreEqual(tokens.EnumerateArray().Select(static token => token.GetString()).ToArray(), laws.Tokens(question).ToArray(), question);
+            }
+
+            var expected = vector.TryGetProperty("kept", out var kept) ? kept : vector.GetProperty("expected");
+            var wanted = expected.EnumerateArray().Select(static act => act.ValueKind == JsonValueKind.Array
+                ? (act[0].GetString()!, (int)Math.Round(act[1].GetDouble() * 100))
+                : (act.GetProperty("work").GetString()!, (int)Math.Round(act.GetProperty("score").GetDouble() * 100))).ToArray();
+            CollectionAssert.AreEqual(wanted, laws.Route(question).Select(static act => (act.Act.Work, act.ScoreCents)).ToArray(), question);
+            compared++;
+        }
+
+        Assert.IsTrue(compared >= 20, "a handful of vectors proves little");
     }
 
     /// <summary>
@@ -439,7 +496,12 @@ public sealed class EveryLawTests
         {
             var masked = V3AssistantParsers.Intake(question)!.Masked;
             var exit = Exit(masked, laws, out _);
-            Console.WriteLine((exit ?? "WIDER READING POSSIBLE") + " | " + question);
+            // For a person who wants the list: LEX_EVERY_LAW_ROADS names a file, and each case is written to it with its road.
+            if (Environment.GetEnvironmentVariable("LEX_EVERY_LAW_ROADS") is { Length: > 0 } path)
+            {
+                File.AppendAllText(path, (exit ?? "wider reading possible") + " | " + question + "\n");
+            }
+
             Assert.IsNotNull(exit, question);
         }
     }
