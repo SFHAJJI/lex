@@ -36,7 +36,11 @@ public sealed record V4PlanInput(
 /// </summary>
 /// <param name="Firm">Code is sure of the answer by the law's own words (a term the act defines, a general rule that says so itself, one value clearly ahead, a word the act never uses): no second reading is asked for it.</param>
 /// <param name="Articles">The articles the plan quotes, in its order.</param>
-public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string Reason, bool Firm = false, IReadOnlyList<string>? Articles = null);
+public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string Reason, bool Firm = false, IReadOnlyList<string>? Articles = null)
+{
+    /// <summary>The first line the tables' answer quotes, with the act it is of: what a second reading that differs also quotes.</summary>
+    internal (string Work, V4Line Line)? Lead { get; init; }
+}
 
 /// <summary>
 /// The function behind the validator (brick H): parse the question, read the corpus context, decide the route, run one
@@ -77,6 +81,9 @@ public static partial class V4Bricks
 
         /// <summary>The date of the version read when it is the latest held and does not cover the date asked.</summary>
         public string? LatestHeld;
+
+        /// <summary>An article the reader cites that exists in the publisher's document and whose text Lex does not hold.</summary>
+        public string? NotHeld;
     }
 
     public static V4PlanOutcome Plan(V4PlanInput input, IV4Corpus corpus, IV4Model? model, CancellationToken cancellationToken)
@@ -154,13 +161,20 @@ public static partial class V4Bricks
         var outlined = string.Empty;
         if (model is not null && (own.PlanJson is not null || own.Reason is "nothing_of_the_dictionary" or "no_act_in_scope"))
         {
-            var read = ByTheOutline(input, row, corpus, model, cancellationToken, asked, personal);
+            var read = ByTheOutline(input, row, corpus, model, cancellationToken, asked, personal, own.Lead);
             if (read.PlanJson is not null)
             {
+                // The tables' answer stands when the second reading quotes the tables' first article and no article the
+                // tables did not see. Where it quotes that article and others besides, it read more of the question than
+                // the tables did ("qui doit prouver quoi en cas de sinistre" : the tables read "sinistre" alone), and its
+                // answer stands: it holds the tables' first article too. Where the two differ, neither is sure: the
+                // second reading's answer stands and quotes the tables' first line after its own, when it is of the same
+                // act (`read.Articles` are the articles the model's reading quoted, without that line).
                 var agree = own.PlanJson is not null && own.Articles is { Count: > 0 } quoted && (read.Articles ?? []).Contains(quoted[0], StringComparer.Ordinal);
-                return agree
+                var wider = agree && (read.Articles ?? []).Any(article => !own.Articles!.Contains(article, StringComparer.Ordinal));
+                return agree && !wider
                     ? own with { CostMicroEuros = own.CostMicroEuros + read.CostMicroEuros + (asked is null ? cost : 0), Reason = own.Reason + "+outline_agrees" }
-                    : read with { CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0), Reason = read.Reason + (own.PlanJson is null ? string.Empty : "+tables_differ") };
+                    : read with { CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0), Reason = read.Reason + (own.PlanJson is null ? string.Empty : wider ? "+tables_narrower" : "+tables_differ") };
             }
 
             if (own.PlanJson is not null)
@@ -192,11 +206,23 @@ public static partial class V4Bricks
         // With no description from a model (none is wired, the call failed, its reply left its closed form), nothing is
         // repaired and nothing is asked again: code searches the reader's own words, and the answer says no model took part.
         Describe();
+
+        // An article cited by its number, no act named, no act of a last answer to read it in: searched, never read alone.
+        // An act the index does not name ("article 1382 du Code civil", "règlement (UE) 2016/679 article 17") is an act
+        // named: the search finds its article and it is read, as before.
+        // And a question on how the law changed is never answered by the one article a search of its words finds
+        // ("quelles modifications de la loi ... depuis 2015 ?" was answered with an article that holds "modification").
+        var searchOnly = own.Reason == "asks_change" ||
+            (own.Reason == "cites_article" && row.Acts.Count == 0 && (input.References?.Count ?? 0) == 0 && !V4Dispatcher.NamesAnotherAct(row, input.Dates, dictionary));
+        // An act of the index named with nothing of the domain beside it and no article cited: the act itself is asked.
+        var index = V4CorpusIndex.Insurance;
+        var actAlone = row.Acts.Count(static act => act.Work is not null) == 1 && row.Concepts.Count == 0 && row.Roles.Count == 0 && !V4Dispatcher.CitesArticle(row) &&
+            !index.InDomain(row.Words.Where(word => !row.Acts.Any(act => word.Start >= act.Start && word.End <= act.End)).ToList());
         var readingDates = V4Dispatcher.ReadingDates(row, input.Dates).Select(static date => date.Ref).ToList();
         if (parts is null || asked is null)
         {
             var read = V4QuestionCall.ByCode(planner, row).Select(part => part with { OwnCase = ownCase }).ToList();
-            return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, read, outcome!, null, readingDates), cost + outline, own.Reason + "+question_" + outcome + outlined);
+            return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, read, outcome!, null, readingDates, searchOnly, row.Acts, actAlone), cost + outline, own.Reason + "+question_" + outcome + outlined);
         }
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
@@ -226,7 +252,7 @@ public static partial class V4Bricks
             parts = parts.Select(static part => part.Asks == "act_on_a_date" ? part with { Asks = "words_on_a_subject", Words = part.Words ?? part.Act, Act = null } : part).ToList();
         }
 
-        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates), cost + outline, "route:operations(" + own.Reason + ")" + outlined);
+        return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates, searchOnly, row.Acts, actAlone), cost + outline, "route:operations(" + own.Reason + ")" + outlined);
     }
 
     /// <summary>
@@ -273,6 +299,14 @@ public static partial class V4Bricks
         {
             var greeting = new Draft { Route = "greeting", AnswerKind = "greeting" };
             return new V4PlanOutcome(Write(input, row, greeting, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:greeting", Firm: true);
+        }
+
+        // One word alone ("garantie", "test") is not a question: Lex asks for a full one and reads nothing (the owner's
+        // brief of 2026-11-19: a single word got an article quoted as if it answered something).
+        if (row.Words.Count == 1 && row.Acts.Count == 0)
+        {
+            var oneWord = new Draft { Route = "clarify", AnswerKind = "greeting" };
+            return new V4PlanOutcome(Write(input, row, oneWord, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:clarify", Firm: true);
         }
 
         // Routes 2 and 3 are Lex's own: a cited article goes to the reference reader, a change over time to diff and its kin.
@@ -505,7 +539,10 @@ public static partial class V4Bricks
         // that it is the general one, the one value clearly ahead, and a word of a complete row that the act never uses.
         var firm = (draft.Route == "definition" && draft.AnswerKind == "definition") || draft.Route == "fact" || draft.Firm ||
             (draft.AnswerKind == "absence" && draft.Absence == "terms_nowhere");
-        return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route, firm, draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList());
+        return new V4PlanOutcome(json, draft.Cost, "route:" + draft.Route, firm, draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList())
+        {
+            Lead = draft.Items.Count > 0 && draft.AnswerKind != "absence" ? (tables.Work, draft.Items[0].First) : null,
+        };
     }
 
     // ---- Route 2, by the tables: one article of an act the index names -----------------------------------------------------
@@ -527,7 +564,38 @@ public static partial class V4Bricks
         var at = corpus.Act(works[0], reading.Count == 1 ? reading[0].Iso : input.Today);
         if (at.Tables?.ArticleByNumber(number) is not { } article)
         {
+            // The article exists in the publisher's document and Lex does not hold its text: said so, with the act's
+            // official address, and nothing is searched (the owner's brief of 2026-11-19, work item 3).
+            if (at.Tables?.NotHeld.FirstOrDefault(missing => missing.Id == "art_" + number) is { } missing)
+            {
+                var absent = new Draft { Route = "absence", AnswerKind = "absence", Absence = "article_not_held", NotHeld = missing.Id, LatestHeld = at.Facts.TextStatus == "latest_held" ? at.Facts.VersionFrom : null };
+                absent.Passes.Add(new V4RecordPass(1, "first_pass", "none", "article_not_held"));
+                return new V4PlanOutcome(Write(input, row, absent, at.Tables, null, null, "today", ruleQuestion: false, "point", string.Empty, at.Tables.Work), 0, "route:absence", Firm: true);
+            }
+
             return null;
+        }
+
+        // The act's last version ended before the date: the article is quoted from the latest version held, and the
+        // answer says so (the owner's brief of 2026-11-19, work item 2). Lex's own operation would refuse the date.
+        if (at.Facts.TextStatus == "latest_held" && at.Facts.VersionFrom is { } heldOn)
+        {
+            var lines = at.Tables.TextLinesOf(article).Take(V3AssistantPipeline.MaximumQuotes).ToList();
+            if (lines.Count == 0)
+            {
+                return null;
+            }
+
+            var draft = new Draft { Route = "open", AnswerKind = "text", Found = true, LatestHeld = heldOn };
+            draft.Items = lines.Select(static line => new Item(line, line, "passage", null)).ToList();
+            draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", "cited_article_read"));
+            if (ownCase)
+            {
+                draft.Caveats.Add("not_your_case");
+            }
+
+            var written = Write(input, row, draft, at.Tables, null, null, reading.Count == 1 ? reading[0].Ref : "today", ruleQuestion: false, "answer", "text", at.Tables.Work, []);
+            return new V4PlanOutcome(written, 0, "route:cited_latest_held", Firm: true, Articles: [article.Id]);
         }
 
         var planner = new V3PlannerInput(input.MaskedQuestion, input.Locale, input.References ?? [], input.SearchLanguages ?? [], input.Today);
@@ -552,8 +620,13 @@ public static partial class V4Bricks
                 continue;
             }
 
+            // A word of the law the reader wrote ("Fonds de Garantie Automobile") is looked up as it stands: another word
+            // of the same concept is not what was asked (2026-11-19: that question got the definition of "véhicules").
+            // A reader's own word ("victime") is looked up by the concept's label and the law's words for it.
             var concept = dictionary.Concept(read.Concept)!;
-            foreach (var keyword in new[] { concept.LabelFr }.Concat(dictionary.KeywordsOf(concept.Id, "law").Select(static keyword => keyword.Keyword)))
+            var written = dictionary.Keyword(read.Keyword);
+            var names = written is { Word: "law" } ? [written.Keyword] : new[] { concept.LabelFr }.Concat(dictionary.KeywordsOf(concept.Id, "law").Select(static keyword => keyword.Keyword));
+            foreach (var keyword in names)
             {
                 var keywordWords = V4Text.Words(V4Text.Fold(keyword));
                 var whole = V4Retrieval.DefinedTerms(tables, keywordWords).FirstOrDefault(term => V4Text.Words(term.Definition.TermFolded).Count == keywordWords.Count);
@@ -580,6 +653,15 @@ public static partial class V4Bricks
         draft.Complete = true;
         draft.Items.Add(new Item(first, last, "definition", null));
         draft.Passes.Add(new V4RecordPass(1, "first_pass", "none", "defining_line_read"));
+
+        // A definition that only points at an article of the same act ("FGA: le Fonds de Garantie Automobile tel que visé
+        // par l'article 15") is followed there: that article's first line is quoted after it. The pointer is read in the
+        // term's own clause of the defining line (a list of definitions stands on one line, clause after clause).
+        if (first.Id == last.Id && V4Dispatcher.PointedArticle(first.Folded, chosen.TermFolded) is { } target && target != chosen.Article &&
+            tables.Article(target) is { } there && tables.TextLinesOf(there).FirstOrDefault() is { } opening)
+        {
+            draft.Items.Add(new Item(opening, opening, "passage", null));
+        }
 
         // Where else the act uses the term: counted, and offered as articles to read.
         var key = V4Key.Read(chosen.TermFolded)!;
@@ -1450,6 +1532,29 @@ public static partial class V4Bricks
             if (draft.EuAct is not null)
             {
                 writer.WriteString("eu_act", draft.EuAct);
+            }
+
+            // The articles not held: the one the reader cites, and those right before or after an article the answer
+            // quotes ("l'article 16 existe mais Lex n'en détient pas le texte", beside article 15 quoted).
+            // And an article the dictionary names for a concept of the question, in that concept's home act.
+            var quotedArticles = draft.Items.Select(static item => item.First.Article).ToHashSet(StringComparer.Ordinal);
+            var ofConcepts = tables is null || draft.Items.Count == 0
+                ? []
+                : row.Concepts.Select(static read => V4Dictionary.Insurance.Concept(read.Concept)!)
+                    .Where(concept => concept.HomeActs.Any(home => tables.Work.EndsWith("/" + home, StringComparison.Ordinal)))
+                    .SelectMany(static concept => concept.Articles).ToHashSet(StringComparer.Ordinal);
+            var notHeld = (draft.NotHeld is null ? [] : new[] { draft.NotHeld })
+                .Concat(tables is null ? [] : tables.NotHeld.Where(missing => quotedArticles.Contains(missing.After) || quotedArticles.Contains(missing.Before) || ofConcepts.Contains(missing.Id)).Select(static missing => missing.Id))
+                .Where(V3AssistantPlanValidator.IsArticleId).Distinct(StringComparer.Ordinal).Take(V4PlanRecord.MaximumNotHeld).ToList();
+            if (work is not null && notHeld.Count > 0)
+            {
+                writer.WriteStartArray("not_held");
+                foreach (var article in notHeld)
+                {
+                    writer.WriteStringValue(article);
+                }
+
+                writer.WriteEndArray();
             }
 
             writer.WriteEndObject();

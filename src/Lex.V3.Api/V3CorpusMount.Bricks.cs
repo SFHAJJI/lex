@@ -100,7 +100,12 @@ internal sealed partial class V3CorpusMount
                     Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(article.Text))),
                     article.TokensJson))
                 .ToList();
-            return V4ActTables.Build("/lu-legilux/" + work, stateSha256, date, French, sources);
+            // The places the held articles take in the publisher's document say which articles are not held (the brief
+            // of 2026-11-19, work item 3: the motor law's article 16 exists and was dropped for an amendment mark).
+            var notHeld = articles.All(static article => article.DocumentPosition is not null)
+                ? V4ActTables.NotHeldAmong(articles.Select(static article => (article.PublisherId, article.DocumentPosition!.Value)).ToList())
+                : [];
+            return V4ActTables.Build("/lu-legilux/" + work, stateSha256, date, French, sources, notHeld);
         }
 
         public bool HoldsEuAct(string celex)

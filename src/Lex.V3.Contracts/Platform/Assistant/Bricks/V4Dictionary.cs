@@ -23,7 +23,15 @@ public sealed record V4Concept(
     IReadOnlyList<string> UsualAnswer,
     bool ValueRequired,
     bool Complete,
-    bool Branch = false);
+    bool Branch = false)
+{
+    /// <summary>
+    /// The articles of the home act where the law treats the concept, when the dictionary names them (`articles`): what
+    /// lets an answer say that one of them exists and is not held (the motor law's article 16, the Fonds de Garantie's
+    /// mission). Empty for most concepts.
+    /// </summary>
+    public IReadOnlyList<string> Articles { get; init; } = [];
+}
 
 /// <summary>One keyword of a concept (brick D, the table <c>concept_keywords</c>).</summary>
 /// <param name="Row">The row's number in the file's order: what a trace names instead of the words.</param>
@@ -211,7 +219,10 @@ public sealed class V4Dictionary
                 Strings(element, "usual_answer"),
                 element.GetProperty("value_required").GetBoolean(),
                 element.GetProperty("complete").GetBoolean(),
-                element.TryGetProperty("branch", out var branch) && branch.ValueKind == JsonValueKind.True));
+                element.TryGetProperty("branch", out var branch) && branch.ValueKind == JsonValueKind.True)
+            {
+                Articles = Strings(element, "articles"),
+            });
             foreach (var (member, language, word, priority, weight, source) in new[]
                      {
                          ("law_fr", "fr", "law", "primary", 1.0, "law_text"),

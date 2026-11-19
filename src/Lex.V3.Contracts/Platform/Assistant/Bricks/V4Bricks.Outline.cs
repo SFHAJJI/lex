@@ -21,7 +21,8 @@ public static partial class V4Bricks
         IV4Model model,
         CancellationToken cancellationToken,
         (V4ModelCall Call, V4ModelReply Reply, string Model)? prior,
-        bool ownCase)
+        bool ownCase,
+        (string Work, V4Line Line)? tablesLead = null)
     {
         var dictionary = V4Dictionary.Insurance;
         var index = V4CorpusIndex.Insurance;
@@ -32,6 +33,33 @@ public static partial class V4Bricks
         if (row.Greeting || row.OtherDomain || (row.Concepts.Count == 0 && row.Roles.Count == 0 && row.Acts.Count == 0 && !index.InDomain(row.Words)))
         {
             return new V4PlanOutcome(null, 0, "outline_not_of_the_domain");
+        }
+
+        // An act the index does not name (an EU act, a law named by a date no act of the index bears) is not in these
+        // tables, and a question put to Lex itself ("remplaces-tu un avocat ?") is not about what the acts provide.
+        if (row.Acts.Any(static act => act.Work is null) || (row.Acts.Count == 0 && V4Dispatcher.NamesAnActByItsDate(row.Folded)))
+        {
+            return new V4PlanOutcome(null, 0, "outline_names_another_act");
+        }
+
+        if (V4Dispatcher.AddressesLex(row.Folded))
+        {
+            return new V4PlanOutcome(null, 0, "outline_put_to_lex");
+        }
+
+        // An opinion asked ("quelle est la meilleure assurance auto ?"), or a subject left unsaid with no concept read
+        // ("mon assureur a-t-il le droit de me faire ça ?"): no article states it, and none is looked for.
+        if (V4Dispatcher.AsksAnOpinion(row.Folded) || (row.Concepts.Count == 0 && V4Dispatcher.LeavesItsSubjectUnsaid(row.Folded)))
+        {
+            return new V4PlanOutcome(null, 0, "outline_no_rule_asked");
+        }
+
+        // A question that names an act and nothing of the domain beside it asks of the act itself (its summary, how many
+        // articles it holds, what it said in a year): Lex's own operations answer that, not a reading of its articles.
+        if (row.Acts.Count > 0 && row.Concepts.Count == 0 && row.Roles.Count == 0 && row.Kinds.Count == 0 &&
+            !index.InDomain(row.Words.Where(word => !row.Acts.Any(act => word.Start >= act.Start && word.End <= act.End)).ToList()))
+        {
+            return new V4PlanOutcome(null, 0, "outline_asks_of_the_act");
         }
 
         var reading = V4Dispatcher.ReadingDates(row, input.Dates);
@@ -54,6 +82,20 @@ public static partial class V4Bricks
                 {
                     latest[tables] = from;
                 }
+            }
+        }
+
+        // A branch of insurance the reader names ("assurance auto") has its own act: the tables of contents read are those
+        // of the acts the question's concepts live in, the branch's and the others' ("résilier mon assurance auto": the
+        // contract law and the motor law), and no other act of the domain (2026-11-19: "puisque l'assurance auto n'est
+        // pas obligatoire ..." was routed to the sector law).
+        var read = row.Concepts.Select(entry => dictionary.Concept(entry.Concept)!).ToList();
+        if (read.Any(static concept => concept.Branch))
+        {
+            var homes = read.SelectMany(static concept => concept.HomeActs).ToHashSet(StringComparer.Ordinal);
+            if (held.Any(entry => homes.Contains(entry.Act.Work)))
+            {
+                held = held.Where(entry => homes.Contains(entry.Act.Work)).ToList();
             }
         }
 
@@ -87,6 +129,32 @@ public static partial class V4Bricks
         // One act answers: the act of the first article named; the articles named of another act are left.
         var scope = ids[picks[0]].Tables;
         var articles = picks.Select(pick => ids[pick]).Where(pick => ReferenceEquals(pick.Tables, scope)).Select(static pick => pick.Article).ToList();
+
+        // Code adds what a heading cannot show: the articles that hold a rare word of the question itself ("données
+        // génétiques" stands on two lines of the act, under headings that do not say so). A word no table read, of six
+        // letters or more, found in at most four articles; at most three articles are added. The model named the act;
+        // code adds only articles of that act, and the extraction still decides which lines answer.
+        foreach (var unread in row.Unmatched)
+        {
+            var word = row.Folded[unread.Start..unread.End];
+            if (word.Length < 6 || articles.Count >= V4Generation.MaximumOutlinePicks + 3)
+            {
+                continue;
+            }
+
+            var stem = V4Text.Stem(word);
+            var holding = scope.Lines.Where(line => line.Kind == "paragraph" && line.Words.Any(written => written.Text.Length >= 4 && V4Text.Stem(written.Text) == stem)).Select(static line => line.Article).Distinct(StringComparer.Ordinal).ToList();
+            if (holding.Count is >= 1 and <= 4)
+            {
+                foreach (var id in holding)
+                {
+                    if (scope.Article(id) is { } more && !articles.Any(article => article.Id == id) && articles.Count < V4Generation.MaximumOutlinePicks + 3)
+                    {
+                        articles.Add(more);
+                    }
+                }
+            }
+        }
         var lines = new List<V4Line>();
         foreach (var article in articles)
         {
@@ -128,6 +196,16 @@ public static partial class V4Bricks
         draft.LatestHeld = latest.TryGetValue(scope, out var heldOn) ? heldOn : null;
         draft.Caveats = extraction!.Caveats.ToList();
         draft.Items = kept.Take(V3AssistantPipeline.MaximumQuotes).Select(static item => new Item(item.Line, item.Line, "passage", null)).ToList();
+        var readArticles = draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList();
+
+        // The tables answered too, without being sure, and this reading quotes another article of the same act: the
+        // tables' first line is quoted after this reading's own, by code (the reader sees both; neither is sure).
+        if (tablesLead is { } lead && lead.Work == scope.Work && !readArticles.Contains(lead.Line.Article, StringComparer.Ordinal) &&
+            scope.Line(lead.Line.Id) is { } theirs && draft.Items.Count < V3AssistantPipeline.MaximumQuotes)
+        {
+            draft.Items.Add(new Item(theirs, theirs, "passage", null, ByCode: true));
+        }
+
         var quoted = draft.Items.Select(static item => item.First.Article).ToHashSet(StringComparer.Ordinal);
         draft.More = articles.Select(static article => article.Id).Where(id => !quoted.Contains(id)).Distinct(StringComparer.Ordinal).Take(V3AssistantPipeline.MaximumCandidates).ToList();
 
@@ -140,6 +218,6 @@ public static partial class V4Bricks
         }
 
         var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, "answer", "text", scope.Work, []);
-        return new V4PlanOutcome(json, draft.Cost, "route:outline", Articles: draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList());
+        return new V4PlanOutcome(json, draft.Cost, "route:outline", Articles: readArticles);
     }
 }

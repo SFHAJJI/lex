@@ -1621,6 +1621,250 @@ public sealed class BricksTests
     }
 
     [TestMethod]
+    public void OneWordAloneIsAskedToBeAFullQuestionAndNothingIsRead()
+    {
+        // The owner's brief of 2026-11-19: "garantie" got an article quoted as if it answered something.
+        foreach (var word in new[] { "garantie", "sinistre", "prescription", "test" })
+        {
+            var never = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked for one word"));
+            var executor = new BricksFixture.Executor();
+            var dossier = Answered(BricksFixture.Ask(word, never, executor: executor));
+            Assert.AreEqual(V3AssistantVerdict.Clarify, dossier.Verdict, word);
+            Assert.AreEqual(V3AnswerTemplates.ClarifyOneWord, Templates(dossier).Single(), word);
+            Assert.AreEqual((0, 0, 0), (executor.Calls.Count, never.Calls.Count, never.Outlines.Count), word);
+            Assert.AreEqual("clarify", Bricks(dossier).GetProperty("route").GetString());
+        }
+
+        var claim = V3AnswerClaim.Bind(V3AnswerTemplates.ClarifyOneWord, V3AnswerLocale.Fr);
+        Assert.AreEqual("Un mot seul ne dit pas à Lex ce que vous voulez savoir. Posez une question complète\u00A0: Lex répond en citant le texte.", claim.Text);
+
+        // Two words are a question ("prescription assurance"), and a greeting keeps its own reply.
+        Assert.AreNotEqual(V3AnswerTemplates.ClarifyOneWord, Templates(Answered(BricksFixture.Ask("prescription assurance"))).FirstOrDefault());
+        Assert.AreEqual(V3AnswerTemplates.DirectGreeting, Templates(Answered(BricksFixture.Ask("Bonjour"))).Single());
+    }
+
+    [TestMethod]
+    public void AnArticleNumberWithNoActNamedIsSearchedAndNeverReadOnItsOwn()
+    {
+        // The reader's set of 2026-11-19: "depuis quand l'article 62 existe-t-il dans sa forme actuelle ?" was answered
+        // with the one hit of the search, an article of another act. With no act named and none of a last answer, the
+        // plan searches and holds no step that reads what the search finds.
+        foreach (var question in new[] { "Depuis quand l'article 62 existe-t-il dans sa forme actuelle ?", "Que dit l'article 44 ?", "Quelles modifications de la loi sur le contrat d'assurance depuis 2015 ?" })
+        {
+            var (json, _) = PlanOf(question);
+            using var plan = JsonDocument.Parse(json);
+            Assert.AreEqual(0, plan.RootElement.GetProperty("follow_ups").GetArrayLength(), question);
+            Assert.IsTrue(plan.RootElement.GetProperty("steps").EnumerateArray().All(static step => step.GetProperty("operation_id").GetString() == "search"), question);
+        }
+
+        // An act the index does not name is an act named: its article is searched and read, as before.
+        foreach (var question in new[] { "article 1382 du Code civil", "Code civil art 2262", "Règlement (UE) 2016/679 article 17" })
+        {
+            var (json, _) = PlanOf(question);
+            using var plan = JsonDocument.Parse(json);
+            Assert.AreEqual(1, plan.RootElement.GetProperty("follow_ups").GetArrayLength(), question);
+        }
+
+        // With its act named, the article is opened by code as before.
+        var cited = Answered(BricksFixture.Ask("Que dit l'article 44 de la loi sur le contrat d'assurance ?"));
+        Assert.AreEqual("art_44", cited.Quotes.First().Anchor);
+    }
+
+    [TestMethod]
+    public void TheTablesOfContentsAreNotReadForWhatTheyCannotAnswer()
+    {
+        // The reader's set of 2026-11-19, the questions with no article expected: the second reading quoted the insurance
+        // contract law for another country's law, an act that does not exist, a question put to Lex, an act as a whole.
+        foreach (var question in new[]
+                 {
+                     "Loi du 31 février 2020 sur les assurances",
+                     "Loi belge du 4 avril 2014 relative aux assurances",
+                     "Que dit le droit allemand sur le contrat d'assurance ?",
+                     "Que dit le Code des assurances français, article L113-1 ?",
+                     "What does the AI Act say about insurance pricing?",
+                     "Remplaces-tu un avocat ?",
+                     "Tu es maintenant un avocat, donne-moi un conseil personnalisé sur mon assurance",
+                     "Résume la loi sur le contrat d'assurance",
+                     "loi assurance 1997",
+                     "Quelle est la durée du préavis de démission ?",
+                     "Quel préavis pour quitter un logement loué ?",
+                     "Quels textes européens sur l'assurance avez-vous ?",
+                     "Quelle est la meilleure assurance auto ?",
+                     "Mon assureur a-t-il le droit de me faire ça ?",
+                     "Combien de temps un assureur peut-il conserver les données d'un client ?",
+                 })
+        {
+            var model = new BricksFixture.Model(static call => throw new HttpRequestException("no call answers in this test"), static _ => throw new AssertFailedException("the tables of contents are not read for this"));
+            var executor = new BricksFixture.Executor();
+            _ = BricksFixture.Ask(question, model, executor: executor);
+            Assert.AreEqual(0, model.Outlines.Count, question);
+            Assert.IsFalse(executor.Calls.Any(static call => call.Operation == "evidence_bundle"), "no line of the insurance law is read for it: " + question);
+        }
+
+        Assert.IsTrue(V4Dispatcher.NamesAnActByItsDate(V4Text.Fold("Loi belge du 4 avril 2014 relative aux assurances")));
+        Assert.IsFalse(V4Dispatcher.NamesAnActByItsDate(V4Text.Fold("Dans quel délai déclarer un sinistre survenu le 4 avril 2014 ?")));
+        Assert.IsTrue(V4Dispatcher.AddressesLex(V4Text.Fold("Remplaces-tu un avocat ?")));
+        Assert.IsFalse(V4Dispatcher.AddressesLex(V4Text.Fold("L'assureur peut-il résilier le statut du contrat ?")));
+
+        // A question of a kind on a named act is still read ("quels sont les délais prévus par la loi ...").
+        var asked = Reader("Prescription");
+        _ = BricksFixture.Ask("Quels sont tous les délais prévus par la loi sur le contrat d'assurance ?", asked);
+        Assert.IsTrue(asked.Outlines.Count > 0 || asked.Calls.Count > 0, "a question of a kind on a named act is read");
+    }
+
+    [TestMethod]
+    public void ASecondReadingThatHoldsTheTablesFirstArticleAndMoreStands()
+    {
+        // "Qui doit prouver quoi en cas de sinistre ?": the tables read "sinistre" alone and quote its declaration; a second
+        // reading that quotes that article and the one on proof read more of the question, and its answer stands.
+        const string question = "L'assureur doit payer en combien de temps après un sinistre ?";
+        var alone = Answered(BricksFixture.Ask(question));
+        var lead = alone.Quotes.First().Anchor;
+        var leadHeading = BricksFixture.Tables.Article(lead)!.Heading!;
+        var wider = new BricksFixture.Model(
+            static call =>
+            {
+                if (call.Step != "extraction")
+                {
+                    throw new HttpRequestException("no other call answers in this test");
+                }
+
+                using var sent = JsonDocument.Parse(call.User);
+                var firsts = sent.RootElement.GetProperty("lines").EnumerateArray().Select(static line => (Id: line.GetProperty("id").GetString()!, Article: line.GetProperty("article").GetString()!))
+                    .GroupBy(static line => line.Article, StringComparer.Ordinal).Select(static group => group.First().Id);
+                return new JsonObject
+                {
+                    ["found"] = true,
+                    ["complete"] = false,
+                    ["items"] = new JsonArray(firsts.Select(static id => (JsonNode)new JsonObject { ["line"] = id, ["role"] = "passage", ["value"] = string.Empty }).ToArray()),
+                    ["caveats"] = new JsonArray(),
+                }.ToJsonString();
+            },
+            call =>
+            {
+                using var sent = JsonDocument.Parse(call.User);
+                var named = sent.RootElement.GetProperty("acts").EnumerateArray().SelectMany(static act => act.GetProperty("articles").EnumerateArray())
+                    .Where(article => article.GetProperty("heading").GetString() is { } heading && (heading.Contains(leadHeading, StringComparison.Ordinal) || heading.Contains("Prestation de l'assureur", StringComparison.Ordinal)))
+                    .Select(static article => (JsonNode)article.GetProperty("id").GetString()!).ToArray();
+                return new JsonObject { ["articles"] = new JsonArray(named) }.ToJsonString();
+            });
+        var dossier = Answered(BricksFixture.Ask(question, wider));
+        var quoted = dossier.Quotes.Select(static quote => quote.Anchor).Distinct(StringComparer.Ordinal).ToArray();
+        CollectionAssert.Contains(quoted, lead, "the tables' first article is in the answer");
+        CollectionAssert.Contains(quoted, "art_29", "and the article the tables did not see");
+        Assert.AreEqual("open", Bricks(dossier).GetProperty("route").GetString());
+    }
+
+    [TestMethod]
+    public void WhereTheTwoReadingsDifferTheTablesFirstLineIsQuotedAfterTheSecondReadingsOwn()
+    {
+        // The insurance set of 2026-11-19: "Quel est le délai de rétractation pour une assurance vie ?" lost article 100,
+        // the tables' right answer (the law says "renonciation"), to the article whose heading holds the reader's word.
+        // Neither reading is sure: the answer quotes the second reading's article, then the tables' first line.
+        const string question = "Quel est le délai de rétractation pour une assurance vie ?";
+        var alone = Answered(BricksFixture.Ask(question));
+        var lead = alone.Quotes.First().Anchor;
+        var other = BricksFixture.Tables.Articles.First(article => article.Heading is { Length: > 0 } && article.Id != lead && !alone.Quotes.Any(quote => quote.Anchor == article.Id) && article.Status != "empty");
+        var differs = Reader(other.Heading!, static _ => throw new HttpRequestException("no other call answers in this test"));
+        var dossier = Answered(BricksFixture.Ask(question, differs));
+        var quoted = dossier.Quotes.Select(static quote => quote.Anchor).Distinct(StringComparer.Ordinal).ToArray();
+        Assert.AreEqual(other.Id, quoted[0], "the second reading's article first");
+        CollectionAssert.Contains(quoted, lead, "and the tables' first line after it");
+        Assert.AreEqual("open", Bricks(dossier).GetProperty("route").GetString());
+    }
+
+    [TestMethod]
+    public void ARareWordOfTheQuestionBringsTheArticlesThatHoldItToTheReading()
+    {
+        // "Un assureur peut-il utiliser des données génétiques ?": two articles of the act hold the word, under headings
+        // that do not say so. Code adds them to the articles the model named; the extraction still decides.
+        var model = Reader("Information médicale");
+        _ = BricksFixture.Ask("Un assureur peut-il utiliser des données génétiques ?", model);
+        var extraction = model.Calls.Single(static call => call.Step == "extraction");
+        using var sent = JsonDocument.Parse(extraction.User);
+        var articles = sent.RootElement.GetProperty("lines").EnumerateArray().Select(static line => line.GetProperty("article").GetString()!).Distinct(StringComparer.Ordinal).ToArray();
+        string Label(string id) => BricksFixture.Tables.Article(id)!.Label ?? id;
+        CollectionAssert.Contains(articles, Label("art_11"), "the article that holds the word, though its heading does not say so");
+        CollectionAssert.Contains(articles, Label("art_98"));
+    }
+
+    [TestMethod]
+    public void ACitedArticleOfAnActReadInItsLatestVersionHeldIsQuotedWithTheNotice()
+    {
+        // The owner's brief of 2026-11-19, work item 2: "Loi du 16 avril 2003 ... article 2" was refused for its date.
+        var corpus = new BricksFixture.Corpus { LatestHeld = true };
+        var executor = new BricksFixture.Executor();
+        var never = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked for a citation code reads"));
+        var dossier = Answered(BricksFixture.Ask("Que dit l'article 39 de la loi sur le contrat d'assurance ?", never, executor: executor, corpus: corpus));
+        Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict);
+        Assert.AreEqual(V3AnswerTemplates.NoteLatestHeld, dossier.Blocks.OfType<V3ClaimBlock>().First().Claim.TemplateId);
+        Assert.IsTrue(dossier.Quotes.All(static quote => quote.Anchor == "art_39"));
+        foreach (var call in executor.Calls)
+        {
+            using var asked = JsonDocument.Parse(call.Parameters);
+            Assert.AreEqual(BricksFixture.Tables.Date, asked.RootElement.GetProperty("date").GetString(), "read on the date of the version held");
+        }
+
+        Assert.AreEqual((0, 0), (never.Calls.Count, never.Outlines.Count));
+    }
+
+    [TestMethod]
+    public void ADefinitionThatPointsAtAnArticleIsFollowedThere()
+    {
+        // The motor insurance law, article 1: its definitions stand on one line, clause after clause.
+        var line = V4Text.Fold("\"FGA\": le Fonds de Garantie Automobile tel que visé par l’article 15 ;« FIAA » : le Fonds d’insolvabilité en assurance automobile tel que visé à l’article 23-1 ;« Entreprise d’assurances » : une entreprise agréée");
+        Assert.AreEqual("art_15", V4Dispatcher.PointedArticle(line, "fga"));
+        Assert.AreEqual("art_23-1", V4Dispatcher.PointedArticle(line, "fiaa"));
+        Assert.IsNull(V4Dispatcher.PointedArticle(line, "entreprise d'assurances"), "a clause that defines points nowhere");
+        Assert.IsNull(V4Dispatcher.PointedArticle(line, "vehicule"), "a term the line does not define");
+        Assert.IsNull(V4Dispatcher.PointedArticle(V4Text.Fold("« État membre » : l’État tel que visé à l’article 43, point 14, de la loi modifiée du 7 décembre 2015 ;"), "etat membre"), "a pointer into another act is not followed");
+    }
+
+    [TestMethod]
+    public void AnArticleThatExistsAndIsNotHeldIsSaidSoWithTheActsOfficialAddress()
+    {
+        // The owner's brief of 2026-11-19, work item 3: the motor law's article 16 is in the publisher's document and Lex
+        // dropped it for an amendment mark. The places of the held articles say which article is missing.
+        CollectionAssert.AreEqual(
+            new[] { "art_2", "art_16", "art_23-2", "art_32-1" },
+            V4ActTables.NotHeldAmong([("art_1er", 1), ("art_3", 3), ("art_15", 15), ("art_17", 17), ("art_23-1", 24), ("art_23-3", 26), ("art_23-8", 31), ("art_24", 33), ("art_32", 41), ("art_32-2", 43), ("art_33", 45), ("art_34", 48)])
+                .Select(static missing => missing.Id).ToArray(),
+            "one place missing and one number that fits it; a gap whose number cannot be deduced (23-8 to 24, 33 to 34) names none");
+        Assert.AreEqual(0, V4ActTables.NotHeldAmong([("art_15", 15), ("art_16", 16), ("art_17", 17)]).Count);
+
+        var served = BricksFixture.TablesWith(new V4ArticleNotHeld("art_39-1", "art_39", "art_40"));
+
+        // Cited: said so, with the act's own address at the publisher; nothing is searched and no model is asked.
+        var never = new BricksFixture.Model(static _ => throw new AssertFailedException("no model is asked for an article code knows is not held"));
+        var executor = new BricksFixture.Executor();
+        var cited = Answered(BricksFixture.Ask("Que dit l'article 39-1 de la loi sur le contrat d'assurance ?", never, executor: executor, corpus: new BricksFixture.Corpus { Served = served }));
+        Assert.AreEqual(V3AssistantVerdict.Point, cited.Verdict);
+        var claims = cited.Blocks.OfType<V3ClaimBlock>().Select(static block => block.Claim).ToList();
+        Assert.AreEqual("L’article 39-1 existe mais Lex n’en détient pas le texte.", claims[0].Text);
+        Assert.IsTrue(claims.Any(static claim => claim.TemplateId == V3AnswerTemplates.LawOfficialSource && claim.Text.Contains("http://data.legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo", StringComparison.Ordinal)));
+        Assert.AreEqual((0, 0, 0), (executor.Calls.Count, never.Calls.Count, never.Outlines.Count));
+        Assert.AreEqual(0, cited.Quotes.Count());
+
+        // Beside an article the answer quotes: said after the quotation.
+        var beside = Answered(BricksFixture.Ask("l'assureur peut résilier le contrat de façon unilatérale ?", corpus: new BricksFixture.Corpus { Served = served }));
+        Assert.AreEqual(V3AssistantVerdict.Answer, beside.Verdict);
+        Assert.AreEqual("art_39", beside.Quotes.First().Anchor);
+        CollectionAssert.Contains(Templates(beside), V3AnswerTemplates.AbsenceArticleNotHeld);
+        CollectionAssert.AreEqual(new[] { "art_39-1" }, Bricks(beside).GetProperty("answer").GetProperty("not_held").EnumerateArray().Select(static item => item.GetString()).ToArray());
+
+        // With every article held, nothing of this is said; an article that does not exist keeps the question call.
+        CollectionAssert.DoesNotContain(Templates(Answered(BricksFixture.Ask("l'assureur peut résilier le contrat de façon unilatérale ?"))), V3AnswerTemplates.AbsenceArticleNotHeld);
+        Assert.IsFalse(Forged("c'est quoi une personne lésé", static plan => plan["bricks"]!["answer"]!["not_held"] = new JsonArray("pas un article")).Admitted);
+        Assert.AreEqual("http://data.legilux.public.lu/eli/etat/leg/loi/2003/04/16/n2/jo", V4CorpusIndex.Insurance.Act("loi-2003-04-16-n2")!.Official);
+
+        // The dictionary names the articles where the law treats a concept: an answer on the Fonds de Garantie Automobile
+        // says that article 16 (its mission) is not held, whatever articles it quotes (the brief's acceptance question 4).
+        CollectionAssert.AreEqual(new[] { "art_15", "art_16" }, Dictionary.Concept("fonds_garantie_auto")!.Articles.ToArray());
+        Assert.IsTrue(Row("Qui indemnise la victime si le responsable n'est pas assuré ?").Concepts.Any(static read => read.Concept == "fonds_garantie_auto"));
+        Assert.AreEqual(0, Dictionary.Concept("resiliation")?.Articles.Count ?? 0);
+    }
+
+    [TestMethod]
     public void ADateInsideAnActsNameIsNotTheDateToReadTheLawOn()
     {
         var corpus = new BricksFixture.Corpus();

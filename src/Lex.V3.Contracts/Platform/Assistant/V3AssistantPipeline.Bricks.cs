@@ -93,6 +93,31 @@ public static partial class V3AssistantPipeline
 
     private static V3AnswerFact Count(string name, int value) => new(name, V3AnswerSlotKind.Count, value.ToString(CultureInfo.InvariantCulture));
 
+    /// <summary>
+    /// What is said of articles that exist in the publisher's document and are not held: one sentence an article, the
+    /// act's own address at the publisher, and the publisher's site. A list, and a method of its own: an iterator or a
+    /// closure here would add a compiler-named class to what the census pins.
+    /// </summary>
+    private static List<V3DossierBlock> ArticlesNotHeld(V4PlanRecord record, V3AnswerLocale locale)
+    {
+        var said = new List<V3DossierBlock>();
+        foreach (var article in record.NotHeld)
+        {
+            said.Add(Claim(V3AnswerTemplates.AbsenceArticleNotHeld, locale, Fact("anchor", V3AnswerSlotKind.Anchor, article)));
+        }
+
+        foreach (var act in V4CorpusIndex.Insurance.Acts)
+        {
+            if (act.Address == record.Work && act.Official is { } official)
+            {
+                said.Add(Claim(V3AnswerTemplates.LawOfficialSource, locale, Fact("uri", V3AnswerSlotKind.Uri, official)));
+            }
+        }
+
+        said.AddRange(OfficialSources(["lu-legilux"], locale));
+        return said;
+    }
+
     private static V3AnswerDossier? ComposeBricks(
         V3AssistantPlan plan,
         V3PlanContext context,
@@ -205,7 +230,7 @@ public static partial class V3AssistantPipeline
         else if (record.Kind == "greeting")
         {
             verdict = V3AssistantVerdict.Clarify;
-            blocks.Add(Claim(V3AnswerTemplates.DirectGreeting, locale));
+            blocks.Add(Claim(record.Route == "clarify" ? V3AnswerTemplates.ClarifyOneWord : V3AnswerTemplates.DirectGreeting, locale));
         }
         else if (record.Kind == "not_held")
         {
@@ -223,6 +248,10 @@ public static partial class V3AssistantPipeline
         {
             switch (record.Absence)
             {
+                case "article_not_held" when record.Work is not null && record.NotHeld.Count > 0:
+                    verdict = V3AssistantVerdict.Point;
+                    blocks.AddRange(ArticlesNotHeld(record, locale));
+                    break;
                 case "text_not_held" when record.Work is not null:
                     verdict = V3AssistantVerdict.Point;
                     blocks.Add(Claim(V3AnswerTemplates.AbsenceTextNotHeld, locale, Fact("work", V3AnswerSlotKind.WorkAddress, record.Work)));
@@ -280,6 +309,13 @@ public static partial class V3AssistantPipeline
                 blocks.Add(Claim(V3AnswerTemplates.AnswerRuleCases, locale));
                 blocks.AddRange(cases.SelectMany(Shown));
             }
+        }
+
+        // An article right before or after one the answer quotes exists in the publisher's document and is not held: said
+        // after the quotations, with the act's official address (the owner's brief of 2026-11-19, work item 3).
+        if (record.Kind != "absence" && record.Items.Count > 0 && record.NotHeld.Count > 0 && record.Work is not null)
+        {
+            blocks.AddRange(ArticlesNotHeld(record, locale));
         }
 
         // An act whose last version ended before the date asked is read in the latest version held, and the answer says so

@@ -121,6 +121,15 @@ Decision 95 (lex-governance PR #9, merged 2026-09-30) records these rulings and 
 ## Blocked on the owner
 
 Only money, legal or public claims, credentials and going live (ruling 7):
+- The owner's brief of 2026-11-19 ("make it work"; STATUS-WEB.md, first section). Served today: Release 16
+  (`v3-20261119T050837Z-0af7de23ab55`, since 06:47 UTC). The brief's slice is built and prepared as the next release
+  and is not live: **going live with it is the owner's word.** With it, the owner's to decide: (1) the stronger model
+  the brief asks for the second reading (a `gpt-4.1` deployment on the same Azure resource: creating it was refused to
+  the driver; about five times the cost of an answer, so the per-answer ceiling of 0.02 EUR must rise with it);
+  (2) whether an answer may carry one sentence written by a model (not built; five examples in
+  `C:\lex-v3\kezhan-brief-2026-11-19\summary-sentence-examples.md`); (3) the monthly cap, 20 EUR today, about 3,700
+  answers at the measured cost; (4) the one measurement on the 77 hold-out questions, not opened; (5) the Developers
+  page's sentence that such questions "are refused", no longer exact for an insurance question whose rule is found.
 - Azure credits: the subscription's trial credit (175.70 EUR left, seen on 2026-10-17) expires on 12 November 2026.
   From then the private copy of the site (about 26 EUR a month, below) is billed to the payment method on file,
   within the 30 EUR monthly budget the owner accepted; a support plan pays for support only. The owner checks the

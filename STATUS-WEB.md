@@ -4,6 +4,92 @@ Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The owner's brief "make it work": an ordinary question gets its article (sole driver, 2026-11-19)
+
+`api/kezhan-set`, on the owner's brief of 2026-11-19 (kept with its question set under
+`C:\lex-v3\kezhan-brief-2026-11-19\`): 259 questions labelled by the owner, 182 to work on (`tune`), 77 held back
+(`holdout`: not opened, not run, not read). Going live with this slice is the owner's decision: the release is prepared
+and waits for his word.
+
+- **The measure** is the brief's: on the 80 `tune` questions whose article was verified by reading, an answer is right
+  when it quotes one of the expected articles and nothing of another act. **Release 16 (live), this morning: 27 right,
+  5 wrong, 29 not found, 19 refused.** **This slice, end to end on the driver's PC over the release's own data and
+  model: 59 right, 3 wrong, 13 not found, 4 refused, 1 not answered in 60 s** (a search with a date, the known limit).
+  One answer that was right before is not now (K183, a question that mixes resignation and insurance: now asked to be
+  more specific). One of the three wrong was closed after that run, with its test (K074, below). The figures of the
+  release candidate itself are taken on Azure before the owner is asked to go live, and go to his report. Two wrong
+  answers remain and are the owner's to see first, as his brief asks: **K022** "Qui doit prouver quoi en cas de sinistre ?"
+  quotes articles 26 and 27 (the declaration of a claim) where the label expects the articles on proof (15, 16); **K030**
+  "L'assureur peut-il modifier les conditions générales en cours de contrat ?" quotes article 60 where the label
+  expects 42, 16 or 17. Both come from the small model's choice among the tables of contents; the brief's stronger
+  model is not deployed (creating the deployment was refused to the driver by the session's safety rules; it is the
+  owner's to create).
+- **By kind of question:** an article asked in ordinary words, 49 right of 54; a change over time, a version on a
+  date, the limits of what is held (Lex's own operations, not this slice's work), 1 of 12 by the article rule.
+- **The second reading** (work item 1, ours in its shape): where the tables do not answer or are not sure, a model names
+  articles in the acts' tables of contents (by ids it is given, six at most, one act), code adds the articles that
+  hold a rare word of the question, and the extraction points at lines among theirs; code quotes. An id that was not
+  given refuses the reply. `docs/ANSWER-DOSSIER-1.md` §13 says which answer stands and when the tables of contents
+  are not read at all (one word, another act or country, a question put to Lex, an opinion, an act as a whole).
+  Measured at the planner on the 80: tried for 57, 0.007 EUR an answer when tried (0.010 at most), 0.001 when not,
+  0.005 on average; p50 2.9 s, p95 9.1 s end to end.
+- **The reader's own case** (the owner's direction of 2026-11-19): a question worded for a person's own case whose
+  general rule the law states is answered by quoting that rule, with "Le texte ne dit pas comment il s'applique à
+  votre situation."; refused only where no line is found. This changes the advice line of decision 4 for the bricks'
+  own routes; Lex's own operations keep the refusal.
+- **Work item 2:** an act whose last version ended before the date asked is read by the assistant in its latest
+  version held, with "Dernière version détenue : … Lex ne détient pas de version plus récente de ce texte."; the
+  operations keep their strict answer. The motor insurance law (`loi-2003-04-16-n2`) answers again, a cited article
+  too. The count over the mount: **65 of 5,416 Luxembourg acts** are in that situation today, 13 of them still in
+  force per the publisher (the motor law, and one more on insurance: the health-insurance laboratory nomenclature);
+  none on the European side. The publisher's catalogue as read on 2026-11-12 lists no version of the motor law after
+  28 December 2024: its end date (1 January 2025) is the publisher's own, and looks like the second entry-into-force
+  date of the amending law of 20 December 2024, which does not touch the motor law on that date (an inference from
+  the mount; the publisher's page is drawn by script and was not read). Nothing to acquire was found.
+- **Work item 3:** the motor law's articles 16 and 32-1 (and 23-9, 32-3) are complete in the publisher's file and were
+  dropped by the reader of the publisher's XML (content profile /3) for an amendment mark only (a mark that is not
+  empty; an amendment that opens in one article and closes in another). Admitting them is a change to that reader and
+  a new build of the data (the data lane; not in this release). Until then the assistant says "L'article 16 existe mais
+  Lex n'en détient pas le texte." with the act's address at the publisher: when the article is cited, and when the
+  answer quotes the article right before or after it. The number is deduced from the places of the held articles
+  (one place missing, one number that fits). Across the mount: **7,638 articles not admitted in held versions**
+  (1,553 acts; 4,248 in the versions served today); a mark is the only obstacle for about 5,400 of them, a table for
+  1,611. In the 1997 law: `article_127-1`; in the 2015 law: articles 200, 256-30, 260, 284, 306; all marks only.
+  The method and the lists: `C:\lex-v3\kezhan-brief-2026-11-19\work-items-2-3-findings.md`.
+- **Found by the 102 other `tune` questions and closed:** the second reading quoted the insurance contract law for
+  what it must not (German and Belgian law, a law that does not exist, "Remplaces-tu un avocat ?", one word alone, a
+  labour or housing question): gates in code and words in the corpus index, each with its test. One word alone now
+  asks for a full question (`clarify.one_word`). "C'est quoi le Fonds de garantie automobile ?" got the definition of
+  "véhicules" (a word of the same concept was looked up in place of the reader's): corrected. An article number with
+  no act named, and a question on how the law changed, were answered with the one hit of a word search (K077, K074):
+  the search is shown and nothing is read on its own. Lex's operations were handed the reader's short name of an act
+  ("loi sur le contrat d'assurance") and did not know it: they get the address the corpus index read.
+- **Not built:** the model-written summary sentence (the owner's decision first: it is a sentence no template holds,
+  which the gate `non_template_strings` forbids by design); five examples of what it would say are in
+  `C:\lex-v3\kezhan-brief-2026-11-19\summary-sentence-examples.md`. The stronger model (above). No page changes but
+  the new sentences the server composes and the work panel's row for the outline step; the Developers page still says
+  such questions "are refused", which is no longer exact for an insurance question whose rule is found (left for the
+  owner, as his brief asks no page change).
+- **The two standing sets**, on the driver's PC: the 56 questions, 36 right articles, 0 wrong, 10 not found, 1 refused
+  by mistake (as Release 16), every quotation verified; the two cases on the reader's own case now give the general
+  rule (articles 29 and 44, the right ones) where a refusal was expected, and their expectation is changed to that
+  rule with the caution sentence (`lex-eval`, the owner's direction). The 79 insurance questions: 63 right articles
+  (64 on Release 15), ten expectations changed the same way (nine on the reader's own case, one on the motor law now
+  readable), and one wrong article, "Quel est le délai de rétractation pour une assurance vie ?" (article 62-3 where
+  100 is expected): the tables had article 100 and the second reading replaced it. Closed after that run: where the
+  two readings differ, the answer quotes the second reading's article and then the tables' first line.
+- **After the acceptance questions:** "Que risque-t-on à rouler sans assurance ?" quoted article 28 with English frame
+  sentences (the question's language tied on "on"): French function words added to the language reading. "Qui
+  indemnise la victime si le responsable n'est pas assuré ?" quoted the insolvency fund: the Fonds de Garantie
+  Automobile is now a concept of its own in the dictionary, with the articles where the law treats it (15 and 16), so
+  an answer on it says that article 16 exists and is not held.
+- **Reversible driver decisions:** the gates' word lists (`corpus-index.json`); the rule that a wider second reading
+  stands; the deduction of a missing article's number; `lex-eval`: a case may require a sentence by its template id,
+  and the cases on the reader's own case now expect the general rule and that sentence (the owner's direction).
+- Evidence: `Lex.V3.Tests` 3,555 tests, 3,545 pass, 10 inconclusive (they call a model or a network), 0 fail; `web`
+  `npm run build` and `npm test`; the two standing sets on the driver's PC (figures in the pull request); the runs under
+  `C:\lex-v3\kezhan-brief-2026-11-19\runs\`.
+
 ## Release 16 is live; a refusal shows the law beside it, an absence its act's title (sole driver, 2026-11-19)
 
 - **Release 16** (`v3-20261119T050837Z-0af7de23ab55`, built and signed on Azure from #1065's 0af7de23; revision

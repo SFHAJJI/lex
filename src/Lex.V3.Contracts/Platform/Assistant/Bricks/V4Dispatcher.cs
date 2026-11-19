@@ -42,8 +42,64 @@ public static class V4Dispatcher
 
     // A question on how the law changed: Lex's own operations (diff, changes_in_period, timeline) answer these.
     // Words that are about a text's own life whatever stands beside them ("historique", "version", "abrogé").
+    private static readonly Regex PointerPattern = new(
+        @"\btel(?:le)?s? que (?:vise|defini|prevu)e?s? (?:par|a) l'article (\d+(?:er)?(?:-\d+)?)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>
+    /// The article a definition points at in place of defining ("tel que visé par l'article 15"), read in the clause of
+    /// the folded defining line that opens with the term; null when the clause points nowhere.
+    /// </summary>
+    public static string? PointedArticle(string folded, string term)
+    {
+        ArgumentNullException.ThrowIfNull(folded);
+        ArgumentException.ThrowIfNullOrEmpty(term);
+        foreach (var clause in folded.Split(';'))
+        {
+            var at = clause.IndexOf(term, StringComparison.Ordinal);
+            if (at < 0 || at > 12)
+            {
+                continue;
+            }
+
+            // A pointer and nothing after it: "tel que visé à l'article 43, point 14, de la loi modifiée du 7 décembre
+            // 2015" points into another act and is not followed.
+            var match = PointerPattern.Match(clause, at);
+            return match.Success && clause.AsSpan(match.Index + match.Length).Trim().IsEmpty ? "art_" + match.Groups[1].Value : null;
+        }
+
+        return null;
+    }
+
+    // An act named by its kind and a date ("loi du 31 février 2020", "loi belge du 4 avril 2014"), and a question put to
+    // Lex itself ("remplaces-tu un avocat", "qui es-tu", "ton prompt"): read on the folded question.
+    private static readonly Regex DatedActPattern = new(
+        @"\b(?:lois?|reglement|directive|arrete|ordonnance|law|act|regulation)\b(?:\s+[\p{L}-]+){0,3}?\s+(?:du|de|of)\s+\d{1,2}(?:er)?\s+\p{L}+\s+\d{4}\b",
+        RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    private static readonly Regex ToLexPattern = new(
+        @"(?:\b|-)(?:tu|toi|ton|ta|tes)\b|\b(?:avez|etes|detenez|couvrez)-vous\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    // A question that asks for an opinion or a choice ("la meilleure assurance auto"), and one that leaves its subject
+    // unsaid ("a-t-il le droit de me faire ça ?"): no article of an act states what is asked.
+    private static readonly Regex OpinionPattern = new(
+        @"\b(?:meilleure?s?|pires?|moins chere?s?|recommande\w*|conseille\w*|best|cheapest|recommend\w*)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    private static readonly Regex UnsaidPattern = new(@"\b(?:ca|cela|ceci)\b", RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>Whether the folded question asks for an opinion or a choice between offers.</summary>
+    public static bool AsksAnOpinion(string folded) => OpinionPattern.IsMatch(folded);
+
+    /// <summary>Whether the folded question points at its subject without saying it ("ça", "cela").</summary>
+    public static bool LeavesItsSubjectUnsaid(string folded) => UnsaidPattern.IsMatch(folded);
+
+    /// <summary>Whether the folded question names an act by its kind and a date.</summary>
+    public static bool NamesAnActByItsDate(string folded) => DatedActPattern.IsMatch(folded);
+
+    /// <summary>Whether the folded question is put to Lex itself, in the second person singular.</summary>
+    public static bool AddressesLex(string folded) => ToLexPattern.IsMatch(folded);
+
     private static readonly Regex ChangePattern = new(
-        @"(?<![\p{L}])(?:historique|versions?|avant et apres|amend\w*|history|abroge\w*|repealed)(?![\p{L}])",
+        @"(?<![\p{L}])(?:historique|versions?|avant et apres|amend\w*|history|abroge\w*|abrogations?|repealed)(?![\p{L}])",
         Options, Timeout);
 
     // Words that say a change of anything ("modifier les conditions générales", "changer d'assureur", "la différence entre

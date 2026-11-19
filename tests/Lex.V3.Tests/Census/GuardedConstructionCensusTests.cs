@@ -477,6 +477,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Action, "
                     + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::ArticlesNotHeld, "
+                    + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Claim, "
                     + "method private static "
                     + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Handoffs, "

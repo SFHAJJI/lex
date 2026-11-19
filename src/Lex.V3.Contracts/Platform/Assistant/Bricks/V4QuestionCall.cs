@@ -393,7 +393,10 @@ public static class V4QuestionCall
         IReadOnlyList<V4DescribedPart> parts,
         string outcome,
         (V4ModelCall Call, V4ModelReply Reply, string ModelId)? asked,
-        IReadOnlyCollection<string>? readingDates = null)
+        IReadOnlyCollection<string>? readingDates = null,
+        bool searchOnly = false,
+        IReadOnlyList<V4ActMention>? acts = null,
+        bool actAlone = false)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(parts);
@@ -482,7 +485,23 @@ public static class V4QuestionCall
 
             // The act of the person's last answer, when the part's own words name none and the description points at its chip.
             var chip = part.ActRef.Length > 0 && references.TryGetValue(part.ActRef, out var chipKind) && chipKind == "context_work" ? part.ActRef : null;
-            JsonObject? ActSource() => named is { } inWords ? SpanSource(inWords) : chip is not null ? new JsonObject { ["ref"] = chip } : null;
+            // The act the corpus index reads in the part's words is named by its address: a reader's short name ("loi sur
+            // le contrat d'assurance") is no identifier Lex's operations resolve (2026-11-19: "Lex ne reconnaît pas ...").
+            JsonObject? Indexed()
+            {
+                var read = acts?.Where(static mention => mention.Work is not null).ToList();
+                if (read is null || read.Count == 0)
+                {
+                    return null;
+                }
+
+                var hit = named is { } span
+                    ? read.FirstOrDefault(mention => mention.Start < span.End && span.Start < mention.End)
+                    : read.Select(static mention => mention.Work).Distinct(StringComparer.Ordinal).Count() == 1 ? read[0] : null;
+                return hit is null || V4CorpusIndex.Insurance.Act(hit.Work!) is not { } indexed ? null : new JsonObject { ["corpus"] = indexed.Address };
+            }
+
+            JsonObject? ActSource() => Indexed() ?? (named is { } inWords ? SpanSource(inWords) : chip is not null ? new JsonObject { ["ref"] = chip } : null);
             var stepsBefore = steps.Count;
 
             // The citation code searches: the span the description points at, made whole by two rules of code. When the
@@ -560,7 +579,10 @@ public static class V4QuestionCall
 
                 var step = Step("search", arguments);
                 steps.Add(step);
-                if (followUps.Count < V3AssistantPlanValidator.MaximumFollowUps)
+                // An article cited by its number with no act named ("depuis quand l'article 62 existe-t-il ?") is found
+                // in many acts: the search shows where, and nothing is read on its own (the reader's set of 2026-11-19:
+                // the one hit of another act was quoted as the answer).
+                if (!searchOnly && followUps.Count < V3AssistantPlanValidator.MaximumFollowUps)
                 {
                     var id = step["step_id"]!.GetValue<string>();
                     followUps.Add(new JsonObject
@@ -603,6 +625,10 @@ public static class V4QuestionCall
                     break;
                 case "exact_identifier" when Usable(part.Citation, V3AssistantPlanValidator.MaximumIdentifierLength) is { } identifier:
                     steps.Add(Step("resolve", new JsonObject { ["identifier"] = SpanSource(identifier) }));
+                    break;
+                case "article_or_act_cited" when actAlone && Indexed() is { } whole:
+                    // An act of the index named alone ("loi assurance 1997"): its record is opened.
+                    steps.Add(Step("dossier", new JsonObject { ["identifier"] = whole }));
                     break;
                 default:
                     // A cited article or act, and every part whose kind lacks what it needs: the citation, else the words,

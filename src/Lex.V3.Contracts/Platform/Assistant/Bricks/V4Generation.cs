@@ -84,7 +84,7 @@ public static class V4Generation
     public const int MaximumOutlinePicks = 6;
 
     public const string OutlinePrompt = """
-        lex-v4-outline-prompt/1
+        lex-v4-outline-prompt/2
 
         You route a question to articles; you never answer it. Lex is a public website that shows legislation exactly as
         published. A person asked the question you are given. You are given the tables of contents of the acts Lex reads on
@@ -99,6 +99,8 @@ public static class V4Generation
           question behind it: which article states the rule. You never say what applies to that person.
         - If no article given can answer (another subject, another country's law, an act that is not listed, a question
           that is not about what these acts provide), return no article. Never guess.
+        - Return no article either when the question is put to Lex itself (what it is, what it holds, what it can do)
+          or when it leaves its subject unsaid ("ça", "cela", "this", "it").
         """;
 
     /// <summary>

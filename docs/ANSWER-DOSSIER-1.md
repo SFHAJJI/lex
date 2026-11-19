@@ -300,8 +300,8 @@ or D1; not a switch-on gate** (R36, R37 and R39 need people's sets).
 the planner's call are retired. A plan /1 is still read, validated and composed (§5, §7): a trace made before the bricks
 replays to its own bytes.
 
-**The call.** One chat-completions request per step of the bricks (the question call, the arbiter, the extraction), at
-temperature 0, with the step's fixed instruction, its typed input, and strict structured outputs that hold the reply to
+**The call.** One chat-completions request per step of the bricks (the question call, the arbiter, the extraction, and
+since 2026-11-19 the outline call), at temperature 0, with the step's fixed instruction, its typed input, and strict structured outputs that hold the reply to
 the step's closed form. Code reads every reply against that form, with no repair (§13).
 
 **Configuration**, from the environment only:
@@ -404,6 +404,49 @@ dictionary) is answered by Lex's operations, as before the bricks, but code choo
 Such a plan is a plan /2 of route `operations`: the operations of §5, composed as §7 composes them, with the record
 below saying who read the question.
 
+**The second reading (2026-11-19, the owner's brief "make it work").** An ordinary question in ordinary words whose
+article is in the corpus must not end as "not found". Where the tables do not answer, or answer without being sure
+(`V4Bricks.Outline.cs`):
+
+- **Step 1, the outline call** (`lex-v4-outline-prompt/2`): the model is given the question and the tables of contents
+  of the acts of the corpus index held on the date (each article by a short id of the call and its heading, never its
+  number) and names at most six articles of one act, or none. An id that was not given refuses the whole reply.
+- **Code adds** the articles that hold a rare word of the question no table read (six letters or more, on at most
+  four lines of the act).
+- **Step 2, the extraction**, as for every route: the model points at lines among the lines of those articles; code
+  checks each and quotes it. The model supplies no legal text.
+- **Which answer stands.** What code is sure of is not read twice (a term the act defines, a fact, a rule that says of
+  itself it is the general one, a cited article). Otherwise: the tables' answer stands when the second reading quotes
+  its first article and nothing the tables did not see; the second reading's answer stands when it quotes other
+  articles; with no second reading (no model, a failed call, nothing found), the tables' answer stands as before.
+- **When the tables of contents are not read**, with no call spent: a greeting; one word alone; a question of another
+  domain or of another act (an EU act, a law named by a date no act of the index bears, another country's law); a
+  question put to Lex itself in the second person singular; an act named with nothing of the domain beside it (its
+  record, its versions and its text on a date are Lex's own operations). A branch of insurance the reader names
+  ("assurance auto") limits the tables of contents to the acts of the question's concepts.
+
+**The reader's own case.** A question worded for a person's own case ("mon assureur peut-il…") whose general rule the
+law states is answered by quoting that rule, with the sentence `caveat.not_your_case` ("Le texte ne dit pas comment il
+s’applique à votre situation."). It is refused only where no line of the law is found. No model judges this for the
+bricks' own routes: the marks are read by code.
+
+**The latest version held.** An act whose last version ended before the date asked, with none after it
+(`no_version_for_date`, an earlier state named), is read by the assistant in that latest version, and the answer opens
+with `note.latest_held`. The record carries `latest_held`, the evidence step reads on that date
+(`{"corpus": "yyyy-MM-dd"}`). Lex's operations themselves keep their strict answer.
+
+**An article that exists and is not held.** The places the held articles take in the publisher's document say when
+one article is missing between two (`V4ActTables.NotHeldAmong`: "art_15", "art_17" give "art_16"; a gap whose number
+cannot be deduced names none). When the reader cites such an article, or the answer quotes the article right before or
+after it, the answer says `absence.article_not_held` with the act's own address at the publisher (`not_held` in the
+record).
+
+**Other rules of that day.** One word alone is asked to be a full question (`clarify.one_word`, route `clarify`). An
+article cited by its number with no act named and none of a last answer is searched and never read on its own. An act
+the corpus index reads in the question is given to Lex's operations by its address (`{"corpus": address}` on
+`dossier`, `timeline`, `as_of`, `diff`), and an act named alone opens its record. A definition that only points at an
+article of the same act is followed there. A word of the law the reader wrote is looked up as written.
+
 **The tables** (`Bricks/`, all code, no model):
 
 | Table | Source | What it holds |
@@ -414,8 +457,9 @@ below saying who read the question.
 
 **Plan /2.** A plan /1's members, and beside them:
 
-- an argument source `{"corpus": "..."}`: an act's address or an article's identifier that code read in its own tables,
-  admitted only for `identifier` and `article` of an `evidence_bundle` step, and only in a closed form;
+- an argument source `{"corpus": "..."}`: an act's address, an article's identifier or the date of a version that code
+  read in its own tables, admitted for `identifier`, `article` and `date` of an `evidence_bundle` step and for the
+  `identifier` of `dossier`, `timeline`, `as_of` and `diff`, and only in a closed form;
 - on such a step, `text_sha256` (the digest of the article text the lines were cut from), `extracts` (at most five,
   each `{offset, length, role, breaks?}` in that text) and `heading` (where the article's own heading is in it);
 - the root member `bricks`, the record below. A plan /2 may run no operation (a greeting, an act not held) and at most six.
@@ -426,7 +470,8 @@ A plan /1 keeps its bytes. No model writes a plan /2.
 `unmatched`, `rule_question`), the route and its reason, the activations with theirs, what each detector found
 (`detectors`), the candidates with their detectors and, when the arbiter ran, its role and reason (`candidates`), the
 sweep, the passes of the loop, the model calls (step, model, digests of what was sent and answered, token counts) and
-the answer (`kind`, `found`, `complete`, `items`, `values`, `caveats`, `notes`, `more`, `usage`, `absence`). It holds
+the answer (`kind`, `found`, `complete`, `items`, `values`, `caveats`, `notes`, `more`, `usage`, `absence`, `not_held`),
+and `latest_held` when the version read is the latest held. It holds
 tokens, numbers and positions only: a string with a space in it is refused, so no sentence can be carried in it. It is
 read as untrusted (a replay hands one in): its form first, then every value against its closed list, the question's
 bounds and the plan's own steps (`V4PlanRecord.Read`).

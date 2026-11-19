@@ -680,10 +680,12 @@ public static class V3AssistantPlanValidator
 
             var source = Source(member.Value, stepId);
 
-            // Plan /2: code names the act and the article it read in its own tables. Only an evidence step takes them, and
-            // only as the two addresses the corpus holds.
+            // Plan /2: code names the act and the article it read in its own tables. An evidence step takes them, as the
+            // two addresses the corpus holds; an operation on a whole act (its record, its versions, the act on a date,
+            // two dates compared) takes the act the corpus index read in the question, as its address.
             var fromCorpus = second && followUp is null && source.Kind == V3ArgumentSourceKind.Corpus &&
-                operation == "evidence_bundle" && member.Name is "identifier" or "article" or "date";
+                ((operation == "evidence_bundle" && member.Name is "identifier" or "article" or "date") ||
+                 (member.Name == "identifier" && operation is "dossier" or "timeline" or "as_of" or "diff"));
             if (!kinds.Contains(source.Kind) && !fromCorpus)
             {
                 throw new PlanRefused(V3PlanRefusal.SourceNotAdmitted, $"{operation}'s '{member.Name}' does not take a {ContractWire.NameOf(source.Kind)} source");

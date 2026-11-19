@@ -53,7 +53,10 @@ public sealed class V4PlanRecord
         ["conditions_apply", "left_to_contract", "cases_from_sweep", "general_and_special", "model_unavailable", "not_defined", "vocabulary_incomplete", "several_by_scope", "list_from_sweep", "not_your_case"];
 
     /// <summary>The ways an answer is "not found" (brick I, four in place of one).</summary>
-    public static readonly IReadOnlyList<string> Absences = ["terms_nowhere", "words_not_found", "no_answer_in_lines", "act_not_held", "text_not_held"];
+    public static readonly IReadOnlyList<string> Absences = ["terms_nowhere", "words_not_found", "no_answer_in_lines", "act_not_held", "text_not_held", "article_not_held"];
+
+    /// <summary>At most this many articles not held are named in one answer.</summary>
+    public const int MaximumNotHeld = 3;
 
     private readonly JsonElement _raw;
 
@@ -127,6 +130,12 @@ public sealed class V4PlanRecord
 
     /// <summary>The EU act of the corpus index the question names and Lex does not hold, or null.</summary>
     public string? EuAct { get; private init; }
+
+    /// <summary>
+    /// Articles of the act that exist in the publisher's document and whose text Lex does not hold: the one the reader
+    /// cites, or those beside an article the answer quotes.
+    /// </summary>
+    public IReadOnlyList<string> NotHeld { get; private init; } = [];
 
     /// <summary>
     /// For a plan of route <c>operations</c>: what became of the question call (<see cref="V4QuestionCall.Outcomes"/>:
@@ -336,6 +345,13 @@ public sealed class V4PlanRecord
 
             var more = ArrayOf(answer, "more").Select(static item => item.GetString()!).ToList();
             var work = Text(element, "work");
+            var notHeld = ArrayOf(answer, "not_held").Select(static item => item.GetString()!).ToList();
+            if (notHeld.Count > MaximumNotHeld || notHeld.Any(static article => !V3AssistantPlanValidator.IsArticleId(article)) || (notHeld.Count > 0 && work is null) ||
+                (absence == "article_not_held" && notHeld.Count == 0))
+            {
+                refusal = "the bricks record names articles not held that are not article identifiers of a named act";
+                return null;
+            }
             if (more.Count > V3AssistantPipeline.MaximumCandidates || more.Any(static article => !V3AssistantPlanValidator.IsArticleId(article)) ||
                 (work is not null && !V3AssistantPlanValidator.IsWorkAddress(work)) || (more.Count > 0 && work is null))
             {
@@ -370,6 +386,7 @@ public sealed class V4PlanRecord
                 Usage = answer.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object ? (Number(usage, "lines"), Number(usage, "articles")) : null,
                 Absence = absence,
                 EuAct = euAct,
+                NotHeld = notHeld,
                 QuestionCall = questionCall,
             };
         }

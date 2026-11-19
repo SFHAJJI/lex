@@ -28,6 +28,22 @@ public sealed record V4IndexAct(
 {
     /// <summary>The act's address on this site.</summary>
     public string Address => "/" + Publisher + "/" + Work;
+
+    /// <summary>
+    /// The act as published, at the publisher's own address, for an act of the Luxembourg publisher named by its kind, its
+    /// date and its number ("loi-2003-04-16-n2"); null for any other.
+    /// </summary>
+    public string? Official
+    {
+        get
+        {
+            var parts = Work.Split('-');
+            return Publisher == "lu-legilux" && parts.Length == 5 && parts[1].Length == 4 && parts[2].Length == 2 && parts[3].Length == 2 &&
+                parts.All(static part => part.Length > 0 && part.All(static character => char.IsAsciiLetterOrDigit(character)))
+                ? "http://data.legilux.public.lu/eli/etat/leg/" + string.Join('/', parts) + "/jo"
+                : null;
+        }
+    }
 }
 
 /// <summary>An EU act of the domain by the names people give it, with its official address: held or not is read from the mount.</summary>
