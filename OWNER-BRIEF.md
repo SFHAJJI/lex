@@ -1,38 +1,40 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-19 at 12:24 UTC by the driver. The driver updates this file in the first pull request of each day and
+Updated 2026-11-20 at 07:40 UTC by the driver. The driver updates this file in the first pull request of each day and
 whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in STATUS-WEB.md and
 STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where Lex stands
 
-- Live: Release 17 since 11:52 UTC (a refusal shows the law's lines beside it). Its answers are this morning's.
-- Your brief "make it work" is built step by step in your order, measured after each step on your 80 checked
-  questions and your 40 questions with no article. Not live: Release 18 is being built and waits for your word.
+- Live: Release 19 since 07:24 UTC on 20 November, on your go-live word of the evening before. Release 18 is kept
+  ready: one command brings it back in about a minute.
+- Later than promised: the build was ready at 01:15 UTC; the driver's session had stopped until 06:53 UTC.
 
-| Step | Right | Wrong | Not found | Refused | The 40 |
-|---|---|---|---|---|---|
-| Live this morning | 25 | 4 | 32 | 19 | 22 |
-| Before your points | 57 | 2 | 17 | 4 | 27 |
-| Point 2: refuse only decisions | 57 | 2 | 17 | 4 | 29 |
-| Point 1: not sure, show candidates | 49 | 1 | 26 | 4 | 28 |
-| Step 3: the "not found" groups | 48 | 0 | 29 | 3 | 34 |
+## What is new in Release 19
 
-- Only asserted answers count as right or wrong. 14 more answers show the passages as candidates ("Lex a trouvé ces
-  passages sans les départager davantage"); almost all of them hold the right article.
-- No wrong answer is left on the 80. Your bar for pages and dashboards (60 right, none wrong) is not reached: 48.
+- Lex reads all its 2,033 Luxembourg laws, not only insurance. Outside insurance it shows the passages it found and
+  does not say "this is the answer".
+- Before Lex asserts an answer, one more model call asks "does this article answer the question?". On a no, the
+  article is shown as a candidate.
+- A stronger model (gpt-4.1). Fewer needless refusals on general questions.
+
+## How it was measured: 70 questions nobody had seen, asked once on the final version
+
+| | Result |
+|---|---|
+| Wrong answers asserted, all 70 | 0 |
+| Other laws (45): right article among the passages shown | 36 |
+| Insurance (15): answered right / right article shown as a candidate | 8 / 6 |
+| Questions that must get no article (10): handled as expected | 6 |
+| The release gate on the candidate (56 cases): right articles / wrong | 36 / 0 |
 
 ## What I decided for you (each can be undone)
 
-- A decision on your own facts ("est-ce légal", "que dois-je faire", "suis-je couvert" after a stated incident) is
-  refused with the article shown; "Mon assureur peut-il résilier mon contrat ?" is answered with the article and the
-  line on your situation.
-- A birth date, a policy number and a name you type are masked before anything reads them.
-- A follow-up with nothing before it ("Tu es sûr ?") is asked to be put in full.
+- Limits: 0.25 EUR an answer, 5000 EUR a month, 20 questions a minute for one visitor.
+- No second-family review of that pull request, on your order to skip ceremonies that night.
 
-## What waits on you
+## Weak spots, and what waits on you
 
-- Go live with Release 18 (ready around 15:30 UTC with its screenshots): yes or no.
-- The stronger model for the second reading (step 5): create it, or tell me to. It costs about five times more.
-- Answers about Lex itself ("Qui es-tu ?", "Quel modèle utilises-tu ?"): 0 of 6. They are public claims: your wording.
-- A model-written summary sentence; the monthly cap (20 EUR); the hold-out (77 questions, not opened).
+- A greeting or nonsense gets "not found" instead of "please ask a question". The European texts are not read the
+  new way. The quality numbers shown on the site are still Release 18's.
+- The two emails to Kezhan (`C:\lex-v3\kezhan-plan-2026-11-20\email\EMAIL-FINAL.md`): you send them yourself.

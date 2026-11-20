@@ -1,8 +1,51 @@
 # Lex V3 status: the web lane
 
-Updated 2026-11-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-11-20. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Release 19 is live (2026-11-20, 07:24 UTC): every Luxembourg law as candidates, the answer check, gpt-4.1
+
+On the owner's order of 2026-11-19 about 19:45 UTC ("the bet": maximise quality, big-bang pull requests, no ceremonies,
+no budget constraint, and his go-live word in advance for this release). Pull request #1069 (`api/every-law`), merged
+on 2026-11-20 at 00:27 UTC; serving commit d0fb93f6; release `v3-20261119T235909Z-d0fb93f61bd0`, built and signed on
+Azure (ready 01:15 UTC), over the same data (derive `d4-20261113-bfb83983`).
+
+- **What it adds.** `LEX_V3_EVERY_LAW=on`: when the insurance path and the old search quote nothing, code routes the
+  question over an embedded index of 2,033 Luxembourg acts (`law-index.json`: fixed scoring, at most 3 acts kept),
+  reads an act of more than 250 articles by its parts first, then the outline and the extraction; outside insurance the
+  result is always shown as candidates; a question of the insurance domain reads insurance acts only.
+  `LEX_V3_ANSWER_CHECK=on`: one more call ("does this article answer the question?") before an answer is asserted;
+  rejected means candidates. Also: a definition only when asked or when the term stands alone; a model-named concept
+  only for a question of the insurance domain; outside insurance only a decision on the reader's own facts is refused.
+- **Measured on questions never seen** (the owner's rule of 2026-11-19: no score on seen questions). The sealed set, 70
+  questions written by a session that never saw the code, asked once on the final code and model on the driver's PC at
+  00:26 UTC (`C:\lex-v3\kezhan-plan-2026-11-20\sealed\sealed-r19.txt`): outside insurance (45) the labelled article is
+  among the passages shown 36 times (first 35), passages without it 3, nothing 1, refused 5, asserted wrong 0; insurance
+  (15) 8 right, 0 wrong, the labelled article shown first as a candidate 6, candidates without it 1; no article
+  expected (10) 6 as expected (clarify 0 of 3, no article 4 of 4, a decision refused 2 of 3); median 4.4 s, nine in ten
+  under 6.2 s. Four earlier fresh sets (r3 to r6, same folder) were spent while building.
+- **The answer check, measured apart** on 163 labelled answers (`verifier\`): of 45 asserted answers to unseen
+  insurance questions it rejected 9, all 9 with a wrong article, and accepted 36 (34 right, 2 wrong).
+- **The release path.** The evaluation gate on the candidate at its own address passed (56 cases, 0 errors: 36 right
+  articles, 0 wrong, 11 not found, 0 wrongly refused, 9 right behaviours; 59 quotations all verified; the same verdict
+  when asked twice 1.000; p50 1.35 s, p95 5.69 s; run `lex-eval\runs\-v3-20261119t235909z-d0fb93f61bd0-ffd84fc7-dev`);
+  the two-address check passed (177 x 429 here, 200 elsewhere); the release is backed up and verified by SHA-256 (14
+  objects); five reader questions asked at the public address after the switch, the owner's interviewer's two among
+  them, all as expected. Logs: `C:\lex-v3\driver-scripts\release-19\`. Release 18's revision is kept active with no
+  traffic for rollback.
+- **Late.** The build was ready at 01:15 UTC; the driver's session had stopped and resumed at 06:53 UTC, so the release
+  went live 6 hours later than it could have.
+- **Driver decisions (reversible).** The code confirmation of an outline-only pick is off (it cost 14 right answers of
+  the 80 and removed no wrong one). Limits: 0.25 EUR an answer, 5000 EUR a month, 20 questions a minute per address, 12 s
+  a model call, 28 s a plan. The model is the deployment `gpt-4.1` (1000K tokens a minute); `gpt-4.1-mini` was raised to
+  5000K. No review by the other model family and no screenshots before the switch, on the owner's order of that night;
+  the screenshots run of `ops/screens-r19` was still going at the switch. The promotion was the traffic command after
+  the gate had passed with `-NoPromote` on the same revision, not a second gate run.
+- **Known defects.** A greeting or nonsense ends on "not found" instead of a clarifying card; one own-case question of
+  the sealed set was answered with candidates instead of a refusal; the EU acts are not read by the new path; the
+  evaluation record shown on the site is still Release 18's; the "how it was built" block counts the new calls but has
+  no row for the parts reading or the check.
 
 ## The owner's order of 2026-11-19: his points 1 and 2, then the "not found" groups, each step measured (sole driver)
 
