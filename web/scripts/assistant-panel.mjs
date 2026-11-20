@@ -212,8 +212,15 @@ const PANEL_EN = /* @__PURE__ */ Object.freeze({
     dockStageRoute: 'Route',
     dockStageRetrieval: 'Retrieval',
     dockStageArbiter: 'Ranking',
+    dockStageSections: 'Parts of the law',
+    dockSectionsLine: 'parts of the law to read named by their headings',
     dockStageOutline: 'Table of contents',
     dockOutlineLine: 'articles to read named by their headings',
+    dockStageCheck: 'Answer check',
+    dockCheckAccepted: 'a second model call confirmed that the first article answers the question',
+    dockCheckRejected: 'a second model call did not confirm the first article: the passages are shown as candidates',
+    dockCheckUnread: 'the second model call gave nothing usable: the answer stands as it was',
+    dockRetrievalLaw: 'the law chosen by code among the Luxembourg laws the assistant reads, from the question’s words',
     dockStageExtraction: 'Extraction',
     dockStageChecks: 'Checks',
     dockQuestionNone: 'no term of the dictionary read',
@@ -445,8 +452,15 @@ const PANEL_FR = /* @__PURE__ */ Object.freeze({
     dockStageRoute: 'Aiguillage',
     dockStageRetrieval: 'Recherche',
     dockStageArbiter: 'Classement',
+    dockStageSections: 'Parties de la loi',
+    dockSectionsLine: 'parties de la loi à lire désignées d’après leurs intitulés',
     dockStageOutline: 'Table des matières',
     dockOutlineLine: 'articles à lire désignés d’après leurs intitulés',
+    dockStageCheck: 'Vérification de la réponse',
+    dockCheckAccepted: 'un second appel au modèle a confirmé que le premier article répond à la question',
+    dockCheckRejected: 'un second appel au modèle n’a pas confirmé le premier article : les passages sont montrés comme candidats',
+    dockCheckUnread: 'le second appel au modèle n’a rien donné d’utilisable : la réponse reste telle quelle',
+    dockRetrievalLaw: 'la loi choisie par le code parmi les lois luxembourgeoises que lit l’assistant, d’après les mots de la question',
     dockStageExtraction: 'Extraction',
     dockStageChecks: 'Contrôles',
     dockQuestionNone: 'aucun terme du dictionnaire reconnu',
@@ -1084,7 +1098,11 @@ function bricksStageRows(dossier, bricks, copy) {
   const routes = { definition: copy.dockRouteDefinition, fact: copy.dockRouteFact, rule: copy.dockRouteRule, list: copy.dockRouteList, open: copy.dockRouteOpen, absence: copy.dockRouteAbsence, not_held: copy.dockRouteNotHeld, greeting: copy.dockRouteGreeting, own_case: copy.dockRouteOwnCase };
   const found = (Array.isArray(bricks.detectors) ? bricks.detectors : []).find((detector) => detector?.id === 'keyword');
   const candidates = Array.isArray(bricks.candidates) ? bricks.candidates : [];
+  const passes = Array.isArray(bricks.passes) ? bricks.passes : [];
+  // The wider reading (2026-11-20): no dictionary term led to the act; code chose it in the law index, by the question's words.
+  const everyLaw = passes.some((pass) => typeof pass?.outcome === 'string' && pass.outcome.startsWith('every_law'));
   const retrieval = bricks.route === 'definition' ? copy.dockRetrievalLine
+    : everyLaw && typeof bricks.work === 'string' ? copy.dockRetrievalLaw
     : typeof bricks.work !== 'string' || !Number.isInteger(bricks.lines) ? copy.dockRetrievalSkipped
     : found === undefined || found.lines === 0 ? copy.dockRetrievalNone
     : fill(copy.dockRetrievalFound, { lines: found.lines, articles: found.articles, kept: candidates.length });
@@ -1100,6 +1118,10 @@ function bricksStageRows(dossier, bricks, copy) {
     const count = (role) => candidates.filter((candidate) => candidate?.role === role).length;
     rows.push({ key: 'arbiter', name: copy.dockStageArbiter, line: fill(copy.dockArbiterLine, { primary: count('primary'), supporting: count('supporting'), others: count('tangential') + count('discarded') }), model: true });
   }
+  if (calls.includes('sections')) {
+    // A long act is read by its parts first (2026-11-20): a model named, among the parts' headings, the ones to open.
+    rows.push({ key: 'sections', name: copy.dockStageSections, line: copy.dockSectionsLine, model: true });
+  }
   if (calls.includes('outline')) {
     // The second reading (2026-11-19): a model named, in the acts' tables of contents, the articles that were then read.
     rows.push({ key: 'outline', name: copy.dockStageOutline, line: copy.dockOutlineLine, model: true });
@@ -1108,6 +1130,12 @@ function bricksStageRows(dossier, bricks, copy) {
     // The lines the model pointed at: an item code added to them (`by: code`) is not the model's.
     const pointed = (Array.isArray(bricks.answer?.items) ? bricks.answer.items : []).filter((item) => item?.by !== 'code').length;
     rows.push({ key: 'extraction', name: copy.dockStageExtraction, line: fill(copy.dockExtractionLine, { count: pointed }), model: true });
+  }
+  const check = passes.find((pass) => pass?.trigger === 'answer_check');
+  if (calls.includes('check') && check !== undefined) {
+    // The answer check (2026-11-20): before an answer is asserted, a second model call says whether its first article answers.
+    const accepted = typeof check.outcome === 'string' && check.outcome.startsWith('accepted');
+    rows.push({ key: 'check', name: copy.dockStageCheck, line: check.outcome === 'rejected' ? copy.dockCheckRejected : accepted ? copy.dockCheckAccepted : copy.dockCheckUnread, model: true });
   }
   rows.push({ key: 'checks', name: copy.dockStageChecks, line: quotes === 0 ? copy.dockComposerNone : fill(copy.dockChecksLine, { count: quotes }), model: false });
   return Object.freeze(rows.map((row) => Object.freeze(row)));

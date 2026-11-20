@@ -3,26 +3,26 @@
 
 export const EVALUATION_RECORD = Object.freeze({
   "dev": {
-    "run": "20261119-r16-gate",
-    "runId": "7ed7e96e34ed4460aee4d98eddf7aa72",
-    "date": "2026-11-19",
-    "servingCommit": "0af7de23ab559fecb7dcaf19340c9b143c76b928",
-    "plannerId": "lex-v4-bricks/gpt-4.1-mini/prompt-44a95d72ed4c",
-    "modelDeployment": "gpt-4.1-mini",
+    "run": "20261120-r19-gate",
+    "runId": "e0951ec423464600b3be486867a45a06",
+    "date": "2026-11-20",
+    "servingCommit": "d0fb93f61bd08eb23468c68a102147b948ed1798",
+    "plannerId": "lex-v4-bricks/gpt-4.1/prompt-e24a26913355",
+    "modelDeployment": "gpt-4.1",
     "cases": 56,
     "rightArticle": 36,
     "wrongArticle": 0,
-    "notFound": 10,
-    "wronglyRefused": 1,
+    "notFound": 11,
+    "wronglyRefused": 0,
     "rightBehaviour": 9,
     "wrongBehaviour": 0,
-    "quotes": 64,
+    "quotes": 59,
     "quoteVerifiedRate": 1,
     "replaySameVerdict": 1,
-    "replaySamePlan": 0.86,
-    "p50": 1.0500214500934817,
-    "p95": 3.7745232000015676,
-    "costEur": 0.001941446,
+    "replaySamePlan": 0.7450980392156863,
+    "p50": 1.3534257499850355,
+    "p95": 5.693033099989407,
+    "costEur": 0.0018867882352941179,
     "questions": [
       {
         "id": "lu-code-civil-art1",
@@ -350,8 +350,8 @@ export const EVALUATION_RECORD = Object.freeze({
         "id": "gdpr-dpo-designation-concept-fr",
         "question": "Quand faut-il désigner un délégué à la protection des données selon le RGPD ?",
         "language": "fr",
-        "verdict": "refuse",
-        "outcome": "wrongly_refused"
+        "verdict": "clarify",
+        "outcome": "not_found"
       },
       {
         "id": "aiact-art5-number-en",

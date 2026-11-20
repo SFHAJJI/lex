@@ -2024,7 +2024,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       oneCall: Object.freeze({
         title: 'Le code d’abord ; un modèle seulement là où le code ne peut pas trancher.',
         gain: 'un terme que la loi définit reçoit sa réponse sans appel au modèle ; environ {cost} € et {typical} s par question.',
-        cost: 'il faut écrire et tenir à jour un dictionnaire des termes de chaque domaine ; aujourd’hui, il couvre l’assurance privée.',
+        cost: 'il faut écrire et tenir à jour un dictionnaire des termes de chaque domaine ; aujourd’hui, il couvre l’assurance privée. Pour les autres lois luxembourgeoises, une liste de mots courants qu’aucun spécialiste n’a relue : Lex n’y montre que des passages candidats.',
       }),
       dated: Object.freeze({
         title: 'Chaque version datée, rien d’écrasé.',
@@ -2063,7 +2063,9 @@ export const LIVE_CHROME_FR = Object.freeze({
       retrieval: 'Le code trouve les lignes du texte qui contiennent le terme, et les classe d’après des indices qu’il peut montrer : l’intitulé, qui agit, la forme d’une règle.',
       arbiter: 'Un modèle d’IA répartit les lignes trouvées par le code : principales, complémentaires, écartées. Il n’en ajoute aucune.',
       outline: 'Un modèle d’IA lit les tables des matières des textes sur le sujet et désigne les articles à lire. Il ne peut désigner que des articles de ces tables.',
+      sections: 'Pour une loi longue, un modèle d’IA lit d’abord les intitulés de ses parties et désigne celles à ouvrir. Il ne peut désigner que des parties de cette loi.',
       extraction: 'Un modèle d’IA désigne, par leur numéro, les lignes qui répondent. Il n’écrit aucun mot ; le code vérifie chaque ligne désignée.',
+      check: 'Avant que Lex n’affirme une réponse, un second appel au modèle dit si le premier article répond à la question. S’il dit non, les passages sont montrés comme candidats et rien n’est affirmé. Il ne peut ni ajouter ni changer un article.',
       checks: 'Chaque phrase vient d’une formule fixe ; la loi est citée, jamais reformulée. La réponse n’est donnée que si chaque citation est identique au texte conservé.',
       validator: 'Le plan écrit par le code est vérifié par rapport à la liste des opérations permises. Un plan qui n’y tient pas est rejeté, jamais réparé.',
       execution: 'Lex exécute les opérations du plan sur les textes qu’il détient.',
@@ -2172,7 +2174,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       rightBehaviour: 'bien traitées sans article (refus, précision, texte non détenu)',
     }),
     stability: 'Posée deux fois, une question reçoit le même verdict {sameVerdict} % du temps et le même plan {samePlan} % : la réponse d’un modèle peut varier, les contrôles vérifient donc le résultat.',
-    heldout: 'Questions inédites, non utilisées pour régler Lex avant cette évaluation : le bon article {heldoutRight} fois sur {heldoutCases}, un article faux {heldoutWrong} fois. Refusées par la règle du conseil : {heldoutRefused} ; pas trouvées : {heldoutNotFound} ; sans réponse à temps : {heldoutNoPlan}. Une règle a été écrite à partir de ce résultat : il faut donc un nouveau jeu de questions inédites.',
+    heldout: '{unseenCases} questions inédites, écrites à partir des lois par une session qui n’a jamais vu le code, posées une seule fois à cette version avant sa mise en ligne. Réponses fausses affirmées : {unseenWrong}. Hors assurance ({otherCases}), Lex montre des passages candidats sans affirmer : le bon article est parmi eux {otherWith} fois, des passages sans lui {otherWithout} fois, rien ou un refus {otherNone} fois. En assurance ({insuranceCases}) : {insuranceRight} réponses justes, le bon article montré sans être affirmé {insuranceWith} fois. Sans article attendu ({noArticleCases}) : {noArticleExpected} traitées comme prévu.',
+    otherLaws: 'Hors assurance, aucun terme du dictionnaire ne mène à la loi. Le code choisit alors les lois les plus proches dans un index des lois luxembourgeoises, d’après les mots de la question ; un modèle d’IA lit les intitulés de leurs parties et de leurs articles, puis désigne des lignes ; Lex montre ces passages comme candidats et n’affirme rien.',
     gateRule: 'Un article faux sur les questions d’assurance, ou une question réussie qui échoue, bloque la mise en ligne.',
     everyQuestion: 'Les {cases} questions, une par une',
     maskedEmail: '[adresse électronique masquée]',
@@ -2188,6 +2191,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     coverageHeading: 'Ce que Lex détient',
     held: 'Détenu : le texte de {withText} versions de {worksWithText} actes, droit luxembourgeois et de l’UE (index du {builtOn}).',
     missing: 'Manquant : le texte de {withoutText} autres versions, sur les {catalogued} que listent les catalogues.',
+    assistantReads: 'Lu par l’assistant : {assistantActs} actes luxembourgeois, sur {luActs} détenus avec leur texte et {actsCatalogued} que liste le catalogue de l’éditeur. Sont écartés les actes qui ne font qu’en modifier d’autres, ceux que l’éditeur ne dit plus applicables et les règlements de circulation d’une seule route. Une question sur un autre acte ne peut pas trouver son article.',
     incidentsHeading: 'Incidents',
     incidents: Object.freeze({
       art70: '13/11/2026 : article 70 cité au lieu de l’article 44 pour la question de la prescription ; corrigé dans la recherche le 14/11.',
