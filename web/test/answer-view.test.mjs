@@ -9,6 +9,7 @@ import test from 'node:test';
 import { answerSentence, contentKeys, dateFor, quoteVerifies, searchCount, searchStepOf, sentencesOf, stepsRun, wordKey } from '../scripts/answer-view.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 import { COVERAGE_RECORD } from '../scripts/coverage-record.mjs';
+import { UNSEEN_RECORD } from '../scripts/unseen-record.mjs';
 import { renderLiveReferencePage } from '../.react-build/app.mjs';
 
 const ART_44 = "Article 44Délai de prescription1.Le délai de prescription de toute action dérivant du contrat d'assurance est de trois ans.Le délai court à partir du jour de l'événement qui donne ouverture à l'action. Toutefois, lorsque celui à qui appartient l'action prouve qu'il n'a eu connaissance de cet événement qu'à une date ultérieure, le délai ne commence à courir qu'à cette date.";
@@ -106,12 +107,19 @@ test('How it works shows the MLflow registry as MLflow holds it, the stability, 
   // The stability and the held-out set, from the runs; the three kinds of held-out miss add up to the misses.
   const dev = EVALUATION_RECORD.dev;
   assert.ok(page.includes(`the same verdict ${Math.floor(100 * dev.replaySameVerdict + 0.5)} % of the time and the same plan ${Math.floor(100 * dev.replaySamePlan + 0.5)} %`));
-  const heldout = EVALUATION_RECORD.heldout;
-  const said = /(\d+) refused by the advice rule, (\d+) not found, (\d+) with no answer in time/.exec(page);
-  assert.ok(said !== null, 'the held-out misses, by kind');
-  // A wrong article on an unseen question is said beside the right ones, never left out of the count.
-  assert.ok(page.includes(`${heldout.rightArticle} right articles of ${heldout.cases}, ${heldout.wrongArticle} wrong.`), 'the held-out right and wrong articles');
-  assert.equal(Number(said[1]) + Number(said[2]) + Number(said[3]), heldout.cases - heldout.rightArticle - heldout.wrongArticle);
+  // The unseen questions are the sealed set's one run (2026-11-20): every count is the record's own, a wrong answer is
+  // said first, and the three groups add up to the questions asked.
+  const unseen = UNSEEN_RECORD;
+  assert.ok(page.includes(`${unseen.cases} unseen questions`) && page.includes(`Wrong answers asserted: ${unseen.otherLaws.wrong + unseen.insurance.wrong}.`), 'the unseen questions and the wrong answers asserted');
+  const other = /Outside insurance \((\d+)\), Lex shows candidate passages and asserts nothing: the right article is among them (\d+) times, passages without it (\d+) times, nothing or a refusal (\d+) times\./.exec(page);
+  assert.ok(other !== null, 'the unseen questions outside insurance, by outcome');
+  assert.deepEqual(other.slice(1).map(Number), [unseen.otherLaws.cases, unseen.otherLaws.candidatesWith + unseen.otherLaws.right, unseen.otherLaws.candidatesWithout, unseen.otherLaws.notFound + unseen.otherLaws.refused]);
+  assert.equal(Number(other[2]) + Number(other[3]) + Number(other[4]) + unseen.otherLaws.wrong, unseen.otherLaws.cases);
+  assert.ok(page.includes(`In insurance (${unseen.insurance.cases}): ${unseen.insurance.right} right answers, the right article shown without being asserted ${unseen.insurance.candidatesWith} times.`), 'the unseen insurance questions');
+  assert.ok(page.includes(`No article expected (${unseen.noArticle.cases}): ${unseen.noArticle.asExpected} handled as expected.`), 'the unseen questions with no article expected');
+  assert.equal(unseen.otherLaws.cases + unseen.insurance.cases + unseen.noArticle.cases, unseen.cases);
+  // What the assistant reads is said with what Lex holds: the law index's acts, the acts held, the catalogue's.
+  assert.ok(page.includes(`Read by the assistant: ${COVERAGE_RECORD.assistantActs.toLocaleString('en-GB')} Luxembourg acts`), 'what the assistant reads');
   // The API's description, the public code and the two schedules, linked.
   assert.ok(page.includes('href="/openapi.json" data-openapi=""'));
   for (const href of Object.values(PUBLIC_LINKS)) assert.ok(page.includes(`href="${href}" rel="external"`), href);

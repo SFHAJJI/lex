@@ -4,6 +4,32 @@ Updated 2026-11-20. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## How it works brought up to Release 19 (2026-11-20; to be built as Release 20, not promoted without the owner's word)
+
+The owner's question of 2026-11-20 about 09:10 UTC: the page that explains the assistant brick by brick still told
+Release 18's story (gpt-4.1-mini, six stages, the old unseen set, no figure on what the assistant reads). His order at
+about 09:40 UTC: build it, do not promote, his interviewer is testing the live site.
+
+- **Records taken again, none typed by hand.** `evaluation-record.mjs` from Release 19's gate run on its candidate
+  (`lex-eval\runs\20261120-r19-gate`, a copy of the gate's folder under a dated name); `how-answer-record.mjs` from one
+  request to the live site at 09:15 UTC (the same question; its trace now holds the `check` call on gpt-4.1);
+  `coverage-record.mjs` from the live site's `coverage` answer, with two figures from elsewhere, said in the script: the
+  acts of the embedded law index (2,033) and the acts the publisher's catalogue lists (24,627: the resources typed
+  `jolux:Act` in the release's Luxembourg index, counted by `kezhan-plan-2026-11-20\build-notes\coverage_counts.py`).
+- **A new record, `unseen-record.mjs`** (`driver-scripts\make-unseen-record.py`): the sealed set's one run, counted by
+  `run_sealed.py`'s fixed rules. The run's build stamp names aff2fce1: the binary was built from the working tree that
+  became d0fb93f6 a few minutes later (the one-case patch of the gate rehearsal), so the page prints no commit for it.
+- **The stages** (`assistant-panel.mjs`, shared by the assistant's panel and the page): a row for the reading of a long
+  act by its parts (`sections`), a row for the answer check (`check`: accepted, rejected, or nothing usable), and the
+  retrieval row says the law was chosen by code in the law index when the wider reading ran.
+- **The page's words** (English and French): the unseen questions' sentence is the sealed set's (wrong answers asserted
+  first, then the three groups); one paragraph on the other laws' path; one line on what the assistant reads (of the acts
+  held, of the catalogue's) and what is left out; the dictionary's cost says the other laws have an unreviewed word list
+  and candidates only.
+- **Not done:** the MLflow registry has no version for Release 19 (the table ends at version 12); the second followed
+  question (one outside insurance) is words only, not a recorded trace.
+- Checks: the web tests (one, `image-run`'s awk test, needs a Unix shell and runs in CI only).
+
 ## Release 19 is live (2026-11-20, 07:24 UTC): every Luxembourg law as candidates, the answer check, gpt-4.1
 
 On the owner's order of 2026-11-19 about 19:45 UTC ("the bet": maximise quality, big-bang pull requests, no ceremonies,

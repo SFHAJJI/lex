@@ -36,6 +36,7 @@ import { longDate } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 import { COVERAGE_RECORD } from '../scripts/coverage-record.mjs';
+import { UNSEEN_RECORD } from '../scripts/unseen-record.mjs';
 import { REGISTRY_RECORD } from '../scripts/registry-record.mjs';
 import { OPENAPI_FILE, OPENAPI_ORIGIN } from '../scripts/openapi.mjs';
 import { plannerName } from '../scripts/answer-view.mjs';
@@ -179,6 +180,22 @@ export function measured() {
     files: count(COVERAGE_RECORD.files),
     withheld: count(COVERAGE_RECORD.filesWithheld),
     builtOn: numericDate(COVERAGE_RECORD.builtOn),
+    // What the assistant reads, of what Lex holds, of what the publisher's catalogue lists (`coverage-record.mjs`).
+    assistantActs: count(COVERAGE_RECORD.assistantActs),
+    luActs: count(COVERAGE_RECORD.works),
+    actsCatalogued: COVERAGE_RECORD.actsCatalogued === null ? '' : count(COVERAGE_RECORD.actsCatalogued),
+    // The sealed set of unseen questions, asked once (`unseen-record.mjs`); every figure is that run's own count.
+    unseenCases: count(UNSEEN_RECORD.cases),
+    unseenWrong: count(UNSEEN_RECORD.otherLaws.wrong + UNSEEN_RECORD.insurance.wrong),
+    otherCases: count(UNSEEN_RECORD.otherLaws.cases),
+    otherWith: count(UNSEEN_RECORD.otherLaws.candidatesWith + UNSEEN_RECORD.otherLaws.right),
+    otherWithout: count(UNSEEN_RECORD.otherLaws.candidatesWithout),
+    otherNone: count(UNSEEN_RECORD.otherLaws.notFound + UNSEEN_RECORD.otherLaws.refused),
+    insuranceCases: count(UNSEEN_RECORD.insurance.cases),
+    insuranceRight: count(UNSEEN_RECORD.insurance.right),
+    insuranceWith: count(UNSEEN_RECORD.insurance.candidatesWith),
+    noArticleCases: count(UNSEEN_RECORD.noArticle.cases),
+    noArticleExpected: count(UNSEEN_RECORD.noArticle.asExpected),
   };
 }
 
@@ -431,6 +448,7 @@ function FirstScreen({ values }) {
             </p>
           </div>
         )}
+        <p className="lx-how-intro" data-other-laws="">{page.otherLaws}</p>
       </div>
       <aside className="lx-how-panel" aria-labelledby="how-measured">
         <section data-reference-section="measured">
@@ -561,6 +579,7 @@ export function EvidenceBody() {
           <ul className="lx-how-lines">
             <li data-coverage-held="">{say(page.held, values)}</li>
             <li data-coverage-missing="">{say(page.missing, values)}</li>
+            {COVERAGE_RECORD.actsCatalogued === null ? null : <li data-coverage-assistant="">{say(page.assistantReads, values)}</li>}
           </ul>
         </Block>
         <Block id="incidents" heading={page.incidentsHeading}>

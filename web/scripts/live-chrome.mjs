@@ -1524,7 +1524,7 @@ const EN = Object.freeze({
       oneCall: Object.freeze({
         title: "Code first; a model only where code cannot decide.",
         gain: "a term the law defines is answered with no model call; about {cost} € and {typical} s a question.",
-        cost: "a dictionary of each domain’s terms has to be written and kept; today it covers private insurance.",
+        cost: "a dictionary of each domain’s terms has to be written and kept; today it covers private insurance. For the other Luxembourg laws there is a list of everyday words no specialist has reviewed: there Lex shows candidate passages only.",
       }),
       dated: Object.freeze({
         title: "Every version dated, nothing overwritten.",
@@ -1565,7 +1565,9 @@ const EN = Object.freeze({
       retrieval: "Code finds the lines of the text that hold the term, and ranks them by signals it can show: the heading, who acts, the form of a rule.",
       arbiter: "An AI model sorts the lines code found into main, supporting and set aside. It adds none.",
       outline: "An AI model reads the tables of contents of the texts on the subject and names the articles to read. It can name only articles of those tables.",
+      sections: "For a long law, an AI model first reads the headings of its parts and names the ones to open. It can name only parts of that law.",
       extraction: "An AI model points at the lines that answer, by their numbers. It writes no word; code checks every line it points at.",
+      check: "Before Lex asserts an answer, a second model call says whether the first article answers the question. If it says no, the passages are shown as candidates and nothing is asserted. It can neither add nor change an article.",
       checks: "Every sentence comes from a fixed template; the law is quoted, never rephrased. The answer is released only if every quote is identical to the stored text.",
       validator: "The plan code wrote is checked against the list of allowed operations. A plan that does not fit is rejected, never repaired.",
       execution: "Lex runs the operations of the plan on the texts it holds.",
@@ -1674,7 +1676,8 @@ const EN = Object.freeze({
       rightBehaviour: "rightly handled without an article (refusal, question back, text not held)",
     }),
     stability: "Asked twice, the same verdict {sameVerdict} % of the time and the same plan {samePlan} %: a model’s reply can vary, so the gates check the outcome.",
-    heldout: "Unseen questions, not used to tune Lex before this run: {heldoutRight} right articles of {heldoutCases}, {heldoutWrong} wrong. {heldoutRefused} refused by the advice rule, {heldoutNotFound} not found, {heldoutNoPlan} with no answer in time. One rule was written from this result, so a new unseen set is needed.",
+    heldout: "{unseenCases} unseen questions, written from the laws by a session that never saw the code, asked once of this version before it went live. Wrong answers asserted: {unseenWrong}. Outside insurance ({otherCases}), Lex shows candidate passages and asserts nothing: the right article is among them {otherWith} times, passages without it {otherWithout} times, nothing or a refusal {otherNone} times. In insurance ({insuranceCases}): {insuranceRight} right answers, the right article shown without being asserted {insuranceWith} times. No article expected ({noArticleCases}): {noArticleExpected} handled as expected.",
+    otherLaws: "Outside insurance, no dictionary term leads to the law. Code then chooses the closest laws in an index of the Luxembourg laws, from the question’s words; an AI model reads the headings of their parts and articles, then points at lines; Lex shows those passages as candidates and asserts nothing.",
     gateRule: "One wrong article on the insurance questions, or one passing question that fails, blocks a release.",
     everyQuestion: "All {cases} questions, one by one",
     maskedEmail: "[e-mail address masked]",
@@ -1690,6 +1693,7 @@ const EN = Object.freeze({
     coverageHeading: "What Lex holds",
     held: "Held: the text of {withText} versions of {worksWithText} acts, Luxembourg and EU (index of {builtOn}).",
     missing: "Missing: the text of {withoutText} more of the {catalogued} versions the catalogues list.",
+    assistantReads: "Read by the assistant: {assistantActs} Luxembourg acts, of {luActs} held with their text and {actsCatalogued} the publisher’s catalogue lists. Left out: acts that only amend other acts, acts the publisher lists as no longer applicable and traffic rules for a single road. A question about any other act cannot find its article.",
     incidentsHeading: "Incidents",
     incidents: Object.freeze({
       art70: "13/11/2026: article 70 quoted instead of article 44 for the prescription question; fixed in search on 14/11.",
