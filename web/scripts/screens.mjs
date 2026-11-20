@@ -27,6 +27,7 @@ const SECOND = { fr: "l'assureur peut résilier le contrat de façon unilatéral
 const OWN = { fr: "Mon assureur peut-il résilier mon contrat ?", en: "Can my insurer terminate my contract?" };
 const AGE = "Que se passe-t-il en cas d'erreur sur l'âge de l'assuré dans une assurance sur la vie ?";
 const CLARIFY = "Quel est le délai de préavis pour résilier un contrat d'assurance ?";
+const OTHER = { fr: "Combien de mois de caution un propriétaire peut-il demander ?", en: "How many days of paid holiday is an employee entitled to per year?" };
 const CITATION = "Loi du 27 juillet 1997 sur le contrat d'assurance, article 38, 1er juin 2012";
 // [name, path, width, height, mobile, whole page, what to do once loaded, how long to wait after it]
 const SHOTS = [];
@@ -44,6 +45,8 @@ for (const lang of ["fr", "en"]) {
     [`${lang}-10-ask-absence--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(NONE), 20000],
     [`${lang}-19-ask-first-question--1366x768`, `/${lang}/`, 1366, 768, false, false, ASK(FIRST[lang]), 20000],
     [`${lang}-20-ask-second-question--1366x768`, `/${lang}/`, 1366, 768, false, false, ASK(SECOND[lang]), 24000],
+    [`${lang}-23-ask-other-law--1366x768`, `/${lang}/`, 1366, 768, false, false, ASK(OTHER[lang]), 26000],
+    [`${lang}-other-law--1366-whole`, `/${lang}/`, 1366, 768, false, true, ASK(OTHER[lang]), 26000],
     [`${lang}-21-ask-own-case-refused--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(OWN[lang]), 22000],
     [`${lang}-22-ask-heading-written-out--1366x768`, `/${lang}/radar.html`, 1366, 768, false, false, ASK(AGE), 22000],
     [`${lang}-first-question--1366-whole`, `/${lang}/`, 1366, 768, false, true, ASK(FIRST[lang]), 20000],
