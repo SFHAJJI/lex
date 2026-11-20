@@ -65,12 +65,49 @@ for (const lang of ["fr", "en"]) {
     [`${lang}-changes--1366-whole`, `/${lang}/radar.html`, 1366, 768, false, true, null, 0],
   );
 }
-// One-off (2026-11-20): only the example the owner asked for, an insurance question that Lex answers with candidates.
-const EXAMPLE = "Si on n'a nommé personne pour toucher son assurance-vie, à qui va l'argent au décès ?";
+// The side build of 2026-11-20 (the new engine behind the current layout), photographed at its own address before any switch.
+const Q = {
+  premium: "Mon assureur peut-il suspendre ma garantie si je ne paie pas ma prime ?",
+  life: "Je ne paie plus la prime de mon assurance sur la vie. L'assureur peut-il suspendre la garantie ?",
+  notice: "Quel est le délai de préavis pour un salarié licencié après 6 ans d'ancienneté ?",
+  dated: "En 2012, mon assureur pouvait-il résilier le contrat après un sinistre ?",
+  notHeld: "En 2014, combien de temps durait au maximum la période d'essai d'un salarié ?",
+  named: "Que dit l'article 21 de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+  german: "Wie lange ist die Probezeit bei einem Arbeitsvertrag?",
+  european: "Que dit le RGPD sur le délai pour notifier une violation de données ?",
+  hello: "Bonjour",
+  english: "Can my insurer suspend my cover if I do not pay my premium?",
+};
 SHOTS.length = 0;
 SHOTS.push(
-  ["fr-insurance-candidates--1366x768", "/fr/", 1366, 768, false, false, ASK(EXAMPLE), 26000],
-  ["fr-insurance-candidates--1366-whole", "/fr/", 1366, 768, false, true, ASK(EXAMPLE), 26000],
+  ["fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 0],
+  ["fr-02-ask-premium--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.premium), 40000],
+  ["fr-02-ask-premium--1366-whole", "/fr/", 1366, 768, false, true, ASK(Q.premium), 40000],
+  ["fr-03-ask-life-insurance--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.life), 40000],
+  ["fr-04-ask-notice-period--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.notice), 40000],
+  ["fr-05-ask-in-2012--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.dated), 40000],
+  ["fr-06-ask-2014-not-held--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(Q.notHeld), 26000],
+  ["fr-06-ask-2014-not-held--1366-whole", "/fr/radar.html", 1366, 768, false, true, ASK(Q.notHeld), 26000],
+  ["fr-07-ask-named-article--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.named), 40000],
+  ["fr-08-ask-german--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(Q.german), 26000],
+  ["fr-09-ask-european--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(Q.european), 26000],
+  ["fr-10-ask-hello--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(Q.hello), 14000],
+  ["fr-11-text-art21-references--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 6000],
+  ["fr-11-text-art21-references--1366-whole", `/fr${text("&article=art_21")}`, 1366, 768, false, true, null, 6000],
+  ["fr-12-compare-2011-2013-art38--1366x768", `/fr${text("&from=2011-04-16&to=2013-03-01&article=art_38")}`, 1366, 768, false, false, null, 0],
+  ["fr-13-how-it-works--1366x768", "/fr/evidence.html", 1366, 768, false, false, null, 4000],
+  ["fr-13-how-it-works--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 4000],
+  ["fr-14-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 4000],
+  ["fr-14-results--1366-whole", "/fr/results.html", 1366, 768, false, true, null, 4000],
+  ["fr-15-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 4000],
+  ["fr-15-coverage--1366-whole", "/fr/coverage.html", 1366, 768, false, true, null, 4000],
+  ["fr-16-home--phone", "/fr/", 390, 844, true, false, null, 0],
+  ["fr-17-ask-premium--phone", "/fr/", 390, 844, true, true, ASK(Q.premium), 40000],
+  ["en-01-home--1366x768", "/en/", 1366, 768, false, false, null, 0],
+  ["en-02-ask-premium--1366x768", "/en/", 1366, 768, false, false, ASK(Q.english), 40000],
+  ["en-02-ask-premium--1366-whole", "/en/", 1366, 768, false, true, ASK(Q.english), 40000],
+  ["en-13-how-it-works--1366-whole", "/en/evidence.html", 1366, 768, false, true, null, 4000],
+  ["en-14-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 4000],
 );
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
