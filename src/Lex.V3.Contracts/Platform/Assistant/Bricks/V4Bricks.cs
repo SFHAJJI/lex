@@ -29,7 +29,17 @@ public sealed record V4PlanInput(
     string Today,
     IReadOnlyList<V3ParsedDate> Dates,
     IReadOnlyList<V3PlannerReference>? References = null,
-    IReadOnlyList<string>? SearchLanguages = null);
+    IReadOnlyList<string>? SearchLanguages = null)
+{
+    /// <summary>
+    /// The switch of the wider reading (LEX_V3_EVERY_LAW exactly <c>on</c>; off by default): whether a question Lex's own
+    /// operations quoted nothing for is routed to every Luxembourg act of the law index (<see cref="V4Bricks.PlanEveryLaw"/>).
+    /// </summary>
+    public bool EveryLaw { get; init; }
+
+    /// <summary>The law index the wider reading routes with; the one this build carries when none is given.</summary>
+    public V4LawIndex? Laws { get; init; }
+}
 
 /// <summary>
 /// What the bricks answer: a plan /2, or none with the reason (a question the bricks do not answer: it cites an article,
@@ -47,6 +57,12 @@ public sealed record V4PlanOutcome(string? PlanJson, long CostMicroEuros, string
     /// them all: code is not sure of it, and no agreement asserts it (the owner's point 1).
     /// </summary>
     internal bool Partial { get; init; }
+
+    /// <summary>
+    /// Code confirms the second reading's pick: a content word of the question stands in a line it quotes or in the heading
+    /// of that line's article. Where the tables read nothing and code does not confirm, the lines are candidates (point 1).
+    /// </summary>
+    internal bool Confirmed { get; init; }
 }
 
 /// <summary>
@@ -85,6 +101,9 @@ public static partial class V4Bricks
         public List<(string Step, string Model, string Prompt, string Reply, int Input, int Output)> Calls = [];
         public long Cost;
         public bool Firm;
+
+        /// <summary>How the last model call that gave no reply failed, in one token (timed_out, http_429, http_error, cut_short, refused, failed).</summary>
+        public string? Failure;
 
         /// <summary>The date of the version read when it is the latest held and does not cover the date asked.</summary>
         public string? LatestHeld;
@@ -204,11 +223,17 @@ public static partial class V4Bricks
                 // assert". Where the tables and the second reading differ, neither is sure: the lines of both are shown as
                 // candidates, not as the answer.
                 var differs = own.PlanJson is not null && !wider;
+
+                // The tables read nothing, so the second reading stands alone: two model calls picked the article and the
+                // lines, and code checked only that they were ones it gave. Unless code itself finds a word of the
+                // question in what is quoted (`read.Confirmed`), nothing but the model says the lines are on the subject:
+                // code is not sure, and they are shown as candidates (point 1), never asserted.
+                var unconfirmed = OutlinePickNeedsCodeConfirmation && own.PlanJson is null && !read.Confirmed;
                 return read with
                 {
-                    PlanJson = differs ? AsCandidates(read.PlanJson) : read.PlanJson,
+                    PlanJson = differs || unconfirmed ? AsCandidates(read.PlanJson) : read.PlanJson,
                     CostMicroEuros = read.CostMicroEuros + own.CostMicroEuros + (asked is null ? cost : 0),
-                    Reason = read.Reason + (own.PlanJson is null ? string.Empty : wider ? "+tables_narrower" : "+tables_differ+candidates"),
+                    Reason = read.Reason + (own.PlanJson is null ? (unconfirmed ? "+unconfirmed_by_code+candidates" : string.Empty) : wider ? "+tables_narrower" : "+tables_differ+candidates"),
                 };
             }
 
@@ -271,7 +296,11 @@ public static partial class V4Bricks
 
         // The model's own words are used for one thing only: to reach a concept of the dictionary the reader named in
         // words the dictionary lacks. Then the tables answer, as for any question, under the boundary above.
-        if (own.Reason == "nothing_of_the_dictionary" && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { Branch: false } concept)
+        // Only for a question that itself holds something of the domain (a word of it, a role, an act of its index): a
+        // concept the model names for a question that holds nothing of insurance is not used (the practice set of
+        // 2026-11-19: "Mon patron veut me virer ..., combien de temps de préavis ?" was answered from the insurance
+        // contract law, because the model named "résiliation"). Such a question goes on to Lex's own operations.
+        if (own.Reason == "nothing_of_the_dictionary" && OfTheDomain(row) && parts is [{ Concept.Length: > 0 } described] && dictionary.Concept(described.Concept) is { Branch: false } concept)
         {
             var span = described.Words ?? described.Span;
             var keyword = dictionary.KeywordsOf(concept.Id, "law", "reader").FirstOrDefault();
@@ -297,6 +326,39 @@ public static partial class V4Bricks
         }
 
         return new V4PlanOutcome(V4QuestionCall.PlanJson(planner, parts, "described", asked, readingDates, searchOnly, row.Acts, actAlone), cost + outline, "route:operations(" + own.Reason + ")" + outlined);
+    }
+
+    /// <summary>
+    /// Whether a question itself holds something of the insurance domain: a word of it, a role, an act of its index, or
+    /// the word "police" (the index lists only "police d'assurance"; "l'acheteur de la police", "police n° ...").
+    /// </summary>
+    internal static bool OfTheDomain(V4QuestionRow row)
+    {
+        if (row.Roles.Count > 0 || V4CorpusIndex.Insurance.InDomain(row.Words))
+        {
+            return true;
+        }
+
+        foreach (var word in row.Words)
+        {
+            // "coassurance", "coassureurs", "réassureur", "assurance-vie", "insurer": a word built on the domain's own root is of
+            // the domain though the index lists only its plain forms (the release gate's case on co-insurance, 2026-11-19).
+            var text = row.Folded.AsSpan(word.Start, word.End - word.Start);
+            if (text is "police" or "polices" || text.Contains("assur", StringComparison.Ordinal) || text.Contains("insur", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        foreach (var act in row.Acts)
+        {
+            if (act.Work is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -348,7 +410,7 @@ public static partial class V4Bricks
 
         // One word alone ("garantie", "test") is not a question: Lex asks for a full one and reads nothing (the owner's
         // brief of 2026-11-19: a single word got an article quoted as if it answered something).
-        if (row.Words.Count == 1 && row.Acts.Count == 0)
+        if ((row.Words.Count == 1 && row.Acts.Count == 0) || V4QuestionParser.AsksNothingNamed(row))
         {
             var oneWord = new Draft { Route = "clarify", AnswerKind = "greeting" };
             return new V4PlanOutcome(Write(input, row, oneWord, null, null, null, "today", ruleQuestion: false, proposed: "clarify", asked: string.Empty), 0, "route:clarify", Firm: true);
@@ -402,6 +464,16 @@ public static partial class V4Bricks
         }
 
         var asksDefinition = row.Kinds.Any(static kind => kind.Kind == "definition") || (row.Kinds.Count == 0 && row.Concepts.Count == 0 && row.Words.Count <= 5);
+
+        // A word of the dictionary among words the tables do not know, in a question that holds nothing of the domain (no
+        // word of it, no role, no act of its index), is half a reading: "à l'avance" in a question on a lease, "rembourser"
+        // in one on a broken window, "sur internet" in one on shoes (the practice set of 2026-11-19 got articles of the
+        // insurance contract law for each). The tables do not answer it, and no second reading of this domain's acts is
+        // made: Lex's own operations go on. A definition asked ("c'est quoi la règle proportionnelle ?") names its term.
+        if (row.Concepts.Count > 0 && !asksDefinition && row.Unmatched.Count >= 2 && !OfTheDomain(row))
+        {
+            return new V4PlanOutcome(null, 0, "not_of_the_domain");
+        }
         if (row.Concepts.Count == 0 && row.Acts.Count == 0 && !asksDefinition)
         {
             // A role alone ("l'assuré ...") names half the lines of the act: without a concept there is nothing to filter on.
@@ -982,7 +1054,14 @@ public static partial class V4Bricks
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            // A model that fails or times out leaves the answer code found; the loop never crashes on it.
+            // A model that fails or times out leaves the answer code found; the loop never crashes on it. How it failed is
+            // kept in one token, for the record of a reading that ends on nothing.
+            draft.Failure = exception is OperationCanceledException or TimeoutException ? "timed_out"
+                : exception.Message.Contains("HTTP 429", StringComparison.Ordinal) ? "http_429"
+                : exception.Message.Contains("HTTP", StringComparison.Ordinal) ? "http_error"
+                : exception.Message.Contains("cut short", StringComparison.Ordinal) ? "cut_short"
+                : exception.Message.Contains("refused", StringComparison.Ordinal) ? "refused"
+                : "failed";
             return null;
         }
     }

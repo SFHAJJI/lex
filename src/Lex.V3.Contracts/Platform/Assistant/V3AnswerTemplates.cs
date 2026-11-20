@@ -419,6 +419,8 @@ public static partial class V3AnswerTemplates
     public const string AbsenceTermCount = "absence.term_count";
     public const string AbsenceTermsNowhere = "absence.terms_nowhere";
     public const string AbsenceWordsNotFound = "absence.words_not_found";
+    public const string AbsenceTermsNowhereInAct = "absence.terms_nowhere_in_act";
+    public const string AbsenceWordsNotFoundInAct = "absence.words_not_found_in_act";
     public const string AbsenceNoAnswerInLines = "absence.no_answer_in_lines";
     public const string AbsenceActNotHeld = "absence.act_not_held";
     public const string AbsenceTextNotHeld = "absence.text_not_held";
@@ -432,6 +434,12 @@ public static partial class V3AnswerTemplates
     private const string BricksAgentDraft = "an agent (Claude), 2026-11-18";
 
     private static readonly V3TemplateProvenance BricksDraft = new(null, BricksAgentDraft, null, null, false);
+
+    // The sentence of an absence as a reader sees it (2026-11-19): one sentence, the act by its name or "this text", never
+    // its address on this site, and no line of counts.
+    private const string AbsenceAgentDraft = "an agent (Claude), 2026-11-19";
+
+    private static readonly V3TemplateProvenance AbsenceDraft = new(null, AbsenceAgentDraft, null, null, false);
 
     private static V3TemplateProvenance Master(string ruling) => new(ruling, null, null, null, false);
 
@@ -586,10 +594,14 @@ public static partial class V3AnswerTemplates
         (NoteLawTerm, "You wrote “{words}”; the text's word is “{term}”.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan), ("term", V3AnswerSlotKind.DictionaryTerm)]),
         (NoteLatestHeld, "Latest version held: {date}. Lex holds no more recent version of this text.", BricksDraft, [("date", V3AnswerSlotKind.CalendarDate)]),
         (NoteWordNotInAct, "The word “{words}” of your question appears nowhere in this text.", BricksDraft, [("words", V3AnswerSlotKind.QuestionSpan)]),
+        // The two below are no longer composed (2026-11-19: they showed a reader the act's address and lines of zero counts);
+        // the sweep they wrote is still in the plan record of every absence.
         (AbsenceSweepHeading, "Lex swept the text of {work} (lines: {lines}; articles: {articles}), as it stood on {date}, for these terms:", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress), ("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count), ("date", V3AnswerSlotKind.CalendarDate)]),
         (AbsenceTermCount, "Lines that hold “{term}”: {lines}; articles concerned: {articles}.", BricksDraft, [("term", V3AnswerSlotKind.DictionaryTerm), ("lines", V3AnswerSlotKind.Count), ("articles", V3AnswerSlotKind.Count)]),
-        (AbsenceTermsNowhere, "None of these terms appears in this text. This says what this text contains, not what a contract provides.", BricksDraft, []),
-        (AbsenceWordsNotFound, "Lex did not find these words in this text, and its vocabulary on this subject is not complete: this does not show that the text is silent.", BricksDraft, []),
+        (AbsenceTermsNowhere, "None of the terms Lex knows for this subject appears in this text, as it stood on {date}: this says what this text contains, not what a contract provides.", AbsenceDraft, [("date", V3AnswerSlotKind.CalendarDate)]),
+        (AbsenceTermsNowhereInAct, "None of the terms Lex knows for this subject appears in the text “{name}”, as it stood on {date}: this says what this text contains, not what a contract provides.", AbsenceDraft, [("name", V3AnswerSlotKind.DictionaryTerm), ("date", V3AnswerSlotKind.CalendarDate)]),
+        (AbsenceWordsNotFound, "Lex found no passage on this subject in this text, as it stood on {date}: this does not show that the text is silent, because Lex looks only for the words it knows for this subject.", AbsenceDraft, [("date", V3AnswerSlotKind.CalendarDate)]),
+        (AbsenceWordsNotFoundInAct, "Lex found no passage on this subject in the text “{name}”, as it stood on {date}: this does not show that the text is silent, because Lex looks only for the words it knows for this subject.", AbsenceDraft, [("name", V3AnswerSlotKind.DictionaryTerm), ("date", V3AnswerSlotKind.CalendarDate)]),
         (AbsenceNoAnswerInLines, "Lex found lines on this subject, but none gives an answer of the kind asked. The closest:", BricksDraft, []),
         (AbsenceActNotHeld, "Your question names an act: {name}. Lex does not hold the text of this act yet.", BricksDraft, [("name", V3AnswerSlotKind.DictionaryTerm)]),
         (AbsenceTextNotHeld, "Lex holds the record of {work} but no text of it that it can show for this date.", BricksDraft, [("work", V3AnswerSlotKind.WorkAddress)]),

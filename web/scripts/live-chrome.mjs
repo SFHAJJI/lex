@@ -1604,7 +1604,7 @@ const EN = Object.freeze({
       ai: Object.freeze({ title: "The AI in it", text: "{model} on Microsoft’s Azure OpenAI service, EU data zone. It describes a question or marks lines of law that code found; it never writes a sentence the reader sees. Some answers use no model at all." }),
       oversight: Object.freeze({ title: "Human oversight", text: "A person approves every release. Every change passes the tests and a second AI model’s review." }),
       quality: Object.freeze({ title: "Quality", text: "{right} right articles and {wrong} wrong on {cases} test questions; {heldoutRight} of {heldoutCases} unseen questions answered." }),
-      cost: Object.freeze({ title: "Cost", text: "About {cost} € a question; the model is capped at 20 € a month in the code." }),
+      cost: Object.freeze({ title: "Cost", text: "About {cost} € a question; the model is capped at 5000 € a month in the code." }),
     }),
     architectureHeading: "Architecture",
     questionLane: "One question",
@@ -1657,7 +1657,7 @@ const EN = Object.freeze({
     supAvailabilityLink: "The monitor",
     supNightly: "Answer quality, every night: the {cases} test questions asked of the live site. A wrong article or a regression opens an issue.",
     supNightlyLink: "The nightly check",
-    supLimits: "Cost and abuse: the model capped at 20 € a month in the code; at most {perMinute} requests a minute and {inFlight} at once from one address; a banner when the index is stale.",
+    supLimits: "Cost and abuse: the model capped at 5000 € a month in the code; at most {perMinute} requests a minute and {inFlight} at once from one address; a banner when the index is stale.",
     improvementHeading: "Continuous improvement",
     improvement: Object.freeze({
       first: "11/11 to 13/11: right verdicts on the first test set from {firstPercent} % to {fifthPercent} %, over three prompt and search versions (registry versions 1 to 5).",

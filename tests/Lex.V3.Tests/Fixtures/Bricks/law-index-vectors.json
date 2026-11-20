@@ -1,0 +1,1193 @@
+{
+ "schema": "lex-v4-law-index-vectors/1",
+ "index_version": "2026-11-19.1",
+ "mount": "d4-20261113-bfb83983",
+ "stem_rule": "strip_sx_prefix7",
+ "name_bonus": 150.0,
+ "min_score": 20.0,
+ "keep_ratio": 0.5,
+ "max_acts": 3,
+ "note": "kept = the router's answer (score >= min_score, score >= keep_ratio * best, at most max_acts; ties by work ascending, ordinal). top5 = the five best scores before the keep rule, for debugging a port. Scores have 2 decimals.",
+ "vectors": [
+  {
+   "id": "K001",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "Combien de temps j'ai pour déclarer un sinistre ?",
+   "normalised": "combien de temps j ai pour declarer un sinistre",
+   "tokens": [
+    "temp",
+    "declare",
+    "sinistr"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 35.36
+    },
+    {
+     "work": "/lu-legilux/loi-1950-02-25-n1",
+     "score": 27.11
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 26.43
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 35.36
+    },
+    {
+     "work": "/lu-legilux/loi-1950-02-25-n1",
+     "score": 27.11
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 26.43
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 19.17
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 15.17
+    }
+   ]
+  },
+  {
+   "id": "K004",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "Comment résilier mon assurance auto ?",
+   "normalised": "comment resilier mon assurance auto",
+   "tokens": [
+    "resilie",
+    "assuran",
+    "auto"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 54.63
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 53.16
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 30.35
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 54.63
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 53.16
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 30.35
+    },
+    {
+     "work": "/lu-legilux/loi-2024-03-29-a136",
+     "score": 26.58
+    },
+    {
+     "work": "/lu-legilux/loi-2024-12-20-a585",
+     "score": 24.23
+    }
+   ]
+  },
+  {
+   "id": "K007",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "Que se passe-t-il si je ne paie pas ma prime ?",
+   "normalised": "que se passe t il si je ne paie pas ma prime",
+   "tokens": [
+    "paie",
+    "prime"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 29.88
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 28.58
+    },
+    {
+     "work": "/lu-legilux/rgd-2001-12-28-n1",
+     "score": 22.31
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 29.88
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 28.58
+    },
+    {
+     "work": "/lu-legilux/rgd-2001-12-28-n1",
+     "score": 22.31
+    },
+    {
+     "work": "/lu-legilux/rgd-2021-04-16-a315",
+     "score": 22.24
+    },
+    {
+     "work": "/lu-legilux/rgd-2008-12-19-n9",
+     "score": 20.38
+    }
+   ]
+  },
+  {
+   "id": "K024",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "Le suicide est-il couvert par une assurance-vie ?",
+   "normalised": "le suicide est il couvert par une assurance vie",
+   "tokens": [
+    "suicide",
+    "couvert",
+    "assuran",
+    "vie"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 63.32
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 49.6
+    },
+    {
+     "work": "/lu-legilux/loi-2009-03-16-n2",
+     "score": 40.44
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 63.32
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 49.6
+    },
+    {
+     "work": "/lu-legilux/loi-2009-03-16-n2",
+     "score": 40.44
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 26.14
+    },
+    {
+     "work": "/lu-legilux/loi-2018-05-30-a446",
+     "score": 26.13
+    }
+   ]
+  },
+  {
+   "id": "K035",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "Dans quelle langue le contrat d'assurance doit-il être rédigé ?",
+   "normalised": "dans quelle langue le contrat d assurance doit il etre redige",
+   "tokens": [
+    "langue",
+    "contrat",
+    "assuran",
+    "redige"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 214.01
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 214.01
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 39.52
+    },
+    {
+     "work": "/lu-legilux/loi-2018-05-30-a446",
+     "score": 28.44
+    },
+    {
+     "work": "/lu-legilux/loi-2022-03-30-a149",
+     "score": 28.14
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 26.14
+    }
+   ]
+  },
+  {
+   "id": "K044",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-2003-04-16-n2",
+   "question": "Un passager est-il indemnisé si le conducteur est responsable ?",
+   "normalised": "un passager est il indemnise si le conducteur est responsable",
+   "tokens": [
+    "passage",
+    "indemni",
+    "conduct",
+    "respons"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 40.48
+    },
+    {
+     "work": "/lu-legilux/loi-2021-02-05-a121",
+     "score": 26.45
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 25.99
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 40.48
+    },
+    {
+     "work": "/lu-legilux/loi-2021-02-05-a121",
+     "score": 26.45
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 25.99
+    },
+    {
+     "work": "/lu-legilux/loi-2009-06-05-n10",
+     "score": 21.77
+    },
+    {
+     "work": "/lu-legilux/loi-2018-08-01-a690",
+     "score": 20.12
+    }
+   ]
+  },
+  {
+   "id": "K049",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "L. 27.07.1997 art 10",
+   "normalised": "l 27 07 1997 art 10",
+   "tokens": [],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 150.0
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 150.0
+    }
+   ]
+  },
+  {
+   "id": "K093",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-2015-12-07-n1",
+   "question": "L'assureur a-t-il une obligation de conseil ?",
+   "normalised": "l assureur a t il une obligation de conseil",
+   "tokens": [
+    "assureu",
+    "obligat",
+    "conseil"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 77.97
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 77.97
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 34.92
+    },
+    {
+     "work": "/lu-legilux/loi-2018-05-30-a446",
+     "score": 24.37
+    },
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 23.42
+    },
+    {
+     "work": "/lu-legilux/loi-2021-12-08-a845",
+     "score": 21.08
+    }
+   ]
+  },
+  {
+   "id": "K125",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "code-travail",
+   "question": "Quel est le salaire social minimum ?",
+   "normalised": "quel est le salaire social minimum",
+   "tokens": [
+    "salaire",
+    "social",
+    "minimum"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 67.13
+    },
+    {
+     "work": "/lu-legilux/loi-2003-09-12-n1",
+     "score": 43.57
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 67.13
+    },
+    {
+     "work": "/lu-legilux/loi-2003-09-12-n1",
+     "score": 43.57
+    },
+    {
+     "work": "/lu-legilux/loi-2020-12-19-a1037",
+     "score": 31.73
+    },
+    {
+     "work": "/lu-legilux/loi-2018-07-28-a630",
+     "score": 28.79
+    },
+    {
+     "work": "/lu-legilux/rgd-1995-09-28-n1",
+     "score": 26.97
+    }
+   ]
+  },
+  {
+   "id": "K135",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-2006-09-21-n1",
+   "question": "Le propriétaire peut-il augmenter le loyer quand il veut ?",
+   "normalised": "le proprietaire peut il augmenter le loyer quand il veut",
+   "tokens": [
+    "proprie",
+    "augment",
+    "loyer"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 56.11
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 40.29
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 30.95
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 56.11
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 40.29
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 30.95
+    },
+    {
+     "work": "/lu-legilux/rgd-2008-02-19-n1",
+     "score": 25.58
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a554",
+     "score": 20.58
+    }
+   ]
+  },
+  {
+   "id": "K173",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "Résume la loi sur le contrat d'assurance",
+   "normalised": "resume la loi sur le contrat d assurance",
+   "tokens": [
+    "contrat",
+    "assuran"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 214.01
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 214.01
+    },
+    {
+     "work": "/lu-legilux/loi-2015-12-07-n1",
+     "score": 39.52
+    },
+    {
+     "work": "/lu-legilux/loi-2018-05-30-a446",
+     "score": 28.44
+    },
+    {
+     "work": "/lu-legilux/loi-2022-03-30-a149",
+     "score": 28.14
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 26.14
+    }
+   ]
+  },
+  {
+   "id": "K209",
+   "source": "tune rows",
+   "expect": "acts",
+   "expected_work": "loi-1997-07-27-n10",
+   "question": "How long do I have to sue my insurer in Luxembourg?",
+   "normalised": "how long do i have to sue my insurer in luxembourg",
+   "tokens": [
+    "long",
+    "sue",
+    "insurer"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 62.37
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 62.37
+    },
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 20.0
+    },
+    {
+     "work": "/lu-legilux/loi-2003-04-16-n2",
+     "score": 15.78
+    },
+    {
+     "work": "/lu-legilux/loi-2019-07-16-a514",
+     "score": 15.39
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 11.98
+    }
+   ]
+  },
+  {
+   "id": "D001",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-travail",
+   "question": "Mon patron veut me virer après 3 ans dans la boîte, il doit me laisser combien de temps de préavis ?",
+   "normalised": "mon patron veut me virer apres 3 ans dans la boite il doit me laisser combien de temps de preavis",
+   "tokens": [
+    "patron",
+    "virer",
+    "boite",
+    "laisser",
+    "temp",
+    "preavi"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 112.57
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 112.57
+    },
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 42.01
+    },
+    {
+     "work": "/lu-legilux/rgd-2012-02-03-n2",
+     "score": 22.75
+    },
+    {
+     "work": "/lu-legilux/loi-1990-11-09-n1",
+     "score": 17.7
+    },
+    {
+     "work": "/lu-legilux/loi-2015-03-25-n8",
+     "score": 17.58
+    }
+   ]
+  },
+  {
+   "id": "D005",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-travail",
+   "question": "Mes heures sup, on me les paie ou je les récupère, et à quel taux ?",
+   "normalised": "mes heures sup on me les paie ou je les recupere et a quel taux",
+   "tokens": [
+    "heure",
+    "sup",
+    "paie",
+    "recuper",
+    "taux"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 62.72
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 62.72
+    },
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 29.33
+    },
+    {
+     "work": "/lu-legilux/rgd-2008-12-19-n9",
+     "score": 20.38
+    },
+    {
+     "work": "/lu-legilux/rgd-2004-05-06-n4",
+     "score": 18.59
+    },
+    {
+     "work": "/lu-legilux/rgd-1991-05-03-n1",
+     "score": 15.9
+    }
+   ]
+  },
+  {
+   "id": "D009",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-travail",
+   "question": "My employer fired me without giving any reason. Can I make him tell me why, and how long do I have to ask?",
+   "normalised": "my employer fired me without giving any reason can i make him tell me why and how long do i have to ask",
+   "tokens": [
+    "employe",
+    "fired",
+    "reason",
+    "long"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 70.64
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 70.64
+    },
+    {
+     "work": "/lu-legilux/loi-2015-03-25-n8",
+     "score": 21.97
+    },
+    {
+     "work": "/lu-legilux/rgd-2017-07-28-a680",
+     "score": 21.17
+    },
+    {
+     "work": "/lu-legilux/rgd-2001-11-15-n2",
+     "score": 18.26
+    },
+    {
+     "work": "/lu-legilux/rgd-2001-11-15-n1",
+     "score": 17.24
+    }
+   ]
+  },
+  {
+   "id": "D013",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "loi-2006-09-21-n1",
+   "question": "Le propriétaire me demande trois mois de caution pour l'appartement, il a le droit ?",
+   "normalised": "le proprietaire me demande trois mois de caution pour l appartement il a le droit",
+   "tokens": [
+    "proprie",
+    "demande",
+    "mois",
+    "caution",
+    "apparte"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 72.74
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 68.31
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 53.95
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 72.74
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 68.31
+    },
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 53.95
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a554",
+     "score": 39.95
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 29.14
+    }
+   ]
+  },
+  {
+   "id": "D016",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "loi-2006-09-21-n1",
+   "question": "Tous les combien le propriétaire peut-il augmenter le loyer, et de combien au plus ?",
+   "normalised": "tous les combien le proprietaire peut il augmenter le loyer et de combien au plus",
+   "tokens": [
+    "proprie",
+    "augment",
+    "loyer"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 56.11
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 40.29
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 30.95
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-2006-09-21-n1",
+     "score": 56.11
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a611",
+     "score": 40.29
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 30.95
+    },
+    {
+     "work": "/lu-legilux/rgd-2008-02-19-n1",
+     "score": 25.58
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a554",
+     "score": 20.58
+    }
+   ]
+  },
+  {
+   "id": "D021",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-civil",
+   "question": "Mon mari refuse de divorcer, est-ce que je peux quand même demander le divorce toute seule ?",
+   "normalised": "mon mari refuse de divorcer est ce que je peux quand meme demander le divorce toute seule",
+   "tokens": [
+    "mari",
+    "refuse",
+    "divorce",
+    "demande",
+    "seule"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 57.42
+    },
+    {
+     "work": "/lu-legilux/code-procedure_civile",
+     "score": 44.7
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 57.42
+    },
+    {
+     "work": "/lu-legilux/code-procedure_civile",
+     "score": 44.7
+    },
+    {
+     "work": "/lu-legilux/loi-2017-03-08-a289",
+     "score": 26.83
+    },
+    {
+     "work": "/lu-legilux/loi-1998-08-03-n10",
+     "score": 23.24
+    },
+    {
+     "work": "/lu-legilux/loi-2018-06-27-a589",
+     "score": 21.62
+    }
+   ]
+  },
+  {
+   "id": "D030",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-consommation",
+   "question": "J'ai commandé des chaussures sur internet et elles ne me plaisent pas, j'ai combien de jours pour les renvoyer ?",
+   "normalised": "j ai commande des chaussures sur internet et elles ne me plaisent pas j ai combien de jours pour les renvoyer",
+   "tokens": [
+    "command",
+    "chaussu",
+    "interne",
+    "plaisen",
+    "jour",
+    "renvoye"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 62.78
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 42.92
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 62.78
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 42.92
+    },
+    {
+     "work": "/lu-legilux/loi-2009-11-10-n1",
+     "score": 28.79
+    },
+    {
+     "work": "/lu-legilux/loi-2011-09-02-n1",
+     "score": 25.57
+    },
+    {
+     "work": "/lu-legilux/loi-2000-08-14-n8",
+     "score": 25.47
+    }
+   ]
+  },
+  {
+   "id": "D035",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-consommation",
+   "question": "D'après le Code de la consommation, une clause abusive dans un contrat est-elle valable ?",
+   "normalised": "d apres le code de la consommation une clause abusive dans un contrat est elle valable",
+   "tokens": [
+    "consomm",
+    "clause",
+    "abusive",
+    "contrat",
+    "valable"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 264.47
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-consommation",
+     "score": 264.47
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 61.65
+    },
+    {
+     "work": "/lu-legilux/code-civil",
+     "score": 43.64
+    },
+    {
+     "work": "/lu-legilux/loi-1997-07-27-n10",
+     "score": 41.13
+    },
+    {
+     "work": "/lu-legilux/loi-1975-05-16-n1",
+     "score": 33.23
+    }
+   ]
+  },
+  {
+   "id": "D038",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "code-penal",
+   "question": "Un type m'a donné un coup de poing dans un bar, qu'est-ce qu'il risque ?",
+   "normalised": "un type m a donne un coup de poing dans un bar qu est ce qu il risque",
+   "tokens": [
+    "coup",
+    "poing",
+    "bar",
+    "risque"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 56.65
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 56.65
+    },
+    {
+     "work": "/lu-legilux/rgd-2010-02-27-n2",
+     "score": 18.72
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 18.16
+    },
+    {
+     "work": "/lu-legilux/loi-2022-02-02-a49",
+     "score": 16.88
+    },
+    {
+     "work": "/lu-legilux/loi-2016-06-27-n6",
+     "score": 16.24
+    }
+   ]
+  },
+  {
+   "id": "D042",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "loi-1915-08-10-n1",
+   "question": "Can I set up a small company in Luxembourg with just one euro of capital?",
+   "normalised": "can i set up a small company in luxembourg with just one euro of capital",
+   "tokens": [
+    "small",
+    "company",
+    "euro",
+    "capital"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 67.6
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 38.6
+    },
+    {
+     "work": "/lu-legilux/loi-2005-07-13-n3",
+     "score": 35.7
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 67.6
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 38.6
+    },
+    {
+     "work": "/lu-legilux/loi-2005-07-13-n3",
+     "score": 35.7
+    },
+    {
+     "work": "/lu-legilux/loi-2004-06-15-n1",
+     "score": 29.1
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 24.96
+    }
+   ]
+  },
+  {
+   "id": "D044",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "loi-1915-08-10-n1",
+   "question": "Selon la loi de 1915 sur les sociétés commerciales, combien d'associés une SARL peut-elle avoir au maximum ?",
+   "normalised": "selon la loi de 1915 sur les societes commerciales combien d associes une sarl peut elle avoir au maximum",
+   "tokens": [
+    "societe",
+    "commerc",
+    "associe",
+    "sarl",
+    "maximum"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 285.26
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-1915-08-10-n1",
+     "score": 285.26
+    },
+    {
+     "work": "/lu-legilux/loi-2013-07-12-n1",
+     "score": 47.87
+    },
+    {
+     "work": "/lu-legilux/loi-2002-12-19-n1",
+     "score": 45.68
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 44.78
+    },
+    {
+     "work": "/lu-legilux/loi-2016-07-23-n8",
+     "score": 32.37
+    }
+   ]
+  },
+  {
+   "id": "D045",
+   "source": "practice set",
+   "expect": "acts",
+   "expected_work": "loi-2017-03-08-a289",
+   "question": "J'habite au Luxembourg depuis six ans, qu'est-ce qu'il faut pour devenir luxembourgeois ?",
+   "normalised": "j habite au luxembourg depuis six ans qu est ce qu il faut pour devenir luxembourgeois",
+   "tokens": [
+    "habite",
+    "six",
+    "devenir"
+   ],
+   "kept": [
+    {
+     "work": "/lu-legilux/loi-2017-03-08-a289",
+     "score": 150.0
+    }
+   ],
+   "top5": [
+    {
+     "work": "/lu-legilux/loi-2017-03-08-a289",
+     "score": 150.0
+    },
+    {
+     "work": "/lu-legilux/code-penal",
+     "score": 27.36
+    },
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 14.41
+    },
+    {
+     "work": "/lu-legilux/rgd-2006-12-22-n9",
+     "score": 12.28
+    },
+    {
+     "work": "/lu-legilux/loi-2023-08-07-a554",
+     "score": 9.69
+    }
+   ]
+  },
+  {
+   "id": "K245",
+   "source": "tune rows",
+   "expect": "nothing",
+   "expected_work": "",
+   "question": "2+2 ?",
+   "normalised": "2 2",
+   "tokens": [],
+   "kept": [],
+   "top5": []
+  },
+  {
+   "id": "K189",
+   "source": "tune rows",
+   "expect": "nothing",
+   "expected_work": "",
+   "question": "Pourquoi ?",
+   "normalised": "pourquoi",
+   "tokens": [],
+   "kept": [],
+   "top5": []
+  },
+  {
+   "id": "K229",
+   "source": "tune rows",
+   "expect": "nothing",
+   "expected_work": "",
+   "question": "bonjour",
+   "normalised": "bonjour",
+   "tokens": [],
+   "kept": [],
+   "top5": []
+  },
+  {
+   "id": "K240",
+   "source": "tune rows",
+   "expect": "nothing",
+   "expected_work": "",
+   "question": "Quel temps fait-il à Luxembourg ?",
+   "normalised": "quel temps fait il a luxembourg",
+   "tokens": [
+    "temp"
+   ],
+   "kept": [],
+   "top5": [
+    {
+     "work": "/lu-legilux/code-travail",
+     "score": 19.17
+    },
+    {
+     "work": "/lu-legilux/rgd-2012-02-03-n2",
+     "score": 14.16
+    },
+    {
+     "work": "/lu-legilux/rgd-1987-10-21-n1",
+     "score": 14.07
+    },
+    {
+     "work": "/lu-legilux/loi-2018-08-01-a681",
+     "score": 12.14
+    },
+    {
+     "work": "/lu-legilux/loi-2026-04-13-a196",
+     "score": 11.58
+    }
+   ]
+  },
+  {
+   "id": "K192",
+   "source": "tune rows",
+   "expect": "nothing",
+   "expected_work": "",
+   "question": "Montre-moi le texte officiel",
+   "normalised": "montre moi le texte officiel",
+   "tokens": [
+    "officie"
+   ],
+   "kept": [],
+   "top5": [
+    {
+     "work": "/lu-legilux/rgd-2023-11-06-a720",
+     "score": 8.17
+    },
+    {
+     "work": "/lu-legilux/loi-2022-04-26-a204",
+     "score": 7.92
+    },
+    {
+     "work": "/lu-legilux/loi-2026-04-02-a178",
+     "score": 7.58
+    },
+    {
+     "work": "/lu-legilux/loi-2026-04-02-a176",
+     "score": 7.15
+    },
+    {
+     "work": "/lu-legilux/rgd-2019-10-26-a734",
+     "score": 6.07
+    }
+   ]
+  },
+  {
+   "id": "K231",
+   "source": "tune rows",
+   "expect": "nothing",
+   "expected_work": "",
+   "question": "Qui es-tu ?",
+   "normalised": "qui es tu",
+   "tokens": [],
+   "kept": [],
+   "top5": []
+  }
+ ]
+}

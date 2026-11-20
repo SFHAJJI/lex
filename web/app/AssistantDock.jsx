@@ -25,8 +25,10 @@ import {
   bricksWork,
   linesBeside,
   workTitleToRead,
+  builtBy,
   builtNote,
   builtFoot,
+  builtRows,
   modelWasAsked,
   clarifyCandidates,
   dockExamples,
@@ -36,7 +38,6 @@ import {
   panelCopy,
   quoteNotes,
   searchedWords,
-  stageRows,
   stripSentence,
 } from '../scripts/assistant-panel.mjs';
 import { articleStrip, bundleFacts, firstSentenceOf, numericDate, plannerName, referenceOpening, registryVersionFor } from '../scripts/answer-view.mjs';
@@ -212,6 +213,15 @@ function Cite({ number, facts, copy }) {
   return fill(copy.dockCiteNoTitle, { number });
 }
 
+/** "This act", in the language the answer is written in (the sentence it stands in is the server's), else the interface's. */
+function thisAct(dossier, copy) {
+  try {
+    return panelCopy(dossier?.answer_locale).dockThisAct;
+  } catch {
+    return copy.dockThisAct;
+  }
+}
+
 /**
  * A bricks answer's body (V4): the server's sentences and the law's lines, in the answer's own order. The first line quoted
  * is marked and named with its text's title; each other line is named by its article and heading, with a way to the whole
@@ -224,11 +234,16 @@ function BricksBody({ turn, copy, locale, onText, beside = false }) {
   const opening = answerOpening(turn, locale);
   return body.map((entry, at) => {
     if (entry.type === 'line') {
-      // A sentence that names the act by its address says its title once the title is read (an absence's sweep).
-      const around = turn.workTitle?.title ? aroundAddress(entry.text, bricksWork(turn.dossier)) : null;
+      // A sentence that names the act by its address (a text Lex cannot show) says its title once the title is read; until
+      // then, and when the title cannot be read, "this act" in the answer's language: never the address. A sentence that
+      // names the act by its title (an absence, since 2026-11-19) holds no address and is shown as the server wrote it.
+      const around = aroundAddress(entry.text, bricksWork(turn.dossier));
+      const named = turn.workTitle?.title
+        ? <>{QUOTE_OPEN}<span lang={tagOf(turn.workTitle.language)}>{turn.workTitle.title}</span>{QUOTE_CLOSE}</>
+        : thisAct(turn.dossier, copy);
       return (
         <p className="lx-dock-line" key={at}>
-          {around === null ? entry.text : <>{around[0]}{QUOTE_OPEN}<span lang={tagOf(turn.workTitle.language)}>{turn.workTitle.title}</span>{QUOTE_CLOSE}{around[1]}</>}
+          {around === null ? entry.text : <>{around[0]}{named}{around[1]}</>}
         </p>
       );
     }
@@ -321,7 +336,7 @@ function Built({ turn, copy, locale, initialPlan = false }) {
   const dossier = turn.dossier;
   if (dossier === null || dossier === undefined) return null;
   const trace = dossier.trace ?? {};
-  const rows = stageRows(dossier, locale);
+  const rows = builtRows(dossier, locale);
   const registry = registryVersionFor(REGISTRY_RECORD, trace.planner_id, turn.servingCommit ?? null);
   const headingId = `lx-dock-${turn.id}-built`;
   const planId = `lx-dock-${turn.id}-plan`;
@@ -329,7 +344,10 @@ function Built({ turn, copy, locale, initialPlan = false }) {
     <section className="lx-dock-card lx-dock-built" aria-labelledby={headingId} data-dock-built="">
       <div className="lx-dock-built-head">
         <h3 className="lx-dock-built-title" id={headingId}>{copy.dockBuilt}</h3>
-        <span className="lx-dock-built-foot" data-dock-cost="">{builtFoot(turn.seconds ?? null, AVERAGE_COST, locale, modelWasAsked(dossier, rows))}</span>
+        <span className="lx-dock-built-facts">
+          <span className="lx-dock-built-by" data-dock-by={rows.some((row) => row.model) || modelWasAsked(dossier, rows) ? 'model' : 'code'}>{builtBy(dossier, rows, locale)}</span>
+          <span className="lx-dock-built-foot" data-dock-cost="">{builtFoot(turn.seconds ?? null, AVERAGE_COST, locale, modelWasAsked(dossier, rows))}</span>
+        </span>
       </div>
       <ol className="lx-dock-rows">
         {rows.map((row) => (
@@ -534,6 +552,7 @@ function Intro({ copy, locale, onAsk }) {
       <div className="lx-dock-about">
         <p><strong>{copy.dockDoes}</strong> {copy.dockDoesText}</p>
         <p><strong>{copy.dockDoesNot}</strong> {copy.dockDoesNotText}</p>
+        <p className="lx-dock-scope" data-dock-scope="">{copy.dockScopeText}</p>
         <p><a className="lx-dock-link" href={`/${locale}/evidence.html`}>{copy.dockHowLink}</a></p>
       </div>
     </>

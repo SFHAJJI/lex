@@ -14,6 +14,79 @@ public static partial class V4Bricks
     /// <summary>The most lines of the articles the outline names that the extraction is given.</summary>
     public const int MaximumOutlineLines = 120;
 
+    /// <summary>
+    /// The switch of the rule "an answer of the second reading alone is asserted only when code confirms the pick"
+    /// (2026-11-19). True: where the tables read nothing and no content word of the question stands in a quoted line or in
+    /// the heading of its article, the lines are shown as candidates. False: such an answer is asserted on the model's
+    /// word alone, as before. One line to switch off if a measure shows the rule costs too many right answers.
+    /// </summary>
+    // Off since the measure of 2026-11-19 21:07 UTC on the owner's 80: on, it moved 14 right answers to candidates (47 right to 34)
+    // and removed no wrong one. The check stays computed and recorded; it does not decide.
+    private const bool OutlinePickNeedsCodeConfirmation = false;
+
+    /// <summary>
+    /// Whether code confirms what the second reading quotes: a content word of the question (five letters or more, no stop
+    /// word; not a word of a role or of an act's name, which stand in most articles and say nothing of the subject) is
+    /// written, by its stem, in a line the model pointed at or in the heading of that line's article. The same fold and
+    /// stem as the rare words above. Plain loops and no closure: the census pins the classes the compiler makes here.
+    /// </summary>
+    private static bool ConfirmedByCode(V4QuestionRow row, V4ActTables scope, List<Item> items)
+    {
+        var stems = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var word in row.Words)
+        {
+            if (!V4QuestionParser.IsContentWord(word.Text))
+            {
+                continue;
+            }
+
+            var named = false;
+            foreach (var role in row.Roles)
+            {
+                named |= word.Start >= role.Start && word.End <= role.End;
+            }
+
+            foreach (var act in row.Acts)
+            {
+                named |= word.Start >= act.Start && word.End <= act.End;
+            }
+
+            if (!named)
+            {
+                stems.Add(V4Text.Stem(word.Text));
+            }
+        }
+
+        foreach (var item in items)
+        {
+            if (item.ByCode)
+            {
+                continue;
+            }
+
+            if (HoldsAStem(item.First.Words, stems) || HoldsAStem(item.Last.Words, stems) ||
+                (scope.Article(item.First.Article) is { } article && HoldsAStem(article.HeadingWords, stems)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HoldsAStem(IReadOnlyList<V4Word> written, HashSet<string> stems)
+    {
+        foreach (var word in written)
+        {
+            if (word.Text.Length >= 4 && stems.Contains(V4Text.Stem(word.Text)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static V4PlanOutcome ByTheOutline(
         V4PlanInput input,
         V4QuestionRow row,
@@ -197,6 +270,7 @@ public static partial class V4Bricks
         draft.LatestHeld = latest.TryGetValue(scope, out var heldOn) ? heldOn : null;
         draft.Caveats = extraction!.Caveats.ToList();
         draft.Items = kept.Take(V3AssistantPipeline.MaximumQuotes).Select(static item => new Item(item.Line, item.Line, "passage", null)).ToList();
+        var confirmed = ConfirmedByCode(row, scope, draft.Items);
         var readArticles = draft.Items.Select(static item => item.First.Article).Distinct(StringComparer.Ordinal).ToList();
 
         // The tables answered too, without being sure, and this reading quotes another article of the same act: the
@@ -224,6 +298,6 @@ public static partial class V4Bricks
         }
 
         var json = Write(input, row, draft, scope, null, null, dateRef, ruleQuestion, decides ? "refuse" : "answer", "text", scope.Work, []);
-        return new V4PlanOutcome(json, draft.Cost, "route:outline", Articles: readArticles);
+        return new V4PlanOutcome(json, draft.Cost, "route:outline", Articles: readArticles) { Confirmed = confirmed };
     }
 }

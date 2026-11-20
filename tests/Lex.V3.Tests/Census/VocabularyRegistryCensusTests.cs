@@ -124,10 +124,13 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Generation: ArbiterReasons=11, "
-                    + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const ArbiterPrompt, "
-                    + "const ExtractionBase, const OutlinePrompt, static property ArbiterSchema, "
+                    + "ArbiterRoles=4, Fragments=7, ModelCaveats=3, const AnswerCheckPrompt, const ArbiterPrompt, "
+                    + "const ExtractionBase, const OutlineNoteWider, const OutlinePrompt, const SectionPrompt, "
+                    + "static property AnswerCheckSchema, "
+                    + "static property AnswerCheckSha256, static property ArbiterSchema, "
                     + "static property ExtractionSchema, static property OutlineSchema, "
-                    + "static property PromptsSha256",
+                    + "static property PromptsSha256, static property SectionPromptSha256, "
+                    + "static property SectionSchema",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Patterns: const Number, "
                     + "const NumberWords, const Tens, const Units",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4QuestionCall: Asks=9, Outcomes=5, "
@@ -137,12 +140,14 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Retrieval: Modals=22",
                 "Lex.V3.Contracts.Platform.Assistant.Bricks.V4Text: Table=592, const LatinBases",
                 "Lex.V3.Contracts.Platform.Assistant.V3AnswerGates: ConsolidatedKinds=3",
-                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=288, "
-                    + "Definitions=144, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=288, "
-                    + "Ids=144, LanguageCodes=4, const AbsenceActNotHeld, "
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=292, "
+                    + "Definitions=146, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=292, "
+                    + "Ids=146, LanguageCodes=4, const AbsenceActNotHeld, const AbsenceAgentDraft, "
                     + "const AbsenceArticleNotHeld, const AbsenceNoAnswerInLines, "
                     + "const AbsenceSweepHeading, const AbsenceTermCount, const AbsenceTermsNowhere, "
-                    + "const AbsenceTextNotHeld, const AbsenceWordsNotFound, const ActionCandidate, "
+                    + "const AbsenceTermsNowhereInAct, "
+                    + "const AbsenceTextNotHeld, const AbsenceWordsNotFound, "
+                    + "const AbsenceWordsNotFoundInAct, const ActionCandidate, "
                     + "const ActionOpenWork, const ActionReadArticle, const ActionReadState, "
                     + "const ActionReadStateEu, const AgentDraft, const AnswerCandidates, "
                     + "const AnswerDefinition, const AnswerList, const AnswerMoreArticles, "

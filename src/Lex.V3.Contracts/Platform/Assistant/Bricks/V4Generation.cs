@@ -136,6 +136,153 @@ public static class V4Generation
         return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
     }
 
+    /// <summary>
+    /// The outline call over acts a router kept (every law, 2026-11-19): the same instruction, form and bound as
+    /// <see cref="OutlineCall"/>, each act by its title and by the articles a pre-filter kept of it, each with the line
+    /// shown of it (its heading, else its text around a word of the question). The second value gives each id's article back.
+    /// </summary>
+    public static (V4ModelCall Call, List<(V4ActTables Tables, V4Article Article)> Ids) OutlineCallOf(string question, IReadOnlyList<(string Title, V4ActTables Tables, IReadOnlyList<V4OutlineArticle> Articles)> acts, bool wider = false)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        ArgumentNullException.ThrowIfNull(acts);
+        var ids = new List<(V4ActTables, V4Article)>();
+        var given = new JsonArray();
+        foreach (var (title, tables, kept) in acts)
+        {
+            var articles = new JsonArray();
+            foreach (var entry in kept)
+            {
+                ids.Add((tables, entry.Article));
+                articles.Add(new JsonObject { ["id"] = "A" + ids.Count.ToString(CultureInfo.InvariantCulture), ["heading"] = entry.Brief });
+            }
+
+            given.Add(new JsonObject { ["act"] = title, ["articles"] = articles });
+        }
+
+        var user = new JsonObject { ["question"] = question };
+        if (wider)
+        {
+            // Said with the list, not in the instruction the insurance reading shares: what is found here is only shown as
+            // candidates, so several articles that may hold the rule are worth more than the one best guess.
+            user["note"] = OutlineNoteWider;
+        }
+
+        user["acts"] = given;
+        return (new V4ModelCall("outline", OutlinePrompt, user.ToJsonString(Relaxed), "lex_v4_outline", OutlineSchema, 120), ids);
+    }
+
+    // ---- The parts call (every law, 2026-11-19): a big code is read by its parts before it is read by its articles, as a
+    // reader goes down a table of contents ("hierarchical retrieval by table of contents" [7quater]). The mount holds no
+    // heading of a book, a title or a chapter, so each part is shown by the range of its articles, by how its first
+    // article begins and by the words that mark it among the other parts (V4LawIndex.Sections).
+
+    /// <summary>What the wider reading says with its list of articles (in the call's own data; the instruction is the outline's).</summary>
+    public const string OutlineNoteWider =
+        "The acts are in French; the question may be in another language or in everyday words. Each article is shown by its heading or by an extract of its text. " +
+        "Name every article that may state the rule asked, up to six, the most likely first; when two or three could, name them all.";
+
+    /// <summary>The instruction of the parts call. Its digest is part of the planner's identity when the wider reading is on.</summary>
+    public const string SectionPrompt = """
+        You route a reader's question to the parts of a law. You are given, for each act, its parts in the order of the
+        document. For each part: its "id", "articles" (the range of its articles), "starts" (how its first article begins)
+        and "words" (the words that mark the part among the others).
+        - Return the ids of the parts whose articles may state the rule that answers the question, the most likely first.
+          Name a part by its "id" (S1, S2, ...). Use only ids given.
+        - The reader's everyday words are often not the law's words: think of what the law calls the thing asked
+          ("virer" is "licenciement", "caution" is "garantie locative"), and of where a code would put that rule.
+        - A question worded for a person's own case is routed like the general question behind it. You never say what
+          applies to that person.
+        - When two or three parts could hold the rule, name them all (at most "at_most"); a part named for nothing costs
+          little, a part missed loses the answer. The question may be in English: the acts are in French.
+        - If no part given can hold the answer, return no part. Never guess from outside what is shown.
+        """;
+
+    private static string SectionSchema { get; } = new JsonObject
+    {
+        ["type"] = "object",
+        ["additionalProperties"] = false,
+        ["required"] = new JsonArray("sections"),
+        ["properties"] = new JsonObject
+        {
+            ["sections"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+        },
+    }.ToJsonString();
+
+    /// <summary>The digest of the parts call's instruction and form.</summary>
+    public static string SectionPromptSha256 { get; } =
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(SectionPrompt + "\n" + SectionSchema)));
+
+    /// <summary>
+    /// The parts call: the question, how many parts may be named at most, and for each big act its parts by a short id.
+    /// The second value gives, for each id, the act (by its place in <paramref name="acts"/>) and the part.
+    /// </summary>
+    public static (V4ModelCall Call, List<(int Act, V4LawSection Section)> Ids) SectionCall(string question, IReadOnlyList<(string Title, IReadOnlyList<V4LawSection> Sections)> acts, int most)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        ArgumentNullException.ThrowIfNull(acts);
+        var ids = new List<(int, V4LawSection)>();
+        var given = new JsonArray();
+        for (var at = 0; at < acts.Count; at++)
+        {
+            var parts = new JsonArray();
+            foreach (var section in acts[at].Sections)
+            {
+                ids.Add((at, section));
+                parts.Add(new JsonObject
+                {
+                    ["id"] = "S" + ids.Count.ToString(CultureInfo.InvariantCulture),
+                    ["articles"] = section.Range,
+                    ["starts"] = section.Starts,
+                    ["words"] = section.Words,
+                });
+            }
+
+            given.Add(new JsonObject { ["act"] = acts[at].Title, ["parts"] = parts });
+        }
+
+        var user = new JsonObject { ["question"] = question, ["at_most"] = most, ["acts"] = given };
+        return (new V4ModelCall("sections", SectionPrompt, user.ToJsonString(Relaxed), "lex_v4_sections", SectionSchema, 200), ids);
+    }
+
+    /// <summary>
+    /// Reads the parts call's reply: the places (from zero) of the parts it names among the <paramref name="given"/>, each
+    /// once, in its order, at most <paramref name="most"/>; an id that was not given is dropped. Null when the reply is not
+    /// of the form.
+    /// </summary>
+    public static List<int>? ReadSections(string content, int given, int most)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("sections", out var sections) || sections.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var picks = new List<int>();
+            foreach (var entry in sections.EnumerateArray())
+            {
+                var id = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
+                if (id is null || id.Length < 2 || id[0] != 'S' || !int.TryParse(id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > given)
+                {
+                    // An id that was not given is dropped; the parts that were given are kept.
+                    continue;
+                }
+
+                if (!picks.Contains(number - 1) && picks.Count < most)
+                {
+                    picks.Add(number - 1);
+                }
+            }
+
+            return picks;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string OutlineSchema { get; } = new JsonObject
     {
         ["type"] = "object",
@@ -152,7 +299,7 @@ public static class V4Generation
     /// each once, in its order, at most <see cref="MaximumOutlinePicks"/>. Null when the reply is not of the form or names
     /// an id that was not given: nothing of it is kept.
     /// </summary>
-    public static List<int>? ReadOutline(string content, int given)
+    public static List<int>? ReadOutline(string content, int given, bool lenient = false)
     {
         try
         {
@@ -168,6 +315,13 @@ public static class V4Generation
                 var id = entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
                 if (id is null || id.Length < 2 || id[0] != 'A' || !int.TryParse(id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > given)
                 {
+                    // Where everything shown is a candidate (the wider reading), an id that was not given is dropped and
+                    // the ids that were given are kept.
+                    if (lenient)
+                    {
+                        continue;
+                    }
+
                     return null;
                 }
 
@@ -245,6 +399,30 @@ public static class V4Generation
             direct first.
             """,
     };
+
+    // ---- The answer check (V4Bricks.CheckAnswer): its instruction and its form. Their digest is apart from PromptsSha256,
+    // so that the planner's identity is the one it was while the check is switched off.
+
+    /// <summary>The check's instruction, as measured on 2026-11-19. Its digest is part of the planner's identity when the check is on.</summary>
+    public const string AnswerCheckPrompt =
+        "You check whether one article of law answers a reader's question. Use only the article given. answer_found is true only if the article states the rule that answers the question as asked: the same subject, the same situation, the same kind of person or contract. It is false if the article is about a neighbouring subject, another situation or another party, if it only shares words with the question, or if the answer would have to be guessed. complete_answer_found is true only if the question can be answered from this article alone. First write the reason in at most 25 words, then the two booleans.";
+
+    internal static string AnswerCheckSchema { get; } = new JsonObject
+    {
+        ["type"] = "object",
+        ["additionalProperties"] = false,
+        ["required"] = new JsonArray("reason", "answer_found", "complete_answer_found"),
+        ["properties"] = new JsonObject
+        {
+            ["reason"] = new JsonObject { ["type"] = "string" },
+            ["answer_found"] = new JsonObject { ["type"] = "boolean" },
+            ["complete_answer_found"] = new JsonObject { ["type"] = "boolean" },
+        },
+    }.ToJsonString();
+
+    /// <summary>The digest of the check's instruction and form.</summary>
+    public static string AnswerCheckSha256 { get; } =
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(AnswerCheckPrompt + "\n" + AnswerCheckSchema)));
 
     /// <summary>The digest of the instructions this build sends, for the planner's identity: a changed prompt is a changed planner.</summary>
     public static string PromptsSha256 { get; } = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(

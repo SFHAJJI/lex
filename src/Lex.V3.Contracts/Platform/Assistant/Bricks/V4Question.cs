@@ -94,6 +94,54 @@ public sealed class V4QuestionRow
 /// </summary>
 public static class V4QuestionParser
 {
+    // What follows a greeting and asks nothing ("Salut, tu es là ?", "Hello, anyone there?"): the words after the greeting
+    // words, joined by one space. A pattern, not a set of words: the words of it mean something else in a question.
+    private static readonly System.Text.RegularExpressions.Regex GreetingFiller = new(
+        @"^(?:tu es la|t.?es la|vous etes la|es.?tu la|etes.?vous la|ca va|comment ca va|comment vas.?tu|comment allez.?vous|il y a quelqu.?un|y a quelqu.?un|quelqu.?un|are you there|is anyone there|anyone there|how are you|you there)$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    // Words that stand for no thing ("blabla", "truc", "machin"): a question made of them asks nothing.
+    private static readonly System.Text.RegularExpressions.Regex PlaceholderWord = new(
+        @"^(?:bla|blabla|blablabla|truc|trucs|machin|machins|bidule|bidules|trucmuche|schmilblick|lorem|ipsum|foo|bar|baz|asdf|qwerty|azerty|xxx|test|tests)$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, V4Text.PatternTimeout);
+
+    /// <summary>A greeting followed by words that ask nothing ("Salut, tu es là ?"): a greeting, answered as one.</summary>
+    private static bool GreetsAndAsksNothing(IReadOnlyList<V4Word> words)
+    {
+        if (words.Count is < 2 or > 8 || !GreetingWords.Contains(words[0].Text))
+        {
+            return false;
+        }
+
+        var rest = new List<string>();
+        foreach (var word in words)
+        {
+            if (rest.Count > 0 || !GreetingWords.Contains(word.Text))
+            {
+                rest.Add(word.Text);
+            }
+        }
+
+        return rest.Count > 0 && GreetingFiller.IsMatch(string.Join(' ', rest));
+    }
+
+    /// <summary>
+    /// Whether a question is made of words that stand for no thing ("blabla truc machin la loi du mardi bleu"): two or more
+    /// of them, and at least half of its words of four letters or more. It asks nothing: Lex asks for a question in full.
+    /// </summary>
+    public static bool AsksNothingNamed(V4QuestionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        var placeholders = 0;
+        var longer = 0;
+        foreach (var word in row.Words)
+        {
+            longer += word.Text.Length >= 4 ? 1 : 0;
+            placeholders += PlaceholderWord.IsMatch(word.Text) ? 1 : 0;
+        }
+
+        return placeholders >= 2 && placeholders * 2 >= longer;
+    }
     private static readonly HashSet<string> GreetingWords = new(StringComparer.Ordinal)
     {
         "bonjour", "bonsoir", "salut", "coucou", "hello", "hi", "hey", "merci", "thanks", "thank", "you", "beaucoup", "bien", "ok",
@@ -117,6 +165,13 @@ public static class V4QuestionParser
         "will", "with", "would", "your", "contract", "insurance", "says", "said", "tell", "show", "many", "much", "long", "according",
         "happens", "happen", "provide", "provides", "regarding", "concerning",
     };
+
+    /// <summary>
+    /// Whether a folded word of a question says something of its subject: five letters or more, no stop word, no digit and
+    /// no masked character. What a word no table read must be to be reported, and what a word must be to confirm a pick.
+    /// </summary>
+    internal static bool IsContentWord(string foldedWord) =>
+        foldedWord.Length >= 5 && !StopWords.Contains(foldedWord) && !foldedWord.Any(char.IsAsciiDigit) && !foldedWord.Contains('•', StringComparison.Ordinal);
 
     /// <summary>The row of a question, by code alone.</summary>
     public static V4QuestionRow Parse(string maskedQuestion, V3AnswerLocale locale, V4Dictionary dictionary, V4CorpusIndex index)
@@ -179,13 +234,13 @@ public static class V4QuestionParser
         for (var at = 0; at < words.Count; at++)
         {
             var word = words[at];
-            if (!taken[at] && word.Text.Length >= 5 && !StopWords.Contains(word.Text) && !word.Text.Any(char.IsAsciiDigit) && !word.Text.Contains('•', StringComparison.Ordinal))
+            if (!taken[at] && IsContentWord(word.Text))
             {
                 unmatched.Add(new V4Span(word.Start, word.End));
             }
         }
 
-        var greeting = words.Count is > 0 and <= 6 && words.All(static word => GreetingWords.Contains(word.Text));
+        var greeting = (words.Count is > 0 and <= 6 && words.All(static word => GreetingWords.Contains(word.Text))) || GreetsAndAsksNothing(words);
         return new V4QuestionRow(
             maskedQuestion,
             folded,
@@ -270,7 +325,12 @@ public static class V4Boundary
     // "Am I covered", "who pays": a decision only after a fact of the reader's own situation is stated.
     private static readonly Regex CoveredOrPays = new(
         @"\b(?:suis-je|sommes-nous|serai-je|serais-je|est-il|est-elle)\s+(?:bien\s+)?(?:couvert|couverte|couverts|couvertes|assure|assuree|indemnise|indemnisee|rembourse|remboursee)\b" +
-        @"|\bqui (?:paie|paye|payera|paiera|doit payer|rembourse|indemnise|est responsable)\b|\bam i (?:covered|insured)\b|\bwho pays\b|\bwho is liable\b",
+        @"|\bqui (?:paie|paye|payera|paiera|doit payer|rembourse|indemnise|est responsable)\b|\bam i (?:covered|insured)\b|\bwho pays\b|\bwho is liable\b" +
+        // A verdict asked on an incident the reader states ("... dit que c'est ma faute : qui a raison et est-ce que mon
+        // assurance va payer ?", the fresh set of 2026-11-19).
+        @"|\bqui a (?:raison|tort)\b|\bqui est (?:en tort|fautif|en faute)\b|\ba qui (?:est )?la faute\b|\b(?:est-ce|c'est) (?:de )?ma faute\b" +
+        @"|\b(?:mon|ma|notre) (?:assurance|assureur|mutuelle) (?:va|doit|devra|peut)(?:-t-(?:il|elle))? (?:me |nous |bien )?(?:payer|rembourser|indemniser|couvrir|prendre en charge)\b" +
+        @"|\bwho is (?:right|wrong|at fault|to blame)\b|\bwill my (?:insurance|insurer) (?:pay|cover)\b",
         Options, Timeout);
 
     // A fact of the reader's own situation: "ma voiture a été volée", "mon voisin a inondé", "j'ai eu un accident",
@@ -368,9 +428,12 @@ public static class V4Boundary
     }
 
     /// <summary>
-    /// Whether a part that holds cues of R15 is nevertheless a question on the rule: a role of the law is named before the
-    /// first cue, every cue is of the two functions a rule can be asked in ("peut-il", "doit-il"), and nothing marks a case of
-    /// the reader's own.
+    /// Whether a part that holds cues of R15 is nevertheless a question on the rule: every cue is of the two functions a rule
+    /// can be asked in ("peut-il", "doit-il"), and nothing marks a case of the reader's own (no personal marker, no number
+    /// that states a fact). Until 2026-11-19 a role of the insurance dictionary also had to be the subject of the cue's
+    /// verb, so an impersonal question on any other law ("Un employeur peut-il ...", "Faut-il ...") was refused by
+    /// construction; the owner's order of that day: an impersonal "peut-il / doit-il" question is a question on the rule,
+    /// whatever the law.
     /// </summary>
     public static bool RuleQuestion(string text, int start, int end, IReadOnlyList<V3ApplicationCue> cues)
     {
@@ -391,15 +454,7 @@ public static class V4Boundary
             return false;
         }
 
-        var folded = V4Text.Fold(text[start..end]);
-        var words = V4Text.Words(folded);
-        var dictionary = V4Dictionary.Insurance;
-        var first = cues.OrderBy(static cue => cue.Start).First();
-        var cueStart = first.Start - start;
-        var cueEnd = first.End - start;
-
-        // The role is the subject of the cue's verb: named before it ("L'assureur peut-il ..."), or right after an inverted
-        // one ("Que doit faire le preneur d'assurance ...").
-        return dictionary.Lookup(words).Any(hit => dictionary.Concept(hit.Keyword.Concept)!.Kind == "role" && (hit.Start < cueStart || (hit.Start >= cueEnd && hit.Start - cueEnd <= 16)));
+        // No role of the insurance dictionary is asked for: the subject of the cue's verb may be any person a law names.
+        return true;
     }
 }

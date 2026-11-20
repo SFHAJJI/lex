@@ -66,6 +66,20 @@ param customDomains array = []
 @description('The assistant (R30; the owner\'s order of 2026-10-28), or empty for none (the switched-off card, as every deployment before it): account, the Azure OpenAI account in this resource group whose key Azure reads as it deploys; deployment, its model deployment; apiVersion; eurPerMillionInput and eurPerMillionOutput, the deployment\'s prices; preview, exactly `unreviewed` while the people\'s reviews are not done. Ignored by the maintenance revision.')
 param assistant object = {}
 
+@description('The assistant\'s wider reading (the owner\'s order of 2026-11-19), read by the API at startup as LEX_V3_EVERY_LAW: on (a question Lex\'s own operations quoted nothing for is read in every Luxembourg act of the law index and shown as candidates) or off (the assistant answers as it did before). Set only where the assistant is on.')
+@allowed([
+  'on'
+  'off'
+])
+param everyLaw string = 'on'
+
+@description('The assistant\'s answer check (the owner\'s order of 2026-11-19), read by the API at startup as LEX_V3_ANSWER_CHECK: on (an answer the assistant asserts is read once more by the model against the first article it quotes, and shown as candidates when the check rejects it) or off (the assistant answers as it did before). Set only where the assistant is on.')
+@allowed([
+  'on'
+  'off'
+])
+param answerCheck string = 'on'
+
 @description('True for the release\'s maintenance revision (deploy.ps1 -Maintenance; R60, R108, R115): the same image with LEX_V3_MAINTENANCE=on, serving only the maintenance page, deployed with no traffic beside the live revision, which keeps 100 per cent.')
 param maintenance bool = false
 
@@ -108,6 +122,16 @@ var assistantEnvironment = assistantOn
       {
         name: 'LEX_V3_ASSISTANT_PREVIEW'
         value: assistant.preview
+      }
+      // The wider reading: only the exact value `on` turns it on (V3AssistantRuntime.EveryLawVariable).
+      {
+        name: 'LEX_V3_EVERY_LAW'
+        value: everyLaw
+      }
+      // The answer check: only the exact value `on` turns it on (V3AssistantRuntime.AnswerCheckVariable).
+      {
+        name: 'LEX_V3_ANSWER_CHECK'
+        value: answerCheck
       }
       {
         name: 'LEX_ASSISTANT_ENDPOINT'

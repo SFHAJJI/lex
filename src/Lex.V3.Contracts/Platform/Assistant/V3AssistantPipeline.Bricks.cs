@@ -118,6 +118,36 @@ public static partial class V3AssistantPipeline
         return said;
     }
 
+    /// <summary>
+    /// What a reader is told when the sweep of an act found no line: one sentence, the act by the name the index gives it
+    /// or "this text", never its address on this site, and no line of counts (the sweep itself stays in the plan record).
+    /// It says what the text contains and nothing more: that none of the terms appears is said only where the plan says
+    /// so and every term of the record's sweep was counted on no line; in every other case, only that Lex found no
+    /// passage, which does not show that the text is silent. It names the sentence and the act; the caller makes the
+    /// block (the census pins every method that makes one). Plain loops and no closure, for the same census.
+    /// </summary>
+    private static (string Template, string? Name) NotFoundInTheText(V4PlanRecord record)
+    {
+        var nowhere = record.Absence == "terms_nowhere";
+        foreach (var row in record.Sweep)
+        {
+            nowhere &= row.Lines == 0;
+        }
+
+        string? name = null;
+        foreach (var act in V4CorpusIndex.Insurance.Acts)
+        {
+            if (act.Address == record.Work)
+            {
+                name = act.Name;
+            }
+        }
+
+        return name is null
+            ? (nowhere ? V3AnswerTemplates.AbsenceTermsNowhere : V3AnswerTemplates.AbsenceWordsNotFound, null)
+            : (nowhere ? V3AnswerTemplates.AbsenceTermsNowhereInAct : V3AnswerTemplates.AbsenceWordsNotFoundInAct, name);
+    }
+
     private static V3AnswerDossier? ComposeBricks(
         V3AssistantPlan plan,
         V3PlanContext context,
@@ -192,29 +222,6 @@ public static partial class V3AssistantPipeline
             return shown;
         }
 
-        List<V3DossierBlock> SweepLines()
-        {
-            var swept = new List<V3DossierBlock>();
-            if (record.Work is null)
-            {
-                return swept;
-            }
-
-            swept.Add(Claim(V3AnswerTemplates.AbsenceSweepHeading, locale,
-                Fact("work", V3AnswerSlotKind.WorkAddress, record.Work), Count("lines", record.Lines), Count("articles", record.Articles), Date("date", date)));
-            foreach (var row in record.Sweep.Take(12))
-            {
-                var keyword = dictionary.Keyword(row.Keyword)!;
-                if (!keyword.Pattern)
-                {
-                    swept.Add(Claim(V3AnswerTemplates.AbsenceTermCount, locale,
-                        Fact("term", V3AnswerSlotKind.DictionaryTerm, keyword.Keyword), Count("lines", row.Lines), Count("articles", row.Articles)));
-                }
-            }
-
-            return swept;
-        }
-
         var blocks = new List<V3DossierBlock>();
         V3AssistantVerdict verdict;
         if (application && !general && record.Kind != "greeting")
@@ -262,14 +269,12 @@ public static partial class V3AssistantPipeline
                     blocks.AddRange(OfficialSources(["lu-legilux"], locale));
                     break;
                 case "terms_nowhere":
-                    verdict = V3AssistantVerdict.Answer;
-                    blocks.AddRange(SweepLines());
-                    blocks.Add(Claim(V3AnswerTemplates.AbsenceTermsNowhere, locale));
-                    break;
                 case "words_not_found":
-                    verdict = V3AssistantVerdict.Clarify;
-                    blocks.AddRange(SweepLines());
-                    blocks.Add(Claim(V3AnswerTemplates.AbsenceWordsNotFound, locale));
+                    verdict = record.Absence == "terms_nowhere" ? V3AssistantVerdict.Answer : V3AssistantVerdict.Clarify;
+                    var (sentence, act) = NotFoundInTheText(record);
+                    blocks.Add(act is null
+                        ? Claim(sentence, locale, Date("date", date))
+                        : Claim(sentence, locale, Fact("name", V3AnswerSlotKind.DictionaryTerm, act), Date("date", date)));
                     break;
                 case "no_answer_in_lines" when record.Items.Count > 0:
                     verdict = V3AssistantVerdict.Answer;
@@ -396,7 +401,8 @@ public static partial class V3AssistantPipeline
         // What a model did, as it was: it described the question (it named the concept the reader's words are about), it
         // marked lines among those code gave it, both, or nothing.
         var described = record.ModelSteps.Contains("question");
-        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "outline" or "extraction");
+        // The answer check read the first article quoted against the question: a model took part, and the answer says so.
+        var assisted = record.ModelSteps.Any(static step => step is "arbiter" or "outline" or "extraction" or "check");
         if (described)
         {
             notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeModelDescribed, locale));

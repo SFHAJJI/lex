@@ -95,7 +95,11 @@ const withoutQuotations = (markup) => markup
   .replace(/<q(?:\s[^>]*)?>[\s\S]*?<\/q>/g, "")
   // Text marked in its own language, wherever the attribute stands (the dock's example questions, 2026-11-15).
   .replace(/<span(?:\s[^>]*)?\slang="[^"]*"[^>]*>[\s\S]*?<\/span>/g, "")
-  .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "");
+  .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "")
+  // The assistant's scope sentence (2026-11-19), in the words it was ordered in: "Today Lex answers on Luxembourg insurance
+  // law…" / "Lex répond aujourd’hui sur…". Its "today" says what this release covers; it states no date (this pattern leaves
+  // the sentence out only while it holds no digit). Reworded without the word, this line goes.
+  .replace(/<p class="lx-dock-scope" data-dock-scope="">[^<\d]*<\/p>/g, "");
 
 test("every date a live screen shows is an explicit calendar date, never relative and never a local format", async () => {
   const texts = [...(await renders()).map((one) => [`${one.name}: ${one.scenario}`, textOf(withoutQuotations(one.markup))]),

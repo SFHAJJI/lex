@@ -11,5 +11,8 @@
     <!-- The bricks' tables (V4): the insurance dictionary and the corpus index, versioned data a person reviews. -->
     <EmbeddedResource Include="Platform/Assistant/Bricks/insurance-dictionary.json" LogicalName="Lex.V3.Contracts.Assistant.Bricks.InsuranceDictionary.json" />
     <EmbeddedResource Include="Platform/Assistant/Bricks/corpus-index.json" LogicalName="Lex.V3.Contracts.Assistant.Bricks.CorpusIndex.json" />
+    <!-- The law index (every Luxembourg act held, by the words that route to it): data made from the mount, read by the router. -->
+    <EmbeddedResource Include="Platform/Assistant/Bricks/law-index.json" LogicalName="Lex.V3.Contracts.Assistant.Bricks.LawIndex.json" />
+    <EmbeddedResource Include="Platform/Assistant/Bricks/law-aliases.json" LogicalName="Lex.V3.Contracts.Assistant.Bricks.LawAliases.json" />
   </ItemGroup>
 </Project>
