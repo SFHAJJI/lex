@@ -65,6 +65,13 @@ for (const lang of ["fr", "en"]) {
     [`${lang}-changes--1366-whole`, `/${lang}/radar.html`, 1366, 768, false, true, null, 0],
   );
 }
+// One-off (2026-11-20): only the example the owner asked for, an insurance question that Lex answers with candidates.
+const EXAMPLE = "Si on n'a nommé personne pour toucher son assurance-vie, à qui va l'argent au décès ?";
+SHOTS.length = 0;
+SHOTS.push(
+  ["fr-insurance-candidates--1366x768", "/fr/", 1366, 768, false, false, ASK(EXAMPLE), 26000],
+  ["fr-insurance-candidates--1366-whole", "/fr/", 1366, 768, false, true, ASK(EXAMPLE), 26000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
