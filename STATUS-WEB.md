@@ -1,8 +1,34 @@
 # Lex V3 status: the web lane
 
-Updated 2026-11-20. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-11-21. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The new Lex is live on law.soufien.lu (2026-11-20 to 21)
+
+The owner's orders of 2026-11-20: build the perfect Lex "as if Kezhan built it", keep the current layout, build it
+beside the live one, then promote it ("dont stop until u finish and see a perfect lex app promoted in law.soufien.lu").
+
+- **Where it is.** `C:\lex-v3\lex-next` (local git, not this repository): `ingest\` (the publisher's XML and the EU
+  Formex read into one SQLite store, with a conservation check that every word and number of the source is stored or
+  explained: 10,870 of 10,870 Luxembourg files and 667 of 667 European files pass), `app\` (the engine and its HTTP
+  face), `web\` (a copy of this repository's `web\` with a new assistant panel, a references panel on the reading page,
+  and new How it works and Results pages), `deploy-next.ps1`, `switch-domain.ps1`, `README.md`, `AUDIT-2026-11-20.md`.
+- **Serving.** Container app `ca-lex-next` in `cae-lex-v3`; models in the EU data zone: gpt-6-luna (question, tables of
+  contents; falls back to gpt-4.1-mini when busy), gpt-6.2-sol (reading), text-embedding-3-large (search by meaning).
+  The reading and comparing pages keep calling `POST /api/v3/*`, which the new server passes to `ca-lex-v3` (read
+  operations only). The server keeps no question and no answer; the privacy and cookies pages were corrected to say so.
+- **Measured.** 130 fresh questions written by an independent session from the law, never seen by the builder, asked
+  once: 99 of 120 right (95% interval 75 to 88%), 4 wrong asserted, 8 right article shown but not asserted, 9 not found;
+  10 of 10 questions without an answer declined; exceptions in another article 11 of 13; dated questions 7 of 8 with no
+  wrong version; English 8 of 8, German 4 of 4, Luxembourgish 2 of 2. The earlier independent questions: 57 of 61 right
+  against 14 for Release 19.
+- **Driver decisions.** No second-family review on the owner's order to skip ceremonies; registry cleaned (25 old
+  `lex-v3` images deleted; Releases 18, 19 and 20 kept); Release 18's revision deactivated; Release 20's local image file
+  removed (its image is in the registry).
+- **Not done.** The new Lex's code is not in this repository; about 16,000 Luxembourg versions were never acquired
+  (licence flag, the owner's decision); no expert-checked dictionary; the slow tail (one answer in ten over 20 seconds
+  under load).
 
 ## How it works brought up to Release 19 (2026-11-20; to be built as Release 20, not promoted without the owner's word)
 

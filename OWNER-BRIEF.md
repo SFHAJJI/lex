@@ -1,40 +1,41 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-20 at 07:40 UTC by the driver. The driver updates this file in the first pull request of each day and
+Updated 2026-11-21 at 00:20 UTC by the driver. The driver updates this file in the first pull request of each day and
 whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in STATUS-WEB.md and
 STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where Lex stands
 
-- Live: Release 19 since 07:24 UTC on 20 November, on your go-live word of the evening before. Release 18 is kept
-  ready: one command brings it back in about a minute.
-- Later than promised: the build was ready at 01:15 UTC; the driver's session had stopped until 06:53 UTC.
+- Live since 20 November about 23:55 UTC, on your word: the new Lex. Same layout as before (reading and comparing in
+  the middle, the assistant on the side), a new engine and a new data store behind it. Its code is in
+  `C:\lex-v3\lex-next` (runbook: its README.md), outside this repository for now.
+- The previous Lex (Release 19) keeps running on its own Azure address: the new one reads and compares through it, and
+  one command brings it back on law.soufien.lu (`C:\lex-v3\lex-next\switch-domain.ps1 -To old -Apply`).
 
-## What is new in Release 19
+## What the new Lex does
 
-- Lex reads all its 2,033 Luxembourg laws, not only insurance. Outside insurance it shows the passages it found and
-  does not say "this is the answer".
-- Before Lex asserts an answer, one more model call asks "does this article answer the question?". On a no, the
-  article is shown as a candidate.
-- A stronger model (gpt-4.1). Fewer needless refusals on general questions.
+- Finds the article three independent ways (meaning, words, the law's table of contents) and says how sure it is.
+- The model only points at lines; the law's words are copied by code. Exceptions written in another article, the law's
+  own definitions and the exact paragraph a reference names are shown beside the rule.
+- Reads the law as it stood on the date asked, and says when it does not hold that version.
+- Reads European texts too (GDPR, AI Act, DORA and 74 others held), with their amounts intact.
+- When it finds no answer, it says so and shows what it searched.
 
-## How it was measured: 70 questions nobody had seen, asked once on the final version
+## How it was measured: 130 fresh questions written by another session, asked once
 
 | | Result |
 |---|---|
-| Wrong answers asserted, all 70 | 0 |
-| Other laws (45): right article among the passages shown | 36 |
-| Insurance (15): answered right / right article shown as a candidate | 8 / 6 |
-| Questions that must get no article (10): handled as expected | 6 |
-| The release gate on the candidate (56 cases): right articles / wrong | 36 / 0 |
+| Right answer asserted, of 120 that have an answer | 99 |
+| Wrong answer asserted | 4 |
+| Questions with no answer in the law, rightly not answered | 10 of 10 |
+| The same 61 earlier questions: new Lex / previous Lex | 57 / 14 |
 
 ## What I decided for you (each can be undone)
 
-- Limits: 0.25 EUR an answer, 5000 EUR a month, 20 questions a minute for one visitor.
-- No second-family review of that pull request, on your order to skip ceremonies that night.
+- Newer models in the EU data zone for the new Lex; the previous Lex keeps gpt-4.1.
+- Old images deleted from the registry; Releases 18, 19 and 20 kept.
 
 ## Weak spots, and what waits on you
 
-- A greeting or nonsense gets "not found" instead of "please ask a question". The European texts are not read the
-  new way. The quality numbers shown on the site are still Release 18's.
-- The two emails to Kezhan (`C:\lex-v3\kezhan-plan-2026-11-20\email\EMAIL-FINAL.md`): you send them yourself.
+- About 16,000 Luxembourg versions were never downloaded (a licence flag): yours to decide.
+- No dictionary checked by an insurance expert yet; one answer in ten can take over 20 seconds when busy.

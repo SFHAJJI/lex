@@ -13,13 +13,21 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
+- **law.soufien.lu serves the new Lex since 2026-11-20 about 23:55 UTC, on the owner's go-live word**: container app
+  `ca-lex-next` (code `lex-next:t7`, data `lex-next-base:20261120c`), built outside this repository in
+  `C:\lex-v3\lex-next` (local git; runbook in its README.md). The current layout's pages with a new engine (three
+  detectors, references in both directions, versions by date, European texts) and a new data store from the
+  publisher's files. Release 19 below keeps running on `ca-lex-v3`: the new Lex passes reading and comparing calls to
+  it, and `switch-domain.ps1 -To old -Apply` brings it back on the domain. Measured on 130 fresh questions written by
+  an independent session and asked once: 99 of 120 right, 4 wrong, 10 of 10 without an answer declined. Detail in
+  STATUS-WEB.md.
 - `v3/integration`: #1069 (every Luxembourg law as candidates, the answer check) merged on 2026-11-20. Served at
-  law.soufien.lu since 2026-11-20 07:24 UTC, publicly: Release 19 `v3-20261119T235909Z-d0fb93f61bd0` (serving commit
+  law.soufien.lu from 2026-11-20 07:24 UTC to about 23:55 UTC, and since then the way back: Release 19 `v3-20261119T235909Z-d0fb93f61bd0` (serving commit
   d0fb93f6, model deployment gpt-4.1), over Release 4's data (derive `d4-20261113-bfb83983`), built and signed on
   Azure; the evaluation gate passed on the candidate (36 right articles of 56, 0 wrong, 11 not found, 0 wrongly
   refused, 9 right behaviours, 0 errors; 59 quotations all verified); on the sealed set of 70 unseen questions, asked
-  once, no asserted answer was wrong. Release 18 `v3-20261119T124726Z-a07cf1887ce3` is kept active with no traffic
-  for rollback. Detail in STATUS-WEB.md.
+  once, no asserted answer was wrong. Release 18 `v3-20261119T124726Z-a07cf1887ce3` was deactivated on 2026-11-21;
+  its image is kept. Detail in STATUS-WEB.md.
 - Earlier head, kept for the record: #1063 (V4, the bricks) merged on 2026-11-19; served from 2026-11-19 about 04:27
   UTC: Release 15 `v3-20261119T030608Z-405abff0d226` (serving commit 405abff0: V4, the bricks of the owner's
   go of 2026-11-18: code reads the question with a dictionary of the law's terms, finds the lines and quotes them, and
