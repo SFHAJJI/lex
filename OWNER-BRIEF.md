@@ -37,5 +37,4 @@ STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Weak spots, and what waits on you
 
-- About 16,000 Luxembourg versions were never downloaded (a licence flag): yours to decide.
-- No dictionary checked by an insurance expert yet; one answer in ten can take over 20 seconds when busy.
+- 16,000 versions never downloaded (a licence flag: yours to decide); no expert-checked dictionary; slow when busy.
