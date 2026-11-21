@@ -175,6 +175,46 @@ SHOTS.push(
   ["r-fr-11-partial--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.partial), 9000],
   ["r-en-01-list-headings--1366x768", "/en/radar.html", 1366, 768, false, false, ASK(B1.listHeadings), 9000],
 );
+// rc (21/11/2026): the release candidate rc1 (code t9, data 20261122b) at its own private address, real answers of the
+// deployed engine (no fixture): about 15 s an answer, so each waits 36 s; the trace is opened 30 s after the question.
+const ASK_LATE = (question, then, ms) => `(() => { const asked = ${ASK(question)}; setTimeout(() => { ${then} }, ${ms}); return asked; })()`;
+const CSS = `/text.html?text=${encodeURIComponent("/lu-legilux/code-securite-sociale")}&article=art_1er`;
+const ROUTE = `/text.html?text=${encodeURIComponent("/lu-legilux/code-route")}`;
+SHOTS.length = 0;
+SHOTS.push(
+  ["s-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 0],
+  ["s-fr-02-home-ask-premium--1366x768", "/fr/", 1366, 768, false, false, ASK(P.exception), 36000],
+  ["s-fr-03-compound-trace-open--tall", "/fr/radar.html", 1366, 7000, false, false, ASK_LATE(B1.compound, OPEN_TRACE, 30000), 36000],
+  ["s-fr-04-list-headings--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.listHeadings), 36000],
+  ["s-fr-05-solvency-held--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.solvency), 36000],
+  ["s-fr-06-css--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(B1.css), 36000],
+  ["s-fr-07-not-held-2014--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.notHeld), 36000],
+  ["s-fr-08-clarify--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(B1.clarify), 30000],
+  ["s-fr-09-not-found--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(P.none), 36000],
+  ["s-fr-10-out-of-scope--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(P.out), 30000],
+  ["s-fr-11-named-article--phone", `/fr${text("&article=art_21")}`, 390, 844, true, false, ASK(Q.named), 36000],
+  ["s-en-01-ask-premium--tall", "/en/radar.html", 1366, 3000, false, false, ASK(Q.english), 36000],
+  ["s-fr-12-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
+  ["s-fr-13-compare-2011-2013-art38--1366x768", `/fr${text("&from=2011-04-16&to=2013-03-01&article=art_38")}`, 1366, 768, false, false, null, 0],
+  ["s-fr-14-text-css--1366x768", `/fr${CSS}`, 1366, 768, false, false, null, 8000],
+  ["s-fr-15-text-solvency--1366x768", "/fr/text.html?text=32009L0138&article=001", 1366, 768, false, false, null, 8000],
+  ["s-fr-16-text-code-route--1366x768", `/fr${ROUTE}`, 1366, 768, false, false, null, 8000],
+  ["s-fr-17-how--1366x768", "/fr/evidence.html", 1366, 768, false, false, null, 5000],
+  ["s-fr-18-how--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 5000],
+  ["s-fr-19-decisions--1366x768", "/fr/decisions.html", 1366, 768, false, false, null, 5000],
+  ["s-fr-20-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 6000],
+  ["s-fr-21-coverage--1366-whole", "/fr/coverage.html", 1366, 768, false, true, null, 6000],
+  ["s-fr-22-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 5000],
+  ["s-fr-23-results--1366-whole", "/fr/results.html", 1366, 768, false, true, null, 5000],
+  ["s-fr-24-modifications--1366x768", "/fr/radar.html", 1366, 768, false, false, null, 8000],
+  ["s-fr-25-privacy--1366-whole", "/fr/privacy.html", 1366, 768, false, true, null, 3000],
+  ["s-fr-26-home--phone", "/fr/", 390, 844, true, false, null, 0],
+  ["s-fr-27-text--phone", `/fr${text("&article=art_44")}`, 390, 844, true, false, null, 0],
+  ["s-en-02-home--1366x768", "/en/", 1366, 768, false, false, null, 0],
+  ["s-en-03-how--1366x768", "/en/evidence.html", 1366, 768, false, false, null, 5000],
+  ["s-en-04-coverage--1366-whole", "/en/coverage.html", 1366, 768, false, true, null, 6000],
+  ["s-en-05-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 5000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
