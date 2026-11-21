@@ -12,7 +12,8 @@
 // handed another, as a release build will be.
 
 import { Document } from './Document.jsx';
-import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, liveChrome, livePath } from '../scripts/live-chrome.mjs';
+import { nextCopy } from '../scripts/next-copy.mjs';
 import { LiveCoverage } from './LiveCoverage.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
@@ -40,12 +41,14 @@ export const CENSUS_EVALUATION_CARD = censusCard;
 // coverage answer ("what this mount holds", a fixture's evaluation card in English) described another engine, so neither is
 // drawn any more; `liveCoverageTree` and the card stay exported for the code that still imports them.
 export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
-  const copy = liveChrome().coverage;
+  // The pages builder (21/11/2026): the page's own words are the side build's (`next-copy.mjs`, `coveragePage`): the earlier
+  // eyebrow and intro spoke of a mounted corpus asked at load, which this page no longer asks.
+  const copy = nextCopy(CHROME_LOCALE).coveragePage;
   readEvaluationCard(card);
   return renderHydratableDocument(
     <Document
       state="live-coverage"
-      title={copy.title}
+      title={liveChrome().coverage.title}
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
@@ -53,7 +56,6 @@ export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
       prose
       indexing="switch"
     >
-      <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
       {/* What Lex holds and does not, by type, by name and by date, from the data builder's file (`NextCoverage.jsx`): drawn once

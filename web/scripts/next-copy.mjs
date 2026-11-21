@@ -804,6 +804,10 @@ const EN = Object.freeze({
     notHeldHeading: 'What Lex does not hold',
     notHeldIntro: 'Counted by code from the store and the publisher’s catalogue; each text named here has no row in the store.',
   }),
+  coveragePage: Object.freeze({
+    heading: 'What Lex holds',
+    intro: 'What Lex holds and what it does not, counted in its own data when this page is opened; then what the assistant reads. The request this page makes holds no word of a question.',
+  }),
   coverage: Object.freeze({
     heading: 'What Lex holds, and what it does not',
     made: 'Counted on {date}.',
@@ -1612,6 +1616,10 @@ const FR = Object.freeze({
     }),
     notHeldHeading: 'Ce que Lex ne détient pas',
     notHeldIntro: `Compté par le code dans la base et dans le catalogue de l’éditeur${NB}; chaque texte nommé ici n’a aucune ligne dans la base.`,
+  }),
+  coveragePage: Object.freeze({
+    heading: 'Ce que Lex détient',
+    intro: `Ce que Lex détient et ce qu’il ne détient pas, compté dans ses propres données à l’ouverture de cette page${NB}; puis ce que l’assistant lit. La requête de cette page ne contient aucun mot d’une question.`,
   }),
   coverage: Object.freeze({
     heading: 'Ce que Lex détient, et ce qu’il ne détient pas',

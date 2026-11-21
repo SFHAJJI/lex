@@ -4211,6 +4211,8 @@ html[data-layout="v4"] .lx-next-wrong th { font-weight: 600; }
 /* On a phone the frame stacks: an answer (or the home page's assistant) is drawn before the page, the law after it. */
 @media (max-width: 760px) {
   html[data-layout="v4"] .lx-frame { display: flex; flex-direction: column; }
+  /* In a column the dock's width basis would become its height: each takes the height of what it holds. */
+  html[data-layout="v4"] .lx-frame > .lx-dock, html[data-layout="v4"] .lx-frame > .lx-scroll { flex: 0 0 auto; }
   html[data-layout="v4"] .lx-dock[data-dock-answer="true"] { order: -1; border-top: 0; border-bottom: 1px solid var(--lx-line); }
   html[data-layout="v4"][data-preview-state="live-home"] .lx-dock { order: -1; border-top: 0; border-bottom: 1px solid var(--lx-line); }
   html[data-layout="v4"] .lx-dock-body { overflow: visible; }

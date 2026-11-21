@@ -168,7 +168,9 @@ test("the product build writes every page in French under /fr/, in the French ta
       // The V4 Home and search results (the owner's brief of 2026-11-15): their own heading and sentence, the V4 header's
       // field, and Home's own find button; Changes (V4Changes) its own words and no eyebrow; every other page as before.
       const v4 = { home: [french.home.headline, french.home.lede, french.home.findLabel, french.site.findLabel], search: [french.search.findHeading, french.search.findIdle, french.site.findLabel] }[key];
-      const opening = v4 ?? [...(key === "radar" ? [] : [french[key].eyebrow]), french[key].heading, french[key].intro];
+      // What Lex holds (the pages builder, 21/11/2026): its own heading and sentence, the side build's (`next-copy.mjs`), no eyebrow.
+      const opening = key === "coverage" ? [nextCopy("fr").coveragePage.heading, nextCopy("fr").coveragePage.intro]
+        : v4 ?? [...(key === "radar" ? [] : [french[key].eyebrow]), french[key].heading, french[key].intro];
       for (const text of [...opening, french.shell.localeNav, french.site.menuEvidence, french.site.menu, french.site.notAdvice, french.site.authenticity, french.site.sources]) {
         assert.ok(html.includes(escaped(text)), `fr/${page} says ${JSON.stringify(text.slice(0, 50))}`);
       }
