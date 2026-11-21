@@ -757,7 +757,9 @@ test('pages2: a text the reading service does not hold is read from the engine, 
   const solvency = JSON.parse(await readFile(new URL('../test/next-fixtures/text-solvency.json', import.meta.url), 'utf8'));
   const eu = fr.nextTextState(solvency, '32009L0138');
   assert.equal(eu.text.publisher, 'eu-eurlex');
-  assert.equal(eu.text.versions.length, 1, 'an EU act is read in the wording that applies, as the reading service reads it');
+  // repair-pages (22/11/2026): an EU act the engine holds in several dated wordings shows each on the axis (the header and
+  // the outline then say the same count).
+  assert.equal(eu.text.versions.length, solvency.versions.filter((version) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(version.from ?? '')).length, 'each dated wording held is on the axis');
   assert.equal(fr.nextTextState({ error: 'unknown text' }, 'x'), null);
 });
 
@@ -795,4 +797,53 @@ test('pages2: the answer asks once where its versions\' words come from; a refus
   const refused = await fr.runReplay('abcdefgh123', async () => ({ ok: false, status: 400, json: async () => ({ error: 'token_not_from_this_server' }) }));
   assert.equal(refused.kind, 'failure');
   assert.equal(refused.refused, true);
+});
+
+test('repair-pages: reasons marked with their language, code reasons in English on an English page, German texts said authentic', async () => {
+  const { sentenceLanguage, reasonLang, codeReasonInEnglish, blockLanguage } = await import('../scripts/next-contract.mjs');
+  assert.equal(sentenceLanguage('L’article 21 fixe le délai de paiement de la prime et les effets du défaut.'), 'fr');
+  assert.equal(sentenceLanguage('This article sets the time limit to pay the premium and what happens if it is not paid.'), 'en');
+  assert.equal(sentenceLanguage('Der Artikel regelt die Frist für die Zahlung der Prämie und die Folgen, wenn sie nicht gezahlt wird.'), 'de');
+  assert.equal(sentenceLanguage('Art. 21'), null);
+  assert.equal(reasonLang({ why: 'L’article 21 fixe le délai de paiement de la prime.' }, {}, 'en'), 'fr');
+  assert.equal(reasonLang({ why: 'This article sets the time limit to pay the premium.' }, {}, 'en'), undefined, 'an English reason on an English page is not marked');
+  assert.equal(reasonLang({ why: 'This article sets the time limit to pay the premium.' }, {}, 'fr'), 'en');
+  assert.equal(reasonLang({ why: 'x', why_lang: 'de' }, {}, 'fr'), 'de', 'the engine’s own word first');
+  assert.equal(codeReasonInEnglish('cité par Art. 69, par. 1, al. 1 (ligne 1): « … article 70 … » — renvoie à Art. 70'), 'cited by Art. 69, par. 1, subpara. 1 (line 1): « … article 70 … » — refers to Art. 70');
+  assert.equal(codeReasonInEnglish('élément de la liste « Congés spéciaux »: Congé de paternité'), 'item of the list « Congés spéciaux »: Congé de paternité');
+  assert.equal(codeReasonInEnglish('Art. 24 écarte Art. 21 (« ne sont pas applicables »)'), 'Art. 24 sets aside Art. 21 (« ne sont pas applicables »)');
+  assert.equal(codeReasonInEnglish('Un modèle a dit ceci.'), null);
+  assert.equal(codeReasonInEnglish('ajouté par la référence: cité par Article 129, par. 1 (ligne 4): « … article 130 … » — renvoie à Article 130'), 'added by the reference: cited by Article 129, par. 1 (line 4): « … article 130 … » — refers to Article 130');
+  assert.equal(codeReasonInEnglish('« entreprise d’assurance » est défini par Art. 32 de ce texte'), '« entreprise d’assurance » is defined by Art. 32 of this text');
+  assert.equal(codeReasonInEnglish('Article 24 écarte Article 21 pour les assurances sur la vie (renvoi entrant).'), 'Article 24 sets aside Article 21 for life insurance (inbound reference).');
+  assert.equal(blockLanguage({}, { language: 'deu' }), 'de');
+  assert.equal(blockLanguage({}, null), null);
+  const { fr, en } = await loadRenderers('test-repair-pages');
+  const block = { role: 'rule', article_pk: 1, label: 'Art. 1', act_title: 'Loi du 9 juillet 1937', version: { from: '1937-07-09' }, lines: [1], text: ['Versicherungsteuer'], language: 'DEU' };
+  const html = fr.renderContractBlock(block, { locale: 'fr' });
+  assert.ok(html.includes('data-dock-source="german"') && html.includes('Texte authentique en allemand'), 'a German text is said to be the authentic text');
+  assert.ok(/data-dock-extract="[^"]*" lang="de"/u.test(html), 'its words are marked German');
+  const english = en.renderContractBlock({ ...block, language: undefined, why: 'cité par Art. 2 (ligne 3)', why_by: 'code' }, { locale: 'en' });
+  assert.ok(english.includes('cited by Art. 2 (line 3)'), 'a code reason is said in English on the English page');
+});
+
+test('repair-pages: the coverage page says the served count and no newer version it does not know of; the footer says the engine’s index', async () => {
+  const { fr, en } = await loadRenderers('test-repair-pages');
+  const copy = nextCopy('fr').coverage;
+  assert.equal(fr.whyWords('original_amended_since+not_held_in_french', copy, 'why'), `${copy.why.original_amended_since}${copy.whyJoin}${copy.why.not_held_in_french}`);
+  assert.equal(fr.whyWords('something_new', copy, 'why'), null);
+  const real = JSON.parse(await readFile(new URL('../test/next-fixtures/coverage-real.json', import.meta.url), 'utf8'));
+  const withStore = { ...real, in_force_store: { served_today: 16628, stale_in_force: 1494, not_served_why: { original_amended_since: 1385, newer_version_not_held: 74, 'original_amended_since+not_held_in_french': 2 } } };
+  const html = fr.renderCoverage(withStore, { locale: 'fr' });
+  assert.ok(html.includes('data-coverage="served"') && html.includes(groupedCount(16628, 'fr')) && html.includes(groupedCount(1494, 'fr')), 'the served count stands beside the held count');
+  assert.ok(!html.includes('une version plus récente existe'), 'no newer version is claimed');
+  const own = fr.renderCoverage({ ...real, in_force: { ...real.in_force, served_today: 16000 } }, { locale: 'fr' });
+  assert.ok(own.includes('Parmi ces'), 'the data builders’ own count is read first');
+  assert.deepEqual(fr.engineIndexFacts({ build: { code: 't9', data: '20261122b' }, index: { built_on: '2026-11-21' } }), { builtOn: '21/11/2026', data: '20261122b', code: 't9' });
+  assert.equal(fr.engineIndexFacts({}), null);
+  const strip = fr.renderFreshness(null, { builtOn: '21/11/2026', data: '20261122b', code: 't9' }, false);
+  assert.ok(strip.includes('data-freshness="engine"') && strip.includes('21/11/2026') && strip.includes('20261122b'), 'the footer says the engine’s index date');
+  assert.equal(en.prose({ fr: 'écrites', en: 'written' }, 'en').text, 'written');
+  assert.equal(en.prose('questions écrites par une session', 'en').lang, 'fr', 'French prose on an English page is marked');
+  assert.equal(fr.prose('questions écrites par une session', 'fr').lang, undefined);
 });

@@ -396,8 +396,9 @@ export function nextTextState(value, identifier) {
   const europe = value.europe === true;
   const read = value.version ?? {};
   const held = (Array.isArray(value.versions) ? value.versions : []).filter((version) => iso(version?.from));
-  // An EU act is read in one wording, as the reading service reads it; a Luxembourg text with each of its versions on the axis.
-  const chosen = europe ? held.filter((version) => version.id === read.id) : held;
+  // repair-pages (22/11/2026): an EU act the engine holds in several dated wordings (Solvency II: 3) shows each of them on the
+  // axis, as a Luxembourg text does; the header no longer says "one version held" beside an outline that says three.
+  const chosen = held;
   const versions = Object.freeze(chosen.map((version, at) => Object.freeze({
     date: version.from, until: iso(version.until) ? version.until : null, articleCount: Number.isInteger(version.articles) ? version.articles : null,
     first: at === 0, changed: null, added: null, removed: null, unchanged: null, bar: null, previous: at > 0 ? chosen[at - 1].from : null, textHeld: true,
@@ -1107,7 +1108,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   const pageCount = Math.max(1, ...contents.map((c) => c.page));
   const readArticles = contents.filter((item) => loadedPages.includes(item.page));
 
-  const facts = isEurope
+  const facts = isEurope && !(text.source === 'next' && versions.length > 1)
     ? `${counted(copy.articles, text.articleCount ?? contents.length)} ${copy.oneVersion}.`
     : `${counted(copy.articles, text.articleCount ?? contents.length)} ${fill(countedEntry(copy.versionsHeld, versions.length), { ...(countedEntry(copy.versionsHeld, versions.length).includes('{count}') ? { count: grouped(versions.length) } : {}), first: numericDate(versions[0]?.date) })}`;
   const until = readVersion?.until ?? null;
@@ -1121,8 +1122,8 @@ export function TextPage({ contract, fetchImpl, now = null }) {
           <div className="lx-text-titles">
             <h1 lang={textLang}>{text.title ?? ''}</h1>
             <p className="lx-muted">
-              {isEurope ? copy.kindEu : copy.kindLu} {compare ? copy.compareHint : facts}
-              {isEurope ? ` ${copy.euDate}` : ''}
+              {isEurope ? (text.source === 'next' ? copy.kindEuNext : copy.kindEu) : copy.kindLu} {compare ? copy.compareHint : facts}
+              {isEurope && text.source !== 'next' ? ` ${copy.euDate}` : ''}
             </p>
             {sourceLine === null ? null : <p className="lx-muted lx-next-gap" data-text-source={text.textSource?.ocr === true ? 'ocr' : text.textSource?.pdf === true ? 'pdf' : 'language'}>{sourceLine}</p>}
           </div>

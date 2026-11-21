@@ -397,7 +397,7 @@ export function ResultsView({ results = null, state = 'loading', locale = CHROME
   }
   const note = <BuildNote note={resultsBuildNote(results, config, locale)} />;
   // An evaluation in the schema of RESULTS-SCHEMA.md is drawn by its own view; an earlier file as it was.
-  if (isResults2(results)) return <Results2View results={results} locale={locale} note={note} />;
+  if (isResults2(results)) return <Results2View results={results} locale={locale} note={note} served={config?.build ?? null} />;
   const bench = objectOr(results.all);
   const fresh = objectOr(results.fresh);
   const independent = objectOr(results.independent);
@@ -476,7 +476,10 @@ export function ResultsView({ results = null, state = 'loading', locale = CHROME
         <>
           {fresh === null && independent === null ? null : <h2>{copy.benchHeading}</h2>}
           <p className="lx-muted" data-results-intro="">
-            {fillNext(copy.intro, { label: results.label ?? results.run ?? '', date: numericDate(results.made) })}
+            {/* repair-pages: the file's label is the evaluation's own words (French): marked as such on the English page. */}
+            {fillNext(copy.intro, { label: '\u0000', date: numericDate(results.made) }).split('\u0000')[0]}
+            <span lang={typeof results.label === 'string' ? dataLang : undefined}>{results.label ?? results.run ?? ''}</span>
+            {fillNext(copy.intro, { label: '\u0000', date: numericDate(results.made) }).split('\u0000')[1]}
             {typeof results.models === 'string' ? <> <span lang={dataLang}>{results.models}</span></> : null}
           </p>
           {results.kind === 'bench' ? <p data-results-bench=""><strong>{copy.benchLead}</strong> {copy.benchText}</p> : null}

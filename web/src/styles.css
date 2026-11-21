@@ -4231,3 +4231,14 @@ html[data-layout="v4"] [data-part-status="not_answered"] [data-part-badge], html
 html[data-layout="v4"] .lx-dock-items > li > a, html[data-layout="v4"] .lx-dock-items > li > span { display: inline; }
 html[data-layout="v4"] .lx-next-keytexts td, html[data-layout="v4"] .lx-next-keytexts th { text-align: left; vertical-align: top; }
 /* == v4: pages2 end == */
+/* == v4: repair-pages, 22/11/2026 (the evidence table that fits the dock, the summary of the quoted lines, drafts, shapes) == */
+html[data-layout="v4"] .lx-dock-terms { table-layout: fixed; }
+html[data-layout="v4"] .lx-dock-terms thead th:last-child, html[data-layout="v4"] .lx-dock-terms td { width: 38%; white-space: normal; overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-dock-terms th[scope="row"] { overflow-wrap: anywhere; padding-right: 8px; }
+html[data-layout="v4"] .lx-dock-term-forms { display: block; font-size: 12px; color: var(--lx-muted); font-weight: 400; }
+html[data-layout="v4"] .lx-dock-table th, html[data-layout="v4"] .lx-dock-table td { overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-dock-summary { margin: 6px 0 0; padding: 8px 10px; border-left: 3px solid var(--lx-indigo-light); background: var(--lx-panel); }
+html[data-layout="v4"] .lx-dock-summary > p { margin: 2px 0; }
+html[data-layout="v4"] .lx-next-draft { color: var(--lx-indigo); font-weight: 600; }
+html[data-layout="v4"] .lx-next-shapes td, html[data-layout="v4"] .lx-next-shapes th { text-align: left; vertical-align: top; white-space: normal; }
+/* == v4: repair-pages end == */

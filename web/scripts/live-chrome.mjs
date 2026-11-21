@@ -27,9 +27,10 @@ import { LIVE_CHROME_FR, REFUSALS_FR } from './live-chrome-fr.mjs';
 
 const EN = Object.freeze({
   coverage: Object.freeze({
-    title: "Trust and Coverage",
+    // repair-pages (22/11/2026): the page's tab says what the page says (its heading is "What Lex holds").
+    title: "What Lex holds",
     eyebrow: "Gateway",
-    heading: "Trust and Coverage",
+    heading: "What Lex holds",
     intro: "What the corpus this server mounts holds and what it recorded as missing, asked of the server when the page loads. The request carries no query text.",
     loading: "Asking this server for its coverage report.",
   }),
@@ -774,6 +775,8 @@ const EN = Object.freeze({
     none: "This address names no text. Find a text by its name or number in the field above.",
     kindLu: "Luxembourg law, consolidated text in French.",
     kindEu: "Text of the European Union, the wording held.",
+    // repair-pages (22/11/2026): an EU text read from the engine's store, held in its dated wordings.
+    kindEuNext: "Text of the European Union.",
     articles: Object.freeze({ one: "{count} article.", other: "{count} articles." }),
     versionsHeld: Object.freeze({ one: "One version held, of {first}.", other: "{count} versions held, from {first} to today." }),
     euDate: "An EU wording's date is the date of that wording, not a date of application.",
@@ -975,6 +978,10 @@ const EN = Object.freeze({
     noAnswer: "This page carries no answer from the server, so there is nothing to show here. On a page that has one, this part says, from that answer, when the index was built, when each publisher's texts were last collected and which code built and serves it.",
     built: "Index built on {date}.",
     builtUndated: "The index records no build date.",
+    // repair-pages (22/11/2026): the assistant's own index first, then the reading service's, named as such.
+    engineBuilt: "The assistant reads the law as indexed on {date} (data {data}, code {code}).",
+    engineUndated: "The assistant reads the law of data {data} (code {code}); its build date is not recorded.",
+    readingBuilt: "The pages that show a text or the changes also read Lex’s reading service, whose index was built on {date}.",
     channels: Object.freeze({
       "lu-legilux": "Luxembourg law, from Legilux",
       "eu-eurlex": "EU law, from the Publications Office of the European Union",

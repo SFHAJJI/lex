@@ -25,6 +25,7 @@ export const NEXT_DECISIONS_ROOT = 'lx-next-decisions';
 /** The addresses asked. */
 export const CONFIG_ADDRESS = '/api/next/config';
 const CORPUS = '/api/next/corpus';
+export const DICTIONARY_ADDRESS = '/api/next/dictionary';
 
 const isCount = (value) => typeof value === 'number' && Number.isFinite(value);
 const objectOr = (value) => (value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null);
@@ -67,8 +68,9 @@ export function modelRows(config, locale) {
   if (value === null) return [];
   const rows = (Array.isArray(value.models) ? value.models : []).filter((row) => text(row?.role) !== null && text(row?.deployment) !== null)
     .map((row) => ({ key: row.role, role: copy.roles[row.role] ?? row.role.replaceAll('_', ' '), deployment: row.deployment }));
-  if (text(value.embedding) !== null) rows.push({ key: 'embedding', role: copy.roles.embedding, deployment: value.embedding });
-  if (text(value.fallback) !== null) rows.push({ key: 'fallback', role: copy.roles.fallback, deployment: value.fallback });
+  // repair-pages: the engine's one table (app/llm.py MODELS) may already list the embedding and the fallback among the roles.
+  if (text(value.embedding) !== null && !rows.some((row) => row.key === 'embedding')) rows.push({ key: 'embedding', role: copy.roles.embedding, deployment: value.embedding });
+  if (text(value.fallback) !== null && !rows.some((row) => row.key === 'fallback')) rows.push({ key: 'fallback', role: copy.roles.fallback, deployment: value.fallback });
   return rows;
 }
 
@@ -124,8 +126,90 @@ function Limits({ corpus, locale }) {
   );
 }
 
+/**
+ * repair-pages (22/11/2026, K-QUEST-3): the dictionary of everyday words the engine reads (`GET /api/next/dictionary`), each
+ * row with its status and who validated it, so a draft is called a draft; nothing while the engine has none.
+ */
+export function DictionarySection({ dictionary = null, locale = CHROME_LOCALE }) {
+  const table = nextCopy(locale);
+  const copy = table.how2;
+  const value = objectOr(dictionary);
+  const rows = Array.isArray(value?.rows) ? value.rows.filter((row) => objectOr(row) !== null && text(row.legal_term) !== null) : [];
+  if (value === null || value.none === true || rows.length === 0) return null;
+  const counts = objectOr(value.counts) ?? {};
+  const validated = isCount(counts.validated) ? counts.validated : rows.filter((row) => row.status === 'validated' && text(row.validator) !== null).length;
+  const lawLang = locale === 'fr' ? undefined : 'fr';
+  return (
+    <section className="lx-how-block lx-how-wide" aria-labelledby="how-dictionary" data-reference-section="dictionary" id="dictionary" data-how-dictionary="">
+      <h2 id="how-dictionary">{copy.dictionaryHeading}</h2>
+      <p>{fillNext(copy.dictionaryLead, { rows: countedForm(copy.dictionaryRows, rows.length, locale) })}</p>
+      <p data-dictionary-state={validated === 0 ? 'drafts' : 'some-validated'}><strong className="lx-next-draft">{countedForm(copy.dictionaryState, validated, locale)}</strong> {copy.dictionaryNote}</p>
+      <details className="lx-how-fold" data-dictionary-rows="">
+        <summary>{countedForm(copy.dictionarySummary, rows.length, locale)}</summary>
+        <div className="lx-how-table-scroll">
+          <table className="lx-how-table lx-next-shapes">
+            <thead><tr>{['concept', 'words', 'term', 'domain', 'status', 'validator'].map((key) => <th scope="col" key={key}>{copy.dictionaryColumns[key]}</th>)}</tr></thead>
+            <tbody>
+              {rows.map((row) => {
+                const variants = objectOr(row.variants) ?? {};
+                return (
+                  <tr key={row.id ?? row.legal_term} data-dictionary-row={row.status === 'validated' && text(row.validator) !== null ? 'validated' : 'draft'}>
+                    <th scope="row" lang={lawLang}>{text(row.concept) ?? row.legal_term}</th>
+                    <td>
+                      {['fr', 'de', 'en'].filter((lang) => Array.isArray(variants[lang]) && variants[lang].length > 0).map((lang) => (
+                        <span className="lx-dock-term-forms" key={lang}>{fillNext(copy.dictionaryWords, { language: table.languages[lang] ?? lang, words: '\u0000' }).split('\u0000')[0]}<span lang={lang === locale ? undefined : lang}>{variants[lang].join(table.listSeparator)}</span></span>
+                      ))}
+                    </td>
+                    <td lang={lawLang}>{row.legal_term}</td>
+                    <td>{copy.domains[row.domain] ?? copy.domains.other}</td>
+                    <td className={row.status === 'validated' && text(row.validator) !== null ? undefined : 'lx-next-draft'}>{copy.dictionaryStatus[row.status] ?? copy.dictionaryStatus.draft}</td>
+                    <td>{text(row.validator) ?? copy.dictionaryNobody}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+/**
+ * repair-pages (22/11/2026, K-SCOPE-1): the written shape decision for each part of the corpus (a pile routed down its
+ * outlines, one document type in many copies read as a typed table, or case files), with the reason: the copy's rows, kept in
+ * step with the data builders' SHAPE-DECISIONS.md by `test/next.test.mjs`. Nothing while the copy has none.
+ */
+export function ShapesSection({ locale = CHROME_LOCALE }) {
+  const copy = nextCopy(locale).how2.shapes;
+  const rows = Array.isArray(copy?.rows) ? copy.rows : [];
+  if (rows.length === 0) return null;
+  return (
+    <section className="lx-how-block lx-how-wide" aria-labelledby="how-shapes" data-reference-section="shapes" id="shapes" data-how-shapes="">
+      <h2 id="how-shapes">{copy.heading}</h2>
+      <p>{copy.intro}</p>
+      <div className="lx-how-table-scroll">
+        <table className="lx-how-table lx-next-shapes" data-shapes="">
+          <thead><tr>{['part', 'shape', 'how', 'why'].map((key) => <th scope="col" key={key}>{copy.columns[key]}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} data-shape={row.shape} data-part={row.key}>
+                <th scope="row">{row.part}</th>
+                <td>{copy.names[row.shape] ?? row.shape}</td>
+                <td>{row.how}</td>
+                <td>{row.why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {typeof copy.source === 'string' ? <p className="lx-next-note">{copy.source}</p> : null}
+    </section>
+  );
+}
+
 /** How it works, drawn from the corpus counts and the server's configuration (each null while not known). */
-export function HowFunnelView({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE }) {
+export function HowFunnelView({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null }) {
   const table = nextCopy(locale);
   const copy = table.how2;
   const dock = table.dock;
@@ -202,6 +286,13 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
           <h2 id="how-commitments">{table.how.commitmentsHeading}</h2>
           <ul className="lx-how-lines">{copy.commitments.map((line) => <li key={line}>{line}</li>)}</ul>
         </section>
+        {/* repair-pages (22/11/2026, K-OPS-1, K-UI-2, K-QUEST-3, K-PARSE-6, K-REF-2): each departure from the method, said as a choice. */}
+        <section className="lx-how-block lx-how-wide" aria-labelledby="how-departures" data-reference-section="departures" id="departures" data-how-departures="">
+          <h2 id="how-departures">{copy.departuresHeading}</h2>
+          <ul className="lx-how-lines">{copy.departures.map((line) => <li key={line}>{line}</li>)}</ul>
+        </section>
+        <ShapesSection locale={locale} />
+        <DictionarySection dictionary={dictionary} locale={locale} />
         {counts.length === 0 ? null : (
           <details className="lx-how-fold lx-how-wide" data-how-counts="">
             <summary>{copy.countsSummary}</summary>
@@ -218,10 +309,10 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
  * the earlier pipeline's (`HowView`). Until the configuration is read, the heading and a loading line only: the page never
  * describes a design before it knows it is the one running.
  */
-export function HowForPipeline({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE }) {
+export function HowForPipeline({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null }) {
   const pipeline = objectOr(config)?.pipeline;
   if (configState === 'ready' && typeof pipeline === 'string' && !FUNNEL_PIPELINES.includes(pipeline)) return <HowView corpus={corpus} state={state} locale={locale} />;
-  if (configState === 'ready' && FUNNEL_PIPELINES.includes(pipeline)) return <HowFunnelView corpus={corpus} config={config} state={state} configState={configState} locale={locale} />;
+  if (configState === 'ready' && FUNNEL_PIPELINES.includes(pipeline)) return <HowFunnelView corpus={corpus} config={config} state={state} configState={configState} locale={locale} dictionary={dictionary} />;
   const copy = nextCopy(locale).how2;
   return (
     <div className="lx-how" data-next-page="how" data-next-state={configState === 'failed' ? 'failed' : 'loading'}>
@@ -234,7 +325,9 @@ export function HowForPipeline({ corpus = null, config = null, state = 'loading'
 export function NextHowFunnel({ fetchImpl = undefined, locale = CHROME_LOCALE }) {
   const corpus = useJson(CORPUS, fetchImpl);
   const config = useJson(CONFIG_ADDRESS, fetchImpl);
-  return <HowForPipeline corpus={corpus.data} config={config.data} state={corpus.state} configState={config.state} locale={locale} />;
+  // repair-pages: the dictionary's rows and their status (K-QUEST-3).
+  const dictionary = useJson(DICTIONARY_ADDRESS, fetchImpl);
+  return <HowForPipeline corpus={corpus.data} config={config.data} state={corpus.state} configState={config.state} locale={locale} dictionary={dictionary.data} />;
 }
 
 /** The design choices, live: the configuration asked once the page is drawn. */

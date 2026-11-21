@@ -1,0 +1,2099 @@
+{
+ "state": "answer_with_exception",
+ "outcome": "answer_with_exception",
+ "pipeline": "combo",
+ "question": "Un assuré peut-il résilier son contrat après un sinistre, et avec quel préavis ? (champs de repair-engine)",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_41",
+   "date": "2025-11-25",
+   "why": "Les lignes distinguent le contrat sinistré des autres contrats du preneur, ainsi que le délai de notification du préavis de prise d’effet.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 41",
+   "number": "41",
+   "heading": "Résiliation après sinistre",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96084,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "why_by": "model",
+   "source": "header",
+   "label": "Article 41",
+   "text": [
+    "Sauf en assurance sur la vie et en assurance-maladie, le contrat peut réserver à l'assureur le droit de résilier le contrat après la survenance d'un sinistre donnant lieu à indemnisation. Cette résiliation est notifiée au preneur d'assurance dans le mois du premier paiement de la prestation de l'assureur.",
+    "Dans le cas où l'assureur exerce ce droit, le preneur d'assurance dispose du droit de résilier les autres contrats conclus auprès du même assureur. Cette résiliation est notifiée dans le mois de la notification prévue au point 1.",
+    "L'assureur peut prononcer la résiliation du contrat et, par dérogation à l'article 39 point 3, donner à cette résiliation effet dès sa notification lorsque le preneur d'assurance, l'assuré ou le bénéficiaire ont manqué à l'une des obligations nées de la survenance du sinistre dans l'intention de tromper l'assureur. Ce droit peut être exercé par l'assureur nonobstant le non paiement de toute prestation et il doit être exercé dans le mois de la découverte de la fraude."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sauf en assurance sur la vie et en assurance-maladie, le contrat peut réserver à l'assureur le droit de résilier le contrat après la survenance d'un sinistre donnant lieu à indemnisation. Cette résiliation est notifiée au preneur d'assurance dans le mois du premier paiement de la prestation de l'assureur.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Dans le cas où l'assureur exerce ce droit, le preneur d'assurance dispose du droit de résilier les autres contrats conclus auprès du même assureur. Cette résiliation est notifiée dans le mois de la notification prévue au point 1.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "L'assureur peut prononcer la résiliation du contrat et, par dérogation à l'article 39 point 3, donner à cette résiliation effet dès sa notification lorsque le preneur d'assurance, l'assuré ou le bénéficiaire ont manqué à l'une des obligations nées de la survenance du sinistre dans l'intention de tromper l'assureur. Ce droit peut être exercé par l'assureur nonobstant le non paiement de toute prestation et il doit être exercé dans le mois de la découverte de la fraude.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true,
+    "still_applies": true
+   },
+   "found_by": {
+    "outline": 14,
+    "words": 2,
+    "meaning": 1,
+    "words_all": 2,
+    "meaning_all": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    3
+   ],
+   "lines_pointed_by_reading": [
+    1,
+    2
+   ],
+   "context_unit": "article (short: whole article)",
+   "conflicting": true
+  },
+  {
+   "role": "condition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_39",
+   "date": "2025-11-25",
+   "why": "Conditions et formes de la résiliation du contrat.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 39",
+   "number": "39",
+   "heading": "Cas, formes et effets de la résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96082,
+   "lines": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "why_by": "model",
+   "source": "header",
+   "label": "Article 39",
+   "text": [
+    "La résiliation du contrat se fait soit par lettre recommandée à la poste, soit par exploit d'huissier ou par remise de la lettre de résiliation contre récépissé.",
+    "Sauf si la loi en dispose autrement, la résiliation n'a d'effet qu'à l'expiration d'un délai d'un mois minimum à compter du lendemain de la signification ou de la date du récépissé ou, dans le cas d'une lettre recommandée, à compter du lendemain de son dépôt à la poste.",
+    "Le délai visé à l'alinéa 1er doit être indiqué dans le contrat et rappelé dans l'acte de résiliation.",
+    "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "La résiliation du contrat se fait soit par lettre recommandée à la poste, soit par exploit d'huissier ou par remise de la lettre de résiliation contre récépissé.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Sauf si la loi en dispose autrement, la résiliation n'a d'effet qu'à l'expiration d'un délai d'un mois minimum à compter du lendemain de la signification ou de la date du récépissé ou, dans le cas d'une lettre recommandée, à compter du lendemain de son dépôt à la poste.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Le délai visé à l'alinéa 1er doit être indiqué dans le contrat et rappelé dans l'acte de résiliation.",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true,
+    "still_applies": true
+   },
+   "found_by": {
+    "outline": 12,
+    "meaning": 2,
+    "meaning_all": 2
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    4
+   ],
+   "lines_pointed_by_reading": [
+    1,
+    2,
+    3
+   ],
+   "context_unit": "article (short: whole article)",
+   "conflicting": true
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_79",
+   "date": "2025-11-25",
+   "why": "Article 79, al. 1 déroge à Article 41 (« par dérogation à »)",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 79",
+   "number": "79",
+   "heading": "Résiliation après sinistre",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section II - L'assurance des récoltes",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96133,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "why_by": "code",
+   "source": "header",
+   "label": "Article 79",
+   "text": [
+    "Par dérogation à l'article 41, lorsque en matière d'assurance des récoltes, l'assureur s'est réservé le droit de résilier le contrat après la survenance d'un sinistre, cette résiliation ne peut avoir d'effet qu'à l'expiration de la période normale des récoltes."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Par dérogation à l'article 41, lorsque en matière d'assurance des récoltes, l'assureur s'est réservé le droit de résilier le contrat après la survenance d'un sinistre, cette résiliation ne peut avoir d'effet qu'à l'expiration de la période normale des récoltes.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true,
+    "still_applies": true
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Article 41",
+   "inbound": true
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_1er",
+   "date": "2025-11-25",
+   "why": "« Contrat d'assurance » est défini par Article 1er de ce texte",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 1er",
+   "number": "1",
+   "heading": "Définitions",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre Ier - Dispositions générales > Section Ière - Définitions et dispositions préliminaires",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2016-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96042,
+   "lines": [
+    3
+   ],
+   "wording_since": "2016-01-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+    "effective": "2016-01-01",
+    "title": "Loi du 7 décembre 2015 portant modification de: 1) la loi modifiée du 27 juillet 1997 sur le contrat …"
+   },
+   "repeal": null,
+   "why_by": "code",
+   "source": "header",
+   "label": "Article 1er",
+   "text": [
+    "Contrat d'assurance: un contrat en vertu duquel, moyennant le paiement d'une prime fixe ou variable, une partie, l'assureur, s'engage envers une autre partie, le preneur d'assurance, à fournir une prestation stipulée dans le contrat au cas où:"
+   ],
+   "quote": [
+    {
+     "n": 3,
+     "text": "Contrat d'assurance: un contrat en vertu duquel, moyennant le paiement d'une prime fixe ou variable, une partie, l'assureur, s'engage envers une autre partie, le preneur d'assurance, à fournir une prestation stipulée dans le contrat au cas où:",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true,
+    "still_applies": true
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Article 41"
+  },
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_1er",
+   "date": "2025-11-25",
+   "why": "élément de la liste « Steuergegenstand »: § 2",
+   "act_title": "Loi du 9 juillet 1937 sur l’impôt sur les assurances",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 1er",
+   "number": "1",
+   "heading": "Définitions",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre Ier - Dispositions générales > Section Ière - Définitions et dispositions préliminaires",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2016-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96042,
+   "lines": [
+    1
+   ],
+   "wording_since": "2016-01-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+    "effective": "2016-01-01",
+    "title": "Loi du 7 décembre 2015 portant modification de: 1) la loi modifiée du 27 juillet 1997 sur le contrat …"
+   },
+   "repeal": null,
+   "why_by": "code",
+   "source": "header",
+   "label": "§ 2.",
+   "text": [
+    "Der Versicherungsteuer unterliegt die Zahlung des Versicherungsentgelts auf Grund eines durch Vertrag oder auf sonstige Weise entstandenen Versicherungsverhältnisses."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Der Versicherungsteuer unterliegt die Zahlung des Versicherungsentgelts.",
+     "label": "§ 2."
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true,
+    "still_applies": true
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Article 41",
+   "authentic_language": "de",
+   "conflicting": false
+  }
+ ],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [
+  "authentic_text_german",
+  "article_unchanged_by_later_amendments"
+ ],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": true,
+  "found_by_words": true,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 2,
+  "conflicting_evidence": false,
+  "meaning_only_verified": true
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "vocabulary_misses",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "rule",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Un assuré peut-il résilier son contrat d'assurance après un sinistre, et avec quel préavis ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "résiliation du contrat d’assurance",
+      "sinistre",
+      "préavis"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [
+      "Un assuré peut-il résilier son contrat d'assurance après un sinistre ?",
+      "Quel préavis un assuré doit-il respecter pour résilier son contrat d'assurance après un sinistre ?"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "keywords",
+     "value": [
+      {
+       "term": "assure",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "assur*"
+       ]
+      },
+      {
+       "term": "resilier",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "resil*"
+       ]
+      },
+      {
+       "term": "contrat",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "contr*"
+       ]
+      },
+      {
+       "term": "assurance",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "assura*"
+       ]
+      },
+      {
+       "term": "apres",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "apres*"
+       ]
+      },
+      {
+       "term": "sinistre",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "sinis*"
+       ]
+      },
+      {
+       "term": "preavis",
+       "source": "question words (code)",
+       "weight": 1.0,
+       "variants": [
+        "preav*"
+       ]
+      },
+      {
+       "term": "resiliation",
+       "source": "model (legal terms or French rendering)",
+       "weight": 1.0,
+       "variants": [
+        "resiliat*"
+       ]
+      }
+     ],
+     "by": "code+model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 67,
+    "considered_lines": 72,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 22,
+      "by": "code"
+     },
+     {
+      "rule": "no_longer_in_force_at_the_date_asked",
+      "removed": 2,
+      "by": "code"
+     },
+     {
+      "rule": "no_version_applicable_on_the_date",
+      "removed": 1,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "replaces": 0,
+     "transposes": 7,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 10,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 17,
+       "lines_meaning": 2,
+       "articles_meaning": 1,
+       "articles_words": 1,
+       "transposes": 11
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/code/route",
+      "node_id": "n00419",
+      "found_by": {
+       "articles_meaning": 2,
+       "articles_words": 4
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/rgd/2003/11/11/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 3,
+       "articles_words": 2
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00186",
+      "found_by": {
+       "lines_meaning": 3,
+       "articles_words": 7
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_ii",
+      "found_by": {
+       "lines_meaning": 8,
+       "articles_meaning": 4,
+       "articles_words": 3
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/rgd/1979/04/23/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/loi/2015/04/12/n6",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 4,
+       "transposes": 10
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/loi/2026/05/05/a226",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/reg/2019/02/26/a150",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 5
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 5,
+       "articles_words": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/loi/1975/12/13/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 8,
+       "articles_words": 5
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "livre_v.titre_ii",
+      "found_by": {
+       "lines_meaning": 6
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/rgd/1999/05/05/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 6
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 29,
+       "lines_meaning": 7,
+       "transposes": 15
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "livre_premier.titre_ii",
+      "found_by": {
+       "articles_meaning": 7,
+       "articles_words": 13
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/loi/1994/06/03/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 8
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "celex:32009L0103",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 18,
+       "articles_words": 8
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00773",
+      "found_by": {
+       "articles_meaning": 9
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/rgd/2024/06/04/a243",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/loi/1890/02/25/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 10
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_iii",
+      "found_by": {
+       "lines_meaning": 10
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "celex:32009L0138",
+      "node_id": "titre_ii",
+      "found_by": {
+       "articles_meaning": 10
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/rgd/2000/10/02/n8",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 10
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/loi/1990/11/09/n1",
+      "node_id": "livre_3.titre_1er",
+      "found_by": {
+       "articles_words": 11
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "title": "Loi du 27 juillet 1997 sur le contrat d'assurance. [LOI; loi_de_fond; public général; in_force] — Réglementation générale du contrat d'assurance, incluant assurances de dommages et de personnes. En cl",
+      "reason": "Loi générale luxembourgeoise sur le contrat d’assurance, susceptible de fixer la résiliation après sinistre et son préavis.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1211
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 3149,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 5,
+      "picked": [
+       {
+        "node_id": "section_1",
+        "heading": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+        "tally": 7,
+        "reason": "Contient le plus grand nombre d'articles sur le contrat d'assurance en général, incluant la résiliation après sinistre.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_2",
+        "heading": "TITRE II DES ASSURANCES DE DOMMAGES",
+        "tally": 7,
+        "reason": "Traite des assurances de dommages, sujet pertinent pour la résiliation après sinistre.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_3",
+        "heading": "TITRE III DES ASSURANCES DE PERSONNES",
+        "tally": 5,
+        "reason": "Traite des assurances de personnes, pouvant inclure la résiliation après sinistre.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 12,
+      "picked": [
+       {
+        "node_id": "section_1.section_2",
+        "heading": "Chapitre II - Dispositions communes à tous les contrats",
+        "tally": 7,
+        "reason": "Contient des dispositions communes sur la résiliation des contrats d'assurance après un sinistre, incluant le préavis.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "section_1.section_3",
+        "heading": "Chapitre III - Dispositions propres aux assurances à caractère indemnitaire",
+        "tally": 6,
+        "reason": "Spécifique aux assurances à caractère indemnitaire, probablement détaillant la résiliation après sinistre.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "section_2.section_2",
+        "heading": "Chapitre II - Des contrats d'assurance de choses",
+        "tally": 7,
+        "reason": "Traite des contrats d'assurance de choses, souvent concernés par la résiliation après sinistre.",
+        "whole": true,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 3,
+      "shown": 13,
+      "picked": [
+       {
+        "node_id": "section_1.section_2.section_9",
+        "heading": "Section IX - Fin du contrat",
+        "tally": 7,
+        "reason": "Section IX traite de la fin du contrat, ce qui inclut la résiliation après sinistre et les conditions de préavis.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "section_1.section_2.section_6",
+        "heading": "Section VI - Inexistence et modification du risque",
+        "tally": 6,
+        "reason": "Section VI aborde la modification du risque, souvent liée à un sinistre, et peut contenir des règles sur la résiliation.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "section_1.section_2.section_8",
+        "heading": "Section VIII - Prise d'effet de la garantie et durée du contrat",
+        "tally": 6,
+        "reason": "Section VIII concerne la durée du contrat et la prise d'effet de la garantie, pouvant inclure des dispositions sur la résiliation après sinistre.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "section_1.section_3",
+      "heading": "Chapitre III - Dispositions propres aux assurances à caractère indemnitaire",
+      "stopped": "leaf",
+      "articles": 11
+     },
+     {
+      "node_id": "section_1.section_2.section_9",
+      "heading": "Section IX - Fin du contrat",
+      "stopped": "leaf",
+      "articles": 5
+     },
+     {
+      "node_id": "section_1.section_2.section_6",
+      "heading": "Section VI - Inexistence et modification du risque",
+      "stopped": "leaf",
+      "articles": 3
+     },
+     {
+      "node_id": "section_1.section_2.section_8",
+      "heading": "Section VIII - Prise d'effet de la garantie et durée du contrat",
+      "stopped": "leaf",
+      "articles": 2
+     }
+    ],
+    "articles": 21,
+    "stopped": "leaf"
+   },
+   {
+    "level": "articles",
+    "by": "model",
+    "groups": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node": "Chapitre III. De la résiliation",
+      "articles": 31,
+      "shown": 18,
+      "shown_by": "code",
+      "picked": 3
+     }
+    ],
+    "shown": 18,
+    "picked": [
+     {
+      "article_pk": 96084,
+      "label": "Article 41",
+      "reason": "Résiliation après sinistre: le cas de la question.",
+      "tally": 3
+     }
+    ],
+    "at_most": 4,
+    "read_amount_set_by": "question type 'value' (at most 4) and the model's picks",
+    "ms": 900,
+    "rule": "a node too big to read whole is opened at the article level"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 96091,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96092,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96093,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96094,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96095,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96096,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96097,
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96098,
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96099,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96100,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96101,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96082,
+      "found_by": {
+       "outline": 12,
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96083,
+      "found_by": {
+       "outline": 13,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96084,
+      "found_by": {
+       "outline": 14,
+       "words": 2,
+       "meaning": 1,
+       "words_all": 2,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96085,
+      "found_by": {
+       "outline": 15
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96086,
+      "found_by": {
+       "outline": 16
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96075,
+      "found_by": {
+       "outline": 17
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96076,
+      "found_by": {
+       "outline": 18
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96077,
+      "found_by": {
+       "outline": 19
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96080,
+      "found_by": {
+       "outline": 20
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96081,
+      "found_by": {
+       "outline": 21,
+       "words": 6,
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96133,
+      "found_by": {
+       "words": 1,
+       "meaning": 3,
+       "words_all": 1,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96054,
+      "found_by": {
+       "words": 3,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96144,
+      "found_by": {
+       "words": 4,
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96065,
+      "found_by": {
+       "words": 5,
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 205304,
+      "found_by": {
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96069,
+      "found_by": {
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 96157,
+      "found_by": {
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0,
+    "wordings_by_article_dates": 0,
+    "compilation_articles_read_in_their_own_act": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 2957,
+    "candidates": [
+     {
+      "article_pk": 96084,
+      "label": "Article 41",
+      "role": "rule",
+      "reason": "Article principal sur résiliation après sinistre et droits associés.",
+      "found_by": {
+       "outline": 14,
+       "words": 2,
+       "meaning": 1,
+       "words_all": 2,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "apres",
+       "sinistre",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96133,
+      "label": "Article 79",
+      "role": "exception",
+      "reason": "Dérogation spécifique à l'assurance des récoltes.",
+      "found_by": {
+       "words": 1,
+       "meaning": 3,
+       "words_all": 1,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "apres",
+       "sinistre",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96082,
+      "label": "Article 39",
+      "role": "condition",
+      "reason": "Conditions et formes de la résiliation du contrat.",
+      "found_by": {
+       "outline": 12,
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96054,
+      "label": "Article 13",
+      "role": "reject",
+      "reason": "Ne traite pas directement de la résiliation après sinistre.",
+      "found_by": {
+       "words": 3,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "sinistre",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96081,
+      "label": "Article 38",
+      "role": "context",
+      "reason": "Durée et résiliation annuelle, contexte général.",
+      "found_by": {
+       "outline": 21,
+       "words": 6,
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "apres",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96144,
+      "label": "Article 90",
+      "role": "reject",
+      "reason": "Pas centré sur la résiliation après sinistre.",
+      "found_by": {
+       "words": 4,
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "sinistre",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96065,
+      "label": "Article 22",
+      "role": "context",
+      "reason": "Mise en demeure et faculté de résiliation, contexte d'exécution.",
+      "found_by": {
+       "words": 5,
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "apres",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96069,
+      "label": "Article 26",
+      "role": "context",
+      "reason": "Déclaration du sinistre, contexte utile.",
+      "found_by": {
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": true,
+      "matched": [
+       "assure",
+       "contrat",
+       "sinistre"
+      ]
+     },
+     {
+      "article_pk": 96083,
+      "label": "Article 40",
+      "role": "context",
+      "reason": "Crédit de prime après résiliation, utile mais non essentiel.",
+      "found_by": {
+       "outline": 13,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96091,
+      "label": "Article 48",
+      "role": "reject",
+      "reason": "Définit intérêt d'assurance, hors sujet.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "assurance"
+      ]
+     },
+     {
+      "article_pk": 96092,
+      "label": "Article 49",
+      "role": "reject",
+      "reason": "Assurance pour compte, hors sujet.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "contrat",
+       "assurance",
+       "sinistre"
+      ]
+     },
+     {
+      "article_pk": 96093,
+      "label": "Article 50",
+      "role": "reject",
+      "reason": "Étendue de la prestation, hors sujet.",
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "assurance"
+      ]
+     },
+     {
+      "article_pk": 96094,
+      "label": "Article 51",
+      "role": "reject",
+      "reason": "Cumul d'assurances, hors sujet.",
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "contrat",
+       "assurance"
+      ]
+     },
+     {
+      "article_pk": 96095,
+      "label": "Article 52",
+      "role": "reject",
+      "reason": "Subrogation, hors sujet.",
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "contrat",
+       "assurance"
+      ]
+     },
+     {
+      "article_pk": 96096,
+      "label": "Article 53",
+      "role": "reject",
+      "reason": "Surassurance de bonne foi, hors sujet.",
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "resilier",
+       "contrat",
+       "assurance",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 96097,
+      "label": "Article 54",
+      "role": "reject",
+      "reason": "Surassurance de mauvaise foi, hors sujet.",
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "contrat",
+       "assurance"
+      ]
+     },
+     {
+      "article_pk": 96098,
+      "label": "Article 55",
+      "role": "reject",
+      "reason": "Répartition en cas de pluralité, hors sujet.",
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "contrat",
+       "assurance",
+       "sinistre"
+      ]
+     },
+     {
+      "article_pk": 96099,
+      "label": "Article 56",
+      "role": "reject",
+      "reason": "Sous-assurance, hors sujet.",
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "contrat",
+       "assurance"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 7,
+    "read_amount_set_by": "outline node",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A1",
+      "lines": [
+       1,
+       2
+      ],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "Les lignes distinguent le contrat sinistré des autres contrats du preneur, ainsi que le délai de notification du préavis de prise d’effet.",
+      "answer_words": "un délai d'un mois minimum",
+      "answer_kind": "depends",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 2,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "exception index",
+    "budget": 1,
+    "loops": 0,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [
+     {
+      "from": "Article 79",
+      "to": "Article 41",
+      "kind": "exception",
+      "why": "Article 79, al. 1 déroge à Article 41 (« par dérogation à »)",
+      "held": true,
+      "direction": "inbound",
+      "article_pk": 96133,
+      "line": 1,
+      "status": "resolved"
+     },
+     {
+      "from": "Article 41",
+      "to": "Article 1er",
+      "kind": "definition",
+      "why": "« Contrat d'assurance » est défini par Article 1er de ce texte",
+      "held": true,
+      "direction": "definition",
+      "article_pk": 96042,
+      "status": "resolved"
+     }
+    ],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 3,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_with_exception_by_code",
+    "state": "answer_with_exception"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 276,
+    "tokens_in": 27,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1357,
+    "model_ms": 1357,
+    "queue_ms": 0,
+    "tokens_in": 616,
+    "tokens_out": 129,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 946,
+    "model_ms": 946,
+    "queue_ms": 0,
+    "tokens_in": 3964,
+    "tokens_out": 53,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 944,
+    "model_ms": 944,
+    "queue_ms": 0,
+    "tokens_in": 527,
+    "tokens_out": 99,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 922,
+    "model_ms": 922,
+    "queue_ms": 0,
+    "tokens_in": 877,
+    "tokens_out": 102,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 993,
+    "model_ms": 993,
+    "queue_ms": 0,
+    "tokens_in": 886,
+    "tokens_out": 121,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 2930,
+    "model_ms": 2929,
+    "queue_ms": 0,
+    "tokens_in": 3188,
+    "tokens_out": 406,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1723,
+    "model_ms": 1723,
+    "queue_ms": 0,
+    "tokens_in": 3373,
+    "tokens_out": 229,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v2"
+   }
+  ],
+  "cost_usd": 0.01452,
+  "ms": 9254,
+  "model_calls": 7,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0,
+  "names_dropped": [
+   {
+    "name": "Loi modifiée du 29 décembre 1971 concernant l’impôt frappant les primes d’assurance",
+    "why": "no act of that date and subject",
+    "rule": "named by a model, matches no act"
+   }
+  ]
+ },
+ "meta": {
+  "build": {
+   "code": "t9",
+   "data": "20261122b",
+   "routing": "2026-11-21T22:01:59"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v2"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "rule",
+   "french": "Un assuré peut-il résilier son contrat d'assurance après un sinistre, et avec quel préavis ?",
+   "legal_terms": [
+    "résiliation du contrat d’assurance",
+    "sinistre",
+    "préavis"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": [
+    "Un assuré peut-il résilier son contrat d'assurance après un sinistre ?",
+    "Quel préavis un assuré doit-il respecter pour résilier son contrat d'assurance après un sinistre ?"
+   ]
+  },
+  "candidates": [
+   {
+    "article_pk": 96084,
+    "role": "rule",
+    "found_by": {
+     "outline": 14,
+     "words": 2,
+     "meaning": 1,
+     "words_all": 2,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 96133,
+    "role": "exception",
+    "found_by": {
+     "words": 1,
+     "meaning": 3,
+     "words_all": 1,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 96082,
+    "role": "condition",
+    "found_by": {
+     "outline": 12,
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 96054,
+    "role": "reject",
+    "found_by": {
+     "words": 3,
+     "words_all": 5
+    }
+   },
+   {
+    "article_pk": 96081,
+    "role": "context",
+    "found_by": {
+     "outline": 21,
+     "words": 6,
+     "meaning": 4,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 96144,
+    "role": "reject",
+    "found_by": {
+     "words": 4,
+     "words_all": 6
+    }
+   },
+   {
+    "article_pk": 96065,
+    "role": "context",
+    "found_by": {
+     "words": 5,
+     "meaning": 6,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 96069,
+    "role": "context",
+    "found_by": {
+     "meaning": 5,
+     "meaning_all": 5
+    }
+   },
+   {
+    "article_pk": 96083,
+    "role": "context",
+    "found_by": {
+     "outline": 13,
+     "meaning_all": 8
+    }
+   },
+   {
+    "article_pk": 96091,
+    "role": "reject",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96092,
+    "role": "reject",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 96093,
+    "role": "reject",
+    "found_by": {
+     "outline": 3
+    }
+   },
+   {
+    "article_pk": 96094,
+    "role": "reject",
+    "found_by": {
+     "outline": 4
+    }
+   },
+   {
+    "article_pk": 96095,
+    "role": "reject",
+    "found_by": {
+     "outline": 5
+    }
+   },
+   {
+    "article_pk": 96096,
+    "role": "reject",
+    "found_by": {
+     "outline": 6
+    }
+   },
+   {
+    "article_pk": 96097,
+    "role": "reject",
+    "found_by": {
+     "outline": 7
+    }
+   },
+   {
+    "article_pk": 96098,
+    "role": "reject",
+    "found_by": {
+     "outline": 8
+    }
+   },
+   {
+    "article_pk": 96099,
+    "role": "reject",
+    "found_by": {
+     "outline": 9
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96084
+   },
+   {
+    "article_pk": 96133
+   },
+   {
+    "article_pk": 96082
+   },
+   {
+    "article_pk": 96081
+   },
+   {
+    "article_pk": 96065
+   },
+   {
+    "article_pk": 96069
+   },
+   {
+    "article_pk": 96083
+   }
+  ],
+  "replay": "eNrNWltv28gV_isDvjhB5Qsl3yQ_FEbiLoJmna2dLQoYBjEiR9IkI5LhkL5sEGBf-96XvvVx3f6EfVv_k_0l_c4ZkqIoynbSdNsXmzycOXPut9FH78ob-T0v9UZemMzHidfzQjznQzxEeOjv9Pd9v98f4z3FWm9SxLEym1d9AD7g_ftYSGuL7P5OpKrIN7UReLbaaJUJm8QiTOI8k7mINnidjEMlZJrd_2RFEQurY23zTPWEyoW8UqH4UCgj8P1OXmkrfk90FCUhm76_2fcJYr3RRBqreh6ePBnba5UF1zqfBeomVGmukxjLsnXfgvFtECaRwpqxN7q4GO7vHO5ifWEAuvB7_d7gsue9VlYYPY3xLwKROp4WKs6FUTVPJfXgPcIiWYARW33EpgJ8qFgVWU9IHVtNvNH26P7OSI09Ik5yPdGhJKLc-pJvfEszbbH21x__riYTlW-RBjI9l9mt13PMx4Uxlz2mvg-9JXGkHeeOhd4umHhRQS1JeJJkc8XYjaz0VB9eEv7QQf5g0PMaIr7wccRxlusQbB0MwafZEj4xmCVTJe7_IaqPu7549su_RCqz8qs7Fit--fk56UpNFIQVqlXmdsFcpCaQdXkoKQe4XnRY1i8_C2VzOoLW83EVBT4MEoxjUa5ucrX2TCCPZ7AK_J97IwJBtqZ6qh9U9ZBKb_TRMxLmIaeKXCQjE5U4AvBJlszb5psnbcg0g4EAGMlb-g76Kuyz5BrwOBGEUOhY5DNFdmRJFiORJ7TlE3yxBAX5bUpEOFvG8eBv9tv4qVFTaYJcZXM45YW3xrzYousjsK1CzWbn0HmXbGWmsGS4ThepykAmDgilVbX7vyvgJZEO2TJITnlgpY4Il8xypuMrcc4s_mmJ6WKBOUq0w6xsqkLIQKRJkX3pQZdQ6Pt2YOpywC7vd7A92qbegZZqkc-L2LYcqt32kv291pKd_WEbcjhoQ4Z-C82w3wYM2oD2ycO9NmC_DThoAw7bgOECAHvJkL5K-TmxOUE5SThmHYPMFDYYpLcLOLK6UobTYZYWljLELb9F6ndz_DEe8291hNCBI_YPmu-B0UgX3ugAIngPHXFytfBh-GUSuP2jPrifaAMjsXwiaxceq1IlDXDIPICTB-TwgbTvVcShap5c0Xn9foMiOH69PU4Ck8RT5DodB4jzoXoE0Xo8V6CMQolMU4PkNDYqoMBSomoi8ZeQQIgWVh-SBD56sZzTkh1anhrJULzAA2KbJpbFBKmTwILrJKOcPtipAHMlYyRcB5IugjegfhNabvb34DUyzJ1Q8RBoqmC2ldHbKpf5NuLTtkn0tj8cHmzvHGz3D7ZjfwfsxKDeLabgq3OWw-tEU9TqH4h3hTYGYY_2CfhtswJouPKWuHj95tWRwBEB8E3gkEciLcYQoZje38XIetIciUo7l-LXH_8mzu7vpkbNUVe4OFkvVEshc3FKDwgQGCUKkRrGCT1K5nPkH07zVD1wuIQot8QJIo9hrUnLUZJYaxxkihuF0q_IpiqhkqPNYjNe9_DVcvQZE4lKTPQNolu7miijWh3SQBMFwCpyblVu5TyCDGeuLVZPA5f7SBGURfy-75NtVk4ZJWFBwvJ6n69gm8NiHOqkyMnMAmetgJUAkZOxLxPX8yp3oNMG_i7CzEyZCC5hbgMDh8gWxWiuUmd-EUQ0W3i_N0KAS3VIPkifFxZnFeeugKqAmZIRm7f39tXbsxPxSrw-ES_enL49O34rXm4cn59_f3Z8-uJEnJyKb05OT86OX5PBSmNu2ZdqBVNlpMtaNUUWFagv4gjV5nwMZcCaStd5wJqFahhjw-ge0TRp9nqWGNWQSZK6YoYUucp4v4vxV-LlybmoGT7Hq3j55ttvj785Oe9m-S0qqFy5OrzTL8hy38EO4Rgo5Uk4nKG_Oj-DTn66GPru5Oz8zelpk6O9p3BUu3aPWLgirbB6MvUfcXO57JO92oj7tRH7_ceseKtbrS9mMtUUCCCITfFSUwIouxK0nfOCeiy0AnkCWzWNHuoR845ca9aBzHaoNlpqzh4pcxcGr5bCVim-PCueYAsLcQzWiWNFHmmWpBl3kzdNvUM6ocwQ9O5_yqgPiNQc_ZDUXDeXMtpvyOg8vb8L0VtSy_lkVD06fUwxcM7ivb8D2JjP8_umaBC45cRb4_hPs5V1SqNWbsZlxGPx4OHtiAtwImIX60KVIeJZ7hu_jOOHXWmwcKXB012pfhouCercQcWrv0BOf9DNJqtbJo0NeSUeYnOytLdHLfKHQjsXyJ-S20uXrQYN0aMu85BddDG-38n4n8lAXsXqBoQozlm5gMiXJipoD-ECa3xkgUeOUUSyMLoRLKzE6Ps7nmy0u2JqLlmGKtYZGx7kNDXdwWhdJP5cwRyuEQz7zndugrTB86NS11N4PkVPLhOpdVWdZtMtJmAtnYRxrexnW5DV5Krz3NWctRLE7Zen5VJ8lyvlJUxcmkc97b8bpYnElPzdUbnoYBAN_Ker_HOCwANH7v2m3vcAIYP_obU_QFafzKbx6q-sXmpMVA5qkmx5YIC2SkVMLTa_124zdwduNdapG1gLW_Otm_OVRwpun9sDP7ZlN6gv4ylWxXRCsCAVvTG1xABaGnSXH7h3d1-BINWGlVRvC-DuEY0OcJzOAppYEGG0PA5CdA-63N8_bPIts7GmDqjVMlHv1h_u0WyksbU1aK8Hx4gXcahTadj1H0s2UZbonGviJEQsRorpHE17LxtjZtuohuCjZqkQoEB9FyYGNG51TtS-bIq-MofreaeqSryppKCX0ajQlVpPqN1X53hg0hk1iFreG8eFMgbRtlyqFs3c1ur4r-d9B3pCEEKzzCfF39WJYc_7lhxQUaE9V4VT1kSGhcn5gmQJYYMweOwN5F-4tLg6d2RNhgaeXIl4kXZrJNhtFiIaNHe_wLlQXnmlMq_L_WVyGIGYS23RJsdCWasocFTSak45mSC-joB7grfs_p-tEc0MgcC1m1urM1HYfW183IKSO-bduwaNXfd_RZiNiqpoo_STl8R37Gwq90UxL0yTQtu5Za-x5bwYV87TuXZ_aW22VFePqTmFk-jOnQcP7JxLlAZkROs2HzY2n93f0Yyf3ZKsLpSu8kRRIY2GXjoxDJvHo93cXKe2y2aYo-DYjnFLkbMqtKNAzpMizgOr8oCXV6Ol2N03uvHmhyLJqyFsEU1VTgPTRjkA8YYzSfPh3cOdHZ6K2rwR4gc7n3AcDorKaae75ZwQpMoMZFZG0ei342OJCvQd-xVVwOT3-pfNQeH_2Q3op5ZSyuu7paRLNWymp1PlsmuZD7gWu_EW4oY7myRJy5m0zAC0QQoxzaiOZL-zibliLDJNt3GY3UpvR0Jhv5sTimdWUjgJ8yORIG1m4nU9SSUo5BFH4qRAqahk7CA0OYQscs7qfKXHg_nnCGUzRd2gGN8KYuNIZGqqbkTiCgAyLZVtWMHDbnE9g8GjWCBijkQMgWSCWxe2zFlSTiHLy8fFBW11-bi4lQXkvSa7WMqdrhr5Khe7xHFldS7juas6HY_ZIGtbDNL33qjM42SPbnqKEFdYVjarI-Kqq8XXrt_my-eSpGSseXdccvY1bo_XMbZ03DJvfJXdwRJdOSd54DBesAdOCquWX4KQAgvbq1XwamMT953oicub0o-1XEdsBoJ--CBq8sRG-XmDsg7iLARZ2hd8KVPRZp5swgLZW0awX1Ejp6oHeedaPGNo5VfJBN8RBmDbZa1aFbD5DNINUexYdwJqvudH4o_qh5mMYcjVMt8HZmOSaysQKpk4pEUkVoVgTDN2r3n7b9fxtViyAboFv8Kb6DYaNDIFpDhBkmxX1SItjLH1GhCH8lcsMPb4tHJT4yAkC-gS-GwIF_c-NYMT3wlyY3Tbik6lo3OQQS1bNgWXveoCTlJxaCW8bKzoWtEJlWO4QFzk-RELRuiJ4Eo4zAVf1SkXcQhWNgC0gbYnMf92gC-eqpCyiD6tTibU1hlvk-qKuEd-TsMCWfuTHL7ogQqHfSqLC0vXg1s7_u4e3CIujbmofvmQpdWT5V9YlNd8XhHX6WMDz_MEPM6hknkxb_p8qig5OkAwoTAeKppZoGpQHWGHS34jxyyDyukHQ6-KRdV16SIYOyu1ZTBHomICjzh619EcX25h6o1fblDiF1wRPCMAkVdpqQ7ymetxe5QdGd9z-olHVP4o5NO_AT5VKgs.KWB58Q6VTrXhfk0B8Y5W497J"
+ },
+ "short_answer": {
+  "words": "un délai d'un mois minimum",
+  "kind": "depends",
+  "kind_fr": "cela dépend",
+  "article_pk": 96082,
+  "label": "Article 39",
+  "line": 2,
+  "by": "the reader points at these words; code checked they are in the quoted line (the kind is the reader's reading, not code)"
+ },
+ "parts": [
+  {
+   "question": "Un assuré peut-il résilier son contrat d'assurance après un sinistre ?",
+   "answered": true
+  },
+  {
+   "question": "Quel préavis un assuré doit-il respecter pour résilier son contrat d'assurance après un sinistre ?",
+   "answered": true
+  }
+ ],
+ "typed_answer": {
+  "kind": "value",
+  "kind_by": "the reader (model)",
+  "language": "fr",
+  "law_words": {
+   "text": "un délai d'un mois minimum",
+   "label": "Article 41",
+   "line": 1,
+   "article_pk": 96084,
+   "by": "the short answer (the law's words the reader points at, checked in the line by code)",
+   "heading": "Les mots de la loi"
+  },
+  "value": {
+   "text": "un mois",
+   "values": [
+    1
+   ]
+  },
+  "conditions_and_exceptions": [
+   {
+    "role": "condition",
+    "label": "Article 39",
+    "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+    "line": 1,
+    "text": "La résiliation du contrat se fait soit par lettre recommandée à la poste, soit par exploit d'huissier ou par remise de la lettre de résiliation contre récépissé."
+   },
+   {
+    "role": "exception",
+    "label": "Article 79",
+    "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+    "line": 1,
+    "text": "Par dérogation à l'article 41, lorsque en matière d'assurance des récoltes, l'assureur s'est réservé le droit de résilier le contrat après la survenance d'un sinistre, cette résiliation ne peut avoir"
+   }
+  ],
+  "summary": {
+   "text": "Après un sinistre, l'assureur comme l'assuré peuvent résilier le contrat; la résiliation prend effet au plus tôt un mois après sa notification.",
+   "label": "Résumé des lignes citées, rédigé par le modèle d'IA et vérifié par le code (chaque chiffre est dans ces lignes) — ce n'est pas le texte de loi",
+   "by": "model (the reading step), checked by code against the quoted lines"
+  }
+ },
+ "summary": {
+  "text": "Après un sinistre, l'assureur comme l'assuré peuvent résilier le contrat; la résiliation prend effet au plus tôt un mois après sa notification.",
+  "label": "Résumé des lignes citées, rédigé par le modèle d'IA et vérifié par le code (chaque chiffre est dans ces lignes) — ce n'est pas le texte de loi",
+  "by": "model (the reading step), checked by code against the quoted lines"
+ },
+ "conflict": {
+  "articles": [
+   {
+    "article_pk": 96084,
+    "label": "Article 41"
+   },
+   {
+    "article_pk": 96082,
+    "label": "Article 39"
+   }
+  ],
+  "sentence": "Deux textes montrés ne disent pas la même chose: les deux sont cités côte à côte, sans être fusionnés; Lex ne tranche pas entre eux.",
+  "by": "the reader flags two passages that disagree (model); code shows both side by side, not merged"
+ },
+ "verification": {
+  "needed": true,
+  "by": "model (verify step, gpt-6-luna)",
+  "passed": true,
+  "reason": "Le passage règle la résiliation après sinistre, le cas de la question."
+ },
+ "unchanged_by_later_amendments": [
+  {
+   "article_pk": 96084,
+   "label": "Article 41",
+   "acts": [
+    {
+     "title": "Loi du 10 août 2018",
+     "from": "2018-11-01"
+    }
+   ],
+   "sentence": "Article 41 est le texte d'origine; la loi a été modifiée depuis par 1 texte tenu par Lex (Loi du 10 août 2018 (2018-11-01)), dont aucun ne vise cet article d'après les références relevées par le code: son libellé est servi comme celui d'aujourd'hui."
+  }
+ ],
+ "authentic_language": {
+  "language": "de",
+  "acts": [
+   "/eli/etat/leg/loi/1937/07/09/n1"
+  ],
+  "sentence": "Le texte authentique de Loi du 9 juillet 1937 sur l’impôt sur les assurances est en allemand: Lex le cite tel quel, sans traduction."
+ }
+}

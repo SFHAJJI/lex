@@ -223,6 +223,14 @@ export function understoodFields(answer, locale) {
     named_articles: (value) => fieldValue(value, locale), articles: (value) => fieldValue(value, locale), article: (value) => fieldValue(value, locale),
     // engine2: the words of the question found in no text held (K-QUEST-4).
     vocabulary_misses: (value) => fieldValue(value, locale),
+    // repair-pages (K-QUEST-3): the dictionary rows the question's words matched, each with the law's term and its status.
+    dictionary_rows: (value) => {
+      const said = list(value).filter((row) => text(row?.matched) !== null && text(row?.legal_term) !== null).map((row) => fillNext(table.contract2.dictionaryRow, {
+        matched: text(row.matched), term: text(row.legal_term),
+        status: row.status === 'validated' && text(row.validator) !== null ? fillNext(table.contract2.dictionaryValidated, { validator: text(row.validator) }) : table.contract2.dictionaryDraft,
+      }));
+      return said.length === 0 ? null : said.join(table.listSeparator);
+    },
     personal_case: (value) => (value === true ? '' : null),
   };
   return list(answer?.trace?.question?.fields).filter((field) => text(field?.name) !== null && Object.hasOwn(said, field.name)).flatMap((field) => {
@@ -423,7 +431,7 @@ export function checksView(answer, locale) {
   if (checks === null) return null;
   const yes = (value) => (value === true ? copy.yes : value === false ? copy.no : copy.unknown);
   const rows = [];
-  for (const key of ['exact_path', 'found_by_outline', 'found_by_words', 'meaning_only', 'list_complete_by_structure', 'conflicting_evidence']) {
+  for (const key of ['exact_path', 'found_by_outline', 'found_by_words', 'meaning_only', 'meaning_only_verified', 'list_complete_by_structure', 'conflicting_evidence']) {
     if (!Object.hasOwn(checks, key) || !Object.hasOwn(copy.names, key)) continue;
     if (key === 'list_complete_by_structure' && checks[key] === null) continue;
     rows.push({ key, name: copy.names[key], value: yes(checks[key]) });
@@ -498,6 +506,27 @@ export function blockVia(block, locale) {
   return null;
 }
 
+/**
+ * engine2's marks on a block, in words: the act a compilation reproduces (`compiled_from`), the original wording held and the
+ * provisions that amended it since (`original_wording`, `amends_this_text`). Each a sentence, or null.
+ */
+export function blockMarks(block, locale) {
+  const copy = nextCopy(locale).contract2.marks;
+  const compiled = objectOr(block?.compiled_from);
+  const title = actTitle(compiled?.title);
+  return {
+    compiled: title === null ? null : actTitle(compiled.compilation_title) === null ? fillNext(copy.compiledBare, { title }) : fillNext(copy.compiled, { title, compilation: actTitle(compiled.compilation_title) }),
+    original: block?.original_wording === true ? copy.original : null,
+    amends: block?.amends_this_text === true ? copy.amends : null,
+  };
+}
+
+/** engine2's `amended_since` (the texts that amended an original wording held): their names, or an empty list. */
+export function amendedSince(answer) {
+  const value = objectOr(answer?.amended_since);
+  return list(value?.acts).map((entry) => (typeof entry === 'string' ? actTitle(entry) : actTitle(entry?.title) ?? text(entry?.act_id))).filter((one) => one !== null);
+}
+
 /** Where a block's words come from, as the engine marks it: a character recognition (OCR) or the publisher's PDF; or null. */
 export function blockSource(block) {
   const value = objectOr(block?.source) ?? objectOr(block?.version?.source) ?? objectOr(block?.text_source);
@@ -505,6 +534,161 @@ export function blockSource(block) {
   if (block?.ocr === true || value?.ocr === true || /ocr/iu.test(how)) return 'ocr';
   if (value?.pdf === true || /pdf/iu.test(how)) return 'pdf';
   return null;
+}
+
+/**
+ * repair-pages (22/11/2026): the language a sentence is written in, told by its commonest small words: "fr", "en", "de", or
+ * null when it cannot be told (too short). Used to mark a model's reason with its language (the engine writes reasons in
+ * the question's language, or in French), never to translate it.
+ */
+export function sentenceLanguage(sentence) {
+  const value = ` ${String(sentence ?? '').toLowerCase().replace(/[«»"“”(),.;:!?]/gu, ' ')} `;
+  const count = (words) => words.reduce((sum, word) => sum + (value.split(` ${word} `).length - 1), 0);
+  const scores = {
+    fr: count(['le', 'la', 'les', 'des', 'du', 'de', 'un', 'une', 'est', 'et', 'qui', 'que', 'pour', 'dans', 'sur', 'par', 'au', 'aux', 'ne', 'pas', 'cet', 'cette', 'il', 'se']),
+    en: count(['the', 'of', 'and', 'is', 'to', 'in', 'for', 'this', 'that', 'it', 'on', 'by', 'not', 'are', 'be', 'an', 'with', 'which']),
+    de: count(['der', 'die', 'das', 'und', 'ist', 'nicht', 'des', 'den', 'dem', 'für', 'wird', 'ein', 'eine', 'mit', 'auf', 'von', 'zu', 'im', 'bei', 'oder']),
+  };
+  const best = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  return best[0][1] >= 2 && best[0][1] > best[1][1] ? best[0][0] : null;
+}
+
+/**
+ * repair-pages: the `lang` a block's reason is marked with on a page of `locale`: the engine's word on the reason's language
+ * when it gives one (`why_lang`, or the answer's `reasons_language`), else the language the reason's words are in; undefined
+ * when it is the page's own (French when nothing can be told, as the engine's reasons were before it wrote them in the
+ * question's language).
+ */
+export function reasonLang(block, answer, locale) {
+  const map = { deu: 'de', de: 'de', fra: 'fr', fr: 'fr', eng: 'en', en: 'en' };
+  const said = [block?.why_lang, block?.why_language, answer?.reasons_language].find((value) => typeof value === 'string' && Object.hasOwn(map, value.toLowerCase()));
+  const lang = said !== undefined ? map[said.toLowerCase()] : (sentenceLanguage(block?.why) ?? 'fr');
+  return lang === locale ? undefined : lang;
+}
+
+const CODE_VERBS_EN = Object.freeze({
+  'renvoie pour la définition à': 'refers for the definition to', réserve: 'preserves', 'rend applicable': 'makes applicable', 'renvoie à': 'refers to', cite: 'cites',
+  'déroge à': 'departs from', écarte: 'sets aside',
+});
+
+/**
+ * repair-pages: a reason code wrote (refs.py, funnel.py: "cité par Art. 69, par. 1 (ligne 1): « … » — renvoie à Art. 70", "élément
+ * de la liste « … »: …", "ajouté parce que la lecture dit qu'il manque: « … » …", "« … » est défini par ce texte", "Art. 24 écarte
+ * Art. 21 (…)") said in English on an English page, the law's quoted words left as they are; null for any other sentence.
+ */
+export function codeReasonInEnglish(reason) {
+  const value = text(reason);
+  if (value === null) return null;
+  // "ajouté par la référence: …" (refs.py): the frame, then the reason it carries.
+  const prefixed = /^ajouté par la référence\s?: (.+)$/u.exec(value);
+  if (prefixed !== null) {
+    const inner = codeReasonInEnglish(prefixed[1]);
+    if (inner !== null) return `added by the reference: ${inner}`;
+    const relation = /^(modifie|abroge|transpose|complète) (.+)$/u.exec(prefixed[1]);
+    return relation === null ? null : `added by the reference: ${{ modifie: 'amends', abroge: 'repeals', transpose: 'transposes', complète: 'completes' }[relation[1]]} ${relation[2]}`;
+  }
+  const unit = (place) => place.replace(/\bal\./gu, 'subpara.').replace(/\bpar\./gu, 'par.').replace(/\blettre\b/gu, 'letter').replace(/\bligne\b/gu, 'line');
+  const tail = (words) => words.replace(/ pour les assurances sur la vie/u, ' for life insurance').replace(/ \(renvoi entrant\)/u, ' (inbound reference)');
+  const verbs = Object.keys(CODE_VERBS_EN).sort((a, b) => b.length - a.length).map((verb) => verb.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|');
+  let match = new RegExp(`^cité par (.+?) \\(ligne ([0-9]+)\\)(?:: (« … .* … »))?(?: — (${verbs}) (.+))?$`, 'u').exec(value);
+  if (match !== null) return `cited by ${unit(match[1])} (line ${match[2]})${match[3] ? `: ${match[3]}` : ''}${match[4] ? ` — ${CODE_VERBS_EN[match[4]]} ${match[5]}` : ''}`;
+  match = /^cité par (.+?) \((.+)\)$/u.exec(value);
+  if (match !== null) return `cited by ${unit(match[1])} (${match[2]})`;
+  match = /^élément de la liste « ?(.+?) ?»\s?: (.+)$/u.exec(value);
+  if (match !== null) return `item of the list « ${match[1]} »: ${match[2]}`;
+  match = /^ajouté parce que la lecture dit qu['’]il manque\s?: (« .* »)(?: \(cherché par ses mots dans les textes choisis\))?$/u.exec(value);
+  if (match !== null) return `added because the reading says this is missing: ${match[1]} (searched by its words in the texts picked)`;
+  match = /^(« ?[^»]+ ?») est défini par ce texte(.*)$/u.exec(value);
+  if (match !== null) return `${match[1]} is defined by this text${match[2]}`;
+  match = /^(« ?[^»]+ ?») est défini par ((?:Art\.|Article)\s.+?) de ce texte(.*)$/u.exec(value);
+  if (match !== null) return `${match[1]} is defined by ${match[2]} of this text${match[3]}`;
+  if (/^désigné par la lecture/u.test(value)) return value.replace(/^désigné par la lecture/u, 'pointed at by the reading');
+  match = new RegExp(`^((?:Art\\.|Article)\\s[^—]{0,40}?)\\s(${verbs})\\s((?:Art\\.|Article|ANNEXE|Annexe)\\s.+)$`, 'u').exec(value);
+  if (match !== null) return `${unit(match[1])} ${CODE_VERBS_EN[match[2]]} ${tail(match[3])}`;
+  return null;
+}
+
+/**
+ * repair-pages (22/11/2026): the language a block's words are in, as the engine or the store says it (`block.language`,
+ * `block.source.language`, or the version's language from `/api/next/sources`: "deu", "fra", "eng"): "de", "fr", "en"; null
+ * when nothing says it (the law's words are then French, as the store holds nearly every text).
+ */
+export function blockLanguage(block, versionSource = null) {
+  const said = [block?.authentic_language, block?.language, block?.lang, objectOr(block?.source)?.language, objectOr(block?.version)?.language, versionSource?.language]
+    .find((value) => typeof value === 'string' && value.trim().length > 0);
+  if (said === undefined) return null;
+  const value = said.trim().toLowerCase();
+  return { deu: 'de', de: 'de', ger: 'de', fra: 'fr', fr: 'fr', fre: 'fr', eng: 'en', en: 'en' }[value] ?? null;
+}
+
+const LANGS = Object.freeze({ deu: 'de', de: 'de', fra: 'fr', fr: 'fr', eng: 'en', en: 'en', lb: 'lb', ltz: 'lb' });
+/** The `lang` a piece in language `language` is marked with on a page of `locale`: undefined when it is the page's own. */
+const markedLang = (language, locale) => {
+  const lang = typeof language === 'string' ? LANGS[language.toLowerCase()] ?? null : null;
+  return lang === null || lang === locale ? undefined : lang;
+};
+
+/**
+ * repair-pages (22/11/2026, K-GEN-3): the typed answer repair-engine adds on a firm answer (`typed_answer`): the value code
+ * formatted, the law's words that answer with where they stand, the reader's kind, the conditions and exceptions verbatim, and
+ * the model's summary of the quoted lines when code found every number of it in them. Each piece `{ text, lang }`, `lang` the
+ * language to mark it with on this page. Null when the answer carries none.
+ */
+export function typedAnswerView(answer, locale) {
+  const typed = objectOr(answer?.typed_answer);
+  if (typed === null) return null;
+  const table = nextCopy(locale);
+  const copy = table.contract3.typed;
+  const asked = markedLang(typed.language, locale);
+  const words = objectOr(typed.law_words);
+  const value = objectOr(typed.value);
+  const summary = objectOr(typed.summary) ?? objectOr(answer?.summary);
+  const lawLang = locale === 'fr' ? undefined : 'fr';
+  const german = list(answer?.blocks).some((block) => block?.article_pk === words?.article_pk && block?.authentic_language === 'de');
+  const kind = typeof typed.kind === 'string' && Object.hasOwn(table.contract2.shortAnswer.kinds, typed.kind) ? fillNext(table.contract2.shortAnswer.kind, { kind: table.contract2.shortAnswer.kinds[typed.kind] }) : null;
+  return {
+    value: text(value?.text) === null ? null : { frame: fillNext(copy.value, { value: '\u0000' }).split('\u0000'), text: text(value.text), lang: asked },
+    words: text(words?.text) === null ? null : { text: text(words.text), where: text(words?.label), lang: german ? 'de' : lawLang, by: /^the first line/u.test(text(words?.by) ?? '') ? copy.firstLine : copy.words },
+    kind,
+    conditions: list(typed.conditions_and_exceptions).filter((entry) => text(entry?.text) !== null).map((entry, at) => {
+      // The engine keeps the first words of a long line: said with "…" when the quoted line is longer.
+      const full = list(answer?.blocks).find((block) => text(block?.label) === text(entry.label));
+      const line = text(list(full?.text)[0]);
+      const cut = line !== null && line.length > text(entry.text).length + 2;
+      return {
+        key: `${entry.label ?? 'c'}-${at}`,
+        role: table.contract.roles[entry.role] ?? text(entry.role) ?? '',
+        label: text(entry.label) ?? '',
+        text: cut ? `${text(entry.text)} …` : text(entry.text),
+      };
+    }),
+    summary: text(summary?.text) === null ? null : { text: text(summary.text), lang: asked, label: copy.summaryLabel },
+  };
+}
+
+/** repair-pages (K-GEN-4): two texts that disagree (`conflict`): the two articles named, or null. */
+export function conflictView(answer) {
+  const conflict = objectOr(answer?.conflict);
+  if (conflict === null) return null;
+  const articles = list(conflict.articles).map((entry) => text(entry?.label)).filter((one) => one !== null);
+  return { articles, pks: list(conflict.articles).map((entry) => entry?.article_pk).filter(isCount) };
+}
+
+/** repair-pages (K-GEN-8): the independent check of a pick found by meaning alone (`verification`), in words; null when none ran. */
+export function verificationLine(answer, locale) {
+  const check = objectOr(answer?.verification);
+  if (check === null || check.needed !== true) return null;
+  const copy = nextCopy(locale).contract3.verified;
+  const reason = text(check.reason) ?? '';
+  if (check.passed !== true) return { text: copy.failed, caution: true, reasonLang: undefined };
+  const byModel = /^model/u.test(text(check.by) ?? '');
+  return { text: fillNext(byModel ? copy.model : copy.code, { reason }), caution: false, reasonLang: byModel ? markedLang(sentenceLanguage(reason), locale) : undefined };
+}
+
+/** repair-pages (K-TIME-4): the original wordings no held amending text targets (`unchanged_by_later_amendments`): their sentences. */
+export function unchangedLines(answer, locale) {
+  return list(answer?.unchanged_by_later_amendments).filter((entry) => text(entry?.sentence) !== null)
+    .map((entry) => ({ text: text(entry.sentence).replace(/\b([0-9]{4})-([0-9]{2})-([0-9]{2})\b/gu, '$3/$2/$1'), lang: markedLang(sentenceLanguage(entry.sentence), locale) }));
 }
 
 /** The lines the reading pointed at, when code widened them to their whole paragraph (`lines_pointed_by_reading`); null otherwise. */
@@ -538,13 +722,22 @@ export function evidenceView(answer, locale) {
   if (evidence === null) return null;
   const terms = list(evidence.terms).filter((term) => text(term?.term) !== null && isCount(term?.hits))
     // A form the index searches by its start ("patern*") is said in words (K-UI-4): "words starting with « patern »".
-    .map((term) => ({
-      term: text(term.term),
-      variants: list(term.variants).map(text).filter((one) => one !== null && one !== text(term.term))
-        .map((one) => (/^[^*\s]+\*$/u.test(one) ? fillNext(nextCopy(locale).contract2.startsWith, { stem: one.slice(0, -1) }) : one)),
-      hits: term.hits,
-      said: countedForm(copy.hits, term.hits, locale),
-    }))
+    .map((term) => {
+      // repair-pages: each form says whether it is the law's word (marked in the law's language) or the page's own phrase.
+      const forms = list(term.variants).map(text).filter((one) => one !== null && one !== text(term.term))
+        .map((one) => (/^[^*\s]+\*$/u.test(one) ? { text: fillNext(nextCopy(locale).contract2.startsWith, { stem: one.slice(0, -1) }), law: false } : { text: one, law: true }));
+      // repair-pages: where the word came from (a draft dictionary row, a model's legal term, the question's words).
+      const source = text(term.source) ?? '';
+      const from = /^dictionary/u.test(source) ? 'dictionary' : /^model \(legal/u.test(source) ? 'model' : /^question words/u.test(source) ? 'question' : /^model \(French rendering/u.test(source) ? 'rendering' : null;
+      return {
+        term: text(term.term),
+        variants: forms.map((form) => form.text),
+        forms,
+        hits: term.hits,
+        said: countedForm(copy.hits, term.hits, locale),
+        source: from === null ? null : nextCopy(locale).contract3.termSources[from],
+      };
+    })
     .sort((a, b) => a.hits - b.hits);
   const sweep = objectOr(evidence.sweep);
   const gradeKey = typeof sweep?.grade === 'string' ? sweep.grade.split(':')[0].trim() : null;
@@ -571,7 +764,12 @@ export function evidenceView(answer, locale) {
     .filter((entry) => isIsoDate(entry?.first_held) && titles.has(entry?.act_id))
     .map((entry) => fillNext(nextCopy(locale).contract2.floor, { title: titles.get(entry.act_id).replace(/\s*>.*$/u, ''), date: numericDate(entry.first_held) }));
   if (coverage === null && terms.length === 0 && swept === null && near === null && floors.length === 0) return null;
-  return { coverage, terms, swept, closest: near, floors };
+  // repair-pages (K-GEN-5): what the grade rests on (draft words), and the question's own words in another language, apart.
+  const extra3 = nextCopy(locale).contract3;
+  const basis = text(sweep?.grade_basis) === null ? null : extra3.gradeBasis;
+  const ownWords = list((objectOr(sweep?.question_words_in_another_language) ?? objectOr(evidence.question_words_in_another_language))?.words).filter((entry) => text(entry?.term) !== null && isCount(entry?.hits));
+  const other = ownWords.length === 0 ? null : fillNext(extra3.otherWords, { words: ownWords.map((entry) => fillNext(extra3.otherWord, { term: entry.term, hits: countedForm(copy.hits, entry.hits, locale) })).join(nextCopy(locale).listSeparator) });
+  return { coverage, terms, swept, closest: near, floors, basis, other };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -626,6 +824,28 @@ export function traceLevels(answer, locale) {
           if (said.length > 0) rows.push(row('sources', fillNext(extra.sourcesLine, { sources: said.join(table.listSeparator) }), 'code'));
         }
         if (text(level.missing_text) !== null) rows.push(row('missing-text', fillNext(extra.missingText, { name: text(level.missing_text) }), 'model'));
+        // repair-pages (K-GEN-6, K-SCOPE-5): a name a model gave that matches no text of the catalogue or the store, dropped by code.
+        for (const dropped of list(answer?.trace?.names_dropped).filter((entry) => text(entry?.name) !== null)) {
+          rows.push(row('name-dropped', fillNext(table.contract3.namesDropped, { name: text(dropped.name) }), 'code'));
+        }
+        break;
+      }
+      // repair-pages (K-RETR-3): a part too big to read whole, opened at the article level: what was shown, what the model picked.
+      case 'articles': {
+        for (const group of list(level.groups).filter((entry) => objectOr(entry) !== null)) {
+          if (![group.shown, group.articles].every(isCount)) continue;
+          rows.push(row('group', fillNext(table.contract3.articlesShown, {
+            shown: groupedCount(group.shown, locale), articles: groupedCount(group.articles, locale), node: text(group.node) ?? '',
+            picked: groupedCount(isCount(group.picked) ? group.picked : 0, locale),
+          }), 'code'));
+        }
+        if (isCount(level.at_most)) rows.push(row('at-most', fillNext(table.contract3.articlesAtMost, { count: groupedCount(level.at_most, locale) }), 'code'));
+        const picked = list(level.picked).filter((entry) => isCount(entry?.article_pk));
+        if (picked.length > 0) {
+          rows.push(row('picked', '', byOf(level.by), {
+            items: picked.map((entry) => ({ title: text(entry.label) ?? article(entry.article_pk), tally: null, reason: text(entry.reason), by: byOf(level.by) })),
+          }));
+        }
         break;
       }
       case 'document': {
@@ -761,7 +981,7 @@ export function traceLevels(answer, locale) {
     }
     // The searches side by side: by meaning (a model's vectors), by words and names (code), by the table of contents (a model).
     const by = key === 'detectors' && level.by === undefined ? 'both' : byOf(level.by);
-    return { key: `${key}-${at}`, level: key, name: copy.levels[key] ?? extra.levels[key] ?? key.replaceAll('_', ' '), by, rows };
+    return { key: `${key}-${at}`, level: key, name: copy.levels[key] ?? extra.levels[key] ?? (key === 'articles' ? table.contract3.articlesLevel : key.replaceAll('_', ' ')), by, rows };
   });
 }
 
@@ -862,7 +1082,8 @@ export function replayRequest(token) {
  * the blocks that do not say it themselves; null when every block says it, or none names its version.
  */
 export function sourcesAddress(answer) {
-  const ids = [...new Set(list(answer?.blocks).filter((block) => blockSource(block) === null && !objectOr(block?.source) && isCount(block?.version?.id)).map((block) => block.version.id))].slice(0, 40);
+  // A block that carries its own `source` (engine2: a string, or an object) is never asked about.
+  const ids = [...new Set(list(answer?.blocks).filter((block) => blockSource(block) === null && (block?.source === undefined || block?.source === null) && isCount(block?.version?.id)).map((block) => block.version.id))].slice(0, 40);
   return ids.length === 0 ? null : `/api/next/sources?${ids.map((id) => `version=${id}`).join('&')}`;
 }
 

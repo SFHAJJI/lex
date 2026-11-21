@@ -368,16 +368,50 @@ export function RecentChanges({ rows }) {
 }
 
 /** The coverage line: the texts and dated versions the coverage answer counts, and the coverage page. */
-export function HomeHolds({ line }) {
-  const counts = line?.state === 'counted'
+export function HomeHolds({ line, held = null }) {
+  // repair-pages (22/11/2026): the engine's counts (its data's coverage file, `/api/next/config` `index.held`) when known: the
+  // same figures as the coverage page and the answers; the reading service's count before that.
+  const engineCounts = held !== null && Number.isInteger(held?.luxembourg_acts) && Number.isInteger(held?.eu_acts) && Number.isInteger(held?.luxembourg_versions) && Number.isInteger(held?.eu_versions)
+    ? fillText(COPY.holds, { texts: counted(COPY.holdsTexts, held.luxembourg_acts + held.eu_acts), versions: counted(COPY.holdsVersions, held.luxembourg_versions + held.eu_versions) }) : null;
+  const counts = engineCounts ?? (line?.state === 'counted'
     ? fillText(COPY.holds, { texts: counted(COPY.holdsTexts, line.works), versions: counted(COPY.holdsVersions, line.states) })
-    : line?.state === 'unmounted' ? refusalSentence(UNMOUNTED_SENTENCE) : null;
+    : line?.state === 'unmounted' ? refusalSentence(UNMOUNTED_SENTENCE) : null);
   return (
-    <p className="lx-home-holds" data-coverage-line={line?.state ?? 'asked'}>
+    <p className="lx-home-holds" data-coverage-line={engineCounts !== null ? 'engine' : line?.state ?? 'asked'}>
       {counts === null ? null : <>{counts} </>}
       <a href={livePath('coverage.html')}>{COPY.holdsLink}</a>
     </p>
   );
+}
+
+/** repair-pages: the engine's name of a starting text (`loi-1997-07-27-n10`, `32016R0679`), or null. */
+const engineWorkOf = (identifier) => /^\/lu-legilux\/([^/?#]+)$/u.exec(identifier ?? '')?.[1] ?? (/^[0-9CE][0-9]{4}[A-Z]{1,2}[0-9]{4}$/u.test(identifier ?? '') ? identifier : null);
+
+/** repair-pages: the address that asks the engine the starting texts' versions, once (`GET /api/next/versions`), or null. */
+export function engineVersionsAddress(texts) {
+  const works = (Array.isArray(texts) ? texts : []).map((text) => engineWorkOf(text?.identifier)).filter((work) => work !== null);
+  return works.length === 0 ? null : `/api/next/versions?${works.map((work) => `work=${encodeURIComponent(work)}`).join('&')}`;
+}
+
+/**
+ * repair-pages: the starting texts' rows from the engine's answer: each text's dated versions held up to today and its articles
+ * today, in the record's shape (by the text's language); a text the engine does not answer keeps its record's row.
+ */
+export function engineRows(texts, answer) {
+  const out = {};
+  for (const text of Array.isArray(texts) ? texts : []) {
+    const work = engineWorkOf(text?.identifier);
+    const row = work === null ? null : answer?.[work];
+    const dates = Array.isArray(row?.versions) ? row.versions.filter((date) => typeof date === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(date)) : [];
+    if (dates.length === 0) continue;
+    const language = Object.keys(text.versions ?? {})[0] ?? 'fra';
+    out[text.identifier] = {
+      ...text,
+      versions: { [language]: dates },
+      articles: Number.isInteger(row.articles_today) && row.articles_today > 0 ? { [language]: row.articles_today } : text.articles,
+    };
+  }
+  return out;
 }
 
 /**
@@ -399,6 +433,31 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
   useEffect(() => (otherIndex
     ? startHomeTimelines({ contract, fetchImpl, texts: texts.texts, today, onText: (identifier, row) => setLive((known) => ({ ...known, [identifier]: row })) })
     : undefined), [otherIndex]);
+  // repair-pages (22/11/2026): the six texts' versions and articles as the engine holds them (the answers and the coverage
+  // page read the same store), asked once after first paint; the record stands until then, and if the engine does not answer.
+  const [engine, setEngine] = useState({});
+  const [held, setHeld] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const ask = async (address) => {
+      try {
+        const response = await (fetchImpl ?? globalThis.fetch)(address, { method: 'GET', headers: { accept: 'application/json' } });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data !== null && typeof data === 'object' ? data : null;
+      } catch {
+        return null;
+      }
+    };
+    (async () => {
+      const address = engineVersionsAddress(texts.texts);
+      const versions = address === null ? null : await ask(address);
+      if (alive && versions !== null) setEngine(engineRows(texts.texts, versions));
+      const config = await ask('/api/next/config');
+      if (alive && config !== null && config.index !== null && typeof config.index === 'object') setHeld(config.index.held ?? null);
+    })();
+    return () => { alive = false; };
+  }, []);
   return (
     <div className="lx-home">
       <h1 className="lx-home-headline">{COPY.headline}</h1>
@@ -411,11 +470,11 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
           <span className="lx-home-count-cell" />
         </div>
         <ul className="lx-home-texts">
-          {texts.texts.map((text) => <StartText key={text.identifier} text={text} row={live[text.identifier] ?? text} />)}
+          {texts.texts.map((text) => <StartText key={text.identifier} text={text} row={engine[text.identifier] ?? live[text.identifier] ?? text} />)}
         </ul>
       </section>
       <RecentChanges rows={recent} />
-      <HomeHolds line={line} />
+      <HomeHolds line={line} held={held} />
     </div>
   );
 }

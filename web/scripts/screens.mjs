@@ -215,6 +215,40 @@ SHOTS.push(
   ["s-en-04-coverage--1366-whole", "/en/coverage.html", 1366, 768, false, true, null, 6000],
   ["s-en-05-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 5000],
 );
+// repair-pages (22/11/2026): this branch's pages (preview), the engine's answers from the fixtures: repair-engine's fields
+// (typed answer, summary, conflict, German text, articles level), the not-found evidence table at 1366 px and on a phone, an
+// English and a German question on the English page, How with the dictionary and the departures, coverage, results in
+// lex-results/2, the Solvency II text page, the footers.
+const R = {
+  fields: "Un assuré peut-il résilier son contrat après un sinistre, et avec quel préavis ? (champs de repair-engine)",
+  notFound: "En 2010, quel était le montant minimal de garantie de l'assurance obligatoire de la responsabilité civile automobile ?",
+  english: "What is the minimum capital requirement of an insurance undertaking under Solvency II?",
+  german: "Wie lange ist die Kündigungsfrist des Vermieters bei einem Mietvertrag über eine Wohnung?",
+};
+const OPEN_DICT = "(() => { document.querySelectorAll('details[data-dictionary-rows]').forEach((d) => { d.open = true; }); return 'opened'; })()";
+SHOTS.length = 0;
+SHOTS.push(
+  ["t-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["t-fr-02-home--1366-whole", "/fr/", 1366, 768, false, true, null, 6000],
+  ["t-fr-03-typed-answer--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(R.fields), 9000],
+  ["t-fr-04-typed-answer-trace--tall", "/fr/radar.html", 1366, 7000, false, false, ASK_THEN(R.fields, OPEN_TRACE), 9000],
+  ["t-fr-05-not-found--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(R.notFound), 9000],
+  ["t-fr-06-not-found--phone-whole", "/fr/radar.html", 390, 844, true, true, ASK(R.notFound), 9000],
+  ["t-fr-07-typed-answer--phone", "/fr/radar.html", 390, 844, true, false, ASK(R.fields), 9000],
+  ["t-en-01-english--tall", "/en/radar.html", 1366, 3600, false, false, ASK(R.english), 9000],
+  ["t-en-02-german--tall", "/en/radar.html", 1366, 3000, false, false, ASK(R.german), 9000],
+  ["t-en-03-not-found--tall", "/en/radar.html", 1366, 3000, false, false, ASK(R.notFound), 9000],
+  ["t-fr-08-how--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 6000],
+  ["t-fr-09-how-dictionary-open--1366-whole", "/fr/evidence.html", 1366, 768, false, true, OPEN_DICT, 2000],
+  ["t-fr-10-coverage--1366-whole", "/fr/coverage.html", 1366, 768, false, true, null, 6000],
+  ["t-fr-11-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 6000],
+  ["t-fr-12-results--1366-whole", "/fr/results.html", 1366, 768, false, true, null, 6000],
+  ["t-fr-13-text-solvency--1366x768", "/fr/text.html?text=32009L0138&article=001", 1366, 768, false, false, null, 8000],
+  ["t-fr-14-modifications--1366-whole", "/fr/radar.html", 1366, 768, false, true, null, 8000],
+  ["t-en-04-how--1366-whole", "/en/evidence.html", 1366, 768, false, true, null, 6000],
+  ["t-en-05-coverage--1366-whole", "/en/coverage.html", 1366, 768, false, true, null, 6000],
+  ["t-en-06-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 6000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });

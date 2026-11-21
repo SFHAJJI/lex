@@ -460,9 +460,10 @@
 
 export const LIVE_CHROME_FR = Object.freeze({
   coverage: Object.freeze({
-    title: 'Confiance et couverture',
+    // repair-pages (22/11/2026): the page's tab says what the page says (its heading is "Ce que Lex détient").
+    title: 'Ce que Lex détient',
     eyebrow: 'Passerelle',
-    heading: 'Confiance et couverture',
+    heading: 'Ce que Lex détient',
     intro: 'Ce que contient le corpus monté sur ce serveur et ce qu’il a consigné comme manquant, demandé au serveur au chargement de la page. La requête ne contient aucun texte de recherche.',
     loading: 'Ce serveur est interrogé sur son rapport de couverture.',
   }),
@@ -1088,6 +1089,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     none: 'Cette adresse ne désigne aucun texte. Cherchez un texte par son nom ou son numéro dans le champ ci-dessus.',
     kindLu: 'Droit luxembourgeois, texte consolidé en français.',
     kindEu: 'Texte de l’Union européenne, la version détenue.',
+    kindEuNext: 'Texte de l’Union européenne.',
     articles: Object.freeze({ one: '{count} article.', other: '{count} articles.' }),
     versionsHeld: Object.freeze({ one: 'Une version détenue, du {first}.', other: '{count} versions détenues, du {first} à aujourd’hui.' }),
     euDate: 'La date d’une version de l’UE est celle de son libellé, pas une date d’application.',
@@ -1536,6 +1538,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     noAnswer: 'Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.',
     built: 'Index construit le {date}.',
     builtUndated: 'L’index ne consigne aucune date de construction.',
+    // repair-pages (22/11/2026) : l’index de l’assistant d’abord, puis celui du service de lecture, nommé comme tel.
+    engineBuilt: 'L’assistant lit le droit tel qu’indexé le {date} (données {data}, code {code}).',
+    engineUndated: 'L’assistant lit le droit des données {data} (code {code}) ; leur date de construction n’est pas consignée.',
+    readingBuilt: 'Les pages qui affichent un texte ou les modifications lisent aussi le service de lecture de Lex, dont l’index a été construit le {date}.',
     channels: Object.freeze({
       'lu-legilux': 'Droit luxembourgeois, provenant de Legilux',
       'eu-eurlex': 'Droit de l’UE, provenant de l’Office des publications de l’Union européenne',

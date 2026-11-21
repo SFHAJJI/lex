@@ -49,6 +49,19 @@ export function coverageView(coverage, locale) {
   const share = isCount(inForceHeld) && isCount(inForceListed) && inForceListed > 0
     ? fillNext(copy.inForce, { held: groupedCount(inForceHeld, locale), listed: groupedCount(inForceListed, locale), share: String(Math.round((100 * inForceHeld) / inForceListed)) })
     : null;
+  // repair-pages (22/11/2026, K-SCOPE-4): beside the count held, the count served as today's law: the data builders' figure
+  // (`in_force.served_today`) when the file carries it, else the server's count in the store (`in_force_store`), each said
+  // with its own denominator and the reasons a text in force is not served, every figure the answer's.
+  const store = objectOr(file.in_force_store);
+  const servedOwn = isCount(first(inForce, 'served_today')) && isCount(inForceHeld) ? { held: inForceHeld, served: inForce.served_today, why: objectOr(first(inForce, 'not_served_why')) } : null;
+  const servedFrom = servedOwn ?? (store !== null && isCount(store.served_today) && isCount(store.stale_in_force) ? { served: store.served_today, stale: store.stale_in_force, why: objectOr(store.not_served_why), store: true } : null);
+  const served = servedFrom === null ? null : {
+    line: servedFrom.store
+      ? fillNext(copy.servedStore, { served: groupedCount(servedFrom.served, locale), stale: groupedCount(servedFrom.stale, locale) })
+      : fillNext(copy.served, { held: groupedCount(servedFrom.held, locale), served: groupedCount(servedFrom.served, locale), notServed: groupedCount(Math.max(0, servedFrom.held - servedFrom.served), locale) }),
+    why: servedFrom.why === null ? [] : Object.entries(servedFrom.why).filter(([, n]) => isCount(n) && n > 0)
+      .map(([key, n]) => ({ key, name: whyWords(key, copy, 'today'), count: n })).filter((row) => row.name !== null),
+  };
   const named = (Array.isArray(first(file, 'not_held_named', 'named_not_held', 'not_held')) ? first(file, 'not_held_named', 'named_not_held', 'not_held') : [])
     .filter((row) => text(typeof row === 'string' ? row : first(row, 'name', 'title')) !== null)
     .map((row) => (typeof row === 'string' ? { name: row.trim(), why: null } : { name: text(first(row, 'name', 'title')), why: text(first(row, 'why', 'note', 'reason')) }));
@@ -91,11 +104,14 @@ export function coverageView(coverage, locale) {
       key: row.act_id ?? row.name, name: text(row.name), held: row.held === true, group,
       status: typeof row.status === 'string' ? copy.statusWords[row.status] ?? null : null,
       version: row.held === true ? versionLine : null,
-      why: typeof row.why === 'string' && row.why !== 'applicable_today' ? copy.why[row.why] ?? null : text(row.held === false ? row.why : null),
+      why: typeof row.why === 'string' && row.why !== 'applicable_today' ? whyWords(row.why, copy, 'why') : text(row.held === false ? row.why : null),
+      german: typeof row.why === 'string' && row.why.split('+').includes('not_held_in_french'),
     };
   });
   const todayWhy = objectOr(objectOr(file.versions)?.today_version_why);
-  const today = todayWhy === null ? [] : Object.keys(copy.today).filter((key) => isCount(todayWhy[key])).map((key) => ({ key, name: copy.today[key], count: todayWhy[key] }));
+  // Every key of the file is said (a combined key, "a+b", by its parts), in the copy's order first.
+  const todayKeys = todayWhy === null ? [] : [...Object.keys(copy.today).filter((key) => Object.hasOwn(todayWhy, key)), ...Object.keys(todayWhy).filter((key) => !Object.hasOwn(copy.today, key))];
+  const today = todayKeys.filter((key) => isCount(todayWhy[key])).map((key) => ({ key, name: whyWords(key, copy, 'today'), count: todayWhy[key] })).filter((row) => row.name !== null);
   const conservation = objectOr(objectOr(file.checks)?.conservation);
   const order = objectOr(objectOr(file.checks)?.conservation_order);
   const euFiles = objectOr(objectOr(file.checks)?.eu_file_check);
@@ -112,10 +128,22 @@ export function coverageView(coverage, locale) {
   const outline = outlineCounts !== null && isCount(outlineCounts.acts_with_outline_today) && isCount(outlineCounts.acts)
     ? fillNext(copy.outline, { with: groupedCount(outlineCounts.acts_with_outline_today, locale), acts: groupedCount(outlineCounts.acts, locale) }) : null;
   const view = {
-    made: iso(made) ? numericDate(made) : null, byType, share, named, floors, pdfCount, pdfItems, sources: sources.map(datesInLine),
+    made: iso(made) ? numericDate(made) : null, byType, share, served, named, floors, pdfCount, pdfItems, sources: sources.map(datesInLine),
     held, status, keyTexts, today, checks, quarantine, references, outline,
   };
-  return byType.length === 0 && share === null && named.length === 0 && floors.length === 0 && pdfCount === null && sources.length === 0 && held === null && keyTexts.length === 0 ? null : view;
+  return byType.length === 0 && share === null && served === null && named.length === 0 && floors.length === 0 && pdfCount === null && sources.length === 0 && held === null && keyTexts.length === 0 ? null : view;
+}
+
+/**
+ * repair-pages: the words for a reason the file writes (`why` of a key text, a key of `today_version_why`), a combined reason
+ * ("original_amended_since+not_held_in_french") said by its parts; null when the copy knows none of its parts.
+ */
+export function whyWords(key, copy, table) {
+  const words = copy[table] ?? {};
+  if (Object.hasOwn(words, key)) return words[key];
+  const parts = String(key).split('+').map((part) => (Object.hasOwn(words, part) ? words[part] : Object.hasOwn(copy.why, part) ? copy.why[part] : null));
+  if (parts.some((part) => part === null)) return null;
+  return parts.join(copy.whyJoin);
 }
 
 /** A line the file writes, its dates (yyyy-mm-dd) said as dd/mm/yyyy (the owner's standard). */
@@ -135,6 +163,16 @@ export function CoverageView({ coverage = null, locale = CHROME_LOCALE }) {
       {view.made === null ? null : <p className="lx-muted">{fillNext(copy.made, { date: view.made })}</p>}
       {view.held === null ? null : <p data-coverage="held">{view.held}</p>}
       {view.share === null ? null : <p data-coverage="in-force"><strong>{view.share}</strong></p>}
+      {view.served === null ? null : (
+        <>
+          <p data-coverage="served"><strong>{view.served.line}</strong></p>
+          {view.served.why.length === 0 ? null : (
+            <ul className="lx-how-lines" data-coverage="not-served">
+              {view.served.why.map((row) => <li key={row.key} data-not-served={row.key}>{fillNext(copy.servedWhy, { why: row.name, count: count(row.count) })}</li>)}
+            </ul>
+          )}
+        </>
+      )}
       {view.keyTexts.length === 0 ? null : (
         <>
           <h3 id="next-coverage-key">{copy.namedHeading2}</h3>
@@ -147,7 +185,8 @@ export function CoverageView({ coverage = null, locale = CHROME_LOCALE }) {
                     <th scope="row" lang={lawLang}>{row.name}</th>
                     <td className={row.held ? undefined : 'lx-next-gap'}>{row.group ?? (row.held ? copy.yes : copy.no)}</td>
                     <td>{row.status ?? ''}</td>
-                    <td>{[row.version, row.why].filter((part) => part !== null).join(' — ')}</td>
+                    {/* A version held but not served as today's law: the reason first, the version held after it. */}
+                    <td>{row.why !== null && row.version !== null ? fillNext(copy.heldNotServed, { why: row.why, version: row.version }) : [row.version, row.why].filter((part) => part !== null).join(' — ')}</td>
                   </tr>
                 ))}
               </tbody>

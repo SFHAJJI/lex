@@ -7,6 +7,10 @@ import { createRoot } from 'react-dom/client';
 import { NEXT_CORPUS_ROOT, NEXT_HOW_ROOT, NEXT_RESULTS_ROOT, NextCorpus, NextResults } from './NextPages.jsx';
 import { NEXT_DECISIONS_ROOT, NextDecisions, NextHowFunnel } from './NextHow.jsx';
 import { NEXT_COVERAGE_ROOT, NextCoverage } from './NextCoverage.jsx';
+import { followAnswers } from './freshness-client.jsx';
+
+// repair-pages (22/11/2026): these pages carry no dock, so their footer strip is drawn from the engine's index here.
+followAnswers(document);
 
 // How it works is the funnel's page (`NextHow.jsx`); the earlier `NextHow` stays in `NextPages.jsx`, unwired.
 for (const [id, element] of [[NEXT_HOW_ROOT, <NextHowFunnel />], [NEXT_RESULTS_ROOT, <NextResults />], [NEXT_CORPUS_ROOT, <NextCorpus />], [NEXT_COVERAGE_ROOT, <NextCoverage />], [NEXT_DECISIONS_ROOT, <NextDecisions />]]) {

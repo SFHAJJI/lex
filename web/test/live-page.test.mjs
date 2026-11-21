@@ -34,7 +34,8 @@ test("the live page is the loading state under the live banner, with its own scr
   assert.ok(!html.includes("client-live.js\""), "the earlier coverage answer's script is not loaded");
   assert.ok(!html.includes('src="/client.js"'), "the preview pages' bundle is not this page's");
   assert.deepEqual(LIVE_CONTRACT, census.contract, "the contract is the census's, as the platform rendered it");
-  assert.match(html, /<title>Trust and Coverage - Lex<\/title>/, "the title does not call a live page a preview");
+  // repair-pages (22/11/2026): the tab says what the page says.
+  assert.match(html, /<title>What Lex holds - Lex<\/title>/, "the title does not call a live page a preview");
 });
 
 test("the coverage page has no earlier coverage answer left to hydrate (release-a, 21/11/2026)", () => {

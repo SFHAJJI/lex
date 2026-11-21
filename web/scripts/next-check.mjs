@@ -108,7 +108,7 @@ export const KNOWN_DIGITS = Object.freeze([
   /^results\.firstNote$/u,
   /^results\.fresh\.columns\.interval$/u,
   /^decisions2\.items\.\d+\.(?:gain|title)$/u,
-  /^results2\.(?:wrongLine|totalsColumns\.interval|slicesColumns\.interval|ablationColumns\.interval|baselineColumns\.interval)$/u,
+  /^results2\.(?:wrongLine|totalsColumns\.interval|slicesColumns\.interval|ablationColumns\.interval|baselineColumns\.interval|previousColumns\.interval)$/u,
 ]);
 
 /** The entries of either table that hold a digit outside the known list. */
@@ -586,7 +586,9 @@ export function contractFaults(html, answer, locale) {
     if (!(evidence >= 0 && evidence < heading && heading < first)) faults.push('a passage stands before the evidence or its heading');
   }
   if (answer.evidence && !['answer', 'answer_with_exception', 'partial'].includes(answer.state)) {
-    for (const term of answer.evidence.terms ?? []) if (!html.includes(`>${inMarkup(term.term)}</th>`)) faults.push(`the word searched ${term.term} is missing`);
+    // repair-pages: the word stands first in its row's head, its forms under it (the table fits the dock).
+    for (const term of answer.evidence.terms ?? []) if (!html.includes(`>${inMarkup(term.term)}</span>`) && !html.includes(`>${inMarkup(term.term)}</th>`)) faults.push(`the word searched ${term.term} is missing`);
+    if ((answer.evidence.terms ?? []).length > 0 && /data-evidence="terms"[^>]*>\s*<thead><tr>(?:<th[^>]*>[^<]*<\/th>){3,}/u.test(html)) faults.push('the evidence table has more than two columns: it is cut in the dock');
   }
   const trace = answer.trace ?? {};
   if (Array.isArray(trace.levels) && trace.levels.length > 0) {
@@ -620,10 +622,25 @@ export function contractFaults(html, answer, locale) {
   }
   if ((Array.isArray(answer.see_also) ? answer.see_also : []).length > 0 && !html.includes('data-dock-card="see-also"')) faults.push('see also is not drawn');
   // engine2's fields (TRACE-CONTRACT.md, 21/11/2026).
-  if (typeof answer.short_answer?.words === 'string' && !(html.includes('data-dock-short-answer=""') && html.includes(inMarkup(answer.short_answer.words)))) faults.push('the short answer\'s words are not drawn');
+  if (typeof answer.short_answer?.words === 'string' && !((html.includes('data-dock-short-answer=""') || html.includes('data-dock-typed-answer=""')) && html.includes(inMarkup(answer.short_answer.words)))) faults.push('the short answer\'s words are not drawn');
+  // repair-pages (22/11/2026): repair-engine's fields.
+  if (typeof answer.typed_answer?.summary?.text === 'string' && !(html.includes('data-dock-summary=""') && html.includes(inMarkup(answer.typed_answer.summary.text)) && html.includes(inMarkup(nextCopy(locale).contract3.typed.summaryLabel)))) faults.push('the summary of the quoted lines is not drawn under its label');
+  if (typeof answer.typed_answer?.value?.text === 'string' && !html.includes('data-dock-typed-value=""')) faults.push('the value code formatted is not drawn');
+  if (answer.conflict && !html.includes('data-dock-card="conflict"')) faults.push('two texts that disagree are not said');
+  if (blocks.some((block) => block.conflicting === true) && count(/data-dock-conflicting=""/gu) !== blocks.filter((block) => block.conflicting === true).length) faults.push('a passage that disagrees is not flagged');
+  if (answer.verification?.needed === true && ['answer', 'answer_with_exception'].includes(answer.state) && !html.includes('data-dock-check="verified"')) faults.push('the independent check of a meaning-only pick is not said');
+  if ((answer.unchanged_by_later_amendments ?? []).length > 0 && !html.includes('data-dock-card="unchanged"')) faults.push('an original wording no amendment targets is not said');
+  if (blocks.some((block) => block.authentic_language === 'de') && !html.includes('data-dock-source="german"')) faults.push('a German authentic text is not said so');
+  for (const dropped of trace.names_dropped ?? []) if (typeof dropped?.name === 'string' && html.includes('data-dock-trace=""') && !html.includes(inMarkup(dropped.name))) faults.push('a name the model gave and code dropped is not said in the trace');
   if ((answer.repealed_named ?? []).length > 0 && !html.includes('data-dock-card="repealed"')) faults.push('a text named and repealed is not said');
   if ((answer.directive_transposed_by?.transposed_by ?? []).length > 0 && !html.includes('data-dock-card="transposed-by"')) faults.push('the law that transposes the directive is not named');
   for (const entry of answer.eu_not_held ?? []) if (typeof entry?.sentence === 'string' && !html.includes(inMarkup(entry.sentence))) faults.push('an EU text not held is not said');
+  if (blocks.some((block) => block.ocr === true || /ocr/iu.test(typeof block.source === 'string' ? block.source : '')) && !html.includes('data-dock-source="ocr"')) faults.push('a text from an OCR is not said so');
+  for (const [field, mark] of [['compiled_from', 'compiled'], ['original_wording', 'original'], ['amends_this_text', 'amends']]) {
+    if (blocks.some((block) => block[field] && block[field] !== false) && !html.includes(`data-dock-mark="${mark}"`)) faults.push(`the block mark ${field} is not said`);
+  }
+  if ((answer.amended_since?.acts ?? []).length > 0 && !html.includes('data-dock-card="amended-since"')) faults.push('the texts that amended the wording are not named');
+  for (const block of blocks) if ((block.why_by === 'code' || block.why_by === 'model') && typeof block.why === 'string' && !block.list_item && !html.includes(`data-why-by="${block.why_by}"`)) faults.push(`the engine's why_by ${block.why_by} is not followed`);
   if (Number.isFinite(answer.list?.deleted_items) && answer.list.deleted_items > 0 && !html.includes('data-dock-list-deleted=""')) faults.push('the items the law deleted are not said');
   for (const level of trace.levels ?? []) if (!Object.hasOwn(copy.trace.levels, level.level) && !Object.hasOwn(extra.trace.levels, level.level)) faults.push(`the level ${level.level} has no name in words`);
   if (/>[^<]*\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b[^<]*</u.test(own.replace(/<details[\s\S]*<\/details>/u, ''))) faults.push('a date outside the trace is not dd/mm/yyyy');
@@ -665,6 +682,17 @@ export function results2Faults(html, results, locale) {
   if (results.baseline && Number.isFinite(results.baseline.naive_right_lex_not) && !html.includes('data-results2-baseline-wins=""')) faults.push('where the naive pipeline did fine is not said');
   if (results.set && !html.includes(`data-results2-used="${results.set.used_before === true ? 'before' : 'once'}"`)) faults.push('whether the questions were seen before is not said');
   if (results.scoring?.lenient?.length > 0 && !html.includes('data-results2-lenient=""')) faults.push('the lenient rule is not said next to the numbers');
+  // repair-pages (22/11/2026): the previous Lex on the same questions, the walk alone, how the times were taken, the run's build.
+  const previous = results.previous;
+  if (previous && Number.isFinite(previous.right)) {
+    if (!html.includes('data-results2-section="previous"')) faults.push('the previous Lex is not drawn');
+    else if (!new RegExp(`<tr data-row="before"><th scope="row">[^<]*</th><td>${count(previous.right)}</td><td>${count(previous.wrong)}</td>`, 'u').test(html)) faults.push('the previous Lex is not said as the file counts it');
+    if (Number.isFinite(previous.better) && !html.includes('data-results2-previous-changed=""')) faults.push('what changed since the previous Lex is not said');
+    if (at('data-results2-section="previous"') >= 0 && at('data-results2-section="previous"') < at('data-results2-section="wrong"')) faults.push('previous stands before the wrong answers');
+  }
+  if (Number.isFinite(results.retrieval?.walk_found) && !html.includes('data-results2-walk=""')) faults.push('what the walk alone found is not said');
+  if (typeof results.latency?.conditions === 'string' && !html.includes('data-results2-conditions=""')) faults.push('how the times were taken is not said');
+  if (results.build && results.run && results.made && !html.includes('data-results2-run=""')) faults.push('the build measured is not named');
   if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
   return faults;
 }
@@ -702,6 +730,8 @@ export async function renderAll({ write = false, tag = '' } = {}) {
   const outlineInsurance = JSON.parse(await readFile(new URL('../test/next-fixtures/outline-insurance.json', import.meta.url), 'utf8'));
   const outlineLabour = JSON.parse(await readFile(new URL('../test/next-fixtures/outline-labour-2014.json', import.meta.url), 'utf8'));
   const context = JSON.parse(await readFile(new URL('context-art16.json', CONTRACT_FIXTURES), 'utf8'));
+  // repair-pages (22/11/2026): the dictionary as /api/next/dictionary answers it (12 of its rows).
+  const dictionary = JSON.parse(await readFile(new URL('../test/next-fixtures/dictionary.json', import.meta.url), 'utf8'));
   const renderings = [];
   for (const locale of LOCALES) {
     const render = renderers[locale];
@@ -758,6 +788,19 @@ export async function renderAll({ write = false, tag = '' } = {}) {
       for (const banned of ['sans base de données vectorielle', 'ne lit pas encore les textes européens', 'qui ne se voient pas', 'indépendants']) if (how.includes(banned)) faults.push(`the page says what the engine does not do: ${banned}`);
       if (locale === 'fr') for (const sentence of englishSentences()) if (how.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
       renderings.push({ name: 'how-funnel', locale, html: how, faults });
+      // repair-pages: the departures said as choices; every dictionary row drawn with its status, a draft called a draft.
+      {
+        const withDictionary = render.renderHowFunnel(corpus, config, { locale, dictionary });
+        const dFaults = markupFaults(withDictionary);
+        if (!withDictionary.includes('data-how-departures=""') || copy.how2.departures.some((line) => !withDictionary.includes(inMarkup(line)))) dFaults.push('a departure from the method is not said');
+        const drawn = (withDictionary.match(/data-dictionary-row="/gu) ?? []).length;
+        if (drawn !== dictionary.rows.length) dFaults.push(`${drawn} dictionary rows drawn for ${dictionary.rows.length}`);
+        const drafts = dictionary.rows.filter((row) => !(row.status === 'validated' && row.validator)).length;
+        if ((withDictionary.match(/data-dictionary-row="draft"/gu) ?? []).length !== drafts) dFaults.push('a draft row is not called a draft');
+        if (!withDictionary.includes(`>${inMarkup(copy.how2.dictionaryStatus.draft)}</td>`)) dFaults.push('the word for a draft is not shown');
+        if (locale === 'fr') for (const sentence of englishSentences()) if (withDictionary.includes(inMarkup(sentence))) dFaults.push(`an English sentence on the French page: ${sentence}`);
+        renderings.push({ name: 'how-funnel-dictionary', locale, html: withDictionary, faults: dFaults });
+      }
       const failed = render.renderHowFunnel(null, null, { locale, state: 'failed', configState: 'failed' });
       renderings.push({ name: 'how-funnel-failed', locale, html: failed, faults: [...markupFaults(failed), ...(failed.includes(inMarkup(copy.how2.configFailed)) ? [] : ['a failed configuration is not said'])] });
       // The earlier pipeline (topk) answering: How it works is its page, never the funnel's.

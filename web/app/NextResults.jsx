@@ -1,9 +1,10 @@
 // The Results page for an evaluation in the schema `lex-results/2` (`web/RESULTS-SCHEMA.md`), in the earlier pages' look
-// (`.lx-how-table`, `.lx-how-fold`, `.lx-prose`): the questions and how they were scored, the wrong answers asserted first,
-// every question by result, the search measured apart, the slices with their counts and margins, by text and by kind
-// (folded), the misses labelled, the questions whose answer Lex does not hold, each brick switched off, a naive pipeline on
-// the same questions, the same questions asked again, cost and time. Every figure is the file's; a section the file does
-// not carry is left out; a key the copy does not name is shown as the file writes it.
+// (`.lx-how-table`, `.lx-how-fold`, `.lx-prose`): whether the numbers describe the build answering on this site (said first,
+// in words, before any number), the wrong answers asserted, the questions and how they were scored, every question by
+// result, the search measured apart, the slices with their counts and margins, by text and by kind (folded), the misses
+// labelled, the questions whose answer Lex does not hold, each brick switched off, a naive pipeline on the same questions,
+// the previous Lex on the same questions, the same questions asked again, cost and time. Every figure is the file's; a
+// section the file does not carry is left out; a key the copy does not name is shown as the file writes it.
 
 import { CHROME_LOCALE } from '../scripts/live-chrome.mjs';
 import { countedForm, decimal, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
@@ -19,6 +20,29 @@ const rowsOf = (value, key) => (Array.isArray(value) ? value.filter((row) => obj
 
 /** Whether a results answer is in this schema. */
 export const isResults2 = (results) => objectOr(results) !== null && results.schema === RESULTS_SCHEMA;
+
+/**
+ * repair-pages (22/11/2026): a sentence the evaluation wrote, in the page's language when the file gives it in both
+ * (`{ fr, en }`), else as written, marked with the language it is in (French or English, told by its words) so an English
+ * page never shows French unmarked: `{ text, lang }`, `lang` undefined when it is the page's own. Null for nothing.
+ */
+export function prose(value, locale) {
+  const own = objectOr(value);
+  if (own !== null) {
+    if (text(own[locale]) !== null) return { text: text(own[locale]), lang: undefined };
+    const other = ['fr', 'en'].find((key) => text(own[key]) !== null);
+    return other === undefined ? null : { text: text(own[other]), lang: other === locale ? undefined : other };
+  }
+  const said = text(value);
+  if (said === null) return null;
+  const french = /[àâçéèêëîïôûùœ’]|\b(?:les|des|une|est|du|aux|qui|avec|pour|sans|sur|dans|ont|été|écrites?)\b/iu.test(said);
+  const lang = french ? 'fr' : 'en';
+  return { text: said, lang: lang === locale ? undefined : lang };
+}
+
+/** A build `{ code, data }` the file names, or null. */
+const buildOf = (value) => (text(objectOr(value)?.code) !== null && text(objectOr(value)?.data) !== null ? { code: value.code.trim(), data: value.data.trim() } : null);
+const sameBuild = (a, b) => a !== null && b !== null && a.code === b.code && a.data === b.data;
 
 /** A table of rows under its column names; each cell a string. */
 function Table({ columns, rows, mark }) {
@@ -39,10 +63,17 @@ function Table({ columns, rows, mark }) {
   );
 }
 
-/** The results in `lex-results/2`, drawn whole. */
-export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
+/** A sentence of the copy with one place filled by a marked piece (`{ text, lang }`). */
+function Filled({ template, place, piece, values = {} }) {
+  const [before, after] = fillNext(template, { ...values, [place]: '\u0000' }).split('\u0000');
+  return <>{before}<span lang={piece.lang}>{piece.text.replace(/[.\s]+$/u, '')}</span>{after}</>;
+}
+
+/** The results in `lex-results/2`, drawn whole. `served` is the build answering on the site (`/api/next/config`), or null. */
+export function Results2View({ results, locale = CHROME_LOCALE, note = null, served = null }) {
   const table = nextCopy(locale);
   const copy = table.results2;
+  const pipelines = table.results3.pipelines;
   const dataLang = locale === 'fr' ? undefined : 'fr';
   const count = (value) => (isCount(value) ? groupedCount(value, locale) : '');
   const interval = (value) => {
@@ -51,7 +82,8 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
   };
   const set = objectOr(results.set);
   const scoring = objectOr(results.scoring);
-  const build = objectOr(results.build);
+  const build = buildOf(results.build);
+  const servedBuild = buildOf(served);
   const totals = objectOr(results.totals);
   const n = isCount(set?.n) ? set.n : null;
   const wrong = rowsOf(results.wrong, 'question');
@@ -67,51 +99,47 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
   const ablation = objectOr(results.ablation);
   const ablationRows = rowsOf(ablation?.rows, 'what');
   const baseline = objectOr(results.baseline);
+  const previous = objectOr(results.previous);
+  const previousItems = rowsOf(previous?.items, 'question');
   const noise = objectOr(results.noise);
   const cost = objectOr(results.cost);
   const latency = objectOr(results.latency);
   const name = (map, key) => (Object.hasOwn(map, key) ? map[key] : key);
   const lawName = (key) => name(table.results.laws, key);
   const typeName = (key) => name(table.questionTypes, key);
+  const stateName = (key) => name(copy.itemStates, key);
   const usd = (value) => (isCount(value) ? decimal(value, locale) : null);
   const seconds = (ms) => (isCount(ms) ? decimal(ms / 1000, locale, 1) : null);
-  const runLine = text(results.run) !== null && text(results.made) !== null && text(build?.code) !== null && text(build?.data) !== null
-    ? fillNext(copy.run, { run: results.run, date: numericDate(results.made), code: build.code, data: build.data }) : null;
+  const measuredPipeline = text(results.pipeline) ?? null;
+  const runLine = text(results.run) !== null && text(results.made) !== null && build !== null
+    ? fillNext(measuredPipeline !== null && Object.hasOwn(pipelines, measuredPipeline) ? copy.runPipeline : copy.run, {
+      run: results.run, date: numericDate(results.made), code: build.code, data: build.data,
+      ...(measuredPipeline !== null && Object.hasOwn(pipelines, measuredPipeline) ? { pipeline: pipelines[measuredPipeline] } : {}),
+    }) : null;
+  // The build a section names, said under its heading, and said not to be the one answering when it is not.
+  const sectionBuild = (value, key) => {
+    const own = buildOf(value);
+    if (own === null || sameBuild(own, build)) return null;
+    const line = fillNext(copy.sectionBuild, { code: own.code, data: own.data });
+    return <p className={servedBuild !== null && !sameBuild(own, servedBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build={key}>{line}{servedBuild !== null && !sameBuild(own, servedBuild) ? <> {copy.notServed}</> : null}</p>;
+  };
+  const written = prose(set?.written_by, locale);
+  const setNote = prose(set?.note, locale);
+  const rule = prose(scoring?.rule, locale);
+  const lenient = (Array.isArray(scoring?.lenient) ? scoring.lenient : []).map((one) => prose(one, locale)).filter((one) => one !== null);
+  const baselineWhat = prose(baseline?.what, locale);
+  const priceSource = prose(cost?.price_source, locale);
+  const conditions = prose(latency?.conditions, locale);
+  const walk = retrieval !== null && isCount(retrieval.walk_found) && isCount(retrieval.walk_of) ? retrieval : null;
   return (
     <div data-next-page="results" data-next-state="ready" data-results-schema={RESULTS_SCHEMA} data-run={results.run ?? ''}>
       <h1>{table.results.heading}</h1>
       {note}
 
-      {set === null && scoring === null && runLine === null ? null : (
-        <section aria-labelledby="results2-set" data-results2-section="set">
-          <h2 id="results2-set">{copy.setHeading}</h2>
-          {set === null || n === null ? null : (
-            <p>
-              {fillNext(copy.set, { n: countedForm(copy.questions, n, locale), name: text(set.name) ?? '', who: '\u0000' }).split('\u0000')[0]}
-              <span lang={dataLang}>{text(set.written_by) ?? ''}</span>
-              {fillNext(copy.set, { n: '', name: '', who: '\u0000' }).split('\u0000')[1]}
-              {set.fixed_before_run === true ? <> {copy.fixed}</> : null}
-              {' '}<strong data-results2-used={set.used_before === true ? 'before' : 'once'}>{set.used_before === true ? copy.usedBefore : copy.fresh}</strong>
-            </p>
-          )}
-          {text(set?.note) === null ? null : <p lang={dataLang}>{set.note}</p>}
-          {runLine === null ? null : <p className="lx-muted">{runLine}</p>}
-          {scoring === null ? null : (
-            <p className="lx-muted" data-results2-scoring="">
-              {Object.hasOwn(copy.scoredBy, scoring.by) ? copy.scoredBy[scoring.by] : null}
-              {text(scoring.rule) === null ? null : <> {fillNext(copy.rule, { rule: '\u0000' }).split('\u0000')[0]}<span lang={dataLang}>{scoring.rule.trim().replace(/[.\s]+$/u, '')}</span>{fillNext(copy.rule, { rule: '\u0000' }).split('\u0000')[1]}</>}
-              {(Array.isArray(scoring.lenient) ? scoring.lenient : []).filter((rule) => text(rule) !== null).map((rule) => (
-                <span key={rule} data-results2-lenient=""> {fillNext(copy.lenient, { rule: '\u0000' }).split('\u0000')[0]}<span lang={dataLang}>{rule.trim().replace(/[.\s]+$/u, '')}</span>{fillNext(copy.lenient, { rule: '\u0000' }).split('\u0000')[1]}</span>
-              ))}
-            </p>
-          )}
-        </section>
-      )}
-
       {totals === null && wrong.length === 0 ? null : (
         <section aria-labelledby="results2-wrong" data-results2-section="wrong">
           <h2 id="results2-wrong">{copy.wrongHeading}</h2>
-          {wrongCount === 0 ? <p data-results2-wrong-count="0"><strong>{copy.wrongNone}</strong></p> : (
+          {wrongCount === 0 ? <p data-results2-wrong-count="0"><strong>{copy.wrongNone}</strong>{n !== null && wrongInterval !== null ? <> {fillNext(copy.wrongLine, { n: count(n), low: decimal(wrongInterval[0], locale), high: decimal(wrongInterval[1], locale) })}</> : null}</p> : (
             <p data-results2-wrong-count={String(wrongCount)}>
               <strong>{countedForm(copy.wrongCount, wrongCount, locale)}</strong>
               {n !== null && wrongInterval !== null ? <> {fillNext(copy.wrongLine, { n: count(n), low: decimal(wrongInterval[0], locale), high: decimal(wrongInterval[1], locale) })}</> : null}
@@ -130,6 +158,30 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
         </section>
       )}
 
+      {set === null && scoring === null && runLine === null ? null : (
+        <section aria-labelledby="results2-set" data-results2-section="set">
+          <h2 id="results2-set">{copy.setHeading}</h2>
+          {set === null || n === null ? null : (
+            <p>
+              {written === null
+                ? fillNext(copy.setBare, { n: countedForm(copy.questions, n, locale), name: text(set.name) ?? '' })
+                : <Filled template={copy.set} place="who" piece={written} values={{ n: countedForm(copy.questions, n, locale), name: text(set.name) ?? '' }} />}
+              {set.fixed_before_run === true ? <> {copy.fixed}</> : null}
+              {' '}<strong data-results2-used={set.used_before === true ? 'before' : 'once'}>{set.used_before === true ? copy.usedBefore : copy.fresh}</strong>
+            </p>
+          )}
+          {setNote === null ? null : <p lang={setNote.lang}>{setNote.text}</p>}
+          {runLine === null ? null : <p className="lx-muted" data-results2-run="">{runLine}</p>}
+          {scoring === null ? null : (
+            <p className="lx-muted" data-results2-scoring="">
+              {Object.hasOwn(copy.scoredBy, scoring.by) ? copy.scoredBy[scoring.by] : null}
+              {rule === null ? null : <> <Filled template={copy.rule} place="rule" piece={rule} /></>}
+              {lenient.map((one) => <span key={one.text} data-results2-lenient=""> <Filled template={copy.lenient} place="rule" piece={one} /></span>)}
+            </p>
+          )}
+        </section>
+      )}
+
       {totals === null ? null : (
         <section aria-labelledby="results2-totals" data-results2-section="totals">
           <h2 id="results2-totals">{copy.totalsHeading}</h2>
@@ -143,10 +195,11 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
         </section>
       )}
 
-      {retrieval === null || !isCount(retrieval.right_article_read) || !isCount(retrieval.of) ? null : (
+      {retrieval === null || ((!isCount(retrieval.right_article_read) || !isCount(retrieval.of)) && walk === null) ? null : (
         <section aria-labelledby="results2-retrieval" data-results2-section="retrieval">
           <h2 id="results2-retrieval">{copy.retrievalHeading}</h2>
-          <p>{fillNext(copy.retrieval, { right: count(retrieval.right_article_read), of: count(retrieval.of), interval: interval(retrieval.interval) || '—' })}</p>
+          {isCount(retrieval.right_article_read) && isCount(retrieval.of) ? <p>{fillNext(copy.retrieval, { right: count(retrieval.right_article_read), of: count(retrieval.of), interval: interval(retrieval.interval) || '—' })}</p> : null}
+          {walk === null ? null : <p data-results2-walk="">{fillNext(copy.walk, { right: count(walk.walk_found), of: count(walk.walk_of), interval: interval(walk.walk_interval) || '—' })}</p>}
         </section>
       )}
 
@@ -165,12 +218,12 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
         <details className="lx-how-fold" data-results2-section="detail">
           <summary>{copy.foldSummary}</summary>
           {byLaw.length === 0 ? null : (
-            <Table mark="laws" columns={['law', 'n', 'right', 'wrong'].map((key) => copy.lawColumns[key])}
-              rows={byLaw.map((row) => ({ key: row.law, head: lawName(row.law), cells: [count(row.n), count(row.right), count(row.wrong)] }))} />
+            <Table mark="laws" columns={['law', 'n', 'right', 'wrong', 'interval'].map((key) => copy.lawColumns[key] ?? copy.slicesColumns[key])}
+              rows={byLaw.map((row) => ({ key: row.law, head: lawName(row.law), lang: Object.hasOwn(table.results.laws, row.law) ? undefined : dataLang, cells: [count(row.n), count(row.right), count(row.wrong), interval(row.interval)] }))} />
           )}
           {byType.length === 0 ? null : (
-            <Table mark="types" columns={['type', 'n', 'right', 'wrong'].map((key) => copy.typeColumns[key])}
-              rows={byType.map((row) => ({ key: row.type, head: typeName(row.type), cells: [count(row.n), count(row.right), count(row.wrong)] }))} />
+            <Table mark="types" columns={['type', 'n', 'right', 'wrong', 'interval'].map((key) => copy.typeColumns[key] ?? copy.slicesColumns[key])}
+              rows={byType.map((row) => ({ key: row.type, head: typeName(row.type), cells: [count(row.n), count(row.right), count(row.wrong), interval(row.interval)] }))} />
           )}
         </details>
       )}
@@ -189,7 +242,10 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
               <Table
                 mark="miss-items"
                 columns={['question', 'label', 'note'].map((key) => copy.missesItemColumns[key])}
-                rows={missItems.map((row, at) => ({ key: row.id ?? String(at), head: row.question, lang: dataLang, cells: [name(copy.missesLabels, row.label ?? ''), text(row.note) ?? ''], cellLang: [undefined, dataLang] }))}
+                rows={missItems.map((row, at) => {
+                  const said = prose(row.note, locale);
+                  return { key: row.id ?? String(at), head: row.question, lang: dataLang, cells: [name(copy.missesLabelsShort, row.label ?? ''), said?.text ?? ''], cellLang: [undefined, said?.lang] };
+                })}
               />
             </details>
           )}
@@ -211,7 +267,12 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
       {ablationRows.length === 0 ? null : (
         <section aria-labelledby="results2-ablation" data-results2-section="ablation">
           <h2 id="results2-ablation">{copy.ablationHeading}</h2>
-          {text(ablation.build?.code) === null || text(ablation.build?.data) === null ? null : <p className="lx-muted">{fillNext(copy.ablationBuild, { code: ablation.build.code, data: ablation.build.data })}</p>}
+          {buildOf(ablation.build) === null ? null : (
+            <p className={servedBuild !== null && !sameBuild(buildOf(ablation.build), servedBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build="ablation">
+              {fillNext(copy.ablationBuild, buildOf(ablation.build))}
+              {servedBuild !== null && !sameBuild(buildOf(ablation.build), servedBuild) ? <> {copy.notServed}</> : null}
+            </p>
+          )}
           <Table
             mark="ablation"
             columns={['what', 'right', 'wrong', 'interval'].map((key) => copy.ablationColumns[key])}
@@ -223,7 +284,8 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
       {baseline === null || !isCount(baseline.right) ? null : (
         <section aria-labelledby="results2-baseline" data-results2-section="baseline">
           <h2 id="results2-baseline">{copy.baselineHeading}</h2>
-          {text(baseline.what) === null ? null : <p className="lx-muted">{fillNext(copy.baselineWhat, { what: '\u0000' }).split('\u0000')[0]}<span lang={dataLang}>{baseline.what.trim().replace(/[.\s]+$/u, '')}</span>{fillNext(copy.baselineWhat, { what: '\u0000' }).split('\u0000')[1]}</p>}
+          {sectionBuild(baseline.build, 'baseline')}
+          {baselineWhat === null ? null : <p className="lx-muted"><Filled template={copy.baselineWhat} place="what" piece={baselineWhat} /></p>}
           <Table
             mark="baseline"
             columns={['who', 'right', 'wrong', 'interval'].map((key) => copy.baselineColumns[key])}
@@ -238,9 +300,40 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
         </section>
       )}
 
+      {previous === null || !isCount(previous.right) ? null : (
+        <section aria-labelledby="results2-previous" data-results2-section="previous">
+          <h2 id="results2-previous">{copy.previousHeading}</h2>
+          <Table
+            mark="previous"
+            columns={['who', 'right', 'wrong', 'notFound', 'interval'].map((key) => copy.previousColumns[key])}
+            rows={[
+              ...(isCount(totals?.right) ? [{ key: 'now', head: build === null ? copy.previousNowBare : fillNext(copy.previousNow, build), cells: [count(totals.right), count(totals.wrong), count(totals.not_found), interval(totals.intervals?.right)] }] : []),
+              {
+                key: 'before',
+                head: buildOf(previous.build) === null ? copy.previousBeforeBare : fillNext(copy.previousBefore, buildOf(previous.build)),
+                cells: [count(previous.right), count(previous.wrong), count(previous.not_found), interval(previous.interval)],
+              },
+            ]}
+          />
+          {isCount(previous.n) && n !== null && previous.n !== n ? <p className="lx-muted lx-next-gap" data-results2-previous-n="">{fillNext(copy.previousOtherN, { n: count(previous.n), now: count(n) })}</p> : null}
+          {isCount(previous.better) && isCount(previous.worse) ? <p data-results2-previous-changed="">{fillNext(copy.previousChanged, { better: count(previous.better), worse: count(previous.worse) })}</p> : null}
+          {previousItems.length === 0 ? null : (
+            <details className="lx-how-fold">
+              <summary>{copy.previousItems}</summary>
+              <Table
+                mark="previous-items"
+                columns={['question', 'before', 'now'].map((key) => copy.previousItemColumns[key])}
+                rows={previousItems.map((row, at) => ({ key: row.id ?? String(at), head: row.question, lang: dataLang, cells: [stateName(row.before ?? ''), stateName(row.now ?? '')] }))}
+              />
+            </details>
+          )}
+        </section>
+      )}
+
       {noise === null || !isCount(noise.runs) || !Array.isArray(noise.right) ? null : (
         <section aria-labelledby="results2-noise" data-results2-section="noise">
           <h2 id="results2-noise">{copy.noiseHeading}</h2>
+          {sectionBuild(noise.build, 'noise')}
           <p>{fillNext(copy.noise, { runs: countedForm(copy.runs, noise.runs, locale), right: noise.right.filter(isCount).map(count).join(table.listSeparator), wrong: (Array.isArray(noise.wrong) ? noise.wrong : []).filter(isCount).map(count).join(table.listSeparator) || '—' })}</p>
         </section>
       )}
@@ -257,7 +350,8 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
           {[seconds(latency?.median_ms), seconds(latency?.p90_ms), seconds(latency?.max_ms)].every((value) => value !== null) ? (
             <p>{fillNext(copy.latency, { median: seconds(latency.median_ms), slow: seconds(latency.p90_ms), max: seconds(latency.max_ms) })}</p>
           ) : null}
-          {text(cost?.price_source) === null ? null : <p className="lx-muted" lang={dataLang}>{cost.price_source}</p>}
+          {conditions === null ? null : <p className="lx-muted" data-results2-conditions=""><Filled template={copy.conditions} place="how" piece={conditions} /></p>}
+          {priceSource === null ? null : <p className="lx-muted" lang={priceSource.lang}>{priceSource.text}</p>}
         </section>
       )}
     </div>

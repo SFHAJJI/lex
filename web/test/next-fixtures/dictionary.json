@@ -1,0 +1,400 @@
+{
+ "name": "Lex dictionary of everyday words",
+ "version": "2026-11-22",
+ "note": "Every row is a draft: written by a model (repair-engine) or taken from the engine's own lists, checked by code against the store (store_hits), validated by nobody yet (validator null). A row becomes 'validated' only when a named person signs it.",
+ "built_by": "experiments/funnel/build_dictionary.py",
+ "counts": {
+  "rows": 86,
+  "by_status": {
+   "draft": 86
+  },
+  "validated": 0,
+  "without_validator": 86,
+  "by_domain": {
+   "insurance": 31,
+   "tax": 2,
+   "labour": 12,
+   "social": 1,
+   "consumer": 1,
+   "road": 2,
+   "tenancy": 4,
+   "act names": 33
+  }
+ },
+ "rows": [
+  {
+   "id": "ins-bundle",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "vente croisée (un produit vendu avec une assurance)",
+   "variants": {
+    "fr": [
+     "vendu avec une assurance",
+     "offre groupée",
+     "vente groupée",
+     "vente liée",
+     "couplé à une assurance",
+     "obligé de prendre leur assurance",
+     "imposer une assurance"
+    ],
+    "de": [
+     "gebündelt",
+     "kopplungsgeschäft",
+     "zusammen mit einer versicherung",
+     "versicherung dazu"
+    ],
+    "en": [
+     "bundled",
+     "bundle",
+     "sold together with",
+     "tied to",
+     "tying",
+     "take their insurance",
+     "insurance with it",
+     "insurance included",
+     "forced to take insurance"
+    ]
+   },
+   "legal_term": "vente croisée",
+   "legal_variants_fr": [
+    "vente croisée",
+    "pratiques de vente croisée",
+    "vente liée",
+    "vente groupée"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 4,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-terminate",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "résiliation du contrat",
+   "variants": {
+    "fr": [
+     "résilier",
+     "résiliation",
+     "mettre fin au contrat"
+    ],
+    "de": [
+     "kündigen",
+     "kündigung"
+    ],
+    "en": [
+     "terminate",
+     "termination",
+     "cancel",
+     "cancellation",
+     "end the contract"
+    ]
+   },
+   "legal_term": "résiliation",
+   "legal_variants_fr": [
+    "résiliation",
+    "résilier"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 1255,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-notice",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "préavis",
+   "variants": {
+    "fr": [
+     "préavis",
+     "délai de préavis"
+    ],
+    "de": [
+     "kündigungsfrist"
+    ],
+    "en": [
+     "notice period",
+     "notice"
+    ]
+   },
+   "legal_term": "préavis",
+   "legal_variants_fr": [
+    "préavis",
+    "délai de préavis"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 510,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-claim",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "sinistre",
+   "variants": {
+    "fr": [
+     "sinistre",
+     "déclaration de sinistre",
+     "dégât des eaux"
+    ],
+    "de": [
+     "schadensfall",
+     "versicherungsfall",
+     "schadenmeldung",
+     "schaden"
+    ],
+    "en": [
+     "claim",
+     "claims"
+    ]
+   },
+   "legal_term": "sinistre",
+   "legal_variants_fr": [
+    "sinistre",
+    "survenance du sinistre"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 389,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-premium",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "prime",
+   "variants": {
+    "fr": [
+     "prime",
+     "prime d'assurance"
+    ],
+    "de": [
+     "prämie",
+     "versicherungsprämie"
+    ],
+    "en": [
+     "premium",
+     "premiums"
+    ]
+   },
+   "legal_term": "prime",
+   "legal_variants_fr": [
+    "prime",
+    "paiement de la prime"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 2453,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-premium-unpaid",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "défaut de paiement de la prime",
+   "variants": {
+    "fr": [
+     "impayé",
+     "pas payé la prime",
+     "oublié de payer"
+    ],
+    "de": [
+     "nicht bezahlt",
+     "zahlungsverzug"
+    ],
+    "en": [
+     "unpaid premium",
+     "forgot to pay",
+     "missed payment"
+    ]
+   },
+   "legal_term": "défaut de paiement de la prime",
+   "legal_variants_fr": [
+    "défaut de paiement de la prime",
+    "suspension de la garantie"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 2,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-deductible",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "franchise",
+   "variants": {
+    "fr": [
+     "franchise",
+     "reste à charge"
+    ],
+    "de": [
+     "selbstbeteiligung",
+     "selbstbehalt"
+    ],
+    "en": [
+     "deductible",
+     "excess"
+    ]
+   },
+   "legal_term": "franchise",
+   "legal_variants_fr": [
+    "franchise"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 614,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-insurer",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "assureur",
+   "variants": {
+    "fr": [
+     "assureur",
+     "compagnie d'assurance"
+    ],
+    "de": [
+     "versicherer",
+     "versicherungsgesellschaft"
+    ],
+    "en": [
+     "insurer",
+     "insurance company"
+    ]
+   },
+   "legal_term": "assureur",
+   "legal_variants_fr": [
+    "assureur",
+    "entreprise d'assurances"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 21569,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-policyholder",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "preneur d'assurance",
+   "variants": {
+    "fr": [
+     "souscripteur",
+     "preneur"
+    ],
+    "de": [
+     "versicherungsnehmer"
+    ],
+    "en": [
+     "policyholder",
+     "policy holder",
+     "insured"
+    ]
+   },
+   "legal_term": "preneur d'assurance",
+   "legal_variants_fr": [
+    "preneur d'assurance",
+    "assuré"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 21569,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-beneficiary",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "bénéficiaire",
+   "variants": {
+    "fr": [
+     "bénéficiaire"
+    ],
+    "de": [
+     "begünstigter",
+     "begünstigte",
+     "bezugsberechtigter"
+    ],
+    "en": [
+     "beneficiary"
+    ]
+   },
+   "legal_term": "bénéficiaire",
+   "legal_variants_fr": [
+    "bénéficiaire"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 5097,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-life",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "assurance sur la vie",
+   "variants": {
+    "fr": [
+     "assurance vie",
+     "assurance-vie"
+    ],
+    "de": [
+     "lebensversicherung"
+    ],
+    "en": [
+     "life insurance",
+     "life policy"
+    ]
+   },
+   "legal_term": "assurance sur la vie",
+   "legal_variants_fr": [
+    "assurance sur la vie",
+    "contrat d'assurance sur la vie"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 89,
+   "added": "2026-11-22"
+  },
+  {
+   "id": "ins-fire",
+   "kind": "concept",
+   "domain": "insurance",
+   "concept": "assurance contre l'incendie (habitation)",
+   "variants": {
+    "fr": [
+     "assurance habitation",
+     "assurance maison",
+     "multirisque habitation",
+     "assurance incendie"
+    ],
+    "de": [
+     "hausratversicherung",
+     "wohngebäudeversicherung",
+     "gebäudeversicherung",
+     "feuerversicherung"
+    ],
+    "en": [
+     "home insurance",
+     "house insurance",
+     "fire insurance",
+     "household insurance"
+    ]
+   },
+   "legal_term": "assurance contre l'incendie",
+   "legal_variants_fr": [
+    "assurance contre l'incendie",
+    "incendie"
+   ],
+   "status": "draft",
+   "validator": null,
+   "store_hits": 1534,
+   "added": "2026-11-22"
+  }
+ ]
+}

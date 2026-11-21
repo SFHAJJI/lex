@@ -36,8 +36,22 @@ function Commit({ label, commit, unstated }) {
  * facts, the as-built line on a page that will ask the server, and on a page that never does (`answers` false), that it
  * carries no answer.
  */
-export function FreshnessStrip({ facts = null, answers = true }) {
+export function FreshnessStrip({ facts = null, answers = true, engine = null }) {
   const copy = liveChrome().freshness;
+  // repair-pages (22/11/2026): the assistant's own index (the engine's data, `GET /api/next/config` `index` and `build`),
+  // said first on every page that has a script; the reading service's index, when an answer of it arrived, after it and
+  // named as that service's (the text pages and the changes page read it).
+  const engineLine = engine === null ? null : (
+    <p data-engine-index={engine.builtOn ?? ''}>{fillText(engine.builtOn === null ? copy.engineUndated : copy.engineBuilt, { date: engine.builtOn ?? '', data: engine.data, code: engine.code })}</p>
+  );
+  if (engineLine !== null && facts === null) {
+    return (
+      <section className="freshness-strip" aria-label={copy.heading} data-freshness="engine">
+        {engineLine}
+        <p data-guide-note=""><GuideLink section="freshness" /></p>
+      </section>
+    );
+  }
   if (facts === null && !answers) {
     return (
       <section className="freshness-strip" aria-label={copy.heading} data-freshness="no-answer">
@@ -56,7 +70,8 @@ export function FreshnessStrip({ facts = null, answers = true }) {
   }
   return (
     <section className="freshness-strip" aria-label={copy.heading} data-freshness="answered" data-stale={String(facts.stale)}>
-      <p data-index-built={facts.builtOn ?? ''}>{facts.builtOn === null ? copy.builtUndated : fillText(copy.built, { date: facts.builtOn })}</p>
+      {engineLine}
+      <p data-index-built={facts.builtOn ?? ''}>{facts.builtOn === null ? copy.builtUndated : fillText(engineLine === null ? copy.built : copy.readingBuilt, { date: facts.builtOn })}</p>
       {facts.channels.length === 0 ? null : (
         <ul className="freshness-channels">
           {facts.channels.map((channel) => (
@@ -114,6 +129,17 @@ export function FreshnessStripSlot({ facts = null, answers = true }) {
       <FreshnessStrip facts={facts} answers={answers} />
     </div>
   );
+}
+
+/**
+ * repair-pages (22/11/2026): the assistant's index as the server's configuration states it (`index.built_on`, `build`), or
+ * null: `{ builtOn, data, code }`, the date said dd/mm/yyyy.
+ */
+export function engineIndexFacts(config) {
+  const build = config !== null && typeof config === 'object' ? config.build : null;
+  if (build === null || typeof build !== 'object' || typeof build.data !== 'string' || typeof build.code !== 'string') return null;
+  const day = typeof config.index?.built_on === 'string' ? /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/u.exec(config.index.built_on) : null;
+  return Object.freeze({ builtOn: day === null ? null : `${day[3]}/${day[2]}/${day[1]}`, data: build.data, code: build.code });
 }
 
 /** The banner's container under the header, empty unless a channel is past the maximum age. */

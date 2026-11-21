@@ -71,6 +71,12 @@
  "retrieval": {
   "right_article_read": 101,
   "of": 110,
+  "walk_found": 74,
+  "walk_of": 110,
+  "walk_interval": [
+   58.1,
+   75.4
+  ],
   "interval": [
    85.2,
    95.6
@@ -322,6 +328,33 @@
  "latency": {
   "median_ms": 5400,
   "p90_ms": 11200,
-  "max_ms": 24800
+  "max_ms": 24800,
+  "conditions": "une question à la fois, 20 s d’écart"
+ },
+ "pipeline": "combo",
+ "previous": {
+  "build": {
+   "code": "t8",
+   "data": "20261120c"
+  },
+  "pipeline": "funnel",
+  "n": 120,
+  "right": 71,
+  "wrong": 6,
+  "not_found": 9,
+  "interval": [
+   50.2,
+   67.5
+  ],
+  "better": 22,
+  "worse": 5,
+  "items": [
+   {
+    "id": "X4",
+    "question": "Quel délai pour renoncer à un contrat d’assurance vie ?",
+    "before": "not_found",
+    "now": "right"
+   }
+  ]
  }
 }

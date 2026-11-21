@@ -43,9 +43,16 @@ export const renderResults = (results, { locale, state = 'ready', config = null 
 /** pages2: a text as the engine holds it, read into the text page's state (`/api/next/text`), and its source's sentence. */
 export { nextTextAddress, nextTextState, textSourceLine } from './TextPage.jsx';
 export const renderCorpus = (corpus, { locale, state = 'ready' } = {}) => renderToStaticMarkup(<CorpusView corpus={corpus} state={state} locale={locale} />);
-export const renderHowFunnel = (corpus, config, { locale, state = 'ready', configState = 'ready' } = {}) => renderToStaticMarkup(<HowForPipeline corpus={corpus} config={config} state={state} configState={configState} locale={locale} />);
+export const renderHowFunnel = (corpus, config, { locale, state = 'ready', configState = 'ready', dictionary = null } = {}) => renderToStaticMarkup(<HowForPipeline corpus={corpus} config={config} state={state} configState={configState} locale={locale} dictionary={dictionary} />);
 export const renderDecisions = ({ locale, pipeline = 'funnel', state = 'ready' } = {}) => renderToStaticMarkup(<DecisionsView pipeline={pipeline} state={state} locale={locale} />);
 export const renderCoverage = (coverage, { locale } = {}) => renderToStaticMarkup(<CoverageView coverage={coverage} locale={locale} />);
+
+/** repair-pages (22/11/2026): the pieces added tonight, for the tests. */
+export { whyWords, coverageView } from './NextCoverage.jsx';
+export { prose } from './NextResults.jsx';
+import { FreshnessStrip, engineIndexFacts } from './Freshness.jsx';
+export { engineIndexFacts };
+export const renderFreshness = (facts, engine, answers = true) => renderToStaticMarkup(<FreshnessStrip facts={facts} engine={engine} answers={answers} />);
 
 /** The references panel of an open article (in the language the bundle was built for). */
 export const renderReferences = (references, identifier) => renderToStaticMarkup(<ArticleReferences references={references} identifier={identifier} />);

@@ -23,7 +23,8 @@ import { countedForm, fillNext, nextCopy } from '../scripts/next-copy.mjs';
 import {
   CONTRACT_ASSERTED, callRows, readableReason, clarifiedQuestion, clarifyOf, contextAddress, contractBlockView, contractBuild, contractFoot, contractStateOf, dateLine,
   evidenceView, listStatement, notHeldLines, replayToken, replayTokenHref, traceLevels, understoodFields, widened,
-  blockSource, blockVia, checksView, contractVersions, engineSaid, listItemsView, notesView, partsView, pointedLines, reasonBy, seeAlsoView, sourcesAddress,
+  amendedSince, blockMarks, blockSource, blockVia, checksView, contractVersions, engineSaid, listItemsView, notesView, partsView, pointedLines, reasonBy, seeAlsoView, sourcesAddress,
+  blockLanguage, reasonLang, codeReasonInEnglish, sentenceLanguage, typedAnswerView, conflictView, verificationLine, unchangedLines,
 } from '../scripts/next-contract.mjs';
 
 /** The language tag the law's own words are marked with on a page written in another language. */
@@ -78,18 +79,62 @@ function StateHead({ answer, locale }) {
 function NotesAndChecks({ answer, locale }) {
   const notes = notesView(answer, locale);
   const checks = checksView(answer, locale);
-  const lead = checks?.lead ?? null;
+  // repair-pages (K-GEN-8): a pick found by meaning alone, checked independently: the check's result replaces "check it yourself".
+  const verified = verificationLine(answer, locale);
+  const lead = verified !== null ? { text: verified.text, caution: verified.caution, verified: true } : checks?.lead ?? null;
   if (notes.length === 0 && lead === null) return null;
   return (
     <div className="lx-dock-notes" data-dock-notes="">
-      {lead === null ? null : <p className={lead.caution ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-check={lead.caution ? 'meaning-only' : 'found-by'}>{lead.text}</p>}
+      {lead === null ? null : <p className={lead.caution ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-check={lead.verified ? 'verified' : lead.caution ? 'meaning-only' : 'found-by'}>{lead.text}</p>}
       {notes.map((note) => <p key={note.key} className={note.caution ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-note={note.key}>{note.text}</p>)}
+    </div>
+  );
+}
+
+/**
+ * repair-pages (22/11/2026, K-GEN-3): the typed answer on a firm answer: the value code formatted, the law's words that answer
+ * (marked in the law's language), the reader's kind, the conditions and exceptions word for word, and the model's summary of the
+ * quoted lines in the question's language, under a label that says who wrote it and that it is not the law.
+ */
+function TypedAnswer({ view, locale }) {
+  const copy = nextCopy(locale).contract3.typed;
+  const dock = nextCopy(locale).dock;
+  return (
+    <div className="lx-dock-short" data-dock-typed-answer="">
+      {view.value === null ? null : <p className="lx-dock-lead" data-dock-typed-value="">{view.value.frame[0]}<strong lang={view.value.lang}>{view.value.text}</strong>{view.value.frame[1]}</p>}
+      {view.words === null ? null : (
+        <>
+          <p className="lx-dock-words" data-dock-typed-words=""><strong><span lang={view.words.lang}>{nextCopy(locale).quoteOpen}{view.words.text}{nextCopy(locale).quoteClose}</span></strong>{view.words.where === null ? null : <span lang={locale === 'fr' ? undefined : 'fr'}> ({view.words.where})</span>}</p>
+          <p className="lx-dock-remark">{view.words.by}{view.kind === null ? null : <> {view.kind}</>} <Tag by="both" copy={dock} /></p>
+        </>
+      )}
+      {view.conditions.length === 0 ? null : (
+        <>
+          <p className="lx-dock-remark"><span className="lx-dock-why-by">{copy.conditionsHeading}</span></p>
+          <ul className="lx-dock-step-list" data-dock-typed-conditions="">
+            {view.conditions.map((entry) => (
+              <li key={entry.key}>{fillNext(copy.condition, { role: '\u0001', label: '\u0002', text: '\u0003' }).split(/([\u0001\u0002\u0003])/u).map((part, at) => (
+                part === '\u0001' ? <span key={at}>{entry.role}</span> : part === '\u0002' ? <span key={at} lang={locale === 'fr' ? undefined : 'fr'}>{entry.label}</span> : part === '\u0003' ? <span key={at} lang={locale === 'fr' ? undefined : 'fr'}>{entry.text}</span> : part
+              ))}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {view.summary === null ? null : (
+        <div className="lx-dock-summary" data-dock-summary="">
+          <p className="lx-dock-remark"><span className="lx-dock-why-by">{view.summary.label}</span> <Tag by="model" copy={dock} /></p>
+          <p className="lx-dock-words" lang={view.summary.lang}>{view.summary.text}</p>
+        </div>
+      )}
     </div>
   );
 }
 
 /** pages2: the words of the law that give the short answer (engine2's `short_answer`), with who found them. */
 function ShortAnswer({ answer, locale }) {
+  // repair-pages: the typed answer, when the engine gives one, says the short answer and more.
+  const typed = typedAnswerView(answer, locale);
+  if (typed !== null && (typed.words !== null || typed.value !== null || typed.summary !== null)) return <TypedAnswer view={typed} locale={locale} />;
   const said = engineSaid(answer, locale).shortAnswer;
   if (said === null) return null;
   const copy = nextCopy(locale).contract2.shortAnswer;
@@ -110,6 +155,7 @@ function EngineNotes({ answer, locale }) {
     ['repealed', copy.repealedHeading, said.repealed],
     ['transposed-by', copy.directiveHeading, said.transposedBy],
     ['eu-not-held', copy.euNotHeldHeading, said.euNotHeld],
+    ['amended-since', copy.amendedHeading, amendedSince(answer)],
   ].filter(([, , lines]) => lines.length > 0);
   if (cards.length === 0) return null;
   return cards.map(([key, heading, lines]) => (
@@ -118,6 +164,33 @@ function EngineNotes({ answer, locale }) {
       <ul className="lx-dock-step-list">{lines.map((line) => <li key={line} lang={key === 'eu-not-held' ? undefined : lawLang(locale)}>{line}</li>)}</ul>
     </div>
   ));
+}
+
+/**
+ * repair-pages (22/11/2026): two texts that disagree (K-GEN-4), said above the passages, both quoted and flagged; an original
+ * wording that no amending text held targets (K-TIME-4), with the engine's sentence in the question's language.
+ */
+function ConflictAndWording({ answer, locale }) {
+  const copy = nextCopy(locale).contract3;
+  const conflict = conflictView(answer);
+  const unchanged = unchangedLines(answer, locale);
+  return (
+    <>
+      {conflict === null ? null : (
+        <div className="lx-dock-card lx-dock-notheld" data-dock-card="conflict">
+          <p className="lx-dock-lead">{copy.conflictHeading}</p>
+          <p className="lx-dock-words">{copy.conflictText}</p>
+          {conflict.articles.length === 0 ? null : <p className="lx-dock-remark" lang={locale === 'fr' ? undefined : 'fr'}>{conflict.articles.join(' · ')}</p>}
+        </div>
+      )}
+      {unchanged.length === 0 ? null : (
+        <div className="lx-dock-card lx-dock-notheld" data-dock-card="unchanged">
+          <p className="lx-dock-lead">{copy.unchangedHeading}</p>
+          <ul className="lx-dock-step-list">{unchanged.map((line) => <li key={line.text} lang={line.lang}>{line.text}</li>)}</ul>
+        </div>
+      )}
+    </>
+  );
 }
 
 /** pages2: the items of a list made of headings, in the text's order, each opening the article that stands for it. */
@@ -295,7 +368,11 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
   }, [address, level]); // eslint-disable-line react-hooks/exhaustive-deps
   const opening = work === null || anchor === null ? null : { identifier: work, article: anchor, date: view.date };
   const href = opening === null ? null : textHref(opening, locale);
+  // repair-pages: a text held only in German (the 1937 premium-tax law) is marked as German and said to be the authentic text.
+  const words = blockLanguage(block, versionSource);
+  const german = words === 'de';
   const lang = lawLang(locale);
+  const wordsLang = german ? 'de' : lang;
   const quotedNumbers = view.lines.filter((line) => !line.gap).map((line) => line.n);
   const wide = level === 'lines' || context.state !== 'ready' ? null : widened(context.data, level, quotedNumbers);
   const quoteLines = view.lines.filter((line) => !line.gap);
@@ -308,26 +385,35 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
   const source = blockSource(block) ?? (versionSource?.ocr === true ? 'ocr' : versionSource?.pdf === true ? 'pdf' : null);
   const item = typeof block?.list_item === 'string' && block.list_item.trim().length > 0 ? block.list_item.trim() : null;
   const whyBy = reasonBy(block);
+  const marks = blockMarks(block, locale);
   // An exception is read with the rule it may set aside (K-REF-6): said once on its card.
   const exceptionNote = explainException && view.role === 'exception' && (state === 'answer' || state === 'answer_with_exception');
   return (
     <article className="lx-dock-card lx-dock-answer lx-dock-block" data-dock-card="block" data-role={view.role ?? ''} aria-label={view.label}>
       <div className="lx-dock-card-head"><span className="lx-dock-verdict">{view.label}</span></div>
       {item === null ? null : <p className="lx-dock-remark" data-dock-list-item="">{fillNext(extra.listItem, { heading: item })}</p>}
+      {block?.conflicting === true ? <p className="lx-dock-remark lx-dock-caution" data-dock-conflicting="">{table.contract3.conflictBadge}</p> : null}
       {/* pages2 (K-GEN-7): the reason under a quotation says who wrote it: a model (the reading, the arbiter) or code (a
           reference followed, a widening, a definition); a model's sentence is never shown as Lex's statement of the law. */}
       {view.why === null || item !== null ? null : (
         <p className="lx-dock-remark" data-dock-why="" data-why-by={whyBy}>
           <span className="lx-dock-why-by">{whyBy === 'model' ? extra.whyModel : extra.whyCode}</span>{' '}
-          <span lang={lang}>{readableReason(view.why, answer ?? {})}</span>
+          {/* repair-pages: a reason code wrote is said in English on an English page; a model's reason is marked with its language. */}
+          {locale === 'en' && whyBy === 'code' && codeReasonInEnglish(view.why) !== null
+            ? <span>{readableReason(codeReasonInEnglish(view.why), answer ?? {})}</span>
+            : <span lang={reasonLang(block, answer, locale)}>{readableReason(view.why, answer ?? {})}</span>}
         </p>
       )}
       {via === null ? null : <p className="lx-dock-remark" data-dock-via={block?.inbound === true ? 'inbound' : block?.retrieved_via ?? ''}>{via}</p>}
       {exceptionNote ? <p className="lx-dock-remark lx-dock-caution" data-dock-exception-note="">{extra.exceptionNote}</p> : null}
+      {[['compiled', marks.compiled], ['original', marks.original], ['amends', marks.amends]].filter(([, line]) => line !== null).map(([key, line]) => (
+        <p className={key === 'original' ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-mark={key} key={key}>{line}</p>
+      ))}
       {source === null ? null : <p className={source === 'ocr' ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-source={source}>{extra.source[source]}</p>}
+      {german ? <p className="lx-dock-remark lx-dock-caution" data-dock-source="german">{extra.source.german}</p> : null}
       {wide === null ? (
         quoteLines.length === 0 ? null : (
-          <div className="lx-dock-extract" data-dock-extract={anchor ?? ''} lang={lang}>
+          <div className="lx-dock-extract" data-dock-extract={anchor ?? ''} lang={wordsLang}>
             {view.lines.map((line, at) => {
               if (line.gap) return <p className="lx-dock-remark" key={`gap-${at}`} aria-hidden="true">{table.dock.gap}</p>;
               return <Line key={`line-${at}`} line={{ ...line, quoted: marked && (pointed === null || pointed.has(line.n)) }} first={line === quoteLines[0]} last={line === quoteLines.at(-1)} table={table} />;
@@ -335,7 +421,7 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
           </div>
         )
       ) : wide.kind === 'section' ? (
-        <div className="lx-dock-extract lx-dock-wide" data-dock-wide="section" lang={lang}>
+        <div className="lx-dock-extract lx-dock-wide" data-dock-wide="section" lang={wordsLang}>
           {wide.label === null ? null : <p className="lx-dock-remark" data-dock-section="">{fillNext(copy.sectionOf, { label: wide.label })}</p>}
           {wide.articles.map((entry) => (
             <div key={entry.key} data-dock-wide-article={entry.anchor ?? ''}>
@@ -346,7 +432,7 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
           {wide.cut ? <p className="lx-dock-remark">{copy.widen.cut}</p> : null}
         </div>
       ) : (
-        <div className="lx-dock-extract lx-dock-wide" data-dock-wide={wide.kind} lang={lang}>
+        <div className="lx-dock-extract lx-dock-wide" data-dock-wide={wide.kind} lang={wordsLang}>
           {wide.lines.map((line, at) => <Line key={`w-${at}`} line={line} first={at === 0} last={at === wide.lines.length - 1} table={table} />)}
         </div>
       )}
@@ -408,14 +494,24 @@ function Evidence({ answer, locale }) {
       <p className="lx-dock-lead">{partial ? nextCopy(locale).contract2.evidencePartial : copy.heading}</p>
       {view.coverage === null ? null : <p className="lx-dock-words" data-evidence="coverage"><strong>{copy.coverage}</strong>{' '}<span lang={lang}>{view.coverage}</span></p>}
       {(view.floors ?? []).map((line) => <p className="lx-dock-words" data-evidence="floor" key={line}>{line}</p>)}
+      {/* repair-pages (K-UI-4): two columns that fit the dock at 1366 px and on a phone: the word with its forms under it,
+          then the articles that hold it; nothing is cut on the right. */}
       {view.terms.length === 0 ? null : (
-        <table className="lx-dock-table" data-evidence="terms">
-          <thead><tr><th scope="col">{copy.terms.term}</th><th scope="col">{copy.terms.variants}</th><th scope="col">{copy.terms.hits}</th></tr></thead>
+        <table className="lx-dock-table lx-dock-terms" data-evidence="terms">
+          <thead><tr><th scope="col">{copy.terms.term}</th><th scope="col">{copy.terms.hits}</th></tr></thead>
           <tbody>
             {view.terms.map((term) => (
               <tr key={term.term} data-none={term.hits === 0 ? '' : undefined}>
-                <th scope="row" lang={lang}>{term.term}</th>
-                <td lang={lang}>{term.variants.join(nextCopy(locale).listSeparator)}</td>
+                <th scope="row">
+                  <span lang={lang}>{term.term}</span>
+                  {term.source === null ? null : <span className="lx-dock-term-forms" data-term-source="">{term.source}</span>}
+                  {term.forms.length === 0 ? null : (
+                    <span className="lx-dock-term-forms" data-term-forms="">
+                      <span className="lx-visually-hidden">{copy.terms.variants} </span>
+                      {term.forms.map((form, at) => <span key={`${form.text}-${at}`}>{at === 0 ? null : nextCopy(locale).listSeparator}<span lang={form.law ? lang : undefined}>{form.text}</span></span>)}
+                    </span>
+                  )}
+                </th>
                 <td>{term.said}</td>
               </tr>
             ))}
@@ -423,6 +519,8 @@ function Evidence({ answer, locale }) {
         </table>
       )}
       {view.swept === null ? null : <p className="lx-dock-words" data-evidence="sweep">{view.swept}</p>}
+      {view.basis === null || view.basis === undefined ? null : <p className="lx-dock-remark lx-dock-caution" data-evidence="basis">{view.basis}</p>}
+      {view.other === null || view.other === undefined ? null : <p className="lx-dock-remark" data-evidence="other-language">{view.other}</p>}
       {view.closest === null ? null : <p className="lx-dock-words" data-evidence="closest">{view.closest} <Tag by="model" copy={nextCopy(locale).dock} /></p>}
     </div>
   );
@@ -578,6 +676,7 @@ export function ContractAnswer({ turn, locale, onAsk, onOpen, typedDay, fetchImp
       <Understood answer={answer} turn={turn} locale={locale} onAsk={onAsk} typedDay={typedDay} initialDateOpen={initialDateOpen} />
       <NotHeld answer={answer} locale={locale} />
       <EngineNotes answer={answer} locale={locale} />
+      <ConflictAndWording answer={answer} locale={locale} />
       <Clarify answer={answer} turn={turn} locale={locale} onAsk={onAsk} />
       <ListStatement answer={answer} locale={locale} />
       <ListItems answer={answer} locale={locale} onOpen={onOpen} />

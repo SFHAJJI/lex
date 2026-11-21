@@ -49,14 +49,16 @@ const readJson = async (name) => JSON.parse(await readFile(new URL(name, FIXTURE
 async function nextFixture(method, url, body) {
   const { pathname, searchParams } = new URL(url, "http://preview");
   const tryRead = async (name) => { try { return await readJson(name); } catch { return null; } };
-  if (pathname === "/api/next/config") return readJson("config.json");
-  // pages2 (21/11/2026): the data builders' own coverage file, the results file as the server holds it today (with the
-  // configuration, the page says which build they describe), and a text the reading service does not hold, from the engine.
-  if (pathname === "/api/next/coverage") return readJson("coverage-real.json");
-  if (pathname === "/api/next/results") return readJson("results.json");
+  // repair-pages (22/11/2026): the answers this tree's server gives (test/next-fixtures/preview/, saved from it locally), and the
+  // results in lex-results/2 as the evaluation will write them (results-v2.json), so the pages are photographed as they will read.
+  if (pathname === "/api/next/config") return readJson("preview/config.json");
+  if (pathname === "/api/next/coverage") return readJson("preview/coverage.json");
+  if (pathname === "/api/next/results") return readJson("results-v2.json");
+  if (pathname === "/api/next/dictionary") return readJson("preview/dictionary.json");
+  if (pathname === "/api/next/versions") return readJson("preview/versions.json");
   if (pathname === "/api/next/sources") return Object.fromEntries(searchParams.getAll("version").filter((id) => id === "17295").map((id) => [id, { identity_from: "publisher-pdf", ocr: false, pdf: true, language: "fra" }]));
-  if (pathname === "/api/next/text") return tryRead({ "code-securite-sociale": "text-css.json", "32009L0138": "text-solvency.json" }[searchParams.get("work")] ?? "none.json");
-  if (pathname === "/api/next/text-outline") return tryRead(`contexts/outline-${searchParams.get("work")}.json`);
+  if (pathname === "/api/next/text") return tryRead(`preview/text-${searchParams.get("work")}.json`).then((value) => value ?? tryRead({ "code-securite-sociale": "text-css.json", "32009L0138": "text-solvency.json" }[searchParams.get("work")] ?? "none.json"));
+  if (pathname === "/api/next/text-outline") return tryRead(`preview/outline-${searchParams.get("work")}.json`).then((value) => value ?? tryRead(`contexts/outline-${searchParams.get("work")}.json`));
   if (pathname === "/api/next/context") return tryRead(`contexts/${Number(searchParams.get("article_pk"))}.json`);
   if (method === "POST" && (pathname === "/api/next/ask" || pathname === "/api/next/replay")) {
     let asked = {};

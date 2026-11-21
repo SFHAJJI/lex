@@ -92,3 +92,33 @@ Questions, expected and given answers are shown in French as written (marked `la
 Every section is optional; the page draws the ones present, in this order: the set and how it was scored, the wrong
 answers asserted, the totals, retrieval, the slices, by law and by type (folded), the misses labelled, the absent
 questions, the bricks switched off, the naive baseline, the noise, cost and time.
+
+## Added by repair-pages (22/11/2026; nothing above was changed or removed)
+
+The page also draws these, each optional, each where a reader of the section needs it:
+
+```json
+{
+  "pipeline": "combo",                     // the pipeline measured (funnel | combo | topk | naive), said beside the build
+
+  "previous": {                            // the previous Lex (the build the public site served before), on the same questions
+    "build": { "code": "t8", "data": "20261120c" }, "pipeline": "funnel",
+    "n": 120, "right": 0, "wrong": 0, "not_found": 0, "interval": [0.0, 0.0], "wrong_interval": [0.0, 0.0],
+    "better": 0, "worse": 0,               // questions right now and not before / right before and not now
+    "items": [ { "id": "F012", "question": "…", "before": "right | wrong | partial | candidates | not_held | not_found | clarify | out_of_scope", "now": "…" } ]
+  },
+
+  "retrieval": { "walk_found": 0, "walk_of": 0, "walk_interval": [0.0, 0.0] },   // the outline walk alone found the article (K-RETR-3)
+
+  "by_law":  [ { "law": "…", "n": 0, "right": 0, "wrong": 0, "interval": [0.0, 0.0] } ],   // "interval" optional, also on by_type
+
+  "baseline": { "build": { "code": "t9", "data": "20261122b" } },   // `build` optional on baseline, noise and previous
+  "noise":    { "build": { "code": "t9", "data": "20261122b" } },
+
+  "latency": { "conditions": "one question at a time, 20 s apart" }  // how the times were taken, one sentence
+}
+```
+
+The page says, under its heading and in words, whether the build measured (`build`) is the one answering on the site
+(`GET /api/next/config` `build`); when it is not, it says so before any number. Each section that names its own build says
+it too. A section without a build is the top-level build's.
