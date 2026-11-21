@@ -55,6 +55,7 @@ export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
       layout="v4"
       prose
       indexing="switch"
+      answers={false}
     >
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>

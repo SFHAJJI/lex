@@ -1,0 +1,199 @@
+{
+ "state": "out_of_scope",
+ "outcome": "out_of_scope",
+ "pipeline": "combo",
+ "question": "Quelle est la recette de la tarte aux pommes ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": false,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "other",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Quelle est la recette de la tarte aux pommes ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "not_a_legal_question_or_another_country",
+    "state": "out_of_scope"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 375,
+    "tokens_in": 14,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1052,
+    "model_ms": 1052,
+    "queue_ms": 0,
+    "tokens_in": 563,
+    "tokens_out": 69,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.00011,
+  "ms": 1062,
+  "model_calls": 1,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "other",
+   "french": "Quelle est la recette de la tarte aux pommes ?",
+   "legal_terms": [],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": []
+  },
+  "candidates": [],
+  "read": [],
+  "replay": "eNqdUrtuwzAM_BWBs1PYHjJ46Td0DgpBkWjHLS0peqQJgvx7KTsO2mztpBNFkXdHXuEEXVOBhw60m_YOKtCMyWlFjM0P7DkV-mwt0ubUcODI97eMRCgwJkFKBNSYEgqD5ZZUYKzyWXg3TRjFa6mY-Vdbt9tN02zaUsZE6HpFEStgBC4n6XoZtfPIr4FD1iWpJOGgSB4z9xqdlS5IxQ8HDFK7bFO4cPYeut17BfawnBN0NhOxJlrRA-AKvILuCqTskNWARWMorFTCEu-Dm54ZJ_ccGYIaLQeNKiwSntNa_eC-ZgWiFBSjFcxYrCI6kVz5cmMzV13p4guJWRnX6gNaffiP04tfCcMUFzfwrClH7nG_ewzRWc7RKuJjBh85jNGMupC5ex_VaMoCcJf5K9P9XEoEs5zEu7FjE_GEVGxAPZZGZSKXebXMPMtM-KdxxjRP4fdO3MpgmUdTb9sKcmQK9Utd1w3vsb0rzav9wS_o9g1uqvE_"
+ }
+}

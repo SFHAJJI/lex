@@ -1,0 +1,2936 @@
+{
+ "state": "answer_with_exception",
+ "outcome": "answer_with_exception",
+ "pipeline": "combo",
+ "question": "Comment est calculé le capital de solvabilité requis selon la directive Solvabilité II ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "32009L0138",
+   "anchor": "101",
+   "date": "2025-01-17",
+   "why": "L’article 101 fixe les principes communs du calcul, et les autres dispositions désignées précisent les méthodes admises et la structure de la formule standard.",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "Article 101",
+   "number": "101",
+   "heading": "Calcul du capital de solvabilité requis",
+   "path": "TITRE I RÈGLES GÉNÉRALES CONCERNANT L'ACCÈS AUX ACTIVITÉS DE L'ASSURANCE DIRECTE ET DE LA RÉASSURANCE ET LEUR EXERCICE > CHAPITRE VI Règles relatives à la valorisation des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d'investissement > Section 4 Capital de solvabilité requis > Sous-section 1 Dispositions générales concernant le capital de solvabilité requis, calculé à l'aide de la formule standard ou d'un modèle interne",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 443758,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+   ],
+   "wording_since": "2009-11-25",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 101",
+   "text": [
+    "1. Le capital de solvabilité requis est calculé conformément aux paragraphes 2 à 5.",
+    "2. Le calcul du capital de solvabilité requis se fonde sur l'hypothèse d'une continuité de l'exploitation de l'entreprise concernée.",
+    "3. Le capital de solvabilité requis est calibré de manière à garantir que tous les risques quantifiables auxquels l'entreprise d'assurance ou de réassurance est exposée soient pris en considération. Il doit couvrir le portefeuille en cours, ainsi que le nouveau portefeuille dont la souscription est attendue dans les douze mois à venir. Pour ce qui concerne le portefeuille en cours, il couvre seulement les pertes non anticipées.",
+    "Le capital de solvabilité requis correspond à la valeur en risque (Value-at-Risk) des fonds propres de base de l'entreprise d'assurance ou de réassurance, avec un niveau de confiance de 99,5 % à l'horizon d'un an.",
+    "4. Le capital de solvabilité requis couvre au minimum les risques suivants:",
+    "a) le risque de souscription en non-vie;",
+    "b) le risque de souscription en vie;",
+    "c) le risque de souscription en santé;",
+    "d) le risque de marché;",
+    "e) le risque de crédit;",
+    "f) le risque opérationnel.",
+    "Le risque opérationnel visé au premier alinéa, point f), comprend les risques juridiques, mais ne comprend ni les risques découlant des décisions stratégiques, ni les risques de réputation.",
+    "5. Lorsqu'elles calculent leur capital de solvabilité requis, les entreprises d'assurance et de réassurance tiennent compte de l'impact des techniques d'atténuation des risques, sous réserve que le risque de crédit et les autres risques inhérents à l'emploi de ces techniques soient pris en considération de manière adéquate dans le capital de solvabilité requis."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "1. Le capital de solvabilité requis est calculé conformément aux paragraphes 2 à 5.",
+     "label": "1."
+    },
+    {
+     "n": 2,
+     "text": "2. Le calcul du capital de solvabilité requis se fonde sur l'hypothèse d'une continuité de l'exploitation de l'entreprise concernée.",
+     "label": "2."
+    },
+    {
+     "n": 3,
+     "text": "3. Le capital de solvabilité requis est calibré de manière à garantir que tous les risques quantifiables auxquels l'entreprise d'assurance ou de réassurance est exposée soient pris en considération. Il doit couvrir le portefeuille en cours, ainsi que le nouveau portefeuille dont la souscription est attendue dans les douze mois à venir. Pour ce qui concerne le portefeuille en cours, il couvre seulement les pertes non anticipées.",
+     "label": "3."
+    },
+    {
+     "n": 4,
+     "text": "Le capital de solvabilité requis correspond à la valeur en risque (Value-at-Risk) des fonds propres de base de l'entreprise d'assurance ou de réassurance, avec un niveau de confiance de 99,5 % à l'horizon d'un an.",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "4. Le capital de solvabilité requis couvre au minimum les risques suivants:",
+     "label": "4."
+    },
+    {
+     "n": 6,
+     "text": "a) le risque de souscription en non-vie;",
+     "label": "a)"
+    },
+    {
+     "n": 7,
+     "text": "b) le risque de souscription en vie;",
+     "label": "b)"
+    },
+    {
+     "n": 8,
+     "text": "c) le risque de souscription en santé;",
+     "label": "c)"
+    },
+    {
+     "n": 9,
+     "text": "d) le risque de marché;",
+     "label": "d)"
+    },
+    {
+     "n": 10,
+     "text": "e) le risque de crédit;",
+     "label": "e)"
+    },
+    {
+     "n": 11,
+     "text": "f) le risque opérationnel.",
+     "label": "f)"
+    },
+    {
+     "n": 12,
+     "text": "Le risque opérationnel visé au premier alinéa, point f), comprend les risques juridiques, mais ne comprend ni les risques découlant des décisions stratégiques, ni les risques de réputation.",
+     "label": null
+    },
+    {
+     "n": 13,
+     "text": "5. Lorsqu'elles calculent leur capital de solvabilité requis, les entreprises d'assurance et de réassurance tiennent compte de l'impact des techniques d'atténuation des risques, sous réserve que le risque de crédit et les autres risques inhérents à l'emploi de ces techniques soient pris en considération de manière adéquate dans le capital de solvabilité requis.",
+     "label": "5."
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {
+    "meaning": 2,
+    "meaning_all": 2
+   },
+   "meaning_only": true,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "32009L0138",
+   "anchor": "100",
+   "date": "2025-01-17",
+   "why": "Dispositions générales sur calcul, pas formule.",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "Article 100",
+   "number": "100",
+   "heading": "Dispositions générales",
+   "path": "TITRE I RÈGLES GÉNÉRALES CONCERNANT L'ACCÈS AUX ACTIVITÉS DE L'ASSURANCE DIRECTE ET DE LA RÉASSURANCE ET LEUR EXERCICE > CHAPITRE VI Règles relatives à la valorisation des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d'investissement > Section 4 Capital de solvabilité requis > Sous-section 1 Dispositions générales concernant le capital de solvabilité requis, calculé à l'aide de la formule standard ou d'un modèle interne",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 443757,
+   "lines": [
+    1,
+    2
+   ],
+   "wording_since": "2009-11-25",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 100",
+   "text": [
+    "Les États membres exigent que les entreprises d'assurance et de réassurance détiennent des fonds propres éligibles couvrant le capital de solvabilité requis.",
+    "Le capital de solvabilité requis est calculé soit à l'aide de la formule standard conformément à la sous-section 2, soit à l'aide d'un modèle interne conformément à la sous-section 3."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les États membres exigent que les entreprises d'assurance et de réassurance détiennent des fonds propres éligibles couvrant le capital de solvabilité requis.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Le capital de solvabilité requis est calculé soit à l'aide de la formule standard conformément à la sous-section 2, soit à l'aide d'un modèle interne conformément à la sous-section 3.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {
+    "meaning": 4,
+    "meaning_all": 4
+   },
+   "meaning_only": true,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    1
+   ],
+   "lines_pointed_by_reading": [
+    2
+   ],
+   "context_unit": "article (short: whole article)"
+  },
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "32009L0138",
+   "anchor": "103",
+   "date": "2025-01-17",
+   "why": "Structure de la formule standard pour capital requis.",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "Article 103",
+   "number": "103",
+   "heading": "Structure de la formule standard",
+   "path": "TITRE I RÈGLES GÉNÉRALES CONCERNANT L'ACCÈS AUX ACTIVITÉS DE L'ASSURANCE DIRECTE ET DE LA RÉASSURANCE ET LEUR EXERCICE > CHAPITRE VI Règles relatives à la valorisation des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d'investissement > Section 4 Capital de solvabilité requis > Sous-section 2 Capital de solvabilité requis - formule standard",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 443760,
+   "lines": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "wording_since": "2009-11-25",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 103",
+   "text": [
+    "Le capital de solvabilité requis calculé selon la formule standard est la somme des éléments suivants:",
+    "a) le capital de solvabilité requis de base, prévu à l'article 104;",
+    "b) l'exigence de capital pour risque opérationnel, prévue à l'article 107;",
+    "c) l'ajustement visant à tenir compte de la capacité d'absorption de pertes des provisions techniques et des impôts différés, prévu à l'article 108."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Le capital de solvabilité requis calculé selon la formule standard est la somme des éléments suivants:",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "a) le capital de solvabilité requis de base, prévu à l'article 104;",
+     "label": "a)"
+    },
+    {
+     "n": 3,
+     "text": "b) l'exigence de capital pour risque opérationnel, prévue à l'article 107;",
+     "label": "b)"
+    },
+    {
+     "n": 4,
+     "text": "c) l'ajustement visant à tenir compte de la capacité d'absorption de pertes des provisions techniques et des impôts différés, prévu à l'article 108.",
+     "label": "c)"
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {
+    "words": 6,
+    "meaning": 7,
+    "meaning_all": 8
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "condition",
+   "kind": "article",
+   "work": "32009L0138",
+   "anchor": "104",
+   "date": "2025-01-17",
+   "why": "Composition du capital de solvabilité requis de base.",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "Article 104",
+   "number": "104",
+   "heading": "Conception du capital de solvabilité requis de base",
+   "path": "TITRE I RÈGLES GÉNÉRALES CONCERNANT L'ACCÈS AUX ACTIVITÉS DE L'ASSURANCE DIRECTE ET DE LA RÉASSURANCE ET LEUR EXERCICE > CHAPITRE VI Règles relatives à la valorisation des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d'investissement > Section 4 Capital de solvabilité requis > Sous-section 2 Capital de solvabilité requis - formule standard",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 443761,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "wording_since": "2009-11-25",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 104",
+   "text": [
+    "1. Le capital de solvabilité requis de base se compose de modules de risque individuels qui sont agrégés conformément au point 1 de l'annexe IV.",
+    "Il comprend au moins les modules de risque suivants:",
+    "a) le risque de souscription en non-vie;",
+    "b) le risque de souscription en vie;",
+    "c) le risque de souscription en santé;",
+    "d) le risque de marché;",
+    "e) le risque de contrepartie.",
+    "2. Aux fins du paragraphe 1, points a), b) et c), les opérations d'assurance et de réassurance sont affectées au module de risque de souscription qui reflète le mieux la nature technique des risques sous-jacents.",
+    "3. Les coefficients de corrélation appliqués aux fins de l'agrégation des modules de risque visés au paragraphe 1 ainsi que le calibrage des exigences de capital pour chaque module de risque aboutissent à un capital de solvabilité requis global satisfaisant aux principes énoncés à l'article 101.",
+    "4. Chacun des modules de risque visés au paragraphe 1 est calibré sur la base d'une mesure de la valeur en risque (Value-at-Risk), avec un niveau de confiance de 99,5 % à l'horizon d'un an.",
+    "S'il y a lieu, il est tenu compte des effets de diversification dans la conception de chaque module de risque."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "1. Le capital de solvabilité requis de base se compose de modules de risque individuels qui sont agrégés conformément au point 1 de l'annexe IV.",
+     "label": "1."
+    },
+    {
+     "n": 2,
+     "text": "Il comprend au moins les modules de risque suivants:",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "a) le risque de souscription en non-vie;",
+     "label": "a)"
+    },
+    {
+     "n": 4,
+     "text": "b) le risque de souscription en vie;",
+     "label": "b)"
+    },
+    {
+     "n": 5,
+     "text": "c) le risque de souscription en santé;",
+     "label": "c)"
+    },
+    {
+     "n": 6,
+     "text": "d) le risque de marché;",
+     "label": "d)"
+    },
+    {
+     "n": 7,
+     "text": "e) le risque de contrepartie.",
+     "label": "e)"
+    },
+    {
+     "n": 8,
+     "text": "2. Aux fins du paragraphe 1, points a), b) et c), les opérations d'assurance et de réassurance sont affectées au module de risque de souscription qui reflète le mieux la nature technique des risques sous-jacents.",
+     "label": "2."
+    },
+    {
+     "n": 9,
+     "text": "3. Les coefficients de corrélation appliqués aux fins de l'agrégation des modules de risque visés au paragraphe 1 ainsi que le calibrage des exigences de capital pour chaque module de risque aboutissent à un capital de solvabilité requis global satisfaisant aux principes énoncés à l'article 101.",
+     "label": "3."
+    },
+    {
+     "n": 10,
+     "text": "4. Chacun des modules de risque visés au paragraphe 1 est calibré sur la base d'une mesure de la valeur en risque (Value-at-Risk), avec un niveau de confiance de 99,5 % à l'horizon d'un an.",
+     "label": "4."
+    },
+    {
+     "n": 11,
+     "text": "S'il y a lieu, il est tenu compte des effets de diversification dans la conception de chaque module de risque.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {
+    "meaning": 6,
+    "meaning_all": 7
+   },
+   "meaning_only": true,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "context",
+   "kind": "annex",
+   "work": null,
+   "anchor": null,
+   "date": "2025-01-17",
+   "why": "Formule standard pour calculer le capital de solvabilité requis.",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "ANNEXE IV",
+   "number": "",
+   "heading": "FORMULE STANDARD POUR LE CALCUL DU CAPITAL DE SOLVABILITÉ REQUIS (SCR)",
+   "path": "ANNEXE IV FORMULE STANDARD POUR LE CALCUL DU CAPITAL DE SOLVABILITÉ REQUIS (SCR)",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 444006,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "wording_since": "2009-11-25",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "ANNEXE IV",
+   "text": [
+    "1. Calcul du capital de solvabilité requis de base",
+    "Le capital de solvabilité requis de base («SCR de base») défini à l'article 104, paragraphe 1, se calcule comme suit:",
+    "SCR de base = √( Σ [i,j] Corr_(i,j) × SCR_(i) × SCR_(j) )",
+    "où SCRi représente le module de risque i et SCRj le module de risque j, et où «i,j» indique que la somme des différents termes doit couvrir toutes les combinaisons possibles de i et j. Dans le calcul, SCRi et SCRj sont remplacés par:",
+    "SCR non-vie, qui représente le module «risque de souscription en non-vie»;",
+    "SCR vie, qui représente le module «risque de souscription en vie»;",
+    "SCR santé, qui représente le module «risque de souscription en santé»;",
+    "SCR marché, qui représente le module «risque de marché»;",
+    "SCR défaut, qui représente le module «risque de contrepartie».",
+    "Le facteur Corr i,j représente l'élément figurant dans la ligne i et la colonne j de la matrice de corrélation suivante:",
+    "j i | Marché | Défaut | Vie | Santé | Non-vie",
+    "Marché | 1 | 0,25 | 0,25 | 0,25 | 0,25",
+    "Défaut | 0,25 | 1 | 0,25 | 0,25 | 0,5",
+    "Vie | 0,25 | 0,25 | 1 | 0,25 | 0",
+    "Santé | 0,25 | 0,25 | 0,25 | 1 | 0",
+    "Non-vie | 0,25 | 0,5 | 0 | 0 | 1"
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "1. Calcul du capital de solvabilité requis de base",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Le capital de solvabilité requis de base («SCR de base») défini à l'article 104, paragraphe 1, se calcule comme suit:",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "SCR de base = √( Σ [i,j] Corr_(i,j) × SCR_(i) × SCR_(j) )",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "où SCRi représente le module de risque i et SCRj le module de risque j, et où «i,j» indique que la somme des différents termes doit couvrir toutes les combinaisons possibles de i et j. Dans le calcul, SCRi et SCRj sont remplacés par:",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "SCR non-vie, qui représente le module «risque de souscription en non-vie»;",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "SCR vie, qui représente le module «risque de souscription en vie»;",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "SCR santé, qui représente le module «risque de souscription en santé»;",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "SCR marché, qui représente le module «risque de marché»;",
+     "label": null
+    },
+    {
+     "n": 9,
+     "text": "SCR défaut, qui représente le module «risque de contrepartie».",
+     "label": null
+    },
+    {
+     "n": 10,
+     "text": "Le facteur Corr i,j représente l'élément figurant dans la ligne i et la colonne j de la matrice de corrélation suivante:",
+     "label": null
+    },
+    {
+     "n": 11,
+     "text": "j i | Marché | Défaut | Vie | Santé | Non-vie",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "Marché | 1 | 0,25 | 0,25 | 0,25 | 0,25",
+     "label": null
+    },
+    {
+     "n": 13,
+     "text": "Défaut | 0,25 | 1 | 0,25 | 0,25 | 0,5",
+     "label": null
+    },
+    {
+     "n": 14,
+     "text": "Vie | 0,25 | 0,25 | 1 | 0,25 | 0",
+     "label": null
+    },
+    {
+     "n": 15,
+     "text": "Santé | 0,25 | 0,25 | 0,25 | 1 | 0",
+     "label": null
+    },
+    {
+     "n": 16,
+     "text": "Non-vie | 0,25 | 0,5 | 0 | 0 | 1",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {
+    "outline": 1,
+    "meaning": 3,
+    "meaning_all": 3
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "32009L0138",
+   "anchor": "077D",
+   "date": "2025-01-17",
+   "why": "Article 77 quinquies, par. 6, al. 1 déroge à Article 101 (« par dérogation à »)",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "Article 77 quinquies",
+   "number": "77quinquies",
+   "heading": "Correction pour volatilité de la courbe des taux d'intérêt sans risque pertinents",
+   "path": "TITRE I RÈGLES GÉNÉRALES CONCERNANT L'ACCÈS AUX ACTIVITÉS DE L'ASSURANCE DIRECTE ET DE LA RÉASSURANCE ET LEUR EXERCICE > CHAPITRE VI Règles relatives à la valorisation des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d'investissement > Section 2 Règles relatives aux provisions techniques",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 443732,
+   "lines": [
+    9
+   ],
+   "wording_since": "2025-01-17",
+   "wording_until": "2027-01-29",
+   "wording_no": 1,
+   "wording_first_held": 0,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 77 quinquies",
+   "text": [
+    "6. Par dérogation à l'article 101, le capital de solvabilité requis ne couvre pas le risque de perte de fonds propres de base découlant d'une variation de la correction pour volatilité."
+   ],
+   "quote": [
+    {
+     "n": 9,
+     "text": "6. Par dérogation à l'article 101, le capital de solvabilité requis ne couvre pas le risque de perte de fonds propres de base découlant d'une variation de la correction pour volatilité.",
+     "label": "6."
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Article 101",
+   "inbound": true
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "32009L0138",
+   "anchor": "308B",
+   "date": "2025-01-17",
+   "why": "Article 308 ter, par. 12, al. 1 déroge à Article 101 (« nonobstant »)",
+   "act_title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+   "act_id": "celex:32009L0138",
+   "article": "Article 308 ter",
+   "number": "308ter",
+   "heading": "Mesures transitoires",
+   "path": "TITRE VI DISPOSITIONS TRANSITOIRES ET FINALES > CHAPITRE I Dispositions transitoires > Section 3 Assurance et réassurance",
+   "version_from": "2025-01-17",
+   "version_to": "2027-01-29",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+   "article_pk": 443974,
+   "lines": [
+    25
+   ],
+   "wording_since": "2025-01-17",
+   "wording_until": "2027-01-29",
+   "wording_no": 1,
+   "wording_first_held": 0,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 308 ter",
+   "text": [
+    "12. Nonobstant l'article 100, l'article 101, paragraphe 3, et l'article 104, les règles suivantes s'appliquent:"
+   ],
+   "quote": [
+    {
+     "n": 25,
+     "text": "12. Nonobstant l'article 100, l'article 101, paragraphe 3, et l'article 104, les règles suivantes s'appliquent:",
+     "label": "12."
+    }
+   ],
+   "version": {
+    "id": 11212,
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": true
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Article 101",
+   "inbound": true
+  }
+ ],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": false,
+  "found_by_words": false,
+  "meaning_only": true,
+  "list_complete_by_structure": null,
+  "references_followed": 2,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [
+      {
+       "text": "Solvabilité II",
+       "kind": "eu",
+       "act_id": "celex:32009L0138",
+       "name": "directive Solvabilité II (2009/138/CE)",
+       "by": "name of a European act"
+      }
+     ],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [
+      "celex:32009L0138"
+     ],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "procedure",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Comment est calculé le capital de solvabilité requis selon la directive Solvabilité II ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "capital de solvabilité requis",
+      "formule standard",
+      "modèle interne",
+      "risque",
+      "exigences de capital"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "luxembourg_or_eu",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 54,
+    "considered_lines": 76,
+    "kept": 3,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "no_longer_in_force_at_the_date_asked",
+      "removed": 3,
+      "by": "code"
+     },
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 8,
+      "by": "code"
+     },
+     {
+      "rule": "not_in_the_store",
+      "removed": 2,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 1,
+     "replaces": 0,
+     "transposes": 30,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 4,
+     "articles_words": 4
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "celex:32009L0138",
+      "node_id": "",
+      "found_by": {
+       "named": 0,
+       "lines_words": 24,
+       "lines_meaning": 16
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i__chapitre_v",
+      "found_by": {
+       "lines_words": 1,
+       "lines_meaning": 1,
+       "articles_meaning": 4
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "celex:32009L0138",
+      "node_id": "titre_i__chapitre_vi",
+      "found_by": {
+       "lines_words": 8,
+       "lines_meaning": 3,
+       "articles_meaning": 1,
+       "articles_words": 1
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_ii",
+      "found_by": {
+       "lines_words": 2,
+       "lines_meaning": 9
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i__chapitre_vi",
+      "found_by": {
+       "lines_words": 3,
+       "lines_meaning": 2
+      },
+      "tally": 5,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/reg/2015/12/07/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 2,
+       "articles_words": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_ii",
+      "found_by": {
+       "articles_meaning": 3,
+       "articles_words": 2
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i",
+      "found_by": {
+       "lines_words": 11,
+       "lines_meaning": 6,
+       "articles_words": 3
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "celex:32015R0035",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4,
+       "lines_meaning": 8
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i__chapitre_iii",
+      "found_by": {
+       "lines_words": 9,
+       "lines_meaning": 4
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/rcsf/2015/07/31/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5,
+       "lines_meaning": 19
+      },
+      "tally": 5,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "celex:32015R0035",
+      "node_id": "annexe_24",
+      "found_by": {
+       "lines_words": 6,
+       "lines_meaning": 5
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "celex:32015R0035",
+      "node_id": "annexe_25",
+      "found_by": {
+       "lines_words": 7,
+       "lines_meaning": 7
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/loi/2015/04/12/n6",
+      "node_id": "",
+      "found_by": {
+       "transposes": 10
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "celex:32013R0575",
+      "node_id": "troisieme_partie__titre_ii",
+      "found_by": {
+       "lines_words": 10,
+       "lines_meaning": 10
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "found_by": {
+       "transposes": 11
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "celex:32015R0035",
+      "node_id": "annexe_23",
+      "found_by": {
+       "lines_meaning": 11
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/loi/2007/12/21/n1",
+      "node_id": "",
+      "found_by": {
+       "transposes": 12
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "celex:32015R0035",
+      "node_id": "annexe_22",
+      "found_by": {
+       "lines_meaning": 12
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "",
+      "found_by": {
+       "transposes": 13
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "celex:32013R0575",
+      "node_id": "troisieme_partie__titre_iv",
+      "found_by": {
+       "lines_words": 25,
+       "lines_meaning": 13
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "celex:32013R0575",
+      "node_id": "troisieme_partie__titre_vi",
+      "found_by": {
+       "lines_meaning": 14
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+      "node_id": "",
+      "found_by": {
+       "transposes": 15
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/rgd/1982/08/16/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 15
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "celex:32009L0138",
+      "node_id": "",
+      "title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentan",
+      "reason": "named in the question (code)",
+      "by": "code"
+     },
+     {
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i__chapitre_v",
+      "title": "Règlement délégué (UE) 2015/35 de la Commission du 10 octobre 2014 complétant la directive 2009/138/CE du Parlement européen et du Conseil sur l'accès aux … > TITRE I VALORISATION ET EXIGENCES DE CAPI",
+      "reason": "Chapitre consacré à la formule standard de calcul du capital de solvabilité requis; il détaille les modules et leur agrégation.",
+      "by": "model"
+     },
+     {
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i__chapitre_vi",
+      "title": "Règlement délégué (UE) 2015/35 de la Commission du 10 octobre 2014 complétant la directive 2009/138/CE du Parlement européen et du Conseil sur l'accès aux … > TITRE I VALORISATION ET EXIGENCES DE CAPI",
+      "reason": "Pertinent si le calcul repose sur un modèle interne intégral ou partiel plutôt que sur la formule standard.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1949
+   },
+   {
+    "level": "document",
+    "act_id": "celex:32009L0138",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 11212,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 13,
+      "picked": [
+       {
+        "node_id": "annexe_4",
+        "heading": "ANNEXE IV FORMULE STANDARD POUR LE CALCUL DU CAPITAL DE SOLVABILITÉ REQUIS (SCR)",
+        "tally": 8,
+        "reason": "Contient une annexe spécifique sur la formule standard pour le calcul du capital de solvabilité requis, ce qui est directement lié à la question.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_iii",
+        "heading": "TITRE III CONTRÔLE DES ENTREPRISES D'ASSURANCE ET DE RÉASSURANCE FAISANT PARTIE D'UN GROUPE",
+        "tally": 12,
+        "reason": "Le titre III traite du contrôle des entreprises d'assurance, ce qui inclut probablement les règles sur le capital de solvabilité requis.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "titre_ii",
+        "heading": "TITRE II DISPOSITIONS PARTICULIÈRES RELATIVES À L'ASSURANCE ET À LA RÉASSURANCE",
+        "tally": 11,
+        "reason": "Le titre II contient des dispositions particulières relatives à l'assurance, susceptibles d'aborder le calcul du capital de solvabilité requis.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 9,
+      "picked": [
+       {
+        "node_id": "titre_iii__chapitre_ii",
+        "heading": "CHAPITRE II Situation financière",
+        "tally": 12,
+        "reason": "Contient le plus grand nombre d'articles et tous les mots clés de la question, indiquant une explication détaillée du calcul du capital de solvabilité requis.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "titre_iii__chapitre_i",
+        "heading": "CHAPITRE I Contrôle de groupe: définitions, applicabilité, portée et niveaux",
+        "tally": 12,
+        "reason": "Contient tous les mots clés et traite du contrôle de groupe, ce qui peut inclure le calcul du capital de solvabilité requis au niveau groupe.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "titre_iii__chapitre_iii",
+        "heading": "CHAPITRE III Mesures visant à faciliter le contrôle des groupes",
+        "tally": 10,
+        "reason": "Contient la plupart des mots clés et traite des mesures facilitant le contrôle des groupes, potentiellement liées au calcul du capital de solvabilité requis.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 3,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "titre_iii__chapitre_ii__section_1",
+        "heading": "Section 1 Solvabilité du groupe",
+        "tally": 12,
+        "reason": "Contient une section entière dédiée à la solvabilité du groupe avec tous les mots clés de la question, indiquant un traitement complet du calcul du capital de solvabilité requis.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "titre_iii__chapitre_i__section_3",
+        "heading": "Section 3 Niveaux",
+        "tally": 11,
+        "reason": "Traite des niveaux liés au calcul du capital de solvabilité requis selon la directive, avec presque tous les mots clés présents.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_iii__chapitre_ii__section_3",
+        "heading": "Section 3 Gestion des risques et contrôle interne",
+        "tally": 8,
+        "reason": "Contient un article sur la gestion des risques et contrôle interne, mentionnant le calcul du capital de solvabilité requis, ce qui peut être pertinent pour la méthode de calcul.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 4,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "titre_iii__chapitre_ii__section_1__sous_section_4",
+        "heading": "Sous-section 4 Méthodes de calcul",
+        "tally": 10,
+        "reason": "Contient le plus grand nombre de mots-clés liés au calcul du capital de solvabilité requis, incluant la formule.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_iii__chapitre_ii__section_1__sous_section_2",
+        "heading": "Sous-section 2 Choix de la méthode de calcul et principes généraux",
+        "tally": 7,
+        "reason": "Aborde les choix de méthode de calcul et principes généraux, essentiels pour comprendre le calcul du capital de solvabilité requis.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_iii__chapitre_ii__section_1__sous_section_3",
+        "heading": "Sous-section 3 Application des méthodes de calcul",
+        "tally": 8,
+        "reason": "Traite de l'application des méthodes de calcul, ce qui est pertinent pour la procédure de calcul du capital de solvabilité requis.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "annexe_4",
+      "heading": "ANNEXE IV FORMULE STANDARD POUR LE CALCUL DU CAPITAL DE SOLVABILITÉ REQUIS (SCR)",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "titre_iii__chapitre_iii",
+      "heading": "CHAPITRE III Mesures visant à faciliter le contrôle des groupes",
+      "stopped": "budget",
+      "articles": 14,
+      "read": "over budget: 8 of 14 articles read, ranked by meaning inside the node"
+     },
+     {
+      "node_id": "titre_iii__chapitre_i__section_3",
+      "heading": "Section 3 Niveaux",
+      "stopped": "leaf",
+      "articles": 3
+     },
+     {
+      "node_id": "titre_iii__chapitre_ii__section_3",
+      "heading": "Section 3 Gestion des risques et contrôle interne",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "titre_iii__chapitre_ii__section_1__sous_section_4",
+      "heading": "Sous-section 4 Méthodes de calcul",
+      "stopped": "leaf",
+      "articles": 5
+     },
+     {
+      "node_id": "titre_iii__chapitre_ii__section_1__sous_section_2",
+      "heading": "Sous-section 2 Choix de la méthode de calcul et principes généraux",
+      "stopped": "leaf",
+      "articles": 5
+     },
+     {
+      "node_id": "titre_iii__chapitre_ii__section_1__sous_section_3",
+      "heading": "Sous-section 3 Application des méthodes de calcul",
+      "stopped": "leaf",
+      "articles": 5
+     }
+    ],
+    "articles": 20,
+    "stopped": "budget,leaf"
+   },
+   {
+    "level": "document",
+    "act_id": "celex:32015R0035",
+    "node_start": "titre_i__chapitre_v",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 11220,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 13,
+      "picked": [
+       {
+        "node_id": "titre_i__chapitre_v__section_1",
+        "heading": "SECTION 1 Dispositions générales",
+        "tally": 11,
+        "reason": "Contient les dispositions générales sur le calcul du capital de solvabilité requis, incluant la méthode de calcul selon la directive.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "titre_i__chapitre_v__section_5",
+        "heading": "SECTION 5 Module «risque de marché»",
+        "tally": 12,
+        "reason": "Module risque de marché, souvent central dans le calcul du capital de solvabilité requis, avec tous les mots-clés présents.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "titre_i__chapitre_v__section_9",
+        "heading": "SECTION 9 Ajustement visant à tenir compte de la capacité d'absorption de pertes des provisions techniques et des impôts différés",
+        "tally": 11,
+        "reason": "Section sur l'ajustement du capital de solvabilité requis, incluant la capacité d'absorption des pertes, ce qui est clé dans le calcul final.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 15,
+      "picked": [
+       {
+        "node_id": "titre_i__chapitre_v__section_1__sous_section_5",
+        "heading": "Sous-section 5 Calcul du capital de solvabilité requis de base",
+        "tally": 7,
+        "reason": "Contient un article spécifiquement dédié au calcul du capital de solvabilité requis de base, ce qui est central à la question.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_i__chapitre_v__section_1__sous_section_6",
+        "heading": "Sous-section 6 Proportionnalité et simplifications",
+        "tally": 11,
+        "reason": "Contient de nombreux articles sur la proportionnalité et simplifications, probablement détaillant le calcul du capital de solvabilité requis selon la directive.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_i__chapitre_v__section_5__sous_section_5",
+        "heading": "Sous-section 5 Sous-module «risque de spread»",
+        "tally": 11,
+        "reason": "Sous-module «risque de spread» avec plusieurs articles mentionnant le calcul du capital de solvabilité requis selon la directive, pertinent pour le calcul global.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "titre_i__chapitre_v__section_9",
+      "heading": "SECTION 9 Ajustement visant à tenir compte de la capacité d'absorption de pertes des provisions techniques et des impôts différés",
+      "stopped": "leaf",
+      "articles": 3
+     },
+     {
+      "node_id": "titre_i__chapitre_v__section_1__sous_section_5",
+      "heading": "Sous-section 5 Calcul du capital de solvabilité requis de base",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "titre_i__chapitre_v__section_1__sous_section_6",
+      "heading": "Sous-section 6 Proportionnalité et simplifications",
+      "stopped": "budget",
+      "articles": 35,
+      "read": "over budget: 8 of 35 articles read, ranked by meaning inside the node"
+     },
+     {
+      "node_id": "titre_i__chapitre_v__section_5__sous_section_5",
+      "heading": "Sous-section 5 Sous-module «risque de spread»",
+      "stopped": "budget",
+      "articles": 11,
+      "read": "over budget: 8 of 11 articles read, ranked by meaning inside the node"
+     }
+    ],
+    "articles": 4,
+    "stopped": "budget,leaf"
+   },
+   {
+    "level": "document",
+    "act_id": "celex:32015R0035",
+    "node_start": "titre_i__chapitre_vi",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 11220,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 9,
+      "picked": [
+       {
+        "node_id": "titre_i__chapitre_vi__section_3",
+        "heading": "SECTION 3 Normes de qualité statistique",
+        "tally": 10,
+        "reason": "Contient les normes de qualité statistique, essentiel pour comprendre le calcul du capital de solvabilité requis selon la directive.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_i__chapitre_vi__section_4",
+        "heading": "SECTION 4 Normes de calibrage",
+        "tally": 10,
+        "reason": "Contient les normes de calibrage, directement liées au calcul du capital de solvabilité requis.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "titre_i__chapitre_vi__section_7",
+        "heading": "SECTION 7 Normes de validation",
+        "tally": 10,
+        "reason": "Contient les normes de validation, importantes pour la méthode de calcul du capital de solvabilité requis selon la directive.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "titre_i__chapitre_vi__section_3",
+      "heading": "SECTION 3 Normes de qualité statistique",
+      "stopped": "leaf",
+      "articles": 10
+     },
+     {
+      "node_id": "titre_i__chapitre_vi__section_4",
+      "heading": "SECTION 4 Normes de calibrage",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "titre_i__chapitre_vi__section_7",
+      "heading": "SECTION 7 Normes de validation",
+      "stopped": "leaf",
+      "articles": 2
+     }
+    ],
+    "articles": 13,
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 444006,
+      "found_by": {
+       "outline": 1,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443875,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443876,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443877,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443906,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443890,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443891,
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443892,
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443893,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443894,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443880,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443881,
+      "found_by": {
+       "outline": 12
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443882,
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443883,
+      "found_by": {
+       "outline": 14
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443884,
+      "found_by": {
+       "outline": 15
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443885,
+      "found_by": {
+       "outline": 16
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443886,
+      "found_by": {
+       "outline": 17
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443887,
+      "found_by": {
+       "outline": 18
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443888,
+      "found_by": {
+       "outline": 19
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443889,
+      "found_by": {
+       "outline": 20
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445862,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445863,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445864,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445725,
+      "found_by": {
+       "outline": 4,
+       "meaning": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445885,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445886,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445887,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445888,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445889,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445890,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445891,
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445892,
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445893,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445894,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445895,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445898,
+      "found_by": {
+       "outline": 12
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445899,
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443777,
+      "found_by": {
+       "words": 1,
+       "words_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 446097,
+      "found_by": {
+       "words": 2,
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445942,
+      "found_by": {
+       "words": 3,
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443768,
+      "found_by": {
+       "words": 4,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 445941,
+      "found_by": {
+       "words": 5,
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443760,
+      "found_by": {
+       "words": 6,
+       "meaning": 7,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 446095,
+      "found_by": {
+       "words": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443763,
+      "found_by": {
+       "words": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 446098,
+      "found_by": {
+       "words": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 446002,
+      "found_by": {
+       "words": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 205154,
+      "found_by": {
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443762,
+      "found_by": {
+       "meaning": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443758,
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443757,
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443759,
+      "found_by": {
+       "meaning": 5,
+       "meaning_all": 6
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443761,
+      "found_by": {
+       "meaning": 6,
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443787,
+      "found_by": {
+       "meaning": 8
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443769,
+      "found_by": {
+       "meaning": 9
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 443917,
+      "found_by": {
+       "outline": 50
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443919,
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443918,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443916,
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443907,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 3735,
+    "candidates": [
+     {
+      "article_pk": 444006,
+      "label": "ANNEXE IV",
+      "role": "rule",
+      "reason": "Formule standard pour calculer le capital de solvabilité requis.",
+      "found_by": {
+       "outline": 1,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "formule",
+       "standard",
+       "interne",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 443777,
+      "label": "Article 119",
+      "role": "context",
+      "reason": "Parle d'écarts sensibles, pas du calcul standard.",
+      "found_by": {
+       "words": 1,
+       "words_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon",
+       "formule",
+       "standard",
+       "modele",
+       "interne",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 443762,
+      "label": "Article 105",
+      "role": "rule",
+      "reason": "Décrit calcul du capital de solvabilité requis de base.",
+      "found_by": {
+       "meaning": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": true,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "interne",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 446097,
+      "label": "ANNEXE XVIII (3/5)",
+      "role": "context",
+      "reason": "Technique d'intégration pour modèles internes, pas formule standard.",
+      "found_by": {
+       "words": 2,
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "formule",
+       "standard",
+       "modele",
+       "interne",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 443758,
+      "label": "Article 101",
+      "role": "context",
+      "reason": "Dispositions générales, pas formule précise.",
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 445942,
+      "label": "Article 283",
+      "role": "context",
+      "reason": "Méthodes pour exigences supplémentaires, pas calcul standard.",
+      "found_by": {
+       "words": 3,
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "directive",
+       "formule",
+       "standard",
+       "modele",
+       "interne",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 445725,
+      "label": "Article 87",
+      "role": "rule",
+      "reason": "Détaille calcul du capital de solvabilité requis de base.",
+      "found_by": {
+       "outline": 4,
+       "meaning": 10
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "directive",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 443768,
+      "label": "Article 110",
+      "role": "context",
+      "reason": "Écarts sensibles, pas calcul standard.",
+      "found_by": {
+       "words": 4,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon",
+       "formule",
+       "standard",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 443757,
+      "label": "Article 100",
+      "role": "context",
+      "reason": "Dispositions générales sur calcul, pas formule.",
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "formule",
+       "standard",
+       "modele",
+       "interne",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 445941,
+      "label": "Article 282",
+      "role": "context",
+      "reason": "Exigences supplémentaires, pas calcul standard.",
+      "found_by": {
+       "words": 5,
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon",
+       "directive",
+       "formule",
+       "standard",
+       "modele",
+       "interne",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 443759,
+      "label": "Article 102",
+      "role": "context",
+      "reason": "Fréquence de calcul, pas méthode de calcul.",
+      "found_by": {
+       "meaning": 5,
+       "meaning_all": 6
+      },
+      "meaning_only": true,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 443760,
+      "label": "Article 103",
+      "role": "rule",
+      "reason": "Structure de la formule standard pour capital requis.",
+      "found_by": {
+       "words": 6,
+       "meaning": 7,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon",
+       "formule",
+       "standard",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 443761,
+      "label": "Article 104",
+      "role": "rule",
+      "reason": "Composition du capital de solvabilité requis de base.",
+      "found_by": {
+       "meaning": 6,
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "directive",
+       "formule",
+       "standard",
+       "interne",
+       "risque",
+       "exigences"
+      ]
+     },
+     {
+      "article_pk": 205154,
+      "label": "Art. 111",
+      "role": "context",
+      "reason": "Écarts sensibles, pas calcul standard.",
+      "found_by": {
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon",
+       "formule",
+       "standard",
+       "modele",
+       "interne",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 445862,
+      "label": "Article 205",
+      "role": "context",
+      "reason": "Ajustement capacité d'absorption, pas calcul standard.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "directive"
+      ]
+     },
+     {
+      "article_pk": 445885,
+      "label": "Article 228",
+      "role": "context",
+      "reason": "Normes qualité statistique pour modèles internes.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "directive",
+       "modele",
+       "interne",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 443875,
+      "label": "Article 215",
+      "role": "reject",
+      "reason": "Hors sujet, contrôle de groupe.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "directive",
+       "risque"
+      ]
+     },
+     {
+      "article_pk": 445863,
+      "label": "Article 206",
+      "role": "context",
+      "reason": "Ajustement capacité d'absorption, pas calcul standard.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "calcule",
+       "capital",
+       "solvabilite",
+       "requis",
+       "directive",
+       "risque",
+       "exigences"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 16,
+    "read_amount_set_by": "outline node",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": false,
+      "article": "A8",
+      "lines": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "missing": "Calcul du risque opérationnel et de l’ajustement, et règles de calcul par modèle interne.",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "A8 fixe les principes communs de calcul, tandis que les autres passages désignés précisent les méthodes admises et la structure de la formule standard.",
+      "pending_references": [
+       {
+        "article": "A4",
+        "line": 3,
+        "reference": "Article 107 de la directive 2009/138/CE",
+        "why": "Fixe le calcul de l’exigence pour risque opérationnel."
+       },
+       {
+        "article": "A4",
+        "line": 4,
+        "reference": "Article 108 de la directive 2009/138/CE",
+        "why": "Précise la détermination de l’ajustement pour capacité d’absorption des pertes."
+       },
+       {
+        "article": "A11",
+        "line": 2,
+        "reference": "Sous-section 3 de la section 4 du chapitre VI de la directive 2009/138/CE, notamment articles 112 et 122",
+        "why": "Fixe les conditions d’utilisation et les normes de calibrage des modèles internes."
+       }
+      ],
+      "lines_refused": []
+     },
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A1",
+      "lines": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "L’article 101 fixe les principes communs du calcul, et les autres dispositions désignées précisent les méthodes admises et la structure de la formule standard.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 13,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "complete_answer_found = false",
+    "budget": 1,
+    "loops": 1,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [
+     {
+      "from": "Article 103",
+      "from_article_pk": 443760,
+      "line": 3,
+      "to": "Article 107",
+      "kind": "pointer",
+      "edge_id": 751010,
+      "loop": 1,
+      "article_pk": 443764,
+      "act_id": "celex:32009L0138",
+      "held": true,
+      "status": "resolved",
+      "why": "cité par Article 103, al. 1, point b (ligne 3): « … article 107 … » — renvoie à Article 107"
+     },
+     {
+      "from": "Article 103",
+      "from_article_pk": 443760,
+      "line": 4,
+      "to": "Article 108",
+      "kind": "pointer",
+      "edge_id": 751011,
+      "loop": 1,
+      "article_pk": 443765,
+      "act_id": "celex:32009L0138",
+      "held": true,
+      "status": "resolved",
+      "why": "cité par Article 103, al. 1, point c (ligne 4): « … article 108 … » — renvoie à Article 108"
+     },
+     {
+      "from": "Article 77 quinquies",
+      "to": "Article 101",
+      "kind": "exception",
+      "why": "Article 77 quinquies, par. 6, al. 1 déroge à Article 101 (« par dérogation à »)",
+      "held": true,
+      "direction": "inbound",
+      "article_pk": 443732,
+      "line": 9,
+      "status": "resolved"
+     },
+     {
+      "from": "Article 308 ter",
+      "to": "Article 101",
+      "kind": "exception",
+      "why": "Article 308 ter, par. 12, al. 1 déroge à Article 101 (« nonobstant »)",
+      "held": true,
+      "direction": "inbound",
+      "article_pk": 443974,
+      "line": 25,
+      "status": "resolved"
+     },
+     {
+      "from": "missing",
+      "to": "ANNEXE XVIII (1/5)",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Calcul du risque opérationnel et de l’ajustement, et règles de calcul par modèle interne. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 446095
+     }
+    ],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 6,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_with_exception_by_code",
+    "state": "answer_with_exception"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 329,
+    "tokens_in": 19,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1298,
+    "model_ms": 1298,
+    "queue_ms": 0,
+    "tokens_in": 570,
+    "tokens_out": 102,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1556,
+    "model_ms": 1556,
+    "queue_ms": 0,
+    "tokens_in": 4345,
+    "tokens_out": 111,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1185,
+    "model_ms": 1185,
+    "queue_ms": 0,
+    "tokens_in": 931,
+    "tokens_out": 122,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1037,
+    "model_ms": 1037,
+    "queue_ms": 0,
+    "tokens_in": 991,
+    "tokens_out": 120,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1351,
+    "model_ms": 1351,
+    "queue_ms": 0,
+    "tokens_in": 712,
+    "tokens_out": 105,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1134,
+    "model_ms": 1133,
+    "queue_ms": 0,
+    "tokens_in": 996,
+    "tokens_out": 125,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1107,
+    "model_ms": 1107,
+    "queue_ms": 0,
+    "tokens_in": 790,
+    "tokens_out": 133,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1157,
+    "model_ms": 1157,
+    "queue_ms": 0,
+    "tokens_in": 576,
+    "tokens_out": 134,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1019,
+    "model_ms": 1018,
+    "queue_ms": 0,
+    "tokens_in": 625,
+    "tokens_out": 115,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 3601,
+    "model_ms": 3601,
+    "queue_ms": 0,
+    "tokens_in": 3840,
+    "tokens_out": 411,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 3476,
+    "model_ms": 3476,
+    "queue_ms": 0,
+    "tokens_in": 12070,
+    "tokens_out": 570,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 3045,
+    "model_ms": 3045,
+    "queue_ms": 0,
+    "tokens_in": 6329,
+    "tokens_out": 426,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.05954,
+  "ms": 30525,
+  "model_calls": 12,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "procedure",
+   "french": "Comment est calculé le capital de solvabilité requis selon la directive Solvabilité II ?",
+   "legal_terms": [
+    "capital de solvabilité requis",
+    "formule standard",
+    "modèle interne",
+    "risque",
+    "exigences de capital"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "luxembourg_or_eu",
+   "parts": []
+  },
+  "candidates": [
+   {
+    "article_pk": 444006,
+    "role": "rule",
+    "found_by": {
+     "outline": 1,
+     "meaning": 3,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 443777,
+    "role": "context",
+    "found_by": {
+     "words": 1,
+     "words_all": 1
+    }
+   },
+   {
+    "article_pk": 443762,
+    "role": "rule",
+    "found_by": {
+     "meaning": 1,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 446097,
+    "role": "context",
+    "found_by": {
+     "words": 2,
+     "words_all": 3
+    }
+   },
+   {
+    "article_pk": 443758,
+    "role": "context",
+    "found_by": {
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 445942,
+    "role": "context",
+    "found_by": {
+     "words": 3,
+     "words_all": 4
+    }
+   },
+   {
+    "article_pk": 445725,
+    "role": "rule",
+    "found_by": {
+     "outline": 4,
+     "meaning": 10
+    }
+   },
+   {
+    "article_pk": 443768,
+    "role": "context",
+    "found_by": {
+     "words": 4,
+     "words_all": 5
+    }
+   },
+   {
+    "article_pk": 443757,
+    "role": "context",
+    "found_by": {
+     "meaning": 4,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 445941,
+    "role": "context",
+    "found_by": {
+     "words": 5,
+     "words_all": 6
+    }
+   },
+   {
+    "article_pk": 443759,
+    "role": "context",
+    "found_by": {
+     "meaning": 5,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 443760,
+    "role": "rule",
+    "found_by": {
+     "words": 6,
+     "meaning": 7,
+     "meaning_all": 8
+    }
+   },
+   {
+    "article_pk": 443761,
+    "role": "rule",
+    "found_by": {
+     "meaning": 6,
+     "meaning_all": 7
+    }
+   },
+   {
+    "article_pk": 205154,
+    "role": "context",
+    "found_by": {
+     "words_all": 2
+    }
+   },
+   {
+    "article_pk": 445862,
+    "role": "context",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 445885,
+    "role": "context",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 443875,
+    "role": "reject",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 445863,
+    "role": "context",
+    "found_by": {
+     "outline": 2
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 444006
+   },
+   {
+    "article_pk": 443762
+   },
+   {
+    "article_pk": 445725
+   },
+   {
+    "article_pk": 443760
+   },
+   {
+    "article_pk": 443761
+   },
+   {
+    "article_pk": 443777
+   },
+   {
+    "article_pk": 446097
+   },
+   {
+    "article_pk": 443758
+   },
+   {
+    "article_pk": 445942
+   },
+   {
+    "article_pk": 443768
+   },
+   {
+    "article_pk": 443757
+   },
+   {
+    "article_pk": 445941
+   },
+   {
+    "article_pk": 443759
+   },
+   {
+    "article_pk": 205154
+   },
+   {
+    "article_pk": 445862
+   },
+   {
+    "article_pk": 445885
+   },
+   {
+    "article_pk": 443764
+   },
+   {
+    "article_pk": 443765
+   },
+   {
+    "article_pk": 446095
+   }
+  ],
+  "replay": "eNrlXEtv28iW_isFbuxgGEfUw69g7oXGUfc1xu14_AgaCAKCIksSE4pks0g_Jmigl9P7u5ndrC46t7e96130T-4vme9UFV8SJVm2k56LWRgmi_U49dV5VtXRR-PaOLRMIzYODTeaDiPDNFw8B5HrBHj2Ks8xqhqjLAx58PzaQsEPeD-KplMepoyLlKGamwWzTyzgeI791AmYx5mIgmtn6Ad-ik8J_yHzBRM8iEIWOMzzE-6m_jVnF9Vqx8fszzR8hiHarfbuc8t63qYxPWEcjpxAcNPAk-GE4oYn9o2fTmx-6_I49aMQ1ZJl3-zhne1GHkedoXH49m2329nr7aNBFqDsrWW2zY7ZNXvmrrln7psHptUyLcu02qbVeWcaJ__46b-dJPVdTNFqWWzk33JMV7A48UPXj_EEGKdZKJiXaUBMxlNZx8nSBP88X8SR8IkavMw-CX8czj7JPmafXF8QnFR9OvuUTkAqGnpTFAvZj8NEmmRumiWcwMX7KEqmoB7lTug5ibdDa5X4Uye5M0yFVZgFwTtTTXYPKxyFKb9N1Xwxq1dVisazTyAncYgEkSXFJGJH5EOtHmG3NTcCIYpRLtbQzeJIDqcYRzHKmpEsOZLnq1VftnoYG2yaz1AtzEruRPHQESun2W21dhum2cw4ptU1rZ5p7YKSb5bMmkDmyXrRWY1Ip20aFTl4e4AR-5pf9_YYOgjxxwUtZ7LDdk3mBDvMIjZMojFns_9h_Qp7b3_-lSrqz46ED1U-__6MZIyPeMJDly_ScbDXrdPR7lUI6bT2WcoTTQMQWk9EGIXRkCBLVw6OQcIJxBr_p8YhFWGNgvypeOD5Q-wYhx-NwAnHmTPmpN4S0jFOyql8lETTef2TRvMl48TxQxR6zh19J3bQvU-iG5SHEaMOmR-ydMKxBFCVAOWQpRE1-RF6VBfZ6V1MRMRJ5HIPgoL-RjTJyRdXtAEfO4GNRZlCq741VndKZM1xMYqmkTf7JaB5opuQaE98gakZxAn-mNZKSpbu23gnOSTIBGkdtWYxT0QUghAX0lfo-fcZOvJ8V7ISzFF2y2GosmRsR4nNM5IHqGTZBcD8oLS6kk-p1bVo7FUUX64_2tUqu62DxSpkG2pFvYNue75or92rj7W7v9jR3mJH1mKtg0UiW3N9W-V7u9Wzet35jvd3Fyjc3-_Nd7y_R0Tz9-CKol2nUgnrgXU9zLHUeOnZasI0PRpeDaGGTUOl4dAQ6GnrqWryNcmaTNmgq_71VJ-kPAJ4H28hq_yaB9JZSeKMOHF4J988_i9gQE5-CmYgfA_aAdRrcPS7HfghB6PsgTU-QDcZh5iwgJhC9CJbtT9so8nID8DEQo4osSYxtiFJYzgUfmiD_V1uO6kNibZJum1HfOCe1EvT6JpG7lRIg5AX_SQ85rCt3urW-0tah1FK41NDkUZSQxRt2rU2gExASFya70cjdKZUhViHx4EjS8FXaQInCYaRXjt4l_jYN1Hi1Qqm3An9cKyKtPtTKe1WCnXbLiTRcVOFIB5snzxJlwf89rDTbrUOTlpWZx_UhyBWfSTl6adylq8KXUVVX6Dmi6MB2e0zJwm4UoNZEsXwmkJyivDlCIvM_YAe2z2Yi2voiES1l15MsOW47uwXcsJumUOdk0KTCgmfBKo4UFCyM-mcwBWrlQYYkPFbnrg-CrZFXYc-Y9swSCQ5eLqE-HDpzJEr50h3lDtCKi-5DvOmgG3Tkj0z5td8ETerd95qdXo13ABagkfbdiekWfF8XYHyfPbLWEMG8wqbMc5A8fbV4Bmj7l50enrCZF98IbSDZLVY5KaRgtDqklMbo7E0wDVjsvECLSzGP376G_sTuzy-PB-wY_amf_L6_Piif3n8-pQNLtng--NvB6dHgwv2asCO-mfHVTSP9IwZibjjAnHyHZpcS2l3yGiu9_5eMmIjmqsfBMq5h2bIAu1_Ex84Ywyl3KGdfNWU9njUsvn_X9btjENdhDSa8JUPI5cGqgmqSI6UhWzOn6D_QAFxCYsy8hxTnwcsDrJ09ltKoqQobA6HqitEviEBFo5t5ayR5iG3xzroHtD65SbGi9yMIDHM9RoMgyW6qyhLSWvaSvuiTBew1BkGvE6MaVzDzJDrR71bVhvOsDHhgWdHYXBnB7ANSRnvpjxWCtWD7ZpIbS6NF55gbWLfJSNC30sucxCt33K7a1C3jifVtdE_PR18j0V7w755ff7d1cmAXVz2T1_1z1-xs9dX5-yEVuzk6OqEvbqSa3fZP6FlvHh98qb_b8cnx5ezn9n54D-uji_Y9sXROWkuyFNwJ-1WKZ3Qhz4tcobJK0KYiCnEHfkr1ksFRMH9BdZkLulSX7rGisMVKwd-oRByVUvMcDOJSMQQjUpQI9r7CLgzksK7IKC-X8NO8zvc5qPXp5fns78CrFfg8gFeBmeQAOL4rf7FxdV5H-xPogDkzmc_l0Xf9CEnp5fsrH9-eYzWW1en7Nvz11dngxJH4oMCyBPwjlRzNCxMtg_zQqgA32T2W0DxNHQTXjgCQ9on8EqLVoDjh_C1U5ilaEh8OM13GRKpaFSof6_gU8NXMCXhR_FOM3qN4LFXxxdnry-OSVlcKBzAbcez_zoHeueDE2iRN3ia_cRO6lBSSb-GZgUyqxkyiZPkQ29-80VqEfCYP_uFNmYSDoGDchSSaaoYikzIWHYYKHSH8HL4Rky6Erl3CzZES3i7kPCDJQJecGnFkMyhfvQXEmEF_IWfZiqMH_kh5iZnvoTtCvnFNKFnBYPyDT34VtKzAgra5yNDkUb4rkxlKpgb5K5VKXkmONCD3DtaIfDbOPBdRUtubWF2ym2zjTCtCvNyZqyBtAQjMniFWGHKURbzQ6IQgCm2MZkTS9o1NSY0VpIS7QAiBP_AOq6DtAkvgrFRuDUVhSjHHIIs5Tnhm_AgzLamT_e4uTjX2Wwpnx2z7ziEB_O79gWtOARq5LhEjRabmu5S1IgKaK1GPnSID0loZatm6OiDHluP6CgWbhyS1i7l1H8QlEZD7tU-WrS1UVkq3J1CuHc3Em7bFlxuhthWDf8LVcqs-g6Pl6_2Op4kqdQ9kzWRqoEY3yNEtB0VjT0z55q7G-sAvWQSdemnKofz60h_CWKnEcQOO12Q5KqBuSzZTYu85JyNGKdhc85UUMZgX3KRmiDNA8t1fGduwknLQPhWR6g0T7WdJ4WtlKVyt2-1B8jyUxPt9Y3v2bHJiD9QM8zFeFOvUGrL2d_JGYiLuEP5mE5xxlIGiA-V5u7jpdmmmEEU73Wn_QKfnufi2WXfFYdDBeVr1WejGeeSt54r3tqYhU1lh3R4WTke2tTJvicm7eWYtNnRJPJvtcpZXFhir_KULj_lqgr4XgW1vnTxpOy5ebf379NELCKUWRH6gAcKLuGht5nFfkoRn4eysxzKDuvHFe-sdhbZwG77TXqRHOj1ndRit0XxpJMQGCB9ZvhlDPI72u4NneCPipyJtph7OXnlXirk-I9xwkqKhpk35mmdpq5cbfoaXaMfVeWQ7bNoxKwuK6ICqmQy6BpoQja8Y3q7GAqDduPlBmiY73Q-obFeAWfnq9vEx67tkxqHFcT0_i9q5S9H7xOovpXEvau-tluLEmUW-vtem41z-8f5ZmPzzv-j9h-J2Kfcf2wgcWn4MjiSm8cWW3YdZYkrXnFw5vZ35q-ybOQ-Vh2bBr5d9N03jqabUek1otJj38lDCPb5V6VzpEPiJO5k9unz70tCO91koYGJGWfXMu6ibUMCwQnFZvAshnzP7xmfbIjHQSMeB6z_PhM6eiztG2J5XzlbaX7NCBOB0ZPx6pYzFFESa9GW_oYUayI6QieSaVLuTkI_1-r00Z_Gs99S4q3RCOyE6S3hxNxG6LOSksAN2W0pyULTXHObCPb5BZQezUNDmXLX0eo9SK7n1G1vubrtsaP7Bsv6Ulazu94YaZZnDfk5Gm1lbBSh60HreGuZeezJwv3A210O3i47SyLae5ThsaKb05naFBZspG3YWq3pcR0L0sF47ryJwv9e279ZP1PI93I3DNdX69NHIdrbhB3l63RR1YqY_Nmapq1J_ppmeluHbjvxLBEl0A_c3WjcOpqPn4ruxgEWKHiSsOifUVVvHBL8MWpt42Dh6ymQlRFhp7ciIuz0nigi_DqyvTr0tVaFvtYDJloLFLpfMU7w_6BA4eD-_sTySFzrFUT9UTJVcdkPmWZfzDn1YZDVxdM1-6ECy7Cqh8o23mN28TaIFe5p3CrYdBux6VawAZn-MKH7zRsBUjQzFy5VPOn52AZz3Wuc615lrtcg2nN0EsgGky3bmWRDoBJhpbhYcU7wJZb9wSb4KWRllflpfTmOfJTVezhvrBi2XVfLtLcxV7umkDm8kDRK6neR-XTIPUkLGn_wVWOpEFVt1OO3UOCSH-5UlkAetzTeEZXcoDK0tDeMWiGNYJekgtFD23VQTLeKUbDbqpLqJEPa-p3X7HT3rbNHVrzadO4S_VMkrjRcxDcNefMQ_h5iNbrFD6GBkaR7NirjqDwQLu_zzd_eN41XaJ346cZx3U7TzX_TuMz9StCVXzuUPoScsr6YKPJ9XlHLjVqks5pCsDzXqt5Jngq205R0YBrlBq-kqMyvEFlM9z1JUztQOrrXZgQraQsSQX3h9YEY1pMeTGP2c-N6LlvMWlraAxLSGlIqTGPwIFzqWRhgfKwFeIEuglfOrah90-nxfNbGQ_Pe5rM9HpzD1pAmsuHq1BNKTKMSzjVHbKs7q6aimIbWz01GaYm47TQksJjGX6CCsczv4TQ3XZ7aacpxecRU3lUVqwwK5rRqkRGhIgZrV8UOtjONsjCF2UptWT93ukOVlKoSLn7IolTma1AWiQpEDj9WbRLlHk4cylDp7rdaMlFDpBVL0IHiNzDx0NMpGCoXdkQluQHRd264Xf-oHRPdFx167ud0oat1CbLlAfr-yuTYUpAIU1_IG9yVJFmgLuAgVBJknzA_Vt7Svz8i2t6WgFgPAeSfI3X4xznG1lmWNe-GXOvEH48p5GvGjP0rk2xklOwLPRZEEcWFFnnmCQqFHaPBhBzgDgFFakz26cTxCwwtduK7Q8bRXoWkbFvA6aHsnZcsgnOUsJMiF5BKMVsMPaAEBgTcqoRiVJM5qXSmZB6mzLV6BiUx4a6Oz2lSL6E4x_yWRcrvIlnlyZZgMqGJ3Ux4CBGVxLxkIafw32G5rE8iHe_qjNEye7UjUzijaS6advwBIqvtA7GQnLpMKi0bkSv7wSfOM-JIaj3KocTI0g_e64F7WgpNCeZC193VCQsESbml6qSZkCst0fcKh1SpQkr-rcxGZ-rSrUnQxYZsOwAHctZ5dsg-_ypTQkoW35Pvn3_Hv78Cz_A68udye_ekJD4EtO4CaPvrQbNWgdb7WqC5OWjdJtD214K23wRaNbfbWMDGKrGp_kiCovlLpYdXEdMBsNSDfjiUanVxDSh5XS3vQRPIDdPWmeQPnPFT5KFvPEuZGq9mSe73ymnqPKVieur20fdv6G7PtvWi96yc5Y3v8RDaDCuwTiMrEJz38DwUs8qzLWkPAq6tg08pVVt-wKYOOIJLRi23tPXWKeWJqcAo5EGeOklWrnCqpP3KM0zKrRPimbn0rh3i-W3oZHlALWuI_N6rPtuk_f7bVF_IE76Yh78ONKUNU8xMGbOq1ltpjUeZ4PUX2yWPTEbPggO1QETqO40W6vT0j8WKHkp1z-hnRVix4mxLf94i-DmjBdR2BBY04d7zNHoOS4PFgmaBnWJF52SEgf0N25almllZNMJ3Blsv8q2AXEmkE5gzaBoChEaAAX_2kv07_8-JE26JUpfAxYiCILoRDCstiWNaM6IkDOjXCjxeZDUsm1dZZQt0M_kKPqOfCqBtb6KAloURkguJrXEWBKKoA-Kim5CVPZpyNN2oMpCQUQD6Ey5MufFj1SWR2dxgr9C9m_NJtEGXF3C9RG_YyHVWudNO7lSyIS_24ZWMMNqtox1qCQzzR4xwhz1QqR5ceRZURu6A3MpX04pkYiKT-eC561B6GXMbRa48tpqjOiduzY_VSECW_uCNTGqUbn-PlEomMPPWTqt3QFFfqLk5y3-XIskvYfwvOR0tHg"
+ }
+}

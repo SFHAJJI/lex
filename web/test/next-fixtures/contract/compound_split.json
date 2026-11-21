@@ -1,0 +1,2056 @@
+{
+ "state": "partial",
+ "outcome": "partial",
+ "pipeline": "combo",
+ "question": "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation et quel est le montant maximal de la garantie locative ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-civil",
+   "anchor": "art_1736",
+   "date": "2025-12-26",
+   "why": "Les lignes désignées couvrent le préavis de droit commun, les conditions de résiliation par le bailleur et la dérogation pour besoin personnel, ainsi que le plafond de la garantie locative.",
+   "act_title": "Code civil",
+   "act_id": "/eli/etat/leg/code/civil",
+   "article": "Art. 1736.",
+   "number": "1736",
+   "heading": null,
+   "path": "Livre III. Des différentes manières dont on acquiert la propriété > TITRE VIII. Du contrat de louage (Décrété le 7 mars 1804. Promulgué le 17 du même mois.) > Chapitre II. Du louage des choses > Section Ire. Des règles communes aux baux des maisons et des biens ruraux",
+   "version_from": "2025-12-26",
+   "version_to": null,
+   "article_since": "2018-04-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/civil/jo",
+   "article_pk": 104317,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": "2018-04-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 1736.",
+   "text": [
+    "Si le bail a été fait sans écrit ou si le contrat est stipulé à durée indéterminée, l’une des parties ne pourra donner congé à l’autre qu’en observant les délais fixés par l’usage des lieux.",
+    "Le délai de résiliation d’un contrat de bail d’habitation est de trois mois, sauf clause contraire dans le contrat de bail écrit prévoyant un délai supérieur à trois mois.",
+    "Alinéa 3 abrogé"
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Si le bail a été fait sans écrit ou si le contrat est stipulé à durée indéterminée, l’une des parties ne pourra donner congé à l’autre qu’en observant les délais fixés par l’usage des lieux.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Le délai de résiliation d’un contrat de bail d’habitation est de trois mois, sauf clause contraire dans le contrat de bail écrit prévoyant un délai supérieur à trois mois.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Alinéa 3 abrogé",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3370,
+    "from": "2025-12-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Art. 12.",
+   "lines_added_by_code": [
+    1,
+    3
+   ],
+   "lines_pointed_by_reading": [
+    2
+   ],
+   "context_unit": "article (short: whole article)",
+   "part": 1
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-2006-09-21-n1",
+   "anchor": "art_12",
+   "date": "2026-10-02",
+   "why": "Contient règles sur durée et résiliation du bail.",
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+   "article": "Art. 12.",
+   "number": "12",
+   "heading": null,
+   "path": "Chapitre III. De la durée du contrat de bail",
+   "version_from": "2026-10-02",
+   "version_to": null,
+   "article_since": "2024-08-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2006/09/21/n1/jo",
+   "article_pk": 29088,
+   "lines": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "wording_since": "2024-08-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "replacement",
+    "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+    "effective": "2024-08-01",
+    "title": "Loi du 23 juillet 2024 portant modification : 1° de la loi modifiée du 21 septembre 2006 sur le bail à usage …"
+   },
+   "repeal": null,
+   "label": "Art. 12.",
+   "text": [
+    "Tout contrat de bail visé par la présente loi, qui vient à cesser pour n’importe quelle cause, est prorogé à durée indéterminée à moins que :",
+    "a. le bailleur déclare avoir besoin des lieux loués pour les occuper lui-même ou pour les faire occuper de manière effective par un parent ou allié jusqu’au troisième degré inclusivement;",
+    "b. le locataire ne remplisse pas ses obligations;",
+    "c. il existe d’autres motifs graves et légitimes à établir par le bailleur; le transfert de propriété du logement ne vaut pas motif grave et légitime.",
+    "Par dérogation à l’article 1736 du Code civil, le délai de résiliation dans les cas prévus au paragraphe (2), point a, est de six mois. La lettre de résiliation doit être écrite, motivée et accompagnée, le cas échéant, de pièces afférentes et s’effectuer par voie de lettre recommandée à la poste avec avis de réception. Elle doit mentionner, sous peine de nullité, le texte du présent paragraphe.",
+    "Dans les trois mois de l’avis de réception à la poste, le locataire peut, sous peine de forclusion, demander une prolongation du délai de résiliation au juge de paix. En l’absence de cette demande, le bailleur peut demander au juge de paix une décision autorisant le déguerpissement forcé du locataire après l’écoulement du délai de résiliation de six mois. Toutefois, le locataire pourra encore introduire une demande en sursis à l’exécution de la décision, conformément aux articles 16 à 18. Dans ce cas, le déguerpissement du logement par le locataire doit impérativement avoir lieu au plus tard quinze mois après la date d’envoi de la lettre de résiliation du bail. La décision autorisant le déguerpissement forcé du locataire ne sera pas susceptible d’opposition ou d’appel.",
+    "En cas de demande de prolongation du délai de résiliation, les parties seront convoquées dans les deux mois à l’audience. Sauf si la demande est sérieusement contestable ou contestée, le juge de paix accordera une prolongation du délai au locataire à condition que celui-ci justifie avant l’expiration du délai initial de six mois, par voie de pièces, soit être en train de construire ou de transformer un logement lui appartenant, soit avoir loué un logement en construction ou en transformation, soit avoir fait des démarches utiles et étendues en vue de la recherche d’un nouveau logement. La prolongation du délai ne pourra en aucun cas dépasser de douze mois la date d’expiration du délai initial de six mois. La faveur du sursis, prévue aux articles 16 à 18, ne sera plus applicable. La décision accordant ou refusant la prolongation du délai vaudra de droit titre exécutoire en vue d’un déguerpissement forcé du locataire après l’écoulement du délai. Elle n’est pas susceptible d’opposition ou d’appel."
+   ],
+   "quote": [
+    {
+     "n": 2,
+     "text": "Tout contrat de bail visé par la présente loi, qui vient à cesser pour n’importe quelle cause, est prorogé à durée indéterminée à moins que :",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "a. le bailleur déclare avoir besoin des lieux loués pour les occuper lui-même ou pour les faire occuper de manière effective par un parent ou allié jusqu’au troisième degré inclusivement;",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "b. le locataire ne remplisse pas ses obligations;",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "c. il existe d’autres motifs graves et légitimes à établir par le bailleur; le transfert de propriété du logement ne vaut pas motif grave et légitime.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "Par dérogation à l’article 1736 du Code civil, le délai de résiliation dans les cas prévus au paragraphe (2), point a, est de six mois. La lettre de résiliation doit être écrite, motivée et accompagnée, le cas échéant, de pièces afférentes et s’effectuer par voie de lettre recommandée à la poste avec avis de réception. Elle doit mentionner, sous peine de nullité, le texte du présent paragraphe.",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "Dans les trois mois de l’avis de réception à la poste, le locataire peut, sous peine de forclusion, demander une prolongation du délai de résiliation au juge de paix. En l’absence de cette demande, le bailleur peut demander au juge de paix une décision autorisant le déguerpissement forcé du locataire après l’écoulement du délai de résiliation de six mois. Toutefois, le locataire pourra encore introduire une demande en sursis à l’exécution de la décision, conformément aux articles 16 à 18. Dans ce cas, le déguerpissement du logement par le locataire doit impérativement avoir lieu au plus tard quinze mois après la date d’envoi de la lettre de résiliation du bail. La décision autorisant le déguerpissement forcé du locataire ne sera pas susceptible d’opposition ou d’appel.",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "En cas de demande de prolongation du délai de résiliation, les parties seront convoquées dans les deux mois à l’audience. Sauf si la demande est sérieusement contestable ou contestée, le juge de paix accordera une prolongation du délai au locataire à condition que celui-ci justifie avant l’expiration du délai initial de six mois, par voie de pièces, soit être en train de construire ou de transformer un logement lui appartenant, soit avoir loué un logement en construction ou en transformation, soit avoir fait des démarches utiles et étendues en vue de la recherche d’un nouveau logement. La prolongation du délai ne pourra en aucun cas dépasser de douze mois la date d’expiration du délai initial de six mois. La faveur du sursis, prévue aux articles 16 à 18, ne sera plus applicable. La décision accordant ou refusant la prolongation du délai vaudra de droit titre exécutoire en vue d’un déguerpissement forcé du locataire après l’écoulement du délai. Elle n’est pas susceptible d’opposition ou d’appel.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 1035,
+    "from": "2026-10-02",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 15,
+    "words": 2,
+    "meaning": 3,
+    "words_all": 4,
+    "meaning_all": 5
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    7,
+    8
+   ],
+   "lines_pointed_by_reading": [
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "context_unit": "paragraph",
+   "part": 1
+  },
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "loi-2006-09-21-n1",
+   "anchor": "art_5",
+   "date": "2026-10-02",
+   "why": "ajouté parce que la lecture dit qu'il manque: « Délai de préavis de droit commun et plafond de la garantie locative du bail d’habitation ordinaire. » (cherché par ses mots dans les textes choisis)",
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+   "article": "Art. 5.",
+   "number": "5",
+   "heading": null,
+   "path": "Chapitre II. De la fixation du loyer et des charges",
+   "version_from": "2026-10-02",
+   "version_to": null,
+   "article_since": "2024-08-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2006/09/21/n1/jo",
+   "article_pk": 29081,
+   "lines": [
+    11,
+    12,
+    13
+   ],
+   "wording_since": "2024-08-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+    "effective": "2024-08-01",
+    "title": "Loi du 23 juillet 2024 portant modification : 1° de la loi modifiée du 21 septembre 2006 sur le bail à usage …"
+   },
+   "repeal": null,
+   "label": "Art. 5.",
+   "text": [
+    "Il est toutefois permis aux parties de convenir d’une garantie locative, qui ne pourra dépasser deux mois de loyer, pour garantir le paiement du loyer ou des autres obligations découlant du contrat de bail.",
+    "En cas de stipulation d’une garantie locative, un constat écrit et contradictoire des lieux doit être signé au plus tard le jour de l’entrée en jouissance des lieux par le locataire.",
+    "Le bailleur ne peut refuser, même après la conclusion du bail, une garantie locative sous forme d’une garantie bancaire."
+   ],
+   "quote": [
+    {
+     "n": 11,
+     "text": "Il est toutefois permis aux parties de convenir d’une garantie locative, qui ne pourra dépasser deux mois de loyer, pour garantir le paiement du loyer ou des autres obligations découlant du contrat de bail.",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "En cas de stipulation d’une garantie locative, un constat écrit et contradictoire des lieux doit être signé au plus tard le jour de l’entrée en jouissance des lieux par le locataire.",
+     "label": null
+    },
+    {
+     "n": 13,
+     "text": "Le bailleur ne peut refuser, même après la conclusion du bail, une garantie locative sous forme d’une garantie bancaire.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 1035,
+    "from": "2026-10-02",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 8,
+    "words": 3,
+    "meaning": 1,
+    "words_all": 6,
+    "meaning_all": 2
+   },
+   "meaning_only": false,
+   "retrieved_via": "widened",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    12,
+    13
+   ],
+   "lines_pointed_by_reading": [
+    11
+   ],
+   "context_unit": "paragraph",
+   "part": 2
+  },
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "code-civil",
+   "anchor": "art_1736",
+   "date": "2025-12-26",
+   "why": "Les lignes désignées couvrent le préavis de droit commun, les conditions de résiliation par le bailleur et la dérogation pour besoin personnel, ainsi que le plafond de la garantie locative.",
+   "act_title": "Code civil",
+   "act_id": "/eli/etat/leg/code/civil",
+   "article": "Art. 1736.",
+   "number": "1736",
+   "heading": null,
+   "path": "Livre III. Des différentes manières dont on acquiert la propriété > TITRE VIII. Du contrat de louage (Décrété le 7 mars 1804. Promulgué le 17 du même mois.) > Chapitre II. Du louage des choses > Section Ire. Des règles communes aux baux des maisons et des biens ruraux",
+   "version_from": "2025-12-26",
+   "version_to": null,
+   "article_since": "2018-04-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/civil/jo",
+   "article_pk": 104317,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": "2018-04-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 1736.",
+   "text": [
+    "Si le bail a été fait sans écrit ou si le contrat est stipulé à durée indéterminée, l’une des parties ne pourra donner congé à l’autre qu’en observant les délais fixés par l’usage des lieux.",
+    "Le délai de résiliation d’un contrat de bail d’habitation est de trois mois, sauf clause contraire dans le contrat de bail écrit prévoyant un délai supérieur à trois mois.",
+    "Alinéa 3 abrogé"
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Si le bail a été fait sans écrit ou si le contrat est stipulé à durée indéterminée, l’une des parties ne pourra donner congé à l’autre qu’en observant les délais fixés par l’usage des lieux.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Le délai de résiliation d’un contrat de bail d’habitation est de trois mois, sauf clause contraire dans le contrat de bail écrit prévoyant un délai supérieur à trois mois.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Alinéa 3 abrogé",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3370,
+    "from": "2025-12-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Art. 12.",
+   "lines_added_by_code": [
+    1,
+    3
+   ],
+   "lines_pointed_by_reading": [
+    2
+   ],
+   "context_unit": "article (short: whole article)"
+  }
+ ],
+ "missing": "partie 2: not_found",
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": false,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 1,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "value",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation et quel est le montant maximal de la garantie locative ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "bail d’habitation",
+      "bailleur",
+      "résiliation",
+      "préavis",
+      "garantie locative"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [
+      "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation ?",
+      "Quel est le montant maximal de la garantie locative ?"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 61,
+    "considered_lines": 62,
+    "kept": 3,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 7,
+      "by": "code"
+     },
+     {
+      "rule": "no_longer_in_force_at_the_date_asked",
+      "removed": 3,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "replaces": 0,
+     "transposes": 0,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 14,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/rgd/2023/10/13/a713",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 1,
+       "articles_words": 14
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/loi/1921/07/29/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 1
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/loi/2023/08/07/a611",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 1,
+       "articles_words": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/rgd/2023/08/07/a555",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 14,
+       "articles_words": 1
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/loi/2015/08/05/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 2,
+       "lines_meaning": 7
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 11,
+       "lines_meaning": 12,
+       "articles_meaning": 2,
+       "articles_words": 2
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/loi/1982/06/18/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 3,
+       "articles_meaning": 9,
+       "articles_words": 12
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/loi/2022/12/23/a703",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 8,
+       "lines_meaning": 3,
+       "articles_meaning": 7,
+       "articles_words": 15
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_24",
+      "found_by": {
+       "articles_meaning": 3,
+       "articles_words": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4,
+       "lines_meaning": 10
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/loi/2017/08/02/a734",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5,
+       "lines_meaning": 4
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/loi/2023/08/07/a554",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 4,
+       "articles_words": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/loi/1979/02/25/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/loi/1920/03/29/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 6,
+       "articles_meaning": 8,
+       "articles_words": 13
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/loi/1987/08/27/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 9,
+       "articles_meaning": 6
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/rgd/2004/03/11/n4",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/loi/2026/09/07/a476",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 20,
+       "lines_meaning": 8
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "celex:32013R0575",
+      "node_id": "troisieme_partie__titre_ii",
+      "found_by": {
+       "articles_words": 8
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/loi/2022/12/23/a652",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 9
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/loi/1824/05/31/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 10
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_30",
+      "found_by": {
+       "lines_meaning": 11
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/rgd/2011/09/02/n8",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 11
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/rgd/2024/08/27/a412",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 11
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/rgd/2023/07/26/a477",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 12
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+      "node_id": "",
+      "title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil. [LOI; loi_de_fond; public général; in_force] — Règle le bail à usage d’habitation et modifi",
+      "reason": "La loi générale en vigueur sur le bail d’habitation contient les règles de préavis et de garantie locative.",
+      "by": "model"
+     },
+     {
+      "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+      "node_id": "",
+      "title": "Loi du 23 juillet 2024 portant modification : 1° de la loi modifiée du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil ; 2° de l’article 1714 du Co",
+      "reason": "Cette loi modificative de 2024 concerne directement le bail d’habitation et peut avoir modifié les règles applicables.",
+      "by": "model"
+     },
+     {
+      "act_id": "/eli/etat/leg/loi/2026/09/07/a476",
+      "node_id": "",
+      "title": "Loi du 7 septembre 2026 portant modification : 1° de la loi modifiée du 7 août 2023 relative au logement abordable ; 2° de la loi modifiée du 21 septembre 2006 sur le bail à usage d’habitation et modi",
+      "reason": "Cette loi modificative de 2026 porte également sur le bail d’habitation et peut avoir changé les règles en vigueur à la date de la question.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 2232
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 1035,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 9,
+      "picked": [
+       {
+        "node_id": "chapitre_ibis",
+        "heading": "Chapitre Ibis De la colocation",
+        "tally": 9,
+        "reason": "Contient les mots clés 'delai', 'preavis', 'bailleur', 'resilier', 'bail' qui correspondent précisément à la question sur le délai de préavis du bailleur pour résilier un bail.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "chapitre_ii",
+        "heading": "Chapitre II. De la fixation du loyer et des charges",
+        "tally": 7,
+        "reason": "Contient les mots 'delai', 'bailleur', 'bail', 'montant', 'maximal' qui correspondent à la question sur le montant maximal de la garantie locative.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "chapitre_iii",
+        "heading": "Chapitre III. De la durée du contrat de bail",
+        "tally": 7,
+        "reason": "Contient les mots 'delai', 'bailleur', 'resilier', 'bail', 'montant' qui peuvent concerner la durée et conditions de résiliation du bail et le montant lié.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "chapitre_ibis",
+      "heading": "Chapitre Ibis De la colocation",
+      "stopped": "leaf",
+      "articles": 5
+     },
+     {
+      "node_id": "chapitre_ii",
+      "heading": "Chapitre II. De la fixation du loyer et des charges",
+      "stopped": "leaf",
+      "articles": 9
+     },
+     {
+      "node_id": "chapitre_iii",
+      "heading": "Chapitre III. De la durée du contrat de bail",
+      "stopped": "leaf",
+      "articles": 4
+     }
+    ],
+    "articles": 18,
+    "stopped": "leaf"
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+    "node_start": "",
+    "outline_source": "none",
+    "by": "code",
+    "version_id": 9731,
+    "held_only_later": false,
+    "steps": [],
+    "final": [],
+    "articles": 0,
+    "stopped": "no_outline"
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/2026/09/07/a476",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 6818,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 2,
+      "picked": [
+       {
+        "node_id": "chapitre_2",
+        "heading": "Chapitre 2 Modification de la loi modifiée du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil",
+        "tally": 2,
+        "reason": "Contient la modification de la loi sur le bail à usage d’habitation, donc probablement les règles sur le délai de préavis et la garantie locative.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "chapitre_1er",
+        "heading": "Chapitre 1er Modification de la loi modifiée du 7 août 2023 relative au logement abordable",
+        "tally": 8,
+        "reason": "Contient des articles sur le délai, bailleur, résilier, bail, montant, mais concerne le logement abordable, moins précis pour la question spécifique.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "chapitre_2",
+      "heading": "Chapitre 2 Modification de la loi modifiée du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "chapitre_1er",
+      "heading": "Chapitre 1er Modification de la loi modifiée du 7 août 2023 relative au logement abordable",
+      "stopped": "budget",
+      "articles": 52,
+      "read": "over budget: 8 of 52 articles read, ranked by question words inside the node"
+     }
+    ],
+    "articles": 1,
+    "stopped": "budget,leaf"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 29074,
+      "found_by": {
+       "outline": 1,
+       "words": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29075,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29076,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29077,
+      "found_by": {
+       "outline": 4,
+       "words": 1,
+       "meaning": 4,
+       "words_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29078,
+      "found_by": {
+       "outline": 5,
+       "meaning": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29079,
+      "found_by": {
+       "outline": 6,
+       "words": 9,
+       "meaning": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29080,
+      "found_by": {
+       "outline": 7,
+       "words": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29081,
+      "found_by": {
+       "outline": 8,
+       "words": 3,
+       "meaning": 1,
+       "words_all": 6,
+       "meaning_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29082,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29083,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29084,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29085,
+      "found_by": {
+       "outline": 12
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29086,
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29087,
+      "found_by": {
+       "outline": 14
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29088,
+      "found_by": {
+       "outline": 15,
+       "words": 2,
+       "meaning": 3,
+       "words_all": 4,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29089,
+      "found_by": {
+       "outline": 16,
+       "words": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29090,
+      "found_by": {
+       "outline": 17,
+       "words": 4,
+       "meaning": 2,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29091,
+      "found_by": {
+       "outline": 18,
+       "words": 8,
+       "meaning": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204572,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29104,
+      "found_by": {
+       "words": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 472525,
+      "found_by": {
+       "words_all": 2,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 104349,
+      "found_by": {
+       "words_all": 3,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 259431,
+      "found_by": {
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 29094,
+      "found_by": {
+       "meaning": 7
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 29097,
+      "found_by": {
+       "meaning": 8
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 29092,
+      "found_by": {
+       "meaning": 10
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 472519,
+      "found_by": {
+       "meaning_all": 1
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 472505,
+      "found_by": {
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 303464,
+      "found_by": {
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 204557,
+      "found_by": {
+       "outline": 50
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204561,
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204559,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204528,
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204526,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204533,
+      "found_by": {
+       "outline": 55
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204534,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 204546,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 3914,
+    "candidates": [
+     {
+      "article_pk": 29074,
+      "label": "Art. 2bis.",
+      "role": "context",
+      "reason": "Traite de la colocation, pas du délai ou garantie.",
+      "found_by": {
+       "outline": 1,
+       "words": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "bailleur",
+       "bail",
+       "montant",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29077,
+      "label": "Art. 2quinquies.",
+      "role": "context",
+      "reason": "Parle du délai de préavis en colocation, pas général.",
+      "found_by": {
+       "outline": 4,
+       "words": 1,
+       "meaning": 4,
+       "words_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "preavis",
+       "bailleur",
+       "resilier",
+       "bail",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 29081,
+      "label": "Art. 5.",
+      "role": "reject",
+      "reason": "Ne traite pas du délai ou montant garantie locative.",
+      "found_by": {
+       "outline": 8,
+       "words": 3,
+       "meaning": 1,
+       "words_all": 6,
+       "meaning_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "bailleur",
+       "bail",
+       "montant",
+       "maximal",
+       "garantie",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29088,
+      "label": "Art. 12.",
+      "role": "rule",
+      "reason": "Contient règles sur durée et résiliation du bail.",
+      "found_by": {
+       "outline": 15,
+       "words": 2,
+       "meaning": 3,
+       "words_all": 4,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "bailleur",
+       "resilier",
+       "bail",
+       "locative",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 29090,
+      "label": "Art. 14.",
+      "role": "context",
+      "reason": "Parle de dommages-intérêts, pas délai ou garantie.",
+      "found_by": {
+       "outline": 17,
+       "words": 4,
+       "meaning": 2,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "resilier",
+       "bail",
+       "montant",
+       "locative",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 472525,
+      "label": "Art. 69.",
+      "role": "reject",
+      "reason": "Concerne bail abordable, pas bail d’habitation général.",
+      "found_by": {
+       "words_all": 2,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "bailleur",
+       "resilier",
+       "bail",
+       "montant",
+       "locative",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 104349,
+      "label": "Art. 1762-7.",
+      "role": "reject",
+      "reason": "Règles pour baux commerciaux, pas habitation.",
+      "found_by": {
+       "words_all": 3,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "bailleur",
+       "resilier",
+       "bail",
+       "garantie",
+       "locative",
+       "resiliation"
+      ]
+     },
+     {
+      "article_pk": 29078,
+      "label": "Art. 2sexies.",
+      "role": "context",
+      "reason": "Délai de préavis en colocation, pas général.",
+      "found_by": {
+       "outline": 5,
+       "meaning": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "preavis",
+       "bail"
+      ]
+     },
+     {
+      "article_pk": 29080,
+      "label": "Art. 4.",
+      "role": "reject",
+      "reason": "Parle de loyer, pas garantie locative ou délai.",
+      "found_by": {
+       "outline": 7,
+       "words": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "bailleur",
+       "bail",
+       "montant",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29079,
+      "label": "Art. 3.",
+      "role": "reject",
+      "reason": "Parle de revenu locatif, pas garantie ou délai.",
+      "found_by": {
+       "outline": 6,
+       "words": 9,
+       "meaning": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "bailleur",
+       "bail",
+       "montant",
+       "maximal",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29091,
+      "label": "Art. 15.",
+      "role": "reject",
+      "reason": "Droit de préemption, pas délai ou garantie.",
+      "found_by": {
+       "outline": 18,
+       "words": 8,
+       "meaning": 9
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "bailleur",
+       "bail",
+       "montant",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29089,
+      "label": "Art. 13.",
+      "role": "context",
+      "reason": "Cas d’abandon, pas délai ou garantie.",
+      "found_by": {
+       "outline": 16,
+       "words": 10
+      },
+      "meaning_only": false,
+      "matched": [
+       "bailleur",
+       "resilier",
+       "bail",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 472519,
+      "label": "Art. 63bis.",
+      "role": "rule",
+      "reason": "Fixe montant maximal garantie locative pour bail social.",
+      "found_by": {
+       "meaning_all": 1
+      },
+      "meaning_only": true,
+      "matched": [
+       "delai",
+       "bailleur",
+       "bail",
+       "montant",
+       "maximal",
+       "garantie",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 204572,
+      "label": "Art. 53.",
+      "role": "reject",
+      "reason": "Modifications, pas règles sur délai ou garantie.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "bail",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29075,
+      "label": "Art. 2ter.",
+      "role": "context",
+      "reason": "Colocation, modalités garantie locative, pas montant ou délai.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "bail",
+       "garantie",
+       "locative"
+      ]
+     },
+     {
+      "article_pk": 29076,
+      "label": "Art. 2quater.",
+      "role": "context",
+      "reason": "Colocation, obligations, pas délai ou garantie.",
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "bailleur",
+       "bail"
+      ]
+     },
+     {
+      "article_pk": 29082,
+      "label": "Art. 6.",
+      "role": "reject",
+      "reason": "Pas de contenu pertinent.",
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 29083,
+      "label": "Art. 7.",
+      "role": "reject",
+      "reason": "Commission des loyers, pas délai ou garantie.",
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "bailleur",
+       "bail",
+       "montant",
+       "locative"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 9,
+    "read_amount_set_by": "outline node",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": false,
+      "article": "A1",
+      "lines": [
+       2,
+       3,
+       4,
+       5,
+       6
+      ],
+      "missing": "Délai de préavis de droit commun et plafond de la garantie locative du bail d’habitation ordinaire.",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "Code civil, article 1736 ; loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil, article 5",
+      "items_are_headings": false,
+      "reason": "A1 fixe le préavis pour la reprise pour besoin personnel ou familial, tandis qu’A2 ne concerne que la garantie du bail abordable.",
+      "pending_references": [
+       {
+        "article": "A1",
+        "line": 6,
+        "reference": "Article 1736 du Code civil",
+        "why": "Le délai de droit commun auquel cette disposition déroge n’est pas reproduit."
+       }
+      ],
+      "lines_refused": []
+     },
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A2",
+      "lines": [
+       2
+      ],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "Les lignes désignées couvrent le préavis de droit commun, les conditions de résiliation par le bailleur et la dérogation pour besoin personnel, ainsi que le plafond de la garantie locative.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 1,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "complete_answer_found = false",
+    "budget": 1,
+    "loops": 1,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [
+     {
+      "from": "Art. 12.",
+      "from_article_pk": 29088,
+      "line": 6,
+      "to": "Art. 1736.",
+      "kind": "exception",
+      "edge_id": 33569,
+      "loop": 1,
+      "article_pk": 104317,
+      "act_id": "/eli/etat/leg/code/civil",
+      "held": true,
+      "status": "resolved",
+      "why": "cité par Art. 12., par. 3, al. 1 (ligne 6): « … article 1736 … » — déroge à Art. 1736."
+     },
+     {
+      "from": "missing",
+      "to": "Art. 5.",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Délai de préavis de droit commun et plafond de la garantie locative du bail d’habitation ordinaire. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 29081
+     },
+     {
+      "from": "missing",
+      "to": "Art. 15.",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Délai de préavis de droit commun et plafond de la garantie locative du bail d’habitation ordinaire. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 29091
+     }
+    ],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 2,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "compound_question_some_parts_not_answered",
+    "state": "partial"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 372,
+    "tokens_in": 37,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1466,
+    "model_ms": 1466,
+    "queue_ms": 0,
+    "tokens_in": 582,
+    "tokens_out": 141,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1599,
+    "model_ms": 1599,
+    "queue_ms": 0,
+    "tokens_in": 3974,
+    "tokens_out": 120,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1016,
+    "model_ms": 1016,
+    "queue_ms": 0,
+    "tokens_in": 437,
+    "tokens_out": 92,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1298,
+    "model_ms": 1297,
+    "queue_ms": 0,
+    "tokens_in": 738,
+    "tokens_out": 169,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 3544,
+    "model_ms": 3543,
+    "queue_ms": 0,
+    "tokens_in": 3193,
+    "tokens_out": 426,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 2354,
+    "model_ms": 2354,
+    "queue_ms": 0,
+    "tokens_in": 5204,
+    "tokens_out": 305,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1783,
+    "model_ms": 1783,
+    "queue_ms": 0,
+    "tokens_in": 4406,
+    "tokens_out": 231,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.03141,
+  "ms": 31201,
+  "model_calls": 7,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation et quel est le montant maximal de la garantie locative ?",
+   "legal_terms": [
+    "bail d’habitation",
+    "bailleur",
+    "résiliation",
+    "préavis",
+    "garantie locative"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": [
+    "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation ?",
+    "Quel est le montant maximal de la garantie locative ?"
+   ]
+  },
+  "candidates": [
+   {
+    "article_pk": 29074,
+    "role": "context",
+    "found_by": {
+     "outline": 1,
+     "words": 7
+    }
+   },
+   {
+    "article_pk": 29077,
+    "role": "context",
+    "found_by": {
+     "outline": 4,
+     "words": 1,
+     "meaning": 4,
+     "words_all": 1
+    }
+   },
+   {
+    "article_pk": 29081,
+    "role": "reject",
+    "found_by": {
+     "outline": 8,
+     "words": 3,
+     "meaning": 1,
+     "words_all": 6,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 29088,
+    "role": "rule",
+    "found_by": {
+     "outline": 15,
+     "words": 2,
+     "meaning": 3,
+     "words_all": 4,
+     "meaning_all": 5
+    }
+   },
+   {
+    "article_pk": 29090,
+    "role": "context",
+    "found_by": {
+     "outline": 17,
+     "words": 4,
+     "meaning": 2,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 472525,
+    "role": "reject",
+    "found_by": {
+     "words_all": 2,
+     "meaning_all": 8
+    }
+   },
+   {
+    "article_pk": 104349,
+    "role": "reject",
+    "found_by": {
+     "words_all": 3,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 29078,
+    "role": "context",
+    "found_by": {
+     "outline": 5,
+     "meaning": 5
+    }
+   },
+   {
+    "article_pk": 29080,
+    "role": "reject",
+    "found_by": {
+     "outline": 7,
+     "words": 5
+    }
+   },
+   {
+    "article_pk": 29079,
+    "role": "reject",
+    "found_by": {
+     "outline": 6,
+     "words": 9,
+     "meaning": 6
+    }
+   },
+   {
+    "article_pk": 29091,
+    "role": "reject",
+    "found_by": {
+     "outline": 18,
+     "words": 8,
+     "meaning": 9
+    }
+   },
+   {
+    "article_pk": 29089,
+    "role": "context",
+    "found_by": {
+     "outline": 16,
+     "words": 10
+    }
+   },
+   {
+    "article_pk": 472519,
+    "role": "rule",
+    "found_by": {
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 204572,
+    "role": "reject",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 29075,
+    "role": "context",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 29076,
+    "role": "context",
+    "found_by": {
+     "outline": 3
+    }
+   },
+   {
+    "article_pk": 29082,
+    "role": "reject",
+    "found_by": {
+     "outline": 9
+    }
+   },
+   {
+    "article_pk": 29083,
+    "role": "reject",
+    "found_by": {
+     "outline": 10
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 29088
+   },
+   {
+    "article_pk": 472519
+   },
+   {
+    "article_pk": 29074
+   },
+   {
+    "article_pk": 29077
+   },
+   {
+    "article_pk": 29090
+   },
+   {
+    "article_pk": 29078
+   },
+   {
+    "article_pk": 29089
+   },
+   {
+    "article_pk": 29075
+   },
+   {
+    "article_pk": 29076
+   },
+   {
+    "article_pk": 104317
+   },
+   {
+    "article_pk": 29081
+   },
+   {
+    "article_pk": 29091
+   }
+  ],
+  "replay": "eNrtWttu3LgZfhVCN05QxR5p7Bl7jKIIkhZYND3soneGIXAkzgwTjaglqbHdIMA-RG9616uiaW96v3fxm-yT9PtJaqQ5-LButt0uCgSxhsf___4zyffRKpokcVRHkyhXy6mK4ijHd6lyXuK76H3XGBrNmqoS5YtVgoav8fvLRpRMGMtKwYrbjyWXrBCs1rcf-UoaVjRsymVZikazWuE_dBhZSqFZU7kuVhws-FRabqWqmLDs696KS1VZXlm25NdyyUtauuRszjUaJb5BmZUrwX5BpDYgJx2koxdJ8iIl-goTTWa8NCKO8BXxylwJnV1Ju8jEdS5q2hHD9F192fQmy1UhMGYaTS4uksHxMBljQlOi7SKJ03h4GUdvhGGlnFf4UxB38-r2I75z1ay0qBwfHR5ASStp0btcNlWMThpZFZI2dP0BIY9HzTXNX2MIfAAAttFqHkYQqlNhlMS30EaRfGLGZWUkYem2L_kMe9wF3yGBIGYC1OZgzENWNWV5GV-kZ4PT0zjq4XUBruPj-CQexeP4FPy_UrQaGNW3f5sTPwYUFQ34EETvBj9BH2jHWkOk-mbPftBHQGLFtSWUkzhJ44SA5m9VY28_Eii58LxxsJfbRgNWSapzAIVa8gp9E_bpH-z1Ho3clABR-AA8LdGs-O6bP_d0VelCVlxqccg-fcue5Quh84UnjxnAsFQW20GznJCJHZL1QkkjzXMAcCULUYliAwBwWS2ga_i7jCbUBCzK9mv9IdqPmkeT91HJq3nD54LsU5PicyuofabVctsorNpumWsoCxoLfkP9BHtYfaGu0F4pRgsyKJhdONwN8T9hVtGUD3AEoSmzNzURseJlQ1YzI41a_Ki8RCnmvMys0Eu4hItoj1zJ2gMxZBc97XVK60km2LbXjy6dnZSNIVP2QvQWiR1zbsTaG71ttDSFzN2iBLDNDJcFrc-1dYR9ZsSI9S-fBNkl5PuOvB8sc3zcWaa31fF4u4WsV4u3sMqocx_OY_qfZ4ONGcfj9CQ96U8hL3t8trXI-HRnn8H2kO05ZzuUnO1snZz1iBscn4zT7VVPdlge7ZCyPel02DVACTSiaEAi7Omx9Ph5TDyPnki_rd8qxBwPrGMKC5aIxBcwe7ESpQvcum5IJac37lchfrbEfxSzQaiBm9FwM5NR0v-dlRIRC60g_h18ezQB0QYWDytWmZ8_SSHwmSxhLsbt6KCagLda8BJrcJvBJWTkHjJu3pEzQ-dSrWi_cY8geIn17EplparmCLeyymYKvvz-dYYb64B9A4XPifb3UcWXNMTpAty4a8UPCz02tTLhp2M1u4LDxu_humEpeCWruW-C4cm87Lcmx73WMDk5gTnw3Ho48JFJSpGORCmPBGztCP7lqFTyKB0MRkeDs6M0OarIyVYg3o8lHyutQ-KNkmTJaYJ4UVuxnCKO0UQXQUPYZ7d_YY2Bc98OP3CCkJKcSbLjXGjLpUtBJDHephMNe4WNWS5XCLrs4s3vvjiHccsMxFDIO2d1My1lzua3H5G1aF6es1Yol-y7b_7EvnIx_fHEOMFx4_zaG057dWsjHajYSs4b8lp9FrcWy9uEguJmm1T0vR92w8-9eYzTFK-9pHL3Sig9PhqMj9LhER8mD8poyN425HAto4lwuto7UMd17gmfsOTTP4MvJc59J-VB_zkps3OWBiKwUtBfloyTYz-uL6BXwlrRo7TNd4TnEXLAjhXlVhq-TCxDNrtPZpRGicYyvlJSrxnfkCCva6gan-L7e0vK2RKExY_HowckNd6AOR09QVRjxtXtt07SQ6ZF6WHhDUbOPQp8Cn9ArPTg_twyf7SkPIuC3X5EbuPpu8e6NiWVL5A7bgmqZ6UgkeoNSv88i22qty1BSlilMXCcmc8gSTKUY6XpMCX5tsGqUHlDJEbx93afxkKd_cooBMiHZz4UoC00MEtC2aQtjlaIX5Se0mbJYIiQvhBlkamqvMkgXKG7OtGK2vv2AnJbuNrYBcVogkyhljnFJuruNBAI1tJq_Jq6vHAheOHiR_Qq9LAv0MNeO_xy5b2VyyYtL8sbt3In6L7vcxVEXiK1YwfghMuDmB3UGAsnSJ9tCkjfWvj8r20_gKgkttPoqOHqaU1yoLk0tx-djnjZtgJtVeZJySZpw9VCkRla3TgcFR0plILPnHXvg0veAdYXhwGrmbxeV42luhHaO34qorieC9MhOL4XwQ67PmAOJPwNqbD79NnwPuj2g_XINPpp8NyJzxqgUGQDHgqZmruwSHz9e8jsqFIPJQcN_MeK1mkDhO4RI-x95xltKS02qpAS_rKH0doWeyBd7ribGYrv8vPZIu1Wi6LdsEv9osnJD6nB9-x79gOpxj1bHhOy3c_kdGf0U3z53kTrPm9eqUr065ktH342HiYP-_CejmwwNejzhGIk7P40zvYlJp8lTo1OCfwnxKn0oTiV7leelP2mnyD9d7PYzoGlex0Y38zmOmIfQU3MCvgthDc1JSEstyuNuwOhP339LO49EXq_GNDxKEF8jxy1A_N0H5jkj1rr2GQ-Xsf9uIv5vjFunTc-uDRdrUDF4g4FNFpCxiEB8VnERjytqWMm0fB5A8H_iLLf45KTH4cGdRROm2Iu7GaE9FZKvQpOjPkhE3bK1IydpJ160SDoEq_gn9j0plMAd77CpDudcsfMVXva00Nil4p4NyYJi1pV6c3zMIhQFA4orPFO-jWc9_SjMU5cw9M73bvxh95t7ezOmLZPvx1p_sYsGD1GVbRDthFpqiznaKYKis6exn1SuYbOOCluRAGqmoZndPrUn7pzABtHf9BcrguzLpmJWc2dhgUPppq1yzrcc2wbR7_nuhS9CRsur9pZeX2ec7h75BtHv4X4PF07VLTp3h4HunVU_MRLpd0T5jVz-KeWS1ireSErC_Jv_25NQGo_TFsn044k7-Kc9fd8Gy2yr9LeBGrrXDuOvgqc-Rs83ly7Kymhc4lvv2q32OGeg_A4ev1EgQ16ZKwBcglqmLFzEaBaQR7uHrf31tBQ7aoJ02Zbi-2scdZXnNfuVi6wIpZ1T5Xv1OP-iT4ERGPp0GsKu3lg8sbhfxz9Sl7vVnO7KARRQdRGQUwB0M17gzjqO9-gYxtafLdZnmyw0xMjfAMvpaWTgB2q_A4t8buCGt21qJqWct6n8h6g0w1pu8LOLQph1whxiHCVPdy9_qANl-5gyMUh45Xsvu0u-x7SxZQt97g-kvcBxx-eFBlfqqaymRE2c8PbRLvy5YM_8f-6UZY8P_QuRLHJ-36AIahQmVEhdDoYuIsCY3sOfTj4gO2wUREuAPyzgRm1tHEARlyXgi4yNjpDLhPWAoEvk5Ysuh1q79Qvexnay4QKSLHxgKDNnLSotTRi__U_QTrjS3KQSNQsRRGDyAXTeJmySnTJWrhDX6tUW56vnduhP5t9PJshFnZcpn0u-9z9BJ5NfNhS1vCEwmyVrlbL-ZyKt_2gsZ8zpxxRp5TQz1Kp2uc8lo4KrMlAZragTNiZl1Hlyq3J6_oIW5vD-mbCBOb72pI9M8hIGHKac6aQuWj2prlGGgS-59SKnB9b_7LRqha88i1UbQID6zIdd-jrLuOexyxfiDykbMTUOfRvLq6Z8kkRGaDQByZkcVcLBCEkUETMOfSNMkJXsDn7XahQuYbXCS-1PWRJeujeC6hla21Z_Q7Fn88JXHk-GYXHC37CeDiiKe8kaV3_fUpE27pceTg8GZ15JB2Q_ZXbtzx3VPfE5FGbnBMsXWnHbWOctJ0EinXGmMvwNoW1HJGX04dsCEhLNLBnTt3Z6Ll7m_LdN39l3fXMcOQaPn3rbt28pgoqMXrckrIF0MJZe9SH5KSHR3hbwtxt2v0656n_ib2t6YtsW6GSB3BM_g_ko4A8S6gGoscrftCF8-6zxojNH1lOkdmfuwmgVxrl-2mzKjyWeR_JaupDiPMQjJ7ihYtH4uMgdB8QJIKR-ILrgdPVonhh1Qs4JwhNXE_g2th6cTZTFDGv2DPXGvwEClP0M9Tjpi3tWmO0C3hAWDPhQTsgQ3x-zn4t_rjg1YHpbBbRWZWlujIIt9YRh6iC4gLRhNGRHT3EEjNZ-Rh1F1_dkAPQzdxP6Bu9UKLimSggqTBCcrsIZXVTlmY9BsSpq4p1K8ZutzCptxHyUKgH1jM5vH_0oR_F3AsRA2zym60wFmKAO5KDdoYa-jJu33VwSurcgQjialvGe1th0Gl3POmAYXLGCHf4Xn8pLHwworYrp7BzmkDTVeXenbkHCW206QLTVuGfSxPeb_Wobol74IGnA-TOR6LuepPyvyQdIJA0ht6cHA6GyTF-VUGbm_bZnK7914d_AR4QEsI"
+ },
+ "parts": [
+  {
+   "question": "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation ?",
+   "state": "answer_with_exception",
+   "rule": "answer_with_exception_by_code",
+   "blocks": 2,
+   "replay": "x"
+  },
+  {
+   "question": "Quel est le montant maximal de la garantie locative ?",
+   "state": "not_found",
+   "rule": "no_answer_in_the_articles_read",
+   "blocks": 1,
+   "replay": "y"
+  }
+ ],
+ "_synthetic": "pages2: b1-compound redrawn as one funnel per part (LEX_FUNNEL_SPLIT=1 shape): blocks carry part, parts carry state"
+}

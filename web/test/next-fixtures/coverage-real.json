@@ -1,0 +1,2669 @@
+{
+ "made": "2026-11-21",
+ "built": "2026-11-21 19:34:50",
+ "by": "ingest\\build_coverage.py",
+ "by_type": [
+  {
+   "type": "CONSTITUTION",
+   "listed": 2,
+   "held": 1,
+   "not_held": 1,
+   "in_force_listed": 1,
+   "in_force_held": 1,
+   "source": "publisher catalogue (data\\catalogue.json) and the publisher's in-force status (SPARQL, data\\publisher\\works.json)"
+  },
+  {
+   "type": "LOI",
+   "listed": 9244,
+   "held": 7482,
+   "not_held": 1762,
+   "in_force_listed": 8035,
+   "in_force_held": 7032,
+   "source": "publisher catalogue (data\\catalogue.json) and the publisher's in-force status (SPARQL, data\\publisher\\works.json)"
+  },
+  {
+   "type": "RGD",
+   "listed": 15398,
+   "held": 12526,
+   "not_held": 2872,
+   "in_force_listed": 9751,
+   "in_force_held": 9633,
+   "source": "publisher catalogue (data\\catalogue.json) and the publisher's in-force status (SPARQL, data\\publisher\\works.json)"
+  },
+  {
+   "type": "CODE",
+   "listed": null,
+   "held": 10,
+   "not_held": null,
+   "in_force_listed": null,
+   "in_force_held": 9,
+   "note": "codes held as XML code states or as the publisher's PDF compilation"
+  },
+  {
+   "type": "EU:DIR",
+   "listed": null,
+   "held": 265,
+   "not_held": null,
+   "in_force_listed": null,
+   "in_force_held": 138,
+   "note": "held outside the catalogue of laws and regulations (codes, coordinated texts, EU acts, others)"
+  },
+  {
+   "type": "EU:REG",
+   "listed": null,
+   "held": 224,
+   "not_held": null,
+   "in_force_listed": null,
+   "in_force_held": 172,
+   "note": "held outside the catalogue of laws and regulations (codes, coordinated texts, EU acts, others)"
+  },
+  {
+   "type": "EU:TREATY",
+   "listed": null,
+   "held": 3,
+   "not_held": null,
+   "in_force_listed": null,
+   "in_force_held": 3,
+   "note": "held outside the catalogue of laws and regulations (codes, coordinated texts, EU acts, others)"
+  },
+  {
+   "type": "LOI (not in the catalogue)",
+   "listed": null,
+   "held": 4,
+   "not_held": null,
+   "in_force_held": 2,
+   "note": "held, published after data\\catalogue.json was made"
+  },
+  {
+   "type": "RBCL",
+   "listed": 35,
+   "held": 35,
+   "not_held": 0,
+   "in_force_listed": 24,
+   "in_force_held": 24,
+   "note": "regulations of the Banque centrale du Luxembourg; listed = the publisher's works of that type (data\\publisher\\works.json); in_force_held = status in force today (build_status.py)"
+  },
+  {
+   "type": "RCSF",
+   "listed": 112,
+   "held": 107,
+   "not_held": 5,
+   "in_force_listed": 82,
+   "in_force_held": 80,
+   "note": "regulations of the financial sector supervisor (CSSF); listed = the publisher's works of that type (data\\publisher\\works.json); in_force_held = status in force today (build_status.py)"
+  },
+  {
+   "type": "REG",
+   "listed": 109,
+   "held": 47,
+   "not_held": 62,
+   "in_force_listed": 87,
+   "in_force_held": 41,
+   "note": "regulations of public authorities (Commissariat aux assurances, Banque centrale, CNPD ...) and old regulations; listed = the publisher's works of that type (data\\publisher\\works.json); in_force_held = status in force today (build_status.py)"
+  },
+  {
+   "type": "RGD (not in the catalogue)",
+   "listed": null,
+   "held": 3,
+   "not_held": null,
+   "in_force_held": 2,
+   "note": "held, published after data\\catalogue.json was made"
+  },
+  {
+   "type": "RILR",
+   "listed": 538,
+   "held": 526,
+   "not_held": 12,
+   "in_force_listed": 392,
+   "in_force_held": 383,
+   "note": "regulations of the telecoms and energy regulator (ILR); listed = the publisher's works of that type (data\\publisher\\works.json); in_force_held = status in force today (build_status.py)"
+  }
+ ],
+ "in_force": {
+  "held": 16666,
+  "listed": 17787,
+  "what": "laws and grand-ducal regulations the publisher marks in force"
+ },
+ "held": {
+  "luxembourg_acts": 20741,
+  "eu_acts": 492,
+  "luxembourg_versions": 23258,
+  "eu_versions": 766
+ },
+ "publisher_lists_beyond_laws": [
+  {
+   "kind": "a",
+   "in_force": false,
+   "works": 1189
+  },
+  {
+   "kind": "a",
+   "in_force": true,
+   "works": 5314
+  },
+  {
+   "kind": "acc",
+   "in_force": false,
+   "works": 1
+  },
+  {
+   "kind": "acc",
+   "in_force": true,
+   "works": 208
+  },
+  {
+   "kind": "acca",
+   "in_force": true,
+   "works": 1
+  },
+  {
+   "kind": "acco",
+   "in_force": false,
+   "works": 1
+  },
+  {
+   "kind": "acco",
+   "in_force": true,
+   "works": 9
+  },
+  {
+   "kind": "agc",
+   "in_force": false,
+   "works": 41
+  },
+  {
+   "kind": "agc",
+   "in_force": true,
+   "works": 126
+  },
+  {
+   "kind": "agd",
+   "in_force": false,
+   "works": 1859
+  },
+  {
+   "kind": "agd",
+   "in_force": true,
+   "works": 4328
+  },
+  {
+   "kind": "agdr",
+   "in_force": false,
+   "works": 1
+  },
+  {
+   "kind": "agdr",
+   "in_force": true,
+   "works": 21
+  },
+  {
+   "kind": "amin",
+   "in_force": false,
+   "works": 871
+  },
+  {
+   "kind": "amin",
+   "in_force": true,
+   "works": 2104
+  },
+  {
+   "kind": "ar",
+   "in_force": false,
+   "works": 16
+  },
+  {
+   "kind": "ar",
+   "in_force": true,
+   "works": 22
+  },
+  {
+   "kind": "argd",
+   "in_force": false,
+   "works": 229
+  },
+  {
+   "kind": "argd",
+   "in_force": true,
+   "works": 1623
+  },
+  {
+   "kind": "avis",
+   "in_force": true,
+   "works": 1
+  },
+  {
+   "kind": "cmin",
+   "in_force": false,
+   "works": 5
+  },
+  {
+   "kind": "cmin",
+   "in_force": true,
+   "works": 1073
+  },
+  {
+   "kind": "constitution",
+   "in_force": true,
+   "works": 1
+  },
+  {
+   "kind": "conv",
+   "in_force": false,
+   "works": 19
+  },
+  {
+   "kind": "conv",
+   "in_force": true,
+   "works": 254
+  },
+  {
+   "kind": "d",
+   "in_force": true,
+   "works": 36
+  },
+  {
+   "kind": "dec",
+   "in_force": false,
+   "works": 13
+  },
+  {
+   "kind": "dec",
+   "in_force": true,
+   "works": 47
+  },
+  {
+   "kind": "dep",
+   "in_force": false,
+   "works": 1
+  },
+  {
+   "kind": "dgc",
+   "in_force": false,
+   "works": 3
+  },
+  {
+   "kind": "dgc",
+   "in_force": true,
+   "works": 44
+  },
+  {
+   "kind": "div",
+   "in_force": false,
+   "works": 26
+  },
+  {
+   "kind": "div",
+   "in_force": true,
+   "works": 3041
+  },
+  {
+   "kind": "dmin",
+   "in_force": false,
+   "works": 1
+  },
+  {
+   "kind": "dmin",
+   "in_force": true,
+   "works": 7
+  },
+  {
+   "kind": "igc",
+   "in_force": false,
+   "works": 2
+  },
+  {
+   "kind": "igc",
+   "in_force": true,
+   "works": 3
+  },
+  {
+   "kind": "imin",
+   "in_force": false,
+   "works": 7
+  },
+  {
+   "kind": "imin",
+   "in_force": true,
+   "works": 113
+  },
+  {
+   "kind": "loi",
+   "in_force": false,
+   "works": 1205
+  },
+  {
+   "kind": "loi",
+   "in_force": true,
+   "works": 8037
+  },
+  {
+   "kind": "ogd",
+   "in_force": false,
+   "works": 6
+  },
+  {
+   "kind": "ord",
+   "in_force": false,
+   "works": 21
+  },
+  {
+   "kind": "ord",
+   "in_force": true,
+   "works": 58
+  },
+  {
+   "kind": "ordr",
+   "in_force": false,
+   "works": 28
+  },
+  {
+   "kind": "ordr",
+   "in_force": true,
+   "works": 45
+  },
+  {
+   "kind": "pa",
+   "in_force": false,
+   "works": 4
+  },
+  {
+   "kind": "pa",
+   "in_force": true,
+   "works": 769
+  },
+  {
+   "kind": "pl",
+   "in_force": true,
+   "works": 4
+  },
+  {
+   "kind": "pr",
+   "in_force": true,
+   "works": 4
+  },
+  {
+   "kind": "prot",
+   "in_force": false,
+   "works": 33
+  },
+  {
+   "kind": "prot",
+   "in_force": true,
+   "works": 210
+  },
+  {
+   "kind": "rap",
+   "in_force": false,
+   "works": 7
+  },
+  {
+   "kind": "rap",
+   "in_force": true,
+   "works": 1
+  },
+  {
+   "kind": "rbcl",
+   "in_force": false,
+   "works": 11
+  },
+  {
+   "kind": "rbcl",
+   "in_force": true,
+   "works": 24
+  },
+  {
+   "kind": "rc",
+   "in_force": false,
+   "works": 44
+  },
+  {
+   "kind": "rc",
+   "in_force": true,
+   "works": 21612
+  },
+  {
+   "kind": "rcsf",
+   "in_force": false,
+   "works": 30
+  },
+  {
+   "kind": "rcsf",
+   "in_force": true,
+   "works": 82
+  },
+  {
+   "kind": "rect",
+   "in_force": false,
+   "works": 320
+  },
+  {
+   "kind": "rect",
+   "in_force": true,
+   "works": 810
+  },
+  {
+   "kind": "reex",
+   "in_force": true,
+   "works": 20
+  },
+  {
+   "kind": "reg",
+   "in_force": false,
+   "works": 22
+  },
+  {
+   "kind": "reg",
+   "in_force": true,
+   "works": 87
+  },
+  {
+   "kind": "res",
+   "in_force": true,
+   "works": 5
+  },
+  {
+   "kind": "rgc",
+   "in_force": false,
+   "works": 138
+  },
+  {
+   "kind": "rgc",
+   "in_force": true,
+   "works": 218
+  },
+  {
+   "kind": "rgd",
+   "in_force": false,
+   "works": 5638
+  },
+  {
+   "kind": "rgd",
+   "in_force": true,
+   "works": 9753
+  },
+  {
+   "kind": "ri",
+   "in_force": false,
+   "works": 12
+  },
+  {
+   "kind": "ri",
+   "in_force": true,
+   "works": 100
+  },
+  {
+   "kind": "rilr",
+   "in_force": false,
+   "works": 146
+  },
+  {
+   "kind": "rilr",
+   "in_force": true,
+   "works": 392
+  },
+  {
+   "kind": "rmin",
+   "in_force": false,
+   "works": 2820
+  },
+  {
+   "kind": "rmin",
+   "in_force": true,
+   "works": 3244
+  },
+  {
+   "kind": "rtc",
+   "in_force": false,
+   "works": 1284
+  },
+  {
+   "kind": "rtde",
+   "in_force": true,
+   "works": 91
+  },
+  {
+   "kind": "rtf",
+   "in_force": true,
+   "works": 32
+  },
+  {
+   "kind": "rv",
+   "in_force": true,
+   "works": 121
+  },
+  {
+   "kind": "st",
+   "in_force": false,
+   "works": 1
+  },
+  {
+   "kind": "st",
+   "in_force": true,
+   "works": 319
+  },
+  {
+   "kind": "tc",
+   "in_force": false,
+   "works": 292
+  },
+  {
+   "kind": "tc",
+   "in_force": true,
+   "works": 52
+  },
+  {
+   "kind": "trep",
+   "in_force": false,
+   "works": 49
+  },
+  {
+   "kind": "trep",
+   "in_force": true,
+   "works": 120
+  }
+ ],
+ "status": {
+  "EU:in_force": 313,
+  "EU:no_longer_in_force": 179,
+  "LU:in_force": 17152,
+  "LU:no_longer_in_force": 929,
+  "LU:not_yet_in_force": 14,
+  "LU:repealed": 2614,
+  "LU:repealed_in_part": 32
+ },
+ "named": [
+  {
+   "name": "Loi du 7 décembre 2015 sur le secteur des assurances",
+   "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2026-04-03",
+    "until": null,
+    "until_known": 1,
+    "kind": "consolidation"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Loi du 27 juillet 1997 sur le contrat d’assurance",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": 1,
+    "kind": "consolidation"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile automobile",
+   "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2024-12-28",
+    "until": "2025-01-01",
+    "until_known": 1,
+    "kind": "consolidation"
+   },
+   "applicable_today": false,
+   "why": "newer_version_not_held"
+  },
+  {
+   "name": "Règlement grand-ducal du 11 novembre 2003 pris en exécution de la loi du 16 avril 2003 (assurance automobile)",
+   "act_id": "/eli/etat/leg/rgd/2003/11/11/n2",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2003-11-23",
+    "until": null,
+    "until_known": 0,
+    "kind": "original"
+   },
+   "applicable_today": false,
+   "why": "original_amended_since"
+  },
+  {
+   "name": "Loi du 8 juin 1999 relative aux régimes complémentaires de pension",
+   "act_id": "/eli/etat/leg/loi/1999/06/08/n5",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "1999-06-21",
+    "until": null,
+    "until_known": 0,
+    "kind": "original"
+   },
+   "applicable_today": false,
+   "why": "original_amended_since"
+  },
+  {
+   "name": "Loi du 13 juillet 2005 relative aux activités et à la surveillance des institutions de retraite professionnelle",
+   "act_id": "/eli/etat/leg/loi/2005/07/13/n2",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2005-07-25",
+    "until": null,
+    "until_known": 0,
+    "kind": "original"
+   },
+   "applicable_today": false,
+   "why": "original_amended_since"
+  },
+  {
+   "name": "Loi du 9 juillet 1937 sur l’impôt sur les assurances",
+   "act_id": "/eli/etat/leg/loi/1937/07/09/n1",
+   "held": false
+  },
+  {
+   "name": "Convention collective du secteur des assurances (RGD du 23 décembre 2016)",
+   "act_id": "/eli/etat/leg/rgd/2016/12/23/n31",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2015-01-01",
+    "until": null,
+    "until_known": 1,
+    "kind": "original"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2026-01-01",
+    "until": null,
+    "until_known": 1,
+    "kind": "code_state"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Code de la route",
+   "act_id": "/eli/etat/leg/code/route",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2026-06-12",
+    "until": null,
+    "until_known": 1,
+    "kind": "code_state"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlements du Commissariat aux assurances (CAA)",
+   "act_id": null,
+   "held": true,
+   "count": 19,
+   "in_force": 16,
+   "acts": [
+    {
+     "act_id": "/eli/etat/leg/reg/2013/12/23/n1",
+     "title": "Règlement du Commissariat aux Assurances N° 13/01 du 23 décembre 2013 relatif à la lutte contre le blanchiment et contre le financement du terrorisme.",
+     "status": "repealed"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2014/04/01/n1",
+     "title": "Règlement du Commissariat aux Assurances N° 14/01 du 1er avril 2014 relatif à l'épreuve d'aptitude pour candidats agents et sous-courtiers d'assurances.",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2015/04/07/n1",
+     "title": "Règlement du Commissariat aux Assurances N° 15/01 du 7 avril 2015 relatif à l'épreuve d'aptitude pour candidats courtiers d'assurances ou de réassurances ou dirigeants de sociétés de courtage d'assura",
+     "status": "repealed"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2015/09/14/n1",
+     "title": "Règlement du Commissariat aux Assurances N° 15/02 du 14 septembre 2015 relatif à l'épreuve d'aptitude pour candidats agents et sous-courtiers d'assurances.",
+     "status": "repealed"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2015/12/07/n1",
+     "title": "Règlement du Commissariat aux Assurances N° 15/03 du 7 décembre 2015 relatif aux entreprises d’assurance et de réassurance.",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2016/05/03/n1",
+     "title": "Règlement du Commissariat aux Assurances N° 16/01 du 3 mai 2016 portant modification du règlement du Commissariat aux Assurances N° 15/03 du 7 décembre 2015 relatif aux entreprises d'assurance et de r",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2019/02/26/a148",
+     "title": "Règlement du Commissariat aux Assurances N° 19/01 du 26 février 2019 relatif à la distribution d’assurances et de réassurances.",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2019/02/26/a149",
+     "title": "Règlement du Commissariat aux Assurances N° 19/02 du 26 février 2019 portant modification du règlement modifié du Commissariat aux Assurances N° 15/03 du 7 décembre 2015 relatif aux entreprises d’assu",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2019/02/26/a150",
+     "title": "Règlement du Commissariat aux Assurances N° 19/03 du 26 février 2019 relatif à la résolution extrajudiciaire des litiges.",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2019/02/26/a151",
+     "title": "Règlement du Commissariat aux Assurances N° 19/04 du 26 février 2019 portant modification du règlement du Commissariat aux Assurances N° 13/01 du 23 décembre 2013 relatif à la lutte contre le blanchim",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2020/06/26/a562",
+     "title": "Règlement du Commissariat aux Assurances N° 20/02 du 26 juin 2020 portant transposition de l‘article 2, point 1), de la directive (UE) 2019/2177 du 18 décembre 2019 et modifiant le règlement modifié d",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2020/06/26/a616",
+     "title": "Règlement du Commissariat aux Assurances N° 20/01 du 26 juin 2020 portant modification du règlement du Commissariat aux Assurances N° 19/01 du 26 février 2019 relatif à la distribution d’assurances et",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2020/07/30/a696",
+     "title": "Règlement du Commissariat aux Assurances N° 20/03 du 30 juillet 2020 relatif à la lutte contre le blanchiment et contre le financement du terrorisme.",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2021/06/22/a567",
+     "title": "Règlement du Commissariat aux Assurances N° 21/01 du 22 juin 2021 portant transposition de l‘article 2, points 4) et 5), de la directive (UE) 2019/2177 du 18 décembre 2019 et modifiant le règlement mo",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2022/12/06/a44",
+     "title": "Règlement du Commissariat aux Assurances N° 22/01 portant modification du règlement du Commissariat aux Assurances N° 19/01 du 26 février 2019 relatif à la distribution d’assurances et de réassurances",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2022/12/06/a45",
+     "title": "Règlement du Commissariat aux Assurances N° 22/02 relatif aux professionnels du secteur de l’assurance et à certaines fonctions dirigeantes.",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2022/12/06/a46",
+     "title": "Règlement du Commissariat aux Assurances N° 22/03 portant modification du règlement du Commissariat aux Assurances N° 15/03 du 7 décembre 2015 relatif aux entreprises d’assurance et de réassurance, te",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2024/12/20/a5",
+     "title": "Règlement du Commissariat aux Assurances N° 24/01 du 20 décembre 2024 portant modification du règlement du Commissariat aux Assurances N° 19/01 du 26 février 2019 relatif à la distribution d’assurance",
+     "status": "in_force"
+    },
+    {
+     "act_id": "/eli/etat/leg/reg/2024/12/20/a6",
+     "title": "Règlement du Commissariat aux Assurances N° 24/02 du 20 décembre 2024 portant modification du règlement du Commissariat aux Assurances n° 20/03 du 30 juillet 2020 relatif à la lutte contre le blanchim",
+     "status": "in_force"
+    }
+   ],
+   "note": "19 regulations of the Commissariat aux assurances held (title \"Règlement du Commissariat aux Assurances N° ...\")"
+  },
+  {
+   "name": "Directive 2009/138/CE (Solvabilité II)",
+   "act_id": "celex:32009L0138",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2025-01-17",
+    "until": "2027-01-29",
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement délégué (UE) 2015/35 (Solvabilité II)",
+   "act_id": "celex:32015R0035",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2024-11-14",
+    "until": "2027-01-29",
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Directive (UE) 2016/97 sur la distribution d’assurances (IDD)",
+   "act_id": "celex:32016L0097",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2024-10-09",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement délégué (UE) 2017/2358 (IDD, gouvernance des produits)",
+   "act_id": "celex:32017R2358",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2022-08-02",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement délégué (UE) 2017/2359 (IDD, produits d’investissement fondés sur l’assurance)",
+   "act_id": "celex:32017R2359",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2022-08-02",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement (UE) n° 1286/2014 (PRIIPs)",
+   "act_id": "celex:32014R1286",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2024-01-09",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement délégué (UE) 2017/653 (PRIIPs, document d’informations clés)",
+   "act_id": "celex:32017R0653",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2023-01-01",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Directive 2009/103/CE (assurance automobile)",
+   "act_id": "celex:32009L0103",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2023-12-23",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Directive (UE) 2016/2341 (IORP II)",
+   "act_id": "celex:32016L2341",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2025-01-17",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement (UE) n° 1094/2010 (AEAPP / EIOPA)",
+   "act_id": "celex:32010R1094",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2025-11-10",
+    "until": "2027-01-29",
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement (UE) 2023/2859 (point d’accès unique européen, ESAP)",
+   "act_id": "celex:32023R2859",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2026-07-02",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  },
+  {
+   "name": "Règlement (UE) 2016/679 (RGPD)",
+   "act_id": "celex:32016R0679",
+   "held": true,
+   "status": "in_force",
+   "status_end": null,
+   "today_version": {
+    "from": "2016-05-04",
+    "until": null,
+    "until_known": 1,
+    "kind": "eu"
+   },
+   "applicable_today": true,
+   "why": "applicable_today"
+  }
+ ],
+ "not_held_named": [
+  {
+   "name": "Loi du 9 juillet 1937 sur l’impôt sur les assurances",
+   "why": "publié par l’éditeur seulement en PDF"
+  }
+ ],
+ "date_floor": [
+  {
+   "title": "Code civil",
+   "act_id": "/eli/etat/leg/code/civil",
+   "first_held": "2016-09-01",
+   "versions_held": 18,
+   "versions_listed": 19
+  },
+  {
+   "title": "Code de commerce",
+   "act_id": "/eli/etat/leg/code/commerce",
+   "first_held": "2010-12-21",
+   "versions_held": 7,
+   "versions_listed": 7
+  },
+  {
+   "title": "Code consommation",
+   "act_id": "/eli/etat/leg/code/consommation",
+   "first_held": "2018-07-01",
+   "versions_held": 15,
+   "versions_listed": 18
+  },
+  {
+   "title": "Code d'Instruction Criminelle",
+   "act_id": "/eli/etat/leg/code/instruction_criminelle",
+   "first_held": "2016-10-01",
+   "versions_held": 1,
+   "versions_listed": 1
+  },
+  {
+   "title": "Code pénal",
+   "act_id": "/eli/etat/leg/code/penal",
+   "first_held": "2016-07-10",
+   "versions_held": 36,
+   "versions_listed": 36
+  },
+  {
+   "title": "Nouveau Code de procédure civile",
+   "act_id": "/eli/etat/leg/code/procedure_civile",
+   "first_held": "2015-09-01",
+   "versions_held": 17,
+   "versions_listed": 17
+  },
+  {
+   "title": "Code de procédure pénale",
+   "act_id": "/eli/etat/leg/code/procedure_penale",
+   "first_held": "2017-04-01",
+   "versions_held": 36,
+   "versions_listed": 37
+  },
+  {
+   "title": "Code de la route",
+   "act_id": "/eli/etat/leg/code/route",
+   "first_held": "2026-06-12",
+   "versions_held": 1,
+   "versions_listed": 46
+  },
+  {
+   "title": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "first_held": "2026-01-01",
+   "versions_held": 1,
+   "versions_listed": 11
+  },
+  {
+   "title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "first_held": "2020-11-01",
+   "versions_held": 29,
+   "versions_listed": 56
+  }
+ ],
+ "versions": {
+  "lu_versions": 23258,
+  "dated": 23258,
+  "undated": 0,
+  "end_not_known": 1342,
+  "open_still_law": 15817,
+  "translations_apart": 7,
+  "today_version_why": {
+   "repealed": 2613,
+   "applicable_today": 16086,
+   "newer_version_not_held": 74,
+   "no_longer_in_force": 1107,
+   "original_amended_since": 1303,
+   "repealed_in_part": 32,
+   "not_yet_applicable": 14,
+   "applicable_today+not_held_in_french": 3,
+   "end_not_known": 1
+  },
+  "original_wording_amended_since": 1345
+ },
+ "annexes": {
+  "today_versions": {
+   "text": 16523,
+   "pdf_only": 507,
+   "empty": 33
+  },
+  "all_versions": {
+   "empty": 53,
+   "pdf_only": 547,
+   "text": 26117
+  }
+ },
+ "annexes_pdf_only": {
+  "count": 507,
+  "acts": 507,
+  "items": [
+   {
+    "act_id": "/eli/etat/leg/rgd/2011/10/24/n2",
+    "title": "Règlement grand-ducal du 24 octobre 2011 fixant les conditions d’admission au stage, le déroulement du stage et l’examen de fin de stage ouvrant l’accès aux fon",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/rgd/2011/10/24/n2/consolide/20160905/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2000/05/06/n3",
+    "title": "Loi du 6 mai 2000 portant approbation de la Convention de Rotterdam sur la procédure de consentement préalable en connaissance de cause applicable à certains pr",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/loi/2000/05/06/n3/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2022/11/04/a558",
+    "title": "Règlement grand-ducal du 4 novembre 2022 fixant les grilles horaires et les référentiels d’évaluation de la formation d’aide-soignant, régime francophone, premi",
+    "annex": "Annexes",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/rgd/2022/11/04/a558/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1974/11/19/n1",
+    "title": "Loi du 19 novembre 1974 portant approbation de l'Acte de Paris du 24 juillet 1971 de la Convention de Berne pour la protection des oeuvres littéraires et artist",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/loi/1974/11/19/n1/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2019/10/26/a764",
+    "title": "Règlement grand-ducal du 26 octobre 2019 fixant les référentiels d’évaluation dans le cadre de la formation professionnelle.",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/rgd/2019/10/26/a764/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2016/03/29/n4",
+    "title": "Loi du 29 mars 2016 portant approbation de l'Accord de sécurité entre le Gouvernement du Grand-Duché de Luxembourg et le Gouvernement de la République de Pologn",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/loi/2016/03/29/n4/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2002/04/29/n2",
+    "title": "Loi du 29 avril 2002 portant règlement des comptes généraux de l'exercice 1998",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/loi/2002/04/29/n2/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2011/05/24/n3",
+    "title": "Règlement grand-ducal du 24 mai 2011 déterminant les localités de vote qui ne sont pas chef-lieu de commune.",
+    "annex": "ANNEXE",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/rgd/2011/05/24/n3/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2020/10/19/a874",
+    "title": "Règlement grand-ducal du 19 octobre 2020 modifiant le règlement grand-ducal du 17 mai 2006 déclarant obligatoire le plan d’occupation du sol (POS) « Aéroport et",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/rgd/2020/10/19/a874/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2022/03/30/a188",
+    "title": "Règlement grand-ducal du 30 mars 2022 déclarant obligatoires les cartes des zones inondables et les cartes des risques d’inondation pour les cours d’eau de l’Al",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/rgd/2022/03/30/a188/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2022/12/23/a649",
+    "title": "Loi du 23 décembre 2022 concernant le budget des recettes et des dépenses de l’État pour l’exercice 2023 et modifiant :\\n\\n1° la loi générale des impôts modifié",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/loi/2022/12/23/a649/jo/fr/pdf"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2016/08/31/n3",
+    "title": "Loi du 31 août 2016 portant approbation de l’Accord entre le Gouvernement du Grand-Duché de Luxembourg et le Gouvernement du Royaume de Belgique sur l’assistanc",
+    "annex": "Annexe",
+    "pdf": "https://data.legilux.public.lu/eli/etat/leg/loi/2016/08/31/n3/jo/fr/pdf"
+   }
+  ]
+ },
+ "outline": {
+  "acts_with_outline_today": 4547,
+  "acts": 21233,
+  "lu_acts_with_outline_today": 4098,
+  "eu_acts_with_outline_today": 449,
+  "versions_with_outline": 6520,
+  "outline_rows": 110038,
+  "acts_over_20_articles_without_outline": 229,
+  "source": "publisher headings (node table, parsed from the XML / Formex); no outline is invented"
+ },
+ "references": {
+  "by_source_target_status": [
+   {
+    "from": "eu",
+    "to": "eu",
+    "status": "resolved_article",
+    "n": 5710
+   },
+   {
+    "from": "eu",
+    "to": "none",
+    "status": "unresolved",
+    "n": 12649
+   },
+   {
+    "from": "lu",
+    "to": "eu",
+    "status": "article_not_found",
+    "n": 632
+   },
+   {
+    "from": "lu",
+    "to": "eu",
+    "status": "not_held",
+    "n": 13642
+   },
+   {
+    "from": "lu",
+    "to": "eu",
+    "status": "resolved_act",
+    "n": 12632
+   },
+   {
+    "from": "lu",
+    "to": "eu",
+    "status": "resolved_article",
+    "n": 5090
+   },
+   {
+    "from": "lu",
+    "to": "lu",
+    "status": "article_not_found",
+    "n": 10153
+   },
+   {
+    "from": "lu",
+    "to": "lu",
+    "status": "not_held",
+    "n": 25112
+   },
+   {
+    "from": "lu",
+    "to": "lu",
+    "status": "resolved_act",
+    "n": 79317
+   },
+   {
+    "from": "lu",
+    "to": "lu",
+    "status": "resolved_article",
+    "n": 50738
+   },
+   {
+    "from": "lu",
+    "to": "none",
+    "status": "unresolved",
+    "n": 23554
+   },
+   {
+    "from": "lu",
+    "to": "other",
+    "status": "not_held",
+    "n": 2704
+   }
+  ],
+  "lu_totals": {
+   "article_not_found": 10785,
+   "not_held": 41458,
+   "resolved_act": 91949,
+   "resolved_article": 55828,
+   "unresolved": 23554
+  },
+  "lu_to_eu": {
+   "article_not_found": 632,
+   "not_held": 13642,
+   "resolved_act": 12632,
+   "resolved_article": 5090
+  },
+  "edges": {
+   "code:finish_spine": 421144,
+   "code:finish_spine+today_version": 2803,
+   "code:resolve_eu_refs": 459985,
+   "code:resolve_refs:code_name": 26111,
+   "code:resolve_refs:date_title_words": 3423,
+   "code:resolve_refs:date_unique": 2841,
+   "code:resolve_refs:eu_name": 5136,
+   "code:resolve_refs:eu_name+label": 12677,
+   "code:resolve_refs:eu_number": 906,
+   "code:resolve_refs:label": 24292,
+   "code:resolve_refs:title_without_date": 258,
+   "code:resolve_refs:treaty_name": 359
+  },
+  "unit_ties": {
+   "not_tied_ambiguous": 987,
+   "not_tied_list_or_unclear": 40261,
+   "not_tied_part_absent": 40670,
+   "tied": 203954
+  },
+  "precision": {
+   "size": 100,
+   "right": 98,
+   "precision": 0.98,
+   "by_group": {
+    "same_act": {
+     "n": 30,
+     "right": 30
+    },
+    "other_act_lu_first_pass": {
+     "n": 20,
+     "right": 20
+    },
+    "other_act_lu_filled_label": {
+     "n": 10,
+     "right": 9
+    },
+    "new_edges": {
+     "n": 20,
+     "right": 19
+    },
+    "lu_to_eu": {
+     "n": 20,
+     "right": 20
+    }
+   },
+   "file": "data\\resolver_precision.json"
+  },
+  "most_cited_not_held": [
+   {
+    "act_id": "/eli/etat/leg/agd/1955/11/23/n1",
+    "references": 3442
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1961/02/08/n1",
+    "references": 2813
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1979/02/12/n1",
+    "references": 966
+   },
+   {
+    "act_id": "/eli/etat/proj/pl",
+    "references": 751
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1848/11/12/n1",
+    "references": 626
+   },
+   {
+    "act_id": "/eli/etat/projet/pl",
+    "references": 540
+   },
+   {
+    "act_id": "celex:31967L0548",
+    "references": 310
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1878/01/27/n1",
+    "references": 309
+   },
+   {
+    "act_id": "/eli/etat/leg/agd/1930/05/26/n4",
+    "references": 302
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1965/06/12/n3",
+    "references": 279
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1925/12/17/n1",
+    "references": 261
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1994/12/14/n1",
+    "references": 248
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1989/05/24/n1",
+    "references": 240
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1979/03/31/n1",
+    "references": 214
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1879/06/18/n2",
+    "references": 202
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1986/12/18/n1",
+    "references": 201
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1951/08/29/n3",
+    "references": 185
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1991/11/14/n1",
+    "references": 177
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1968/02/22/n1",
+    "references": 149
+   },
+   {
+    "act_id": "celex:32002L0021",
+    "references": 141
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1973/03/14/n1",
+    "references": 140
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1997/03/21/n1",
+    "references": 132
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2007/11/30/n7",
+    "references": 126
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1994/06/17/n3",
+    "references": 120
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1994/06/15/n1",
+    "references": 118
+   },
+   {
+    "act_id": "celex:32003R1782",
+    "references": 116
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2016/12/23/n17",
+    "references": 114
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1937/06/12/n1",
+    "references": 112
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1957/11/30/n1",
+    "references": 110
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1976/06/28/n5",
+    "references": 106
+   }
+  ]
+ },
+ "checks": {
+  "conservation": {
+   "files_checked": 10870,
+   "passed": 10870,
+   "failed": 0,
+   "unexplained_words": 48,
+   "numbers_missing": 0,
+   "seconds": 138
+  },
+  "conservation_order": {
+   "files_checked": 23256,
+   "passed": 23195,
+   "failed": 61,
+   "tokens": 64364757,
+   "missing": 1451,
+   "extra": 1580,
+   "misplaced": 327,
+   "built": "2026-11-21 17:35:27",
+   "seconds": 428
+  },
+  "eu_conservation": {},
+  "eu_file_check": {
+   "files": 567,
+   "failing": 54,
+   "acts_with_a_failing_file": 54,
+   "items": [
+    {
+     "act_id": "celex:32005R0396",
+     "file": "CL2005R0396FR0680010.0001.xml",
+     "words_lost": 151293,
+     "numbers_missing": 48114,
+     "words": 577973
+    },
+    {
+     "act_id": "celex:32002L0049",
+     "file": "CL2002L0049FR0060010.0001.xml",
+     "words_lost": 118060,
+     "numbers_missing": 58379,
+     "words": 263708
+    },
+    {
+     "act_id": "celex:32007L0046",
+     "file": "CL2007L0046FR0270010.0001.xml",
+     "words_lost": 56864,
+     "numbers_missing": 9247,
+     "words": 131960
+    },
+    {
+     "act_id": "celex:32006R1907",
+     "file": "CL2006R1907FR0690020.0001.xml",
+     "words_lost": 53233,
+     "numbers_missing": 13849,
+     "words": 229095
+    },
+    {
+     "act_id": "celex:31976L0769",
+     "file": "CL1976L0769FR0240010.0001.xml",
+     "words_lost": 49686,
+     "numbers_missing": 10948,
+     "words": 77566
+    }
+   ]
+  }
+ },
+ "ingest": {
+  "merged_by_batch": {
+   "bulk": 11626,
+   "pdf": 2,
+   "refresh": 43,
+   "regulators": 717
+  },
+  "merged_order_check": {
+   "pass": 12386,
+   "pdf: pass": 2
+  },
+  "quarantined_by_batch": {
+   "bulk": 148,
+   "refresh": 1,
+   "regulators": 6
+  },
+  "quarantined": [
+   {
+    "act_id": "/eli/etat/leg/loi/1807/09/15/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1906/08/07/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1911/05/15/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1911/05/15/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1912/07/29/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1914/06/02/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1914/06/02/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1916/08/18/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1916/08/18/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1917/08/24/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1918/07/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1920/11/15/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1922/01/22/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1923/11/17/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1924/11/18/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1926/11/22/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1926/11/22/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1928/01/04/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1928/01/04/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1930/11/13/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1930/11/13/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1934/03/29/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1934/03/29/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1935/01/05/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1936/06/22/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1937/12/29/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1937/12/29/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1939/06/16/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1939/07/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/04/13/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/04/13/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/04/13/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/12/04/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/12/07/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/12/10/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/12/16/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1949/12/29/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1950/05/17/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1951/02/23/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1952/11/27/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1952/12/15/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1952/12/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1954/04/24/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1955/02/04/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1955/12/23/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1957/03/05/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1958/10/27/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1959/04/25/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1960/03/09/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1961/07/07/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1962/06/09/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1964/01/04/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1965/07/29/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1965/07/29/n7",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1966/07/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1969/03/10/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1969/12/03/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1970/01/06/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1971/05/28/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1971/05/28/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1972/02/01/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1974/11/22/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1977/07/12/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1977/07/12/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1978/10/31/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1978/11/07/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1980/07/15/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1980/07/26/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1981/03/27/n6",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1982/03/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1983/03/18/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1983/07/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1984/11/28/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1986/01/11/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1987/06/16/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1987/07/16/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1987/11/20/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1988/03/08/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1990/12/21/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1991/12/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1992/01/15/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1992/07/01/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1992/11/25/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1995/01/13/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1995/01/13/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1996/01/11/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1996/01/11/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1996/12/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1997/12/22/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1998/08/03/n14",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1998/08/03/n15",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2001/03/23/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: missing"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2002/12/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2003/04/16/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2004/12/21/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2004/12/21/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2005/04/25/n7",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2008/10/24/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2009/12/18/n15",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2014/12/17/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2015/12/18/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2016/07/23/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/2016/12/23/n17",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1962/08/08/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1962/12/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1963/12/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1964/08/15/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1966/12/14/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1967/12/11/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1968/03/18/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1972/12/29/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1973/12/04/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1974/02/18/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1974/08/11/n9",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1977/12/22/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1978/10/24/n7",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1978/12/15/n6",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1979/04/23/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1979/12/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1980/07/08/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1980/07/26/n6",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1981/11/20/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1981/12/18/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1983/06/29/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1983/12/02/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1985/04/26/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1985/08/08/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1989/06/29/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1993/10/11/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1993/10/16/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1996/04/12/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1996/09/01/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1996/10/16/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/1999/04/29/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2000/05/19/n8",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2002/09/27/n4",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2003/11/28/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2004/01/30/n5",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2005/02/03/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2007/05/08/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2010/04/14/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2010/11/19/n1",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2010/12/17/n24",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2011/12/16/n11",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2012/04/19/n3",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2014/01/24/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2014/02/27/n2",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rgd/2016/03/15/n6",
+    "version": "jo",
+    "batch": "bulk",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/loi/1998/04/17/n1",
+    "version": "consolide/20050510",
+    "batch": "refresh",
+    "stage": "parse",
+    "reason": "ParseError('duplicate attribute: line 1038, column 163') | T.fromstring(xml_text.encode('utf-8'))\n                ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Program Files\\Python313\\Lib\\xml\\etr"
+   },
+   {
+    "act_id": "/eli/etat/leg/rcsf/2018/11/19/a1084",
+    "version": "jo",
+    "batch": "regulators",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rcsf/2019/06/26/a447",
+    "version": "jo",
+    "batch": "regulators",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rcsf/2019/10/29/a802",
+    "version": "jo",
+    "batch": "regulators",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rcsf/2022/11/30/a647",
+    "version": "jo",
+    "batch": "regulators",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rcsf/2023/11/30/a803",
+    "version": "jo",
+    "batch": "regulators",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: extra"
+   },
+   {
+    "act_id": "/eli/etat/leg/rilr/2014/11/14/n2",
+    "version": "jo",
+    "batch": "regulators",
+    "stage": "conservation",
+    "reason": "bag: pass | order: fail: misplaced"
+   }
+  ],
+  "rule": "a file data-acquire fetched is merged only when it passes both conservation checks (bag of words and order-aware); one that fails, or that cannot be read or parsed, is kept out whole and named here",
+  "source": "tables ingest_file and ingest_quarantine; data\\ingest_report.json; data\\ingest_quarantine.json"
+ },
+ "index": {
+  "vectors": {
+   "rows": 188670,
+   "model": "text-embedding-3-large",
+   "dims": 1024,
+   "articles_with_rows": 162606,
+   "left_out": {
+    "amending": 17756,
+    "container": 16,
+    "deleted_by_publisher": 650,
+    "empty": 326,
+    "not_applicable_act": 30559,
+    "not_law_text": 202,
+    "superseded_version": 3241,
+    "tiny": 223
+   },
+   "rule": "today's versions of acts whose today's text is law or the best text held of a law that still applies; articles that only amend, titles, preambles, signatures and texts under 20 characters stay out; rows of an older version of an act are zeroed once its today's version has rows (superseded_version)"
+  },
+  "keyword_index": {
+   "articles": 158708
+  },
+  "routing_lines": {
+   "lines": 21666,
+   "groups": 342,
+   "acts": 21324
+  },
+  "spot_check": {
+   "articles": 20,
+   "right": 19,
+   "defect": 1,
+   "file": "data\\index_spotcheck.json"
+  }
+ },
+ "sources": [
+  {
+   "line": "Legilux (data.legilux.public.lu, legilux.public.lu): Journal officiel et textes consolidés; état de vigueur et dates d’application selon les données publiées par l’éditeur (SPARQL), récupérées le 2026-11-21."
+  },
+  {
+   "line": "Office des publications de l’Union européenne (publications.europa.eu, Cellar): textes de l’Union en français (Formex), état de vigueur selon l’Office."
+  }
+ ]
+}

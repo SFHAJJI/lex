@@ -246,6 +246,9 @@ test("a page that ships no script says its strip carries no answer, in English a
       ...LEGAL_PAGE_PATHS.map((path) => path.slice(1)), ...REFERENCE_PAGE_PATHS.map((path) => path.slice(1)), "locale-de.html", "locale-lb.html", "maintenance/en.html", "maintenance/fr.html",
       // The side build's Results page: it reads the engine's scored test, which carries no freshness.
       "en/results.html", "fr/results.html",
+      // Trust and Coverage (pages2, 21/11/2026): it reads the data builders' coverage file and the engine's counts, never an
+      // answer that carries freshness; its strip no longer says it will show what an answer brings.
+      "en/coverage.html", "fr/coverage.html",
     ].sort());
     // And the 404 page, which offers the search and so may have an answer, keeps the as-built line.
     assert.ok(pages.some(([label]) => label === "not-found/fr.html") && !quiet.includes("not-found/fr.html"));

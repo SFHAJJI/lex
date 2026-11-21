@@ -1,0 +1,2324 @@
+{
+ "state": "answer",
+ "outcome": "answer",
+ "pipeline": "combo",
+ "question": "Quels sont tous les congés spéciaux prévus par le Code du travail ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-1",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 1. Congé-jeunesse ( L. 24 octobre 2007 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-1.",
+   "number": "l234-1",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 1. Congé-jeunesse ( L. 24 octobre 2007 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142186,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-1.",
+   "text": [
+    "Il est institué un congé-jeunesse dont le but est de soutenir le développement d’activités en faveur de la jeunesse au niveau local, régional et national."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Il est institué un congé-jeunesse dont le but est de soutenir le développement d’activités en faveur de la jeunesse au niveau local, régional et national.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 1. Congé-jeunesse ( L. 24 octobre 2007 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-9",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 2. Congé sportif",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-9.",
+   "number": "l234-9",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 2. Congé sportif",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142194,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-9.",
+   "text": [
+    "Un congé spécial dit «congé sportif» peut être accordé aux sportifs d’élite, au personnel indispensable à leur encadrement ainsi qu’aux juges et arbitres en vue d’assurer la meilleure représentation dans les compétitions internationales. Le congé est pris en charge par l’Etat dans les limites des crédits budgétaires."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Un congé spécial dit «congé sportif» peut être accordé aux sportifs d’élite, au personnel indispensable à leur encadrement ainsi qu’aux juges et arbitres en vue d’assurer la meilleure représentation dans les compétitions internationales. Le congé est pris en charge par l’Etat dans les limites des crédits budgétaires.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 2. Congé sportif"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-10",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 3. Congé culturel ( L. 6 janvier 2023 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-10.",
+   "number": "l234-10",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 3. Congé culturel ( L. 6 janvier 2023 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2023-02-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142195,
+   "lines": [
+    1
+   ],
+   "wording_since": "2024-08-04",
+   "wording_until": null,
+   "wording_no": 3,
+   "wording_first_held": 0,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-10.",
+   "text": [
+    "Les acteurs culturels suivants peuvent bénéficier d’un congé culturel :"
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les acteurs culturels suivants peuvent bénéficier d’un congé culturel :",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 3. Congé culturel ( L. 6 janvier 2023 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-22",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 4. Congé spécial des volontaires des services de secours",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-22.",
+   "number": "l234-22",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 4. Congé spécial des volontaires des services de secours",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142205,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-22.",
+   "text": [
+    "Dans l’intérêt des volontaires assurant les services de secours dans le cadre du Corps grand-ducal d’incendie et de secours, des services communaux d’incendie et de sauvetage et des membres des organismes de secours à agréer par arrêté grand-ducal, il est institué un congé spécial sous les modalités ci-après déterminées."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Dans l’intérêt des volontaires assurant les services de secours dans le cadre du Corps grand-ducal d’incendie et de secours, des services communaux d’incendie et de sauvetage et des membres des organismes de secours à agréer par arrêté grand-ducal, il est institué un congé spécial sous les modalités ci-après déterminées.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 4. Congé spécial des volontaires des services de secours"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-32",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 5. Congé de la coopération au développement",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-32.",
+   "number": "l234-32",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 5. Congé de la coopération au développement",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142215,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-32.",
+   "text": [
+    "Il est institué un congé spécial dit «congé de la coopération au développement» dans l’intérêt des experts et des représentants des organisations non gouvernementales, remplissant les conditions définies à l’article 34 de la loi du 6 janvier 1996 sur la coopération au développement, s’ils exercent une autre activité professionnelle, salariée ou non salariée."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Il est institué un congé spécial dit «congé de la coopération au développement» dans l’intérêt des experts et des représentants des organisations non gouvernementales, remplissant les conditions définies à l’article 34 de la loi du 6 janvier 1996 sur la coopération au développement, s’ils exercent une autre activité professionnelle, salariée ou non salariée.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 5. Congé de la coopération au développement"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-43",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 6. Congé parental",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-43.",
+   "number": "l234-43",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 6. Congé parental",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142226,
+   "lines": [
+    1
+   ],
+   "wording_since": "2022-12-27",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-43.",
+   "text": [
+    "Tout parent a droit, suite à la naissance ou à l’adoption d’un ou de plusieurs enfants, à un congé parental tant que les enfants n’ont pas atteint l’âge de six ans aux conditions et dans les limites de la présente loi. Le délai de six ans est porté à douze ans pour les parents d’un ou de plusieurs enfants adoptés."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Tout parent a droit, suite à la naissance ou à l’adoption d’un ou de plusieurs enfants, à un congé parental tant que les enfants n’ont pas atteint l’âge de six ans aux conditions et dans les limites de la présente loi. Le délai de six ans est porté à douze ans pour les parents d’un ou de plusieurs enfants adoptés.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 6. Congé parental"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l234-50",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 7. Congé pour raisons familiales ( L. 15 décembre 2017 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L.234-50.",
+   "number": "l234-50",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 7. Congé pour raisons familiales ( L. 15 décembre 2017 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142233,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L.234-50.",
+   "text": [
+    "Sans préjudice de dispositions plus favorables prévues dans les conventions collectives, il est institué un congé spécial dit « congé pour raisons familiales »."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sans préjudice de dispositions plus favorables prévues dans les conventions collectives, il est institué un congé spécial dit « congé pour raisons familiales ».",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 7. Congé pour raisons familiales ( L. 15 décembre 2017 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-56",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 8. Congé d’accueil",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-56.",
+   "number": "l234-56",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 8. Congé d’accueil",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142239,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-56.",
+   "text": [
+    "En cas d’adoption par deux conjoints d’un enfant âgé n’ayant pas atteint l’âge de douze ans accomplis, le parent occupé dans le cadre d’un contrat d’apprentissage ou d’un contrat de louage de services par un employeur du secteur privé a droit à un congé dit « congé d’accueil », d’une durée de douze semaines, sur présentation d’une attestation délivrée par le tribunal selon laquelle la procédure d’adoption est introduite."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "En cas d’adoption par deux conjoints d’un enfant âgé n’ayant pas atteint l’âge de douze ans accomplis, le parent occupé dans le cadre d’un contrat d’apprentissage ou d’un contrat de louage de services par un employeur du secteur privé a droit à un congé dit « congé d’accueil », d’une durée de douze semaines, sur présentation d’une attestation délivrée par le tribunal selon laquelle la procédure d’adoption est introduite.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 8. Congé d’accueil"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-59",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 9. Congé-formation ( L. 24 octobre 2007 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-59.",
+   "number": "l234-59",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 9. Congé-formation ( L. 24 octobre 2007 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142242,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-59.",
+   "text": [
+    "Il est institué un congé spécial dit «congé-formation», destiné à permettre aux salariés de participer à des cours, de préparer des examens et d’y participer, de rédiger des mémoires ou d’accomplir tout autre travail en relation avec une formation éligible d’après l’article L. 234-60."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Il est institué un congé spécial dit «congé-formation», destiné à permettre aux salariés de participer à des cours, de préparer des examens et d’y participer, de rédiger des mémoires ou d’accomplir tout autre travail en relation avec une formation éligible d’après l’article L. 234-60.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 9. Congé-formation ( L. 24 octobre 2007 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-65",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 10. Congé d’accompagnement ( L. 16 mars 2009 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-65.",
+   "number": "l234-65",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 10. Congé d’accompagnement ( L. 16 mars 2009 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142248,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-65.",
+   "text": [
+    "Il est institué un congé spécial pour l’accompagnement d’une personne en fin de vie, désigné ci-après par «congé d’accompagnement», qui peut être demandé par tout travailleur salarié dont un parent au premier degré en ligne directe ascendante ou descendante ou au second degré en ligne collatérale, le conjoint ou le partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats souffre d’une maladie grave en phase terminale."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Il est institué un congé spécial pour l’accompagnement d’une personne en fin de vie, désigné ci-après par «congé d’accompagnement», qui peut être demandé par tout travailleur salarié dont un parent au premier degré en ligne directe ascendante ou descendante ou au second degré en ligne collatérale, le conjoint ou le partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats souffre d’une maladie grave en phase terminale.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 10. Congé d’accompagnement ( L. 16 mars 2009 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-71",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 11. Congé pour mandats sociaux ( L. 13 mai 2008 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-71.",
+   "number": "l234-71",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 11. Congé pour mandats sociaux ( L. 13 mai 2008 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142254,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-71.",
+   "text": [
+    "Les salariés remplissant le mandat de membre d’une chambre professionnelle, de membre d’un organe d’une institution de sécurité sociale, d’assesseur auprès du Tribunal du travail, d’assesseur-assuré et d’assesseur-employeur du Conseil arbitral des assurances et du Conseil supérieur des assurances sociales ont droit à un congé spécial pour remplir leur mandat. Ils avisent leur employeur chaque fois qu’ils sont appelés à l’exercice de leur mandat."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les salariés remplissant le mandat de membre d’une chambre professionnelle, de membre d’un organe d’une institution de sécurité sociale, d’assesseur auprès du Tribunal du travail, d’assesseur-assuré et d’assesseur-employeur du Conseil arbitral des assurances et du Conseil supérieur des assurances sociales ont droit à un congé spécial pour remplir leur mandat. Ils avisent leur employeur chaque fois qu’ils sont appelés à l’exercice de leur mandat.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 11. Congé pour mandats sociaux ( L. 13 mai 2008 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-72",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 12. Congé linguistique ( L. 17 février 2009 )",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-72.",
+   "number": "l234-72",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 12. Congé linguistique ( L. 17 février 2009 )",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142255,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-72.",
+   "text": [
+    "Il est institué un congé spécial dit «congé linguistique», destiné à permettre aux salariés de participer à des cours de langue luxembourgeoise et de préparer et de participer à des examens y relatifs, dans le cadre d’une formation éligible d’après l’article L. 234-73."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Il est institué un congé spécial dit «congé linguistique», destiné à permettre aux salariés de participer à des cours de langue luxembourgeoise et de préparer et de participer à des examens y relatifs, dans le cadre d’une formation éligible d’après l’article L. 234-73.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 12. Congé linguistique ( L. 17 février 2009 )"
+  },
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_234-78",
+   "date": "2026-07-01",
+   "why": "élément de la liste « Chapitre IV. Congés spéciaux »: Section 13. Congé de représentation des parents (L. 1er août 2018)",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 234-78.",
+   "number": "l234-78",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 13. Congé de représentation des parents (L. 1er août 2018)",
+   "version_from": "2026-07-26",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142261,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. L. 234-78.",
+   "text": [
+    "Les parents d’élèves qui sont membres de la commission scolaire nationale ont droit à un congé de deux demi-journées par mois pour remplir leur mandat. Pendant ce congé, ils peuvent s’absenter du lieu de travail du secteur public et privé avec maintien de leur rémunération. Dans le secteur public les bénéficiaires du congé continueront à toucher leur traitement et à jouir des avantages attachés à leur fonction. Sont visés sous le terme de «secteur public», l’État, les communes, les syndicats de communes, les établissements et services publics placés sous la surveillance de l’État ou des communes, les organismes parastataux ainsi que la société nationale des chemins de fer."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les parents d’élèves qui sont membres de la commission scolaire nationale ont droit à un congé de deux demi-journées par mois pour remplir leur mandat. Pendant ce congé, ils peuvent s’absenter du lieu de travail du secteur public et privé avec maintien de leur rémunération. Dans le secteur public les bénéficiaires du congé continueront à toucher leur traitement et à jouir des avantages attachés à leur fonction. Sont visés sous le terme de «secteur public», l’État, les communes, les syndicats de communes, les établissements et services publics placés sous la surveillance de l’État ou des communes, les organismes parastataux ainsi que la société nationale des chemins de fer.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 4766,
+    "from": "2026-07-26",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "list_item": "Section 13. Congé de représentation des parents (L. 1er août 2018)"
+  }
+ ],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": {
+  "heading": "Chapitre IV. Congés spéciaux",
+  "items_total": 13,
+  "items_shown": 13,
+  "count_stated_by_text": null,
+  "complete": true,
+  "by": "code (headings under the list node of the outline; the reading said the items are these headings)",
+  "items": [
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_1",
+    "heading": "Section 1. Congé-jeunesse ( L. 24 octobre 2007 )",
+    "first_article": "Art. L. 234-1",
+    "articles": 8,
+    "article_pk": 142186
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_2",
+    "heading": "Section 2. Congé sportif",
+    "first_article": "Art. L. 234-9",
+    "articles": 1,
+    "article_pk": 142194
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_3",
+    "heading": "Section 3. Congé culturel ( L. 6 janvier 2023 )",
+    "first_article": "Art. L. 234-10",
+    "articles": 10,
+    "article_pk": 142195
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_4",
+    "heading": "Section 4. Congé spécial des volontaires des services de secours",
+    "first_article": "Art. L. 234-22",
+    "articles": 10,
+    "article_pk": 142205
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_5",
+    "heading": "Section 5. Congé de la coopération au développement",
+    "first_article": "Art. L. 234-32",
+    "articles": 11,
+    "article_pk": 142215
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_6",
+    "heading": "Section 6. Congé parental",
+    "first_article": "Art. L. 234-43",
+    "articles": 7,
+    "article_pk": 142226
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_7",
+    "heading": "Section 7. Congé pour raisons familiales ( L. 15 décembre 2017 )",
+    "first_article": "Art. L.234-50",
+    "articles": 6,
+    "article_pk": 142233
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_8",
+    "heading": "Section 8. Congé d’accueil",
+    "first_article": "Art. L. 234-56",
+    "articles": 3,
+    "article_pk": 142239
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_9",
+    "heading": "Section 9. Congé-formation ( L. 24 octobre 2007 )",
+    "first_article": "Art. L. 234-59",
+    "articles": 6,
+    "article_pk": 142242
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_10",
+    "heading": "Section 10. Congé d’accompagnement ( L. 16 mars 2009 )",
+    "first_article": "Art. L. 234-65",
+    "articles": 6,
+    "article_pk": 142248
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_11",
+    "heading": "Section 11. Congé pour mandats sociaux ( L. 13 mai 2008 )",
+    "first_article": "Art. L. 234-71",
+    "articles": 1,
+    "article_pk": 142254
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_12",
+    "heading": "Section 12. Congé linguistique ( L. 17 février 2009 )",
+    "first_article": "Art. L. 234-72",
+    "articles": 6,
+    "article_pk": 142255
+   },
+   {
+    "node_id": "livre_ii.titre_iii.chapitre_iv.section_13",
+    "heading": "Section 13. Congé de représentation des parents (L. 1er août 2018)",
+    "first_article": "Art. L. 234-78",
+    "articles": 2,
+    "article_pk": 142261
+   }
+  ]
+ },
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": true,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": true,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [
+      {
+       "text": "Code du travail",
+       "kind": "code",
+       "act_id": "/eli/etat/leg/code/travail"
+      }
+     ],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "list",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Quels sont tous les congés spéciaux prévus par le Code du travail ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "congé spécial",
+      "Code du travail",
+      "congé extraordinaire",
+      "congé de paternité",
+      "congé pour raisons familiales"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [
+      "/eli/etat/leg/code/travail"
+     ],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 52,
+    "considered_lines": 60,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 3,
+      "by": "code"
+     },
+     {
+      "rule": "no_longer_in_force_at_the_date_asked",
+      "removed": 7,
+      "by": "code"
+     },
+     {
+      "rule": "not_in_the_store",
+      "removed": 1,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 1,
+     "replaces": 0,
+     "transposes": 0,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 8,
+     "articles_words": 12
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "",
+      "found_by": {
+       "named": 0,
+       "lines_words": 6,
+       "lines_meaning": 22
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "livre_ii.titre_iii",
+      "found_by": {
+       "lines_words": 1,
+       "lines_meaning": 1,
+       "articles_meaning": 1,
+       "articles_words": 2
+      },
+      "tally": 4,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00186",
+      "found_by": {
+       "articles_meaning": 5,
+       "articles_words": 1
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/loi/2021/01/22/a45",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 13,
+       "lines_meaning": 2
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/rgd/2023/10/06/a641",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 2
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/loi/2017/12/15/a1082",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 3,
+       "lines_meaning": 10
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/rgd/2017/10/28/a952",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/rgd/2008/12/19/n31",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 29,
+       "articles_words": 3
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/loi/2009/02/17/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/loi/1979/04/16/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 4,
+       "articles_words": 7
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/rgd/2025/10/16/a456",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/loi/2023/01/06/a16",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5,
+       "lines_meaning": 7
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/loi/2024/02/08/a66",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 15,
+       "lines_meaning": 5
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/loi/1985/12/24/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/loi/2016/11/03/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 8,
+       "lines_meaning": 6
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/rgd/2024/06/04/a243",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 6
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/loi/1990/11/09/n1",
+      "node_id": "livre_3.titre_2",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/rgd/2008/11/11/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 7
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/rgd/2010/08/03/n21",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 8,
+       "articles_words": 9
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/rgd/1987/10/21/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 14,
+       "articles_words": 8
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/loi/2005/08/03/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 10
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/loi/2016/12/23/n7",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 11
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/rgd/2010/08/03/n20",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 11
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/loi/1988/03/14/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 12
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "livre_ii.titre_iii",
+      "title": "Code du travail > LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux [CODE; code; public général; in_force] — Réglemente le repos hebdomadaire, jours fé",
+      "reason": "Partie du Code du travail qui traite directement des congés spéciaux et permet d’en recenser les catégories.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 4271
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/code/travail",
+    "node_start": "livre_ii.titre_iii",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 4766,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_iv",
+        "heading": "Chapitre IV. Congés spéciaux",
+        "tally": 10,
+        "reason": "Ce chapitre est spécifiquement intitulé 'Congés spéciaux' et contient la liste complète des congés spéciaux prévus par le Code du travail.",
+        "whole": true,
+        "stop": "list_node"
+       },
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_iii",
+        "heading": "Chapitre III. Congé annuel payé des salariés",
+        "tally": 9,
+        "reason": "Ce chapitre traite du congé annuel payé, qui est un type de congé mais pas forcément spécial, il peut contenir des informations complémentaires.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_v",
+        "heading": "Chapitre V. Compte épargne-temps ( L. 12 avril 2019 )",
+        "tally": 6,
+        "reason": "Ce chapitre traite du compte épargne-temps, qui peut inclure des congés extraordinaires liés au travail, potentiellement spéciaux.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_v.section_2",
+        "heading": "Section 2. Alimentation du compte épargne-temp s",
+        "tally": 5,
+        "reason": "Contient plusieurs articles sur l'alimentation du compte épargne-temps, mentionnant les congés prévus par le Code du travail.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_v.section_3",
+        "heading": "Section 3. Utilisation du compte épargne-temps",
+        "tally": 4,
+        "reason": "Traite de l'utilisation du compte épargne-temps, incluant les congés extraordinaires, ce qui peut correspondre aux congés spéciaux.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "livre_ii.titre_iii.chapitre_iv",
+      "heading": "Chapitre IV. Congés spéciaux",
+      "stopped": "list_node",
+      "articles": 77,
+      "read": "over budget: 8 of 77 articles read, ranked by question words inside the node"
+     },
+     {
+      "node_id": "livre_ii.titre_iii.chapitre_iii",
+      "heading": "Chapitre III. Congé annuel payé des salariés",
+      "stopped": "budget",
+      "articles": 20,
+      "read": "over budget: 8 of 20 articles read, ranked by meaning inside the node"
+     },
+     {
+      "node_id": "livre_ii.titre_iii.chapitre_v.section_2",
+      "heading": "Section 2. Alimentation du compte épargne-temp s",
+      "stopped": "leaf",
+      "articles": 3
+     },
+     {
+      "node_id": "livre_ii.titre_iii.chapitre_v.section_3",
+      "heading": "Section 3. Utilisation du compte épargne-temps",
+      "stopped": "leaf",
+      "articles": 1
+     }
+    ],
+    "articles": 4,
+    "stopped": "budget,leaf,list_node"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 142265,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142266,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142267,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142268,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142233,
+      "found_by": {
+       "outline": 51,
+       "words": 1,
+       "meaning": 1,
+       "words_all": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142238,
+      "found_by": {
+       "words": 2,
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142235,
+      "found_by": {
+       "words": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142236,
+      "found_by": {
+       "words": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142234,
+      "found_by": {
+       "outline": 52,
+       "words": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142237,
+      "found_by": {
+       "words": 6,
+       "meaning": 8,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142207,
+      "found_by": {
+       "outline": 55,
+       "words": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142211,
+      "found_by": {
+       "words": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142181,
+      "found_by": {
+       "outline": 50,
+       "words": 9,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142214,
+      "found_by": {
+       "words": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532546,
+      "found_by": {
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532551,
+      "found_by": {
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 370493,
+      "found_by": {
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 389715,
+      "found_by": {
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142215,
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 142218,
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 142208,
+      "found_by": {
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 142201,
+      "found_by": {
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 142210,
+      "found_by": {
+       "meaning": 7,
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 142195,
+      "found_by": {
+       "outline": 53,
+       "meaning": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142199,
+      "found_by": {
+       "meaning": 10
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 142229,
+      "found_by": {
+       "outline": 50
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142196,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142244,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142209,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142169,
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142176,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142182,
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142184,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142166,
+      "found_by": {
+       "outline": 55
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142171,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 142167,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 4099,
+    "candidates": [
+     {
+      "article_pk": 142233,
+      "label": "Art. L.234-50.",
+      "role": "rule",
+      "reason": "Établit le congé spécial pour raisons familiales.",
+      "found_by": {
+       "outline": 51,
+       "words": 1,
+       "meaning": 1,
+       "words_all": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "speciaux",
+       "prevus",
+       "conge",
+       "special",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142238,
+      "label": "Art. L.234-55.",
+      "role": "context",
+      "reason": "Traite contestation, pas liste congés spéciaux.",
+      "found_by": {
+       "words": 2,
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "travail",
+       "conge",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142215,
+      "label": "Art. L. 234-32.",
+      "role": "rule",
+      "reason": "Institue congé spécial de coopération au développement.",
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "matched": [
+       "conges",
+       "speciaux",
+       "conge",
+       "special"
+      ]
+     },
+     {
+      "article_pk": 142181,
+      "label": "Art. L. 233-16.",
+      "role": "rule",
+      "reason": "Définit congé extraordinaire pour raisons personnelles.",
+      "found_by": {
+       "outline": 50,
+       "words": 9,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "prevus",
+       "code",
+       "travail",
+       "conge",
+       "extraordinaire",
+       "paternite",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142218,
+      "label": "Art. L. 234-35.",
+      "role": "context",
+      "reason": "Complément sur durée congé coopération, pas liste.",
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "matched": [
+       "conges",
+       "speciaux",
+       "code",
+       "conge",
+       "special"
+      ]
+     },
+     {
+      "article_pk": 142234,
+      "label": "Art. L.234-51.",
+      "role": "condition",
+      "reason": "Condition d’éligibilité au congé pour raisons familiales.",
+      "found_by": {
+       "outline": 52,
+       "words": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "speciaux",
+       "code",
+       "conge",
+       "special",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142208,
+      "label": "Art. L. 234-25.",
+      "role": "rule",
+      "reason": "Institue congé spécial pour volontaires des services de secours.",
+      "found_by": {
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": true,
+      "matched": [
+       "conges",
+       "speciaux",
+       "conge",
+       "special"
+      ]
+     },
+     {
+      "article_pk": 142237,
+      "label": "Art. L.234-54.",
+      "role": "context",
+      "reason": "Détails sur congé pour raisons familiales, pas liste.",
+      "found_by": {
+       "words": 6,
+       "meaning": 8,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "travail",
+       "conge",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142201,
+      "label": "Art. L. 234-16.",
+      "role": "rule",
+      "reason": "Institue congé culturel comme congé spécial.",
+      "found_by": {
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": true,
+      "matched": [
+       "conges",
+       "travail",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 142207,
+      "label": "Art. L. 234-24.",
+      "role": "rule",
+      "reason": "Limite durée congé spécial volontaires secours.",
+      "found_by": {
+       "outline": 55,
+       "words": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "speciaux",
+       "prevus",
+       "code",
+       "conge",
+       "special"
+      ]
+     },
+     {
+      "article_pk": 142210,
+      "label": "Art. L. 234-27.",
+      "role": "context",
+      "reason": "Détails sur congé spécial volontaires, pas liste.",
+      "found_by": {
+       "meaning": 7,
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "matched": [
+       "conges",
+       "speciaux",
+       "conge",
+       "special"
+      ]
+     },
+     {
+      "article_pk": 142195,
+      "label": "Art. L. 234-10.",
+      "role": "rule",
+      "reason": "Définit bénéficiaires et but du congé culturel.",
+      "found_by": {
+       "outline": 53,
+       "meaning": 9
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "speciaux",
+       "code",
+       "conge",
+       "special",
+       "raisons"
+      ]
+     },
+     {
+      "article_pk": 532546,
+      "label": "Art. L. 234-50.",
+      "role": "reject",
+      "reason": "Duplicate C1, pas plus d’information.",
+      "found_by": {
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "speciaux",
+       "prevus",
+       "conge",
+       "special",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142235,
+      "label": "Art. L.234-52.",
+      "role": "condition",
+      "reason": "Durée du congé pour raisons familiales selon âge enfant.",
+      "found_by": {
+       "words": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "conge",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 532551,
+      "label": "Art. L. 234-55.",
+      "role": "context",
+      "reason": "Duplicate C2, pas liste congés.",
+      "found_by": {
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "travail",
+       "conge",
+       "raisons",
+       "familiales"
+      ]
+     },
+     {
+      "article_pk": 142265,
+      "label": "Art. L.235-3.",
+      "role": "reject",
+      "reason": "Compte épargne-temps, hors sujet congés spéciaux.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 142266,
+      "label": "Art. L.235-4.",
+      "role": "context",
+      "reason": "Alimentation compte épargne-temps, pas congés spéciaux.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "conges",
+       "prevus",
+       "travail",
+       "conge",
+       "raisons"
+      ]
+     },
+     {
+      "article_pk": 142267,
+      "label": "Art. L.235-5.",
+      "role": "reject",
+      "reason": "Limite compte épargne-temps, hors sujet congés spéciaux.",
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "matched": []
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 9,
+    "read_amount_set_by": "list",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "",
+      "lines": [],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": true,
+      "reason": "La liste complète figure dans les intitulés des sections 1 à 13 du chapitre IV, et non dans un article unique.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 0,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "none",
+    "budget": 1,
+    "loops": 0,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 0,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_complete",
+    "state": "answer"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 2172,
+    "tokens_in": 18,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 3278,
+    "model_ms": 3278,
+    "queue_ms": 0,
+    "tokens_in": 568,
+    "tokens_out": 100,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1111,
+    "model_ms": 1111,
+    "queue_ms": 0,
+    "tokens_in": 4056,
+    "tokens_out": 48,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1334,
+    "model_ms": 1334,
+    "queue_ms": 0,
+    "tokens_in": 624,
+    "tokens_out": 127,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 874,
+    "model_ms": 873,
+    "queue_ms": 0,
+    "tokens_in": 544,
+    "tokens_out": 87,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 3880,
+    "model_ms": 3880,
+    "queue_ms": 0,
+    "tokens_in": 3004,
+    "tokens_out": 432,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1459,
+    "model_ms": 1459,
+    "queue_ms": 0,
+    "tokens_in": 6271,
+    "tokens_out": 158,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.01931,
+  "ms": 28029,
+  "model_calls": 6,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "list",
+   "french": "Quels sont tous les congés spéciaux prévus par le Code du travail ?",
+   "legal_terms": [
+    "congé spécial",
+    "Code du travail",
+    "congé extraordinaire",
+    "congé de paternité",
+    "congé pour raisons familiales"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": []
+  },
+  "candidates": [
+   {
+    "article_pk": 142233,
+    "role": "rule",
+    "found_by": {
+     "outline": 51,
+     "words": 1,
+     "meaning": 1,
+     "words_all": 1,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 142238,
+    "role": "context",
+    "found_by": {
+     "words": 2,
+     "words_all": 4
+    }
+   },
+   {
+    "article_pk": 142215,
+    "role": "rule",
+    "found_by": {
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 142181,
+    "role": "rule",
+    "found_by": {
+     "outline": 50,
+     "words": 9,
+     "meaning": 3,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 142218,
+    "role": "context",
+    "found_by": {
+     "meaning": 4,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 142234,
+    "role": "condition",
+    "found_by": {
+     "outline": 52,
+     "words": 5
+    }
+   },
+   {
+    "article_pk": 142208,
+    "role": "rule",
+    "found_by": {
+     "meaning": 5,
+     "meaning_all": 5
+    }
+   },
+   {
+    "article_pk": 142237,
+    "role": "context",
+    "found_by": {
+     "words": 6,
+     "meaning": 8,
+     "meaning_all": 8
+    }
+   },
+   {
+    "article_pk": 142201,
+    "role": "rule",
+    "found_by": {
+     "meaning": 6,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 142207,
+    "role": "rule",
+    "found_by": {
+     "outline": 55,
+     "words": 7
+    }
+   },
+   {
+    "article_pk": 142210,
+    "role": "context",
+    "found_by": {
+     "meaning": 7,
+     "meaning_all": 7
+    }
+   },
+   {
+    "article_pk": 142195,
+    "role": "rule",
+    "found_by": {
+     "outline": 53,
+     "meaning": 9
+    }
+   },
+   {
+    "article_pk": 532546,
+    "role": "reject",
+    "found_by": {
+     "words_all": 2
+    }
+   },
+   {
+    "article_pk": 142235,
+    "role": "condition",
+    "found_by": {
+     "words": 3
+    }
+   },
+   {
+    "article_pk": 532551,
+    "role": "context",
+    "found_by": {
+     "words_all": 3
+    }
+   },
+   {
+    "article_pk": 142265,
+    "role": "reject",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 142266,
+    "role": "context",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 142267,
+    "role": "reject",
+    "found_by": {
+     "outline": 3
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 142233
+   },
+   {
+    "article_pk": 142215
+   },
+   {
+    "article_pk": 142181
+   },
+   {
+    "article_pk": 142208
+   },
+   {
+    "article_pk": 142201
+   },
+   {
+    "article_pk": 142207
+   },
+   {
+    "article_pk": 142195
+   },
+   {
+    "article_pk": 142234
+   },
+   {
+    "article_pk": 142235
+   }
+  ],
+  "replay": "eNrFWktv28oV_isDbpygsiJST8tAi8AxCqPuvW1uejdBQIzIkTQJRTIc0o8GAe62-266K7qq0Z9wd1f_pL-k35nhU6IkW3HbjS2O5vGdM-fxnSN-sW6sqd2xYmtqedFqFlkdy8PnIPJ4gM9-7XOMqdY8C0MRnN7YGPiM5z9mIlBMRWHK0ihTLBCKeVG4WD9gNF4_eJJndyxO1g83-DbmCWawi8gXzM9YmvAbLgP2Gzopw25Ozxmd2vapQ9v7yprOeaBEx8Ini4fqViQYT8oHF5DjQKQCozNr-v69PXDsyQhTsgBj7-0PHWv9EKwfVgL4cGbAWSBVKtgv_2IXSx7LNBHs6scuEG1C_uXnKftBeKmMQmYXE04_iiwUSgn2gl13mTNgkZdGM2zi9Hpj9pK0lMgVT-6tjoEeZkHwoaOBnQ2eHZhTTMD3UZLK-X4Aw2cH0C8BeFmQZokIjGZG7CMPb6RIoBinv18xTu_5cQ1qitHfB9hMsZsogKVymeAzPSuR3EhPP-CzF2WJ2ovUfn6kwxKp2cOLIsxLuP6SZ8yH54ggimNBB-1F5zy_5Y9KdHBdbGUCwU4E_f6zIxhXCHA9LOESwUaxOV_JANeKu9MGZw9JU55YGWe0Dzij0z97dqST6ib__dPfuOdlQu5X18B5dhBnZaiaR8nKWNHTY5UzmDx_EO1t6gfBmy9Cbdf5JY4Y8CgCeHYA4PD5g6ltN01txUOfp5TczFwDsY9xSQgnhxA-f6ywq3gfyHCRYQv5OcuTEUx-jliRmKB7UIEj-_nh9euxLBGU9RUFDf0txVsTROCyhBc4ebT-OSV3newCC2jhEqkd_1fWlIZAUILiEz58sZaC-9AGWMF-rDhBpmKl3DSiODa1-8WAWka3oRlADghTVwGz8N3ZvZuKu7Q8t2Ab0zTJwEpm95o1QdYXOQbFstCHXOlSaA2ykL6N5nogylLcmjjXD4lZwBSXvh7QSBj0Q08gGMWOLwvYUMIXi_ZzpWZl8ibBR9lNSWJ8kF0vF9-VN11l7sQlIlUp6BhCM5eJSl0OduHBWqbW6yTt6rn9wSntnn8DfJPywY0_QZ2ajH3tHIHaaUXdxnb2oTtroLO30Z0NjkLXb0X3BCq0V6W9JupeC-zhUbAHrbC_iSntE8RxDgkC4neUIMNWQZ5MpPaB72-A3zYecMGjwI9awbfyrH0AB_0GwPE2Puc41xu34vsmFrZDDhJj2LT20bYY_f5RYkxaxdhF0fZpejhqQOy3QDw7CuJZK8QnEbi9uM8OqXbgHIVbR6iWnHIEv9uHfzQ8iH9yHP4dOfEY-rdPgLF9IP-AxB4nQHt6fDo73IveOaT-4XEB0G5Pn99KHvfKMmnI4mzLMrK_fvjasURB9WJOzDLgUCNf0HZz6jzBHgSNz5NotdmtSqPNkQWiJFglVt3T9zUiCbqJ8TBitCGToSaAuCpFsk5ZGtESwCmG3PQ-FlrDSicu6MFbPmfzLRALHoDrJppmWl6TEGDCxiLqEpo5kCrhUYLLJK5QjWN6DOGSUKbrh2p4R_awQO_FnRdkCtIqQ_djkWAWYHlcibIT-DFLpPKlthmtQ5B1UGiqHnCneikU9ylvBlYNiaLsn2go-jI2ezp5l2xiN5fY20v6Az3kS42i6GJNNo4ab63rbWzdG28c1dtcUvXs8DzsI2JQj0d8hNOU5ww3wNC0ob11-Gi4uXI02p40ribhDhL4daHHXFe5inKJc6lyYXLAuYoMOOwS3OjaJRDgX7piSuKM2GNZP_1qhT-5USmJAkrg3KFTf3apdKI4BBV9EnGq46mu21DOuWb91BlQHAhgdqZa0oqbQqBYwMp8l6cuPM0lr3O5-iTIbBKxim7ovH4NkEWRLV8dRi6o8EIkrgxd5GRP7N9nvHOflHaghSqNtK-Ua-zGGqhMwU88khcBlq_yKZAj4HoUSoDbhSiDVP6o1ePewhOJo5QDK8FDHWf7Ff2ujU5qg_laG6TA4l5qNIgPJri_EoF8JRCNXyFWvCKcr6pYsC8HUOiTqdbAZuT5Nbu--vHtJbu66rK3l7-9vvz95XfvXr-7-v47dvmOXXz_3ZsreviBvblk796-_vH11TXWvDMV_tUVeysgf6eMeCJlH6kuoUSXSBoJ1g8LioDvL75_c3nOCPU5i7NZID2GJSGVB8E5K-71A_v3T39lb7Eo0KRFULhM6BBU4zM_WnGfglynOkbfIVc6FP2BNKnl25TzcybpM6p45mO9l4q80dIWrSEFIt8K_4hFiRAAPBGi_DLRnSOcLiKkcdUtPMgYP1nNSiqFe82bFhYmUDwfOGOb7LDwPz_ysrwEesL1qhTy7brhvLXhGrPFrHyApXwWiCbQjnUD_6SsRicPxhSFliLw3SgM7t2Akkb1u08qYmOIPnx-WTm9JiSx9Mj3ntIXaVCPg-0ilGHBvSldy2u-EKzYjyE75_PnxLT0rcoQB2ewPHayteUJ3S5FXEkzyy6b7iut_0nmcUQCJzu4XUZB2ZZCdIlzsuCGRRB6pIL0bbZpiHw0p2c8DME7gOZe53kg5QHXDlep7GyHxgo3yHIxG5t1tKeQUjNQIlAeYhH5PLBuUgC8Dp6adyoLftJhcLJYZEa3IpSJhiXDsoJSuY71Ot3UqGmttDWjNsHnT9DYDovSBrWKIer6AdeGKugUXh8XZbLDOKh4QOTVMPFcbaNHqK1lV6M4rQEZgkUlTUtqcjSERR0ceWlBHdAyqA1WGZjAV9neLjURj6WIUw9AndJLnW_y0ke0AV8HclXVBu1aYTVzHNb1WvhfTHRTUCQvciBTYKfBCX_E7tA5zcGMkJMv19T9aHf9NsM73I78Uwp6rfaLUeloUNPRu9zekAFPskfs0jF2t6mJDcNDqhaVpYIGYiwGc4W5UpjbCnwHVPVhK__NcVDwX8wHdHws_EZwbXThNHvmNAG8LmGzzF-IdMom9BPAeFzZGU3qoA4K4Rlsdl_WfkyTMCiTWK-uCv_nAbyS0aBvVs69PQI6vd0C5ozzGyR7zqhQu0eypEZ77__hgXvw2GTX1eNg-4I6tKbTzPYl1RMpwERJs9oSq5nwNVjs9kma3TTHMrMxT9yBGmr3uzedihwC09XIZstCO595fSjnIJgV0gluBR2mE6KWxzDVTaTqUR0qT2Yy1e_3NLiiJrC9M_CJ-tKN4r5jrf9CTFNS-GEb3YtdPYduW0-gU4Q-PaCMLXU08Si42laQ2no3xLoKFZHAbSiaz-z7WaK71YXoWG_WDwhsMmWtLZemeKZpElIirwS0GwJeVExI5zs_Q74qodbh1eTutrc-aLf8sy5X1g-BXMgZNJxSnClZ3qErKHsne3Sn93jEz1LdtgaM1iLWBSbH74fVJnfP3omw_LkPHrDawt3davZ0rGu5MnSurvlS0LqMmzLVO0TtMrVt0yJQ7WWwysBmuiaeS6zXp6NamSFTV2y9ELXb0o7CPlmMyppamhe2OZIoljaMGhfvtjeuaLlWh3_IaqAUSMbW_1igAgvnPPeazbZXA4_T4sPdls6YcY8WfrNEEIWaP4p0TwioN9Q6ViMd7aBNBGrPfuMasNxovKPwfaiHWp3BN-Js2QYy6d3Ub77LV-Z9CJG6enregTbNpc8ZygZfR_acK0y_1FMXaWPJqRc3mPR6uidVteh1m-orjsEBft5sMi91zmmkSCTFOxdu25dVt7_AZFrHJY-93i6x53Kh6yPsp7lqWa8XAcUzBaPN1n-nn3vIHCte2CGfCCna0XqUqUVezELqAHStrxuangtq1otGAibOncjFghodyK2hbpDkCoQBBwjBeY8PVyxS5SKqu0tivpTwhIqCG72Ux_ErnKC68f2UCaw37Rb2QiH9MiTwcxYhTSfsOrtDzoc3LWgU9U7os8ssiWKwMjNCDZgO46lO6_pXCd3XfAnKvhReTuJM_ywRC3HHorB8jUUkJyonrrdLEUI9Gsw5CwVxRM4KG1tqueiCqBdKRxbXNc-UaD64-kUcrQUlcPuBisz38C0R5j8TfLFkODMGoTdntzJd5j02crqT_OsTun9cfRKtctS4lkT4p2l0Crlk6Iu7KbTCys2pzcACfste6FEPdS2NRnN8z5RMVUGBivtPl1CeBwdV5gRE1pfn7Hfiz0senpQVJrNt7BwE0a2i14E0OIQ52CDyNqMGGP3KJHQ0NiK2y1VNOQFuph9xR_QDTvG2EQUhRprcJGssRu2uyjkAh0qdVTt29Gn5otpB8A39VhRTHgzH-lq3c92nh5-F3v2Goefmoy_ST3Lmqu_ZdMU5hUDFYbszUZYGxteZxJHURtCKYXLOSO8wVwbDD6Qwdkxjt5oNLWiBftEq1D-q6Z5uYaiVTW8QZE8qk37qqAtwW2-ZaxVUL6PrpivVRZOeg5CZKRK027PP-vDjMDfYrPjZLykaJ_8BJU-W9Q"
+ }
+}

@@ -40,7 +40,7 @@ function Table({ columns, rows, mark }) {
 }
 
 /** The results in `lex-results/2`, drawn whole. */
-export function Results2View({ results, locale = CHROME_LOCALE }) {
+export function Results2View({ results, locale = CHROME_LOCALE, note = null }) {
   const table = nextCopy(locale);
   const copy = table.results2;
   const dataLang = locale === 'fr' ? undefined : 'fr';
@@ -80,6 +80,7 @@ export function Results2View({ results, locale = CHROME_LOCALE }) {
   return (
     <div data-next-page="results" data-next-state="ready" data-results-schema={RESULTS_SCHEMA} data-run={results.run ?? ''}>
       <h1>{table.results.heading}</h1>
+      {note}
 
       {set === null && scoring === null && runLine === null ? null : (
         <section aria-labelledby="results2-set" data-results2-section="set">

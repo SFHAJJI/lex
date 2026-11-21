@@ -80,6 +80,16 @@ const Q = {
 };
 // The pages builder's preview of 21/11/2026: this branch's pages, the answers in the engine's contract served from the
 // fixtures they are checked against (`preview-server.mjs`): four answers the funnel really gave, and one fixture a state.
+// pages2: the questions asked tonight of the shipped pipeline, answered from their fixtures (test/next-fixtures/funnel-real/b1-*).
+const B1 = {
+  listHeadings: "Quels sont tous les congés spéciaux prévus par le Code du travail ?",
+  compound: "Quel est le délai de préavis du bailleur pour résilier un bail d'habitation et quel est le montant maximal de la garantie locative ?",
+  clarify: "Préavis ?",
+  notHeld: "En 2014, quelle était la durée du congé de paternité ?",
+  solvency: "Comment est calculé le capital de solvabilité requis selon la directive Solvabilité II ?",
+  css: "Qui est assuré obligatoirement à l'assurance maladie selon le Code de la sécurité sociale ?",
+  partial: "Quel est le délai pour déclarer un sinistre à mon assureur habitation ?",
+};
 const P = {
   exception: "Mon assureur peut-il suspendre ma garantie si je ne paie pas ma prime ?",
   list: "Quelles mentions la police d'assurance doit-elle contenir ?",
@@ -127,6 +137,27 @@ SHOTS.push(
   ["p-en-03-ask-exception--tall", "/en/radar.html", 1366, 3600, false, false, ASK(P.exception), 9000],
   ["p-en-16-how--1366x768", "/en/evidence.html", 1366, 768, false, false, null, 5000],
   ["p-en-22-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 5000],
+  // pages2 (21/11/2026): the answers the shipped pipeline (combo + refs) gave tonight, and the pages changed.
+  ["q-fr-01-list-headings--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(B1.listHeadings), 9000],
+  ["q-fr-02-list-headings--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.listHeadings), 9000],
+  ["q-fr-03-compound--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.compound), 9000],
+  ["q-fr-04-compound-trace--tall", "/fr/radar.html", 1366, 7000, false, false, ASK_THEN(B1.compound, OPEN_TRACE), 9000],
+  ["q-fr-05-partial--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.partial), 9000],
+  ["q-fr-06-not-held-2014--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.notHeld), 9000],
+  ["q-fr-07-css--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(B1.css), 9000],
+  ["q-fr-08-solvency-held--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.solvency), 9000],
+  ["q-fr-09-text-css-from-engine--1366x768", `/fr/text.html?text=${encodeURIComponent("/lu-legilux/code-securite-sociale")}&article=art_1er`, 1366, 768, false, false, null, 8000],
+  ["q-fr-10-text-solvency-from-engine--1366x768", `/fr/text.html?text=32009L0138&article=001`, 1366, 768, false, false, null, 8000],
+  ["q-fr-11-clarify-real--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(B1.clarify), 6000],
+  ["q-fr-12-list-headings--phone", "/fr/radar.html", 390, 844, true, false, ASK(B1.listHeadings), 9000],
+  ["q-fr-13-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 6000],
+  ["q-fr-14-coverage--1366-whole", "/fr/coverage.html", 1366, 768, false, true, null, 6000],
+  ["q-fr-15-results-build--1366x768", "/fr/results.html", 1366, 768, false, false, null, 5000],
+  ["q-fr-16-how--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 5000],
+  ["q-fr-17-decisions-tab--1366x768", "/fr/decisions.html", 1366, 768, false, false, null, 5000],
+  ["q-fr-18-modifications--1366x768", "/fr/radar.html", 1366, 768, false, false, null, 8000],
+  ["q-en-01-compound--tall", "/en/radar.html", 1366, 3600, false, false, ASK(B1.compound), 9000],
+  ["q-en-02-coverage--1366-whole", "/en/coverage.html", 1366, 768, false, true, null, 6000],
 );
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -1,0 +1,207 @@
+{
+ "state": "clarify",
+ "outcome": "clarify",
+ "pipeline": "combo",
+ "question": "Préavis ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [],
+ "missing": null,
+ "not_held": [],
+ "clarify": {
+  "question": "De quel type de préavis s’agit-il ?",
+  "options": [
+   "Préavis de travail",
+   "Préavis de bail",
+   "Préavis d’assurance"
+  ],
+  "by": "model, gated by code (two content words or fewer)"
+ },
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": false,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "other",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Préavis ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "vague_question_one_clarification",
+    "state": "clarify"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 412,
+    "tokens_in": 4,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1271,
+    "model_ms": 1271,
+    "queue_ms": 0,
+    "tokens_in": 555,
+    "tokens_out": 87,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.00012,
+  "ms": 1274,
+  "model_calls": 1,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "other",
+   "french": "Préavis ?",
+   "legal_terms": [],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": []
+  },
+  "candidates": [],
+  "read": [],
+  "replay": "eNqNUkuOnDAQvYrlVSLREaBoIrHJJgeYfWuECrugnRib8YceNGop18gRco7cZE6SKmg6o15lRdWjPq-e36ucZVMVcpKNVH7svCykoth6BZZi_S6eqFT22Tm0h7ki4Jnyx_DnN8wmiq9cnQmpy_rhUFWHmkt0lE0PNmIhI6-wEEy_0I9A2QxDxvY5Y0zGu9Y7bLcCo4ARKutkc3wqpDtt31E2LltLHK1sXuXeSrO-oaDMirRMKDSKaecV337-gsGkg7ErRz9xB5E5_uNO9SnADIbPfI929xAPizEHcAolEeoW2j16jbYQAyTUoluEolx8SGdPkUvokjj7oKPwQfR4xvBRXgpp91NwDybgmyy4IcOArHVgBWkq433w4726yd8jQwDDcmhgkRO-pH36yZ8Jd17wQGGcSKdVslXARiTPLcTr9hysJHV4qmMefUCnTvcvbnEA2yYMY9xeCF-UzfGqMOUThugd1SiIePPC9xxM1EZdH8_51EYwmk0GIa2tROXHNiLo7WvJf0cSCGe0fCIqE68uWVb7amRjZYv_562YVmlvprywwWh3VX_5XMgcaW35qSzLqiYDXq_Lu5xh2qLLX5OkEqk"
+ }
+}

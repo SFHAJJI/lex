@@ -1,0 +1,238 @@
+{
+ "act_id": "celex:32009L0138",
+ "work": "32009L0138",
+ "title": "Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'assurance et de la réassurance et leur exercice (solvabilité II) (refonte) (Texte présentant de l'intérêt pour l'EEE)",
+ "type": "DIR",
+ "europe": true,
+ "asked": "2026-11-21",
+ "before_first_held": false,
+ "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+ "versions": [
+  {
+   "id": 11211,
+   "from": "2009-11-25",
+   "until": "2025-01-16",
+   "articles": 312
+  },
+  {
+   "id": 11212,
+   "from": "2025-01-17",
+   "until": "2027-01-29",
+   "articles": 334
+  },
+  {
+   "id": 11213,
+   "from": "2027-01-30",
+   "until": null,
+   "articles": 364
+  }
+ ],
+ "version": {
+  "id": 11212,
+  "from": "2025-01-17",
+  "until": "2027-01-29",
+  "until_known": true,
+  "articles": 349
+ },
+ "source": {
+  "identity_from": "formex",
+  "ocr": false,
+  "pdf": false
+ },
+ "contents": [
+  {
+   "publisher_id": "001",
+   "number": "premier",
+   "heading": "Objet",
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "002",
+   "number": "2",
+   "heading": "Champ d'application",
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "003",
+   "number": "3",
+   "heading": "Régimes légaux",
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "004",
+   "number": "4",
+   "heading": "Exclusion du champ d'application en raison de la taille",
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "005",
+   "number": "5",
+   "heading": "Opérations",
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "006",
+   "number": "6",
+   "heading": "Assistance",
+   "kind": "article",
+   "page": 1
+  }
+ ],
+ "page": {
+  "number": 1,
+  "pages": 6,
+  "size": 60,
+  "articles": [
+   {
+    "publisher_id": "001",
+    "article_pk": 443649,
+    "number": "premier",
+    "heading": "Objet",
+    "kind": "article",
+    "official_source": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+    "lines": [
+     {
+      "n": 1,
+      "text": "La présente directive établit des règles concernant:",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "1) l'accès aux activités non salariées de l'assurance directe et de la réassurance ainsi que leur exercice, au sein de la Communauté;",
+      "label": "1)"
+     },
+     {
+      "n": 3,
+      "text": "2) le contrôle des groupes d'assurance et de réassurance;",
+      "label": "2)"
+     },
+     {
+      "n": 4,
+      "text": "3) l'assainissement et la liquidation des entreprises d'assurance directe.",
+      "label": "3)"
+     }
+    ]
+   },
+   {
+    "publisher_id": "002",
+    "article_pk": 443650,
+    "number": "2",
+    "heading": "Champ d'application",
+    "kind": "article",
+    "official_source": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+    "lines": [
+     {
+      "n": 1,
+      "text": "1. La présente directive s'applique aux entreprises d'assurance directe vie et non-vie qui sont établies sur le territoire d'un État membre ou qui désirent s'y établir.",
+      "label": "1."
+     },
+     {
+      "n": 2,
+      "text": "Elle s'applique également, à l'exception du titre IV, aux entreprises de réassurance, qui n'exercent que des activités de réassurance et qui sont établies dans un État membre ou qui désirent s'y établir.",
+      "label": null
+     },
+     {
+      "n": 3,
+      "text": "2. Pour ce qui concerne l'assurance non-vie, la présente directive s'applique aux activités des branches qui figurent à l'annexe I, partie A. Aux fins du paragraphe 1, premier alinéa, l'assurance non-vie inclut l'activité consistant à fournir une assistance aux personnes en difficulté au cours de déplacements, d'absences de leur domicile ou de leur résidence habituelle. Elle comporte, moyennant le paiement préalable d'une prime, l'engagement de mettre immédiatement une aide à la disposition du bénéficiaire d'un contrat d'assistance lorsque celui-ci se trouve en difficulté par suite d'un événement fortuit, dans les cas et dans les conditions prévus par le contrat.",
+      "label": "2."
+     },
+     {
+      "n": 4,
+      "text": "L'aide peut comporter des prestations en espèces ou en nature. Les prestations en nature peuvent également être fournies par l'utilisation du personnel ou du matériel propres au prestataire.",
+      "label": null
+     },
+     {
+      "n": 5,
+      "text": "L'activité d'assistance ne couvre pas les services d'entretien ou de maintenance, les services après-vente ou la simple indication ou mise à disposition, en tant qu'intermédiaire, d'une aide.",
+      "label": null
+     },
+     {
+      "n": 6,
+      "text": "3. Pour ce qui concerne l'assurance vie, la présente directive s'applique:",
+      "label": "3."
+     },
+     {
+      "n": 7,
+      "text": "a) aux activités d'assurance vie suivantes, lorsqu'elles découlent d'un contrat:",
+      "label": "a)"
+     },
+     {
+      "n": 8,
+      "text": "i) l'assurance «vie», qui comprend l'assurance en cas de vie, l'assurance en cas de décès, l'assurance mixte, l'assurance sur la vie avec contre-assurance, l'assurance «nuptialité», l'assurance «natalité»;",
+      "label": "i)"
+     },
+     {
+      "n": 9,
+      "text": "ii) l'assurance de rente;",
+      "label": "ii)"
+     },
+     {
+      "n": 10,
+      "text": "iii) les assurances complémentaires souscrites en complément d'une assurance vie, et notamment les assurances «atteintes corporelles y compris l'incapacité de travail professionnel», les assurances «décès à la suite d'accident» et les assurances «invalidité à la suite d'accident ou de maladie»;",
+      "label": "iii)"
+     },
+     {
+      "n": 11,
+      "text": "iv) les types d'assurance-maladie permanente, non résiliable, pratiquée actuellement en Irlande et au Royaume-Uni;",
+      "label": "iv)"
+     },
+     {
+      "n": 12,
+      "text": "b) aux opérations suivantes lorsqu'elles découlent d'un contrat, pour autant qu'elles soient soumises au contrôle des autorités chargées du contrôle des assurances privées:",
+      "label": "b)"
+     },
+     {
+      "n": 13,
+      "text": "i) les opérations comportant la constitution d'associations réunissant des adhérents en vue de capitaliser en commun leurs cotisations et de répartir ensuite l'avoir ainsi constitué soit entre les survivants, soit entre les ayants droit des décédés (opérations tontinières);",
+      "label": "i)"
+     },
+     {
+      "n": 14,
+      "text": "ii) les opérations de capitalisation basées sur une technique actuarielle comportant, en échange de versements uniques ou périodiques fixés à l'avance, des engagements déterminés quant à leur durée et à leur montant;",
+      "label": "ii)"
+     },
+     {
+      "n": 15,
+      "text": "iii) les opérations de gestion de fonds collectifs de retraite, comprenant la gestion des placements et notamment des actifs représentatifs des réserves des organismes qui fournissent des prestations en cas de décès, en cas de vie ou en cas de cessation ou de réduction d'activités;",
+      "label": "iii)"
+     },
+     {
+      "n": 16,
+      "text": "iv) les opérations visées au point iii) lorsqu'elles sont assorties d'une garantie d'assurance portant soit sur la conservation du capital, soit sur le service d'un intérêt minimal;",
+      "label": "iv)"
+     },
+     {
+      "n": 17,
+      "text": "v) les opérations effectuées par des entreprises d'assurance vie, telles que celles visées par le code français des assurances au livre IV, titre 4, chapitre 1;",
+      "label": "v)"
+     },
+     {
+      "n": 18,
+      "text": "c) aux opérations dépendant de la durée de la vie humaine, définies ou prévues par la législation des assurances sociales, pour autant qu'elles soient pratiquées ou gérées par des entreprises d'assurance vie et à leur propre risque, en conformité avec la législation d'un État membre.",
+      "label": "c)"
+     }
+    ]
+   },
+   {
+    "publisher_id": "003",
+    "article_pk": 443651,
+    "number": "3",
+    "heading": "Régimes légaux",
+    "kind": "article",
+    "official_source": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32009L0138",
+    "lines": [
+     {
+      "n": 1,
+      "text": "La présente directive ne concerne pas les assurances faisant partie d'un régime légal de sécurité sociale, sans préjudice de l'article 2, paragraphe 3, point c).",
+      "label": null
+     }
+    ]
+   }
+  ]
+ }
+}

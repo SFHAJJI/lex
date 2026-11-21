@@ -1,0 +1,1553 @@
+{
+ "state": "not_held",
+ "outcome": "not_held",
+ "pipeline": "combo",
+ "question": "En 2014, quelle était la durée du congé de paternité ?",
+ "date_used": "2014-01-01..2014-12-31",
+ "date_said": true,
+ "blocks": [
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "32006L0054",
+   "anchor": "016",
+   "date": "2006-07-05",
+   "why": "passage le plus proche: Directive européenne mentionne congé paternité sans durée précise.",
+   "act_title": "Directive 2006/54/CE du Parlement européen et du Conseil du 5 juillet 2006 relative à la mise en œuvre du principe de l'égalité des chances et de l'égalité de traitement entre hommes et femmes en matière d'emploi et de travail (refonte)",
+   "act_id": "celex:32006L0054",
+   "article": "Article 16",
+   "number": "16",
+   "heading": "Congé de paternité ou d'adoption",
+   "path": "TITRE II DISPOSITIONS SPÉCIFIQUES > CHAPITRE 3 Égalité de traitement en ce qui concerne l'accès à l'emploi, à la formation et à la promotion professionnelles, et les conditions de travail",
+   "version_from": "2006-07-05",
+   "version_to": "2026-06-18",
+   "article_since": null,
+   "official": "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32006L0054",
+   "article_pk": 389670,
+   "lines": [
+    1
+   ],
+   "wording_since": "2006-07-05",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 16",
+   "text": [
+    "La présente directive est aussi sans préjudice de la faculté dont disposent les États membres de reconnaître des droits distincts au congé de paternité et/ou d'adoption. Les États membres qui reconnaissent de tels droits prennent les mesures nécessaires pour protéger les travailleurs et travailleuses du licenciement résultant de l'exercice de ces droits et pour veiller à ce que, à l'issue de ce congé, ils aient le droit de retrouver leur emploi ou un emploi équivalent à des conditions qui ne leur soient pas moins favorables et de bénéficier de toute amélioration des conditions de travail à laquelle ils auraient eu droit durant leur absence."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "La présente directive est aussi sans préjudice de la faculté dont disposent les États membres de reconnaître des droits distincts au congé de paternité et/ou d'adoption. Les États membres qui reconnaissent de tels droits prennent les mesures nécessaires pour protéger les travailleurs et travailleuses du licenciement résultant de l'exercice de ces droits et pour veiller à ce que, à l'issue de ce congé, ils aient le droit de retrouver leur emploi ou un emploi équivalent à des conditions qui ne leur soient pas moins favorables et de bénéficier de toute amélioration des conditions de travail à laquelle ils auraient eu droit durant leur absence.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 10913,
+    "from": "2006-07-05",
+    "until": "2026-06-18",
+    "until_known": true
+   },
+   "found_by": {
+    "words_all": 1,
+    "meaning_all": 7
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "candidate": true
+  }
+ ],
+ "missing": null,
+ "not_held": [
+  {
+   "name": "Directive 2006/54/CE du Parlement européen et du Conseil du 5 juillet 2006 relative à la mise en œuvre du principe de l'égalité des chances et de l'égalité de …",
+   "act_id": "celex:32006L0054",
+   "why": "the wording held applies from 2006-07-05 until 2026-06-18; the wording in force on 2014-01-01 is not held",
+   "by": "code"
+  }
+ ],
+ "clarify": null,
+ "evidence": {
+  "coverage": "Lex tient 20 741 textes luxembourgeois, dont 16 666 des 17 787 lois et règlements grand-ducaux que l'éditeur marque en vigueur, et 492 textes européens; un texte qui n'est pas tenu n'est pas cherché.",
+  "coverage_source": "data/coverage.json (2026-11-21 19:34:50)",
+  "coverage_detail": {
+   "held": {
+    "luxembourg_acts": 20741,
+    "eu_acts": 492,
+    "luxembourg_versions": 23258,
+    "eu_versions": 766
+   },
+   "in_force": {
+    "held": 16666,
+    "listed": 17787,
+    "what": "laws and grand-ducal regulations the publisher marks in force"
+   },
+   "not_held_named": [
+    "Loi du 9 juillet 1937 sur l’impôt sur les assurances"
+   ],
+   "date_floor_of_the_texts_picked": [
+    {
+     "act_id": "/eli/etat/leg/code/travail",
+     "first_held": "2020-11-01"
+    }
+   ]
+  },
+  "terms": [
+   {
+    "term": "2014",
+    "variants": [
+     "2014*"
+    ],
+    "hits": 9488
+   },
+   {
+    "term": "etait",
+    "variants": [
+     "etait*"
+    ],
+    "hits": 1129
+   },
+   {
+    "term": "duree",
+    "variants": [
+     "duree*"
+    ],
+    "hits": 10332
+   },
+   {
+    "term": "conge",
+    "variants": [
+     "conge*"
+    ],
+    "hits": 2525
+   },
+   {
+    "term": "paternite",
+    "variants": [
+     "patern*"
+    ],
+    "hits": 87
+   }
+  ],
+  "sweep": {
+   "acts": 0,
+   "articles": 0,
+   "articles_in_the_texts_picked": 0,
+   "grade": "medium: the terms never appear together"
+  },
+  "closest": {
+   "article_pk": 389670,
+   "label": "Article 16",
+   "act_title": "Directive 2006/54/CE du Parlement européen et du Conseil du 5 juillet 2006 relative à la mise en œuvre du principe de …",
+   "why_not": "La directive mentionne le congé de paternité sans en fixer la durée."
+  }
+ },
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": false,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2014-01-01",
+      "to": "2014-12-31",
+      "grain": "year",
+      "text": "2014",
+      "how": "a year alone is the whole year"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "value",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "En 2014, quelle était la durée du congé de paternité ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "congé de paternité"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 78,
+    "considered_lines": 80,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 3,
+      "by": "code"
+     },
+     {
+      "rule": "not_in_the_store",
+      "removed": 5,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "replaces": 0,
+     "transposes": 7,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 15,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/rgd/1963/07/10/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 1
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/loi/2016/11/03/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 19,
+       "lines_meaning": 1,
+       "articles_meaning": 4
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "livre_ii.titre_iii",
+      "found_by": {
+       "lines_words": 7,
+       "lines_meaning": 27,
+       "articles_meaning": 1,
+       "articles_words": 5
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "celex:32006L0054",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 3,
+       "articles_words": 1
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_8",
+      "found_by": {
+       "lines_words": 2,
+       "articles_words": 2
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/loi/1999/02/12/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 2
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00348",
+      "found_by": {
+       "lines_meaning": 21,
+       "articles_meaning": 2
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/rgd/1975/12/30/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 3
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/loi/2021/01/22/a45",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/loi/1979/04/16/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 6,
+       "articles_words": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/rgd/1987/10/21/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4,
+       "articles_words": 8
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/loi/2020/06/20/a533",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/rgd/2014/11/21/n16",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/rgd/1996/02/21/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/loi/2006/12/22/n18",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 5,
+       "articles_meaning": 10
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/loi/2015/03/25/n5",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/loi/2021/05/20/a392",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 6,
+       "lines_meaning": 6
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/loi/2014/05/23/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/loi/1973/10/04/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 7
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/loi/2023/07/29/a524",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 24,
+       "articles_meaning": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/rgd/2012/02/03/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 7
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/loi/2020/11/23/a922",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 11,
+       "lines_meaning": 8
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/loi/1985/12/24/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 8
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/rgd/2013/07/19/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 9
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/code/travail",
+      "node_id": "livre_ii.titre_iii",
+      "title": "Code du travail > LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux [CODE; code; public général; in_force] — Réglemente le repos hebdomadaire, jours fé",
+      "reason": "La partie du Code du travail sur les repos et congés est la source générale la plus susceptible de fixer le congé de paternité applicable en 2014.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1519
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/code/travail",
+    "node_start": "livre_ii.titre_iii",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 736,
+    "held_only_later": true,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_iv",
+        "heading": "Chapitre IV. Congés spéciaux",
+        "tally": 2,
+        "reason": "Le Chapitre IV traite des congés spéciaux, ce qui inclut généralement le congé de paternité, et contient le mot 'congé' et 'durée'.",
+        "whole": true,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 14,
+      "picked": [
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_iv.section_7",
+        "heading": "Section 7. Congé pour raisons familiales",
+        "tally": 2,
+        "reason": "Cette section traite des congés pour raisons familiales, ce qui inclut généralement le congé de paternité, et contient des articles spécifiques sur la durée du congé.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "livre_ii.titre_iii.chapitre_iv.section_6",
+        "heading": "Section 6. Congé parental",
+        "tally": 2,
+        "reason": "La section sur le congé parental peut contenir des dispositions relatives au congé de paternité, notamment sa durée.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "__own__livre_ii.titre_iii.chapitre_iv",
+        "heading": "Chapitre IV. Congés spéciaux (articles placés directement sous cet intitulé)",
+        "tally": 1,
+        "reason": "Le chapitre IV regroupe les congés spéciaux, il peut contenir des articles spécifiques sur le congé de paternité et sa durée.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "livre_ii.titre_iii.chapitre_iv.section_7",
+      "heading": "Section 7. Congé pour raisons familiales",
+      "stopped": "leaf",
+      "articles": 6
+     },
+     {
+      "node_id": "livre_ii.titre_iii.chapitre_iv.section_6",
+      "heading": "Section 6. Congé parental",
+      "stopped": "leaf",
+      "articles": 8
+     },
+     {
+      "node_id": "__own__livre_ii.titre_iii.chapitre_iv",
+      "heading": "Chapitre IV. Congés spéciaux (articles placés directement sous cet intitulé)",
+      "stopped": "leaf",
+      "articles": 7
+     }
+    ],
+    "articles": 21,
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 18303,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18304,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18305,
+      "found_by": {
+       "outline": 3,
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18306,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18307,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18308,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18296,
+      "found_by": {
+       "outline": 7,
+       "meaning": 6,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18297,
+      "found_by": {
+       "outline": 8,
+       "words": 5,
+       "meaning": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18298,
+      "found_by": {
+       "outline": 9,
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18299,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18300,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18301,
+      "found_by": {
+       "outline": 12,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18302,
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330083,
+      "found_by": {
+       "outline": 14
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330081,
+      "found_by": {
+       "outline": 15
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330084,
+      "found_by": {
+       "outline": 16
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330085,
+      "found_by": {
+       "outline": 17
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330087,
+      "found_by": {
+       "outline": 18
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330088,
+      "found_by": {
+       "outline": 19
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330089,
+      "found_by": {
+       "outline": 20
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 330091,
+      "found_by": {
+       "outline": 21
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18328,
+      "found_by": {
+       "words": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18152,
+      "found_by": {
+       "words": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18327,
+      "found_by": {
+       "words": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18277,
+      "found_by": {
+       "words": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18319,
+      "found_by": {
+       "words": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 389670,
+      "found_by": {
+       "words_all": 1,
+       "meaning_all": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 485798,
+      "found_by": {
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 18249,
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 3249,
+    "candidates": [
+     {
+      "article_pk": 18297,
+      "label": "Art. L. 234-44.",
+      "role": "reject",
+      "reason": "Congé parental, pas spécifiquement congé paternité.",
+      "found_by": {
+       "outline": 8,
+       "words": 5,
+       "meaning": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 389670,
+      "label": "Article 16",
+      "role": "context",
+      "reason": "Directive européenne mentionne congé paternité sans durée précise.",
+      "found_by": {
+       "words_all": 1,
+       "meaning_all": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "conge",
+       "paternite"
+      ]
+     },
+     {
+      "article_pk": 18249,
+      "label": "Art. L. 233-16.",
+      "role": "reject",
+      "reason": "Congé extraordinaire, pas congé paternité.",
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18305,
+      "label": "Art. L.234-52.",
+      "role": "reject",
+      "reason": "Congé pour raisons familiales, pas congé paternité.",
+      "found_by": {
+       "outline": 3,
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18301,
+      "label": "Art. L. 234-48.",
+      "role": "reject",
+      "reason": "Congé parental, pas congé paternité.",
+      "found_by": {
+       "outline": 12,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18298,
+      "label": "Art. L. 234-45",
+      "role": "reject",
+      "reason": "Congé parental, pas congé paternité.",
+      "found_by": {
+       "outline": 9,
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18296,
+      "label": "Art. L. 234-43.",
+      "role": "reject",
+      "reason": "Congé parental, pas congé paternité.",
+      "found_by": {
+       "outline": 7,
+       "meaning": 6,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18328,
+      "label": "Art. L. 234-75.",
+      "role": "reject",
+      "reason": "Congé linguistique, hors sujet.",
+      "found_by": {
+       "words": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18152,
+      "label": "Art. L. 212-9.",
+      "role": "reject",
+      "reason": "Durée travail, pas congé paternité.",
+      "found_by": {
+       "words": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "etait",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18327,
+      "label": "Art. L. 234-74.",
+      "role": "reject",
+      "reason": "Congé linguistique, hors sujet.",
+      "found_by": {
+       "words": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18303,
+      "label": "Art. L.234-50.",
+      "role": "reject",
+      "reason": "Congé pour raisons familiales, hors congé paternité.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18304,
+      "label": "Art. L.234-51.",
+      "role": "reject",
+      "reason": "Congé pour raisons familiales, hors congé paternité.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18306,
+      "label": "Art. L.234-53.",
+      "role": "reject",
+      "reason": "Congé pour raisons familiales, hors congé paternité.",
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18307,
+      "label": "Art. L.234-54.",
+      "role": "reject",
+      "reason": "Congé pour raisons familiales, hors congé paternité.",
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18308,
+      "label": "Art. L.234-55.",
+      "role": "reject",
+      "reason": "Congé pour raisons familiales, hors congé paternité.",
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18299,
+      "label": "Art. L. 234-46.",
+      "role": "reject",
+      "reason": "Congé parental, pas congé paternité.",
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "matched": [
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18300,
+      "label": "Art. L. 234-47.",
+      "role": "reject",
+      "reason": "Congé parental, pas congé paternité.",
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "matched": [
+       "duree",
+       "conge"
+      ]
+     },
+     {
+      "article_pk": 18302,
+      "label": "Art. L. 234-49.",
+      "role": "reject",
+      "reason": "Article vide ou non pertinent.",
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "matched": []
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 1,
+    "read_amount_set_by": "outline node",
+    "rounds": [
+     {
+      "answer_found": false,
+      "complete_answer_found": false,
+      "article": "",
+      "lines": [],
+      "missing": "Durée du congé de paternité au Luxembourg en 2014.",
+      "conflicting_evidence": false,
+      "text_reach": "none",
+      "answer_outside_held_texts": "Code du travail luxembourgeois, article L. 233-16 dans sa version applicable en 2014",
+      "items_are_headings": false,
+      "reason": "La directive mentionne le congé de paternité sans en fixer la durée.",
+      "pending_references": [],
+      "lines_refused": []
+     },
+     {
+      "answer_found": false,
+      "complete_answer_found": false,
+      "article": "",
+      "lines": [],
+      "missing": "Durée du congé de paternité au Luxembourg en 2014.",
+      "conflicting_evidence": false,
+      "text_reach": "none",
+      "answer_outside_held_texts": "Code du travail luxembourgeois, article L. 233-16 dans sa version applicable en 2014",
+      "items_are_headings": false,
+      "reason": "La directive ne fixe pas de durée et les articles du Code du travail présentés concernent d’autres congés.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 0,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "complete_answer_found = false",
+    "budget": 1,
+    "loops": 1,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [
+     {
+      "from": "missing",
+      "to": "Art. L. 234-75.",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Durée du congé de paternité au Luxembourg en 2014. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 18328
+     },
+     {
+      "from": "missing",
+      "to": "Art. L. 234-43.",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Durée du congé de paternité au Luxembourg en 2014. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 18296
+     },
+     {
+      "from": "missing",
+      "to": "Art. L. 234-23.",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Durée du congé de paternité au Luxembourg en 2014. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 18276
+     }
+    ],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 0,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "text_held_only_from_a_later_date",
+    "state": "not_held"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 181,
+    "tokens_in": 18,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 941,
+    "model_ms": 941,
+    "queue_ms": 0,
+    "tokens_in": 569,
+    "tokens_out": 82,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1154,
+    "model_ms": 1154,
+    "queue_ms": 0,
+    "tokens_in": 4142,
+    "tokens_out": 59,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 741,
+    "model_ms": 741,
+    "queue_ms": 0,
+    "tokens_in": 549,
+    "tokens_out": 55,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1234,
+    "model_ms": 1234,
+    "queue_ms": 0,
+    "tokens_in": 912,
+    "tokens_out": 130,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 3127,
+    "model_ms": 3127,
+    "queue_ms": 0,
+    "tokens_in": 3021,
+    "tokens_out": 430,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1399,
+    "model_ms": 1399,
+    "queue_ms": 0,
+    "tokens_in": 1325,
+    "tokens_out": 175,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1462,
+    "model_ms": 1462,
+    "queue_ms": 0,
+    "tokens_in": 3159,
+    "tokens_out": 181,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.01784,
+  "ms": 15696,
+  "model_calls": 7,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2014-01-01",
+    "to": "2014-12-31",
+    "grain": "year",
+    "text": "2014",
+    "how": "a year alone is the whole year"
+   },
+   "question_type": "value",
+   "french": "En 2014, quelle était la durée du congé de paternité ?",
+   "legal_terms": [
+    "congé de paternité"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": []
+  },
+  "candidates": [
+   {
+    "article_pk": 18297,
+    "role": "reject",
+    "found_by": {
+     "outline": 8,
+     "words": 5,
+     "meaning": 1,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 389670,
+    "role": "context",
+    "found_by": {
+     "words_all": 1,
+     "meaning_all": 7
+    }
+   },
+   {
+    "article_pk": 18249,
+    "role": "reject",
+    "found_by": {
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 18305,
+    "role": "reject",
+    "found_by": {
+     "outline": 3,
+     "meaning": 5,
+     "meaning_all": 5
+    }
+   },
+   {
+    "article_pk": 18301,
+    "role": "reject",
+    "found_by": {
+     "outline": 12,
+     "meaning": 3,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 18298,
+    "role": "reject",
+    "found_by": {
+     "outline": 9,
+     "meaning": 4,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 18296,
+    "role": "reject",
+    "found_by": {
+     "outline": 7,
+     "meaning": 6,
+     "meaning_all": 8
+    }
+   },
+   {
+    "article_pk": 18328,
+    "role": "reject",
+    "found_by": {
+     "words": 1
+    }
+   },
+   {
+    "article_pk": 18152,
+    "role": "reject",
+    "found_by": {
+     "words": 2
+    }
+   },
+   {
+    "article_pk": 18327,
+    "role": "reject",
+    "found_by": {
+     "words": 3
+    }
+   },
+   {
+    "article_pk": 18303,
+    "role": "reject",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 18304,
+    "role": "reject",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 18306,
+    "role": "reject",
+    "found_by": {
+     "outline": 4
+    }
+   },
+   {
+    "article_pk": 18307,
+    "role": "reject",
+    "found_by": {
+     "outline": 5
+    }
+   },
+   {
+    "article_pk": 18308,
+    "role": "reject",
+    "found_by": {
+     "outline": 6
+    }
+   },
+   {
+    "article_pk": 18299,
+    "role": "reject",
+    "found_by": {
+     "outline": 10
+    }
+   },
+   {
+    "article_pk": 18300,
+    "role": "reject",
+    "found_by": {
+     "outline": 11
+    }
+   },
+   {
+    "article_pk": 18302,
+    "role": "reject",
+    "found_by": {
+     "outline": 13
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 389670
+   },
+   {
+    "article_pk": 18328
+   },
+   {
+    "article_pk": 18296
+   },
+   {
+    "article_pk": 18276
+   }
+  ],
+  "replay": "eNrlWs1u5LgRfhVCF88kcrvV_24jCQYeIzDi7Aazg70YA4EtsbtpsyUtSbXtDAbYd0gue8spyCDX3HJbIy-yT5KvSEmtbrfnZ-NsAiww8EglFlmsKn71w34brINpFAZFMA2SfDXLgzBI8KzyhCs8p63nAkODeZllQh2uIxC-wftZxnrdaBCyb0qhlGD37y2XlinO0lLfvxf4jyV5trh_z1LBCm6FzqTF229o9hIzEPthN8K_Tsc9R73DPk2fmmBqdSnCAA9Bltt4KVSKDxqvVtz69zjP1F081_kq5rGi-eMUfzFsFkwvL_uT49G4i03lGbEE4WX0BlvhxvCFYBC4UKVhhc6TpZiyl1KLxMq1YKLUeQH5sVu2EpmVOT1VO2ltw_DM1Fst8DeRRnRIWVquuL4LQreDrFTqDdbNlpDpbZDxlcAeNqv1ut3R0XBwdHpG-voD10rQohspmLD05TTPjJCKHofsqpTQuHXMTAvsnaa6_wspfwUxGNj-9adyrZ0RIFCWyEKQGdTB_fsFV24DqTAsWfIswf-0yO5X9sO3f8V-eGJjSd6QCCVup31a9KLbHQ7w7WZ5RxZZCnaT61RmC0aGYbwolMSsZBsn5GF3fNgdshLaVCD0QBgdRpMT1maVGZvnOhEs957lXYNJw-ABrPKA2Z3z11QE76DVVTAlBcPIqn5qHqDntxi5Fhr2BtOFuGVWkm57XTYeRIy8AkKq8lbA_Uu9ELk0IUvhLywasdFo5FQUjdl4MmYKH0lN-v5vC28jwxaaZ-lhWia8vKVj4BSYSgvjMfgAUWCJtVyUoITEPTju1es2FjYnUIynYhLJsgNhLDzNgJaVrVc4qk6W9-_Jy-qNxQaSJ7Q_-D4_qsmdKwMtPnOqjqLDXsSi42l_MB12n7eZU4Ezq0hRTr34f6ONGIbH8et1oStos6zesYOwPQozGRwRGtnvDSdu5IY2Ho3ehYHMYmfZzUIRtDvCPNJYQa9jqJjciVuCHX5jGDTb0q-Cmy9KcnRM67ymKGfghkZI09em8Z4A69WIEdNxw_SXwUUu6SgcN0cnOu6PmYGd1A_ffidXxf0_rH-FZQARpXbnIoCPEabEc5XnOs7nMZaOyVQmLmRy7SZ_uzkiR0LJI-jUHimxOCI3PbKar0nHYTCX2lRIRtjX65JluhEcGSIDVlbGTUZPFTiCac215Bkp_tKRfkEiLSURjgeTybuwYSBT2h0OR2uxRFHvuMUC9BJih8XR2izdfr_X4iEg3OVxtBZPb9gbtlhq0Nxl8_QW32RMh9rcCFGQq3iHA4RzbWUCy2y9xPCqh9bAAHhNSgcCppflauq8xamXZQKeSegkuGY2Xwh80uQwicoNTplb1E8fF9fBtA4his8ETknwwn8DOlS4aKVV_1M89xANGI7h8wRyiL6NLJvopcT-UOxiGCafy1sopgndneDdOwqVDhB4tig9gs514I8D0Qnbt2I4vtm8ptSRHLaQGYh30DgNoEDc-PYyv8ELZ_SRcZVDUOkP980yh8iOCYIARw1tJLZ3Bcmx5qokX5prkSXL_zQVwUnlKq7PX7BvHHmouE2QL3hUu6REAhiXZ-BMuIFQc64M8pWrUkuTyoTErVIXwyUFrgKO5VixoWvKT6JJ7xiYp8UVzIUVHiQsIGHM4Lg9Jpr0u8NdQrRN6B1PdgmjHZbezoho2NsdMd5dpb9LGOwSdlfpPpjjgWAPNtfdJbQEg9Y1AW6lKL8Pvz38HY_wXa0dhiocdOXAShelaacNv1zhj3IxMDMyFZpAYzxpv8dKZoQ1E8hyLQrr0mQDZ4UD5rHnn_YGBOgKHuJRW5cOCLQAtijMwa0DJxc8uCFoon2sEHixXn8rjwkbbnKXCtWMzbVo8wx3cx8f-A2dxSrMOd0ViicVUiL0ZKYgZMMWKdhiWzFlW3jvd2vCSvAM6ZcnNeDaUKNhi1oxR0D3Cp0_OfplePXDlASQxVJ2gJ7uQRIyVEh6imF0XCtG9mt2cf71qzN2ft5hr85-e3H2-7MvXr94ff7lF-zsNTv98ouX5_TyFXt5xl6_evH1i_ML8LymmcFzzl4JKCCsTr9L4K6gN6Sm9--1JIqilBfp2-Xply_PThhJfeKTi4SBJcM4rk5YncK8AeT-mb0Ckwd2h62aFkGGOkvzFU85ADjcLOOMyI3DA8Az4YAUPgRsb7VOP_xskLQR2jgs8wbfCCWI6IoYU5oEjipnygWFCs0fwXyXnCecxgqPm536gHjfdom1NAbmjyvAxoCVs3vk0of6eKV5UpIS2lXCx53AWKjgMT_IS0tuuUlrKwKzJPG2oMgmfKLpVh73gT-butAVhE0ZaUXhnTWFnpabEx1MwdTK5D7kpR0US4V_WVP0Ejx1JyQ4rejs_OsOBXZnNFNQSQjPIufmSkHsXtsTBGuxkQ8gP_Il2e4E8F5fGCDsq9K2HMBlFo_YOaw8yJc8GLRCEXXgRx7QtwMfGw86LoHI6fTVysoLX0SRJ7QdI2z012v0h7D7YxTYMcIFyXi8pcqvPJWNa0WyAo7AoB1Dif-cr6SSnFLBvVo9FRZarKbep9RHZnsKFdMyNVBWxptLSl38wX6YizyieJwuPne6_mxdjvbqcrTRJUfGZF1LZ59L8kZzHoo2TQ_PxgpR-g2LTGq34VRSgJG-LKszV-ihfERhiHB85XRqNslmo4YqiXpcD3FMUTh-srPJnjUWo7hJ33z67O0OEILrwMgSNrYlQsXzjeqi7dOctE4zalWdl4VwcL7nPMt9qvyA7zyC5OLTtfjmAcLPJZLXn_rIkkyFSGux2pXd6L_t8R9Ye_J_6GUfENdVyZvXXvRg9FaQFhZL5Xo7DRarmUid9GC-lp7ZxUc_mhoKtwjqTZMvy2sPZS7dpIYLlWp1ceacyjeSKzjDqIxWiLfK9wwFE8iUGJPsW_kE1zNJUXsnylPq0XeFUJt1t4IKgx2bh65p1jpNTtsPGrmdfbVXGDxVQ_hBFdfIiXU0d71PnzG6Ft9e6barvs1GHwtmH54p-pjKHmNtF5afzTr6saztYrVhRUq4KCUcD2YN2RLeDaS8ErbzsJ6FKb1NqjT0Y6uNP3u1dm38ceM49setM3i6qUZPN9X46aaaPNVU7e7B5_pUq8_w2axt16o7gmuJ0JyXyG8yhHYQM0wFjjdteEO6kO5iW1Nau49VUpHGfJWXmY2NsLEbXldBFKSCunL_psxtVffPynQh2v1LqtZgfwQsalAMJt1u17fbW2jc76KMR6KSpVUhn5kboVHngtKkEYD0QgnqYuz7Wk3mS8Sqb0LdsXZS-TQNyfAnkC_ztbOzv6vNHW4I628F6hi-p3QnuDfYHIV27CvBdlxJ8MO33_ESeUGTBXZct7_tEnNBXUyxFZ0pydRysaACdv8G2a-Y22GwMT1cR-U5lbkR5agaRBPDF-Ml5YEOoUyu1m5OXhRHWNp0irspE-D35TV7ZhC0GcL-CcupN84umoseovpbmTOKh4JnnkIVd8i4dckAhWbm2l3PQ7quorKQze6qrgrSYnFLt3s0lNxc6APjrv_wdwmrI8cgYU7qRj2rT8kyr8r3qutctSfqljNOYYdddFivPzgcDykVvpbkBMENjmUGEbDmx9Tosxx-hZPmscBVhK7HouAeJfXepQXpAPZe8Qzfpuz7v7OXH-4woxJq6bBuuLDv_8me1dd5tBgqL0MVOryLTgC5WXVNmCxzaaR5HoTV1VmVXLWuKVyMJK_6uHYG_Z-hdpB8fJp2ej9L7YxHlLo3v7Ko8HFeGrH9EicUk1y4MQK6UCb332mxrLoaeRvIbOYh2J1adiPtsoZYqPKg-nxAShX-FwIeDgCEWqSHNj8EYMAE4nYKuGHN5HS9C43eoJoiqmt4gprP8Z0ZaU1dkdRlil0ClRJJinArlEo8P2G_E39c8uygwXMWRZhZqfzGIIBbJxwSEtRiArkHtRLp0kugXPZdjsf2tRlyALmZe4X30L0SZKwuIW8tI03u1k6sKJUyzRgIhwKUbWYM3WoVU2shpKEW7pIykwCR6dKuffUBrRnoJrnbCS0VLjtDprqqG52d_S0E9aj9j2Rmgq5EvFKd59P9nOv7OcUwOWekd8SB5icfFCCI1vyow2_L3e21ft-xHSx26lUUTlRQbktdCfcJv_5xOmn_bsg1tF37ekRlSGlo751uNJ4g2c4qHy7r343ouvn5b74t_U0"
+ }
+}

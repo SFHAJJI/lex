@@ -992,7 +992,7 @@ export const LIVE_CHROME_FR = Object.freeze({
   radar: Object.freeze({
     title: 'Modifications',
     heading: 'Ce qui a changé dans le droit luxembourgeois',
-    intro: 'Chaque texte dont le libellé a changé pendant la période choisie. Ouvrez-en un pour voir l’ancien et le nouveau libellé côte à côte.',
+    intro: 'Les textes dont Lex détient une nouvelle version pour la période choisie. Ouvrez-en un pour voir l’ancien et le nouveau libellé côte à côte.',
     sent: 'Les dates de la période, et les textes dont cette page affiche le titre, sont envoyés à ce serveur dans les requêtes et nulle part ailleurs ; le filtre par titre reste dans cette page, et cette page ne conserve rien.',
     period: 'Période',
     presets: Object.freeze({ last30: '{days} derniers jours', thisYear: 'Cette année', lastYear: '{year}', dates: 'Choisir les dates' }),
@@ -1040,7 +1040,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     loadingEarlier: 'Chargement des modifications antérieures…',
     earlierFailed: 'Les modifications antérieures n’ont pas pu être chargées.',
     tryAgain: 'Réessayer',
-    allShown: 'Toutes les modifications de cette période sont affichées.',
+    allShown: 'Toutes les nouvelles versions détenues pour cette période sont affichées ; une modification dont Lex ne détient pas la version n’y figure pas.',
     cut: 'Cette période compte plus de versions que cette page n’en affiche à la fois ; choisissez une période plus courte pour les voir toutes.',
     caveat: 'Une ligne de version n’affirme pas à elle seule une modification du libellé, un effet juridique ni une entrée en vigueur.',
   }),

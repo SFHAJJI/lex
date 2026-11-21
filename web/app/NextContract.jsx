@@ -23,6 +23,7 @@ import { countedForm, fillNext, nextCopy } from '../scripts/next-copy.mjs';
 import {
   CONTRACT_ASSERTED, callRows, readableReason, clarifiedQuestion, clarifyOf, contextAddress, contractBlockView, contractBuild, contractFoot, contractStateOf, dateLine,
   evidenceView, listStatement, notHeldLines, replayToken, replayTokenHref, traceLevels, understoodFields, widened,
+  blockSource, blockVia, checksView, contractVersions, listItemsView, notesView, partsView, pointedLines, reasonBy, seeAlsoView,
 } from '../scripts/next-contract.mjs';
 
 /** The language tag the law's own words are marked with on a page written in another language. */
@@ -59,7 +60,86 @@ function StateHead({ answer, locale }) {
     <div className={asserted ? 'lx-dock-state' : 'lx-dock-card lx-dock-state'} data-dock-card={asserted ? undefined : 'outcome'} data-dock-state={state.key}>
       <p className="lx-dock-state-badge"><span className="lx-visually-hidden">{copy.stateLabel} </span><span className="lx-dock-chip lx-dock-chip-state" data-state-badge={state.key}>{state.badge}</span></p>
       <p className="lx-dock-lead lx-dock-outcome" data-dock-outcome={state.key}>{state.lead}</p>
-      {state.more === null ? null : <p className="lx-dock-words" data-dock-more="">{state.more}</p>}
+      {state.more === null ? null : (
+        <p className="lx-dock-words" data-dock-more="">
+          {state.more}
+          {/* What is missing is the reading model's own sentence (K-GEN-7). */}
+          {state.moreBy === 'model' ? <> <Tag by="model" copy={nextCopy(locale).dock} /></> : null}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * pages2: the engine's notes said in words (a model that did not answer, passages that disagree, the text changed in the
+ * period), and the one check a reader can weigh (found by meaning alone; or the searches that found it).
+ */
+function NotesAndChecks({ answer, locale }) {
+  const notes = notesView(answer, locale);
+  const checks = checksView(answer, locale);
+  const lead = checks?.lead ?? null;
+  if (notes.length === 0 && lead === null) return null;
+  return (
+    <div className="lx-dock-notes" data-dock-notes="">
+      {lead === null ? null : <p className={lead.caution ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-check={lead.caution ? 'meaning-only' : 'found-by'}>{lead.text}</p>}
+      {notes.map((note) => <p key={note.key} className={note.caution ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-note={note.key}>{note.text}</p>)}
+    </div>
+  );
+}
+
+/** pages2: the items of a list made of headings, in the text's order, each opening the article that stands for it. */
+function ListItems({ answer, locale, onOpen }) {
+  const view = listItemsView(answer, locale);
+  if (view === null) return null;
+  const copy = nextCopy(locale).contract2.list;
+  const lang = lawLang(locale);
+  const blocks = Array.isArray(answer.blocks) ? answer.blocks : [];
+  return (
+    <div className="lx-dock-card lx-dock-list-items" data-dock-card="list-items">
+      {view.items.length === 0 ? null : (
+        <>
+          <p className="lx-dock-lead">{copy.heading}</p>
+          <ol className="lx-dock-items" data-dock-items="">
+            {view.items.map((item) => {
+              const block = item.block === null ? null : contractBlockView(blocks[item.block], locale, answer.state);
+              const opening = block === null || block.identifier === null || block.anchor === null ? null : { identifier: block.identifier, article: block.anchor, date: block.date };
+              const href = opening === null ? null : textHref(opening, locale);
+              const where = [block?.cite ?? (item.first === null ? null : fillNext(copy.from, { article: item.first })), item.articles].filter((part) => part !== null && part !== '').join(' · ');
+              return (
+                <li key={item.key} data-list-item="">
+                  {href === null ? <span lang={lang}>{item.heading}</span> : (
+                    <a className="lx-dock-link" href={href} lang={lang} onClick={(event) => {
+                      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                      event.preventDefault();
+                      onOpen(opening);
+                    }}>{item.heading}</a>
+                  )}
+                  {where.length === 0 ? null : <span className="lx-dock-row-time" lang={lang}> · {where}</span>}
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+      {view.deleted === null ? null : <p className="lx-dock-remark" data-dock-list-deleted="">{view.deleted}</p>}
+    </div>
+  );
+}
+
+/** pages2: "See also": the articles the engine names beside the answer, each with why. */
+function SeeAlso({ answer, locale }) {
+  const entries = seeAlsoView(answer);
+  if (entries.length === 0) return null;
+  const copy = nextCopy(locale).contract2.seeAlso;
+  return (
+    <div className="lx-dock-card" data-dock-card="see-also">
+      <p className="lx-dock-lead">{copy.heading}</p>
+      <ul className="lx-dock-step-list">
+        {entries.map((entry) => (
+          <li key={entry.key} lang={lawLang(locale)}>{entry.why === null ? [entry.article, entry.heading].filter(Boolean).join(', ') : fillNext(copy.item, { article: [entry.article, entry.heading].filter(Boolean).join(', '), why: entry.why })}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -188,16 +268,36 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
   const wide = level === 'lines' || context.state !== 'ready' ? null : widened(context.data, level, quotedNumbers);
   const quoteLines = view.lines.filter((line) => !line.gap);
   const marked = view.role === 'rule' || view.role === 'exception';
+  // pages2: when code widened the reading's lines to their paragraph, the lines the reading pointed at are the ones marked.
+  const pointed = pointedLines(block);
+  const extra = table.contract2;
+  const via = blockVia(block, locale);
+  const source = blockSource(block);
+  const item = typeof block?.list_item === 'string' && block.list_item.trim().length > 0 ? block.list_item.trim() : null;
+  const whyBy = reasonBy(block);
+  // An exception is read with the rule it may set aside (K-REF-6): said once on its card.
+  const exceptionNote = view.role === 'exception' && (state === 'answer' || state === 'answer_with_exception');
   return (
     <article className="lx-dock-card lx-dock-answer lx-dock-block" data-dock-card="block" data-role={view.role ?? ''} aria-label={view.label}>
       <div className="lx-dock-card-head"><span className="lx-dock-verdict">{view.label}</span></div>
-      {view.why === null ? null : <p className="lx-dock-remark" lang={lang} data-dock-why="">{readableReason(view.why, answer ?? {})}</p>}
+      {item === null ? null : <p className="lx-dock-remark" data-dock-list-item="">{fillNext(extra.listItem, { heading: item })}</p>}
+      {/* pages2 (K-GEN-7): the reason under a quotation says who wrote it: a model (the reading, the arbiter) or code (a
+          reference followed, a widening, a definition); a model's sentence is never shown as Lex's statement of the law. */}
+      {view.why === null || item !== null ? null : (
+        <p className="lx-dock-remark" data-dock-why="" data-why-by={whyBy}>
+          <span className="lx-dock-why-by">{whyBy === 'model' ? extra.whyModel : extra.whyCode}</span>{' '}
+          <span lang={lang}>{readableReason(view.why, answer ?? {})}</span>
+        </p>
+      )}
+      {via === null ? null : <p className="lx-dock-remark" data-dock-via={block?.inbound === true ? 'inbound' : block?.retrieved_via ?? ''}>{via}</p>}
+      {exceptionNote ? <p className="lx-dock-remark lx-dock-caution" data-dock-exception-note="">{extra.exceptionNote}</p> : null}
+      {source === null ? null : <p className={source === 'ocr' ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-source={source}>{extra.source[source]}</p>}
       {wide === null ? (
         quoteLines.length === 0 ? null : (
           <div className="lx-dock-extract" data-dock-extract={anchor ?? ''} lang={lang}>
             {view.lines.map((line, at) => {
               if (line.gap) return <p className="lx-dock-remark" key={`gap-${at}`} aria-hidden="true">{table.dock.gap}</p>;
-              return <Line key={`line-${at}`} line={{ ...line, quoted: marked }} first={line === quoteLines[0]} last={line === quoteLines.at(-1)} table={table} />;
+              return <Line key={`line-${at}`} line={{ ...line, quoted: marked && (pointed === null || pointed.has(line.n)) }} first={line === quoteLines[0]} last={line === quoteLines.at(-1)} table={table} />;
             })}
           </div>
         )
@@ -217,6 +317,9 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
           {wide.lines.map((line, at) => <Line key={`w-${at}`} line={line} first={at === 0} last={at === wide.lines.length - 1} table={table} />)}
         </div>
       )}
+      {wide === null && marked && pointed !== null ? <p className="lx-dock-remark" data-dock-pointed="">{extra.pointed}</p> : null}
+      {typeof block?.version?.until_cut === 'string' && block.version.until_cut.length > 0 ? <p className="lx-dock-remark" data-dock-until-cut="">{extra.untilCut}</p> : null}
+      {view.missingNow ? <p className="lx-dock-remark lx-dock-caution" data-dock-missing-now="">{copy.trace.missingNow}</p> : null}
       {level !== 'lines' && context.state === 'loading' ? <p className="lx-dock-remark" role="status">{copy.widen.loading}</p> : null}
       {level !== 'lines' && context.state === 'failed' ? <p className="lx-dock-remark" role="status">{copy.widen.failed}</p> : null}
       {address === null ? null : (
@@ -257,12 +360,17 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
 /** What Lex checked, for a "not found" or proposed passages: what it holds, the words, the sweep, the closest passage. */
 function Evidence({ answer, locale }) {
   const copy = nextCopy(locale).contract.evidence;
-  const view = evidenceView(answer, locale);
-  if (view === null || CONTRACT_ASSERTED.includes(answer.state)) return null;
+  const found = evidenceView(answer, locale);
+  // pages2 (K-UI-4): a partial answer shows what Lex checked for the part missing too, without a "closest passage" (the
+  // passage shown answers in part).
+  const partial = answer.state === 'partial';
+  if (found === null || (CONTRACT_ASSERTED.includes(answer.state) && !partial)) return null;
+  const view = partial ? { ...found, closest: null } : found;
+  if (partial && view.coverage === null && view.terms.length === 0 && view.swept === null) return null;
   const lang = lawLang(locale);
   return (
     <div className="lx-dock-card" data-dock-card="searched" data-dock-evidence="">
-      <p className="lx-dock-lead">{copy.heading}</p>
+      <p className="lx-dock-lead">{partial ? nextCopy(locale).contract2.evidencePartial : copy.heading}</p>
       {view.coverage === null ? null : <p className="lx-dock-words" data-evidence="coverage"><strong>{copy.coverage}</strong>{' '}<span lang={lang}>{view.coverage}</span></p>}
       {view.terms.length === 0 ? null : (
         <table className="lx-dock-table" data-evidence="terms">
@@ -279,7 +387,7 @@ function Evidence({ answer, locale }) {
         </table>
       )}
       {view.swept === null ? null : <p className="lx-dock-words" data-evidence="sweep">{view.swept}</p>}
-      {view.closest === null ? null : <p className="lx-dock-words" data-evidence="closest">{view.closest}</p>}
+      {view.closest === null ? null : <p className="lx-dock-words" data-evidence="closest">{view.closest} <Tag by="model" copy={nextCopy(locale).dock} /></p>}
     </div>
   );
 }
@@ -293,6 +401,9 @@ function Trace({ answer, turn, locale }) {
   const calls = callRows(answer, locale);
   const foot = contractFoot(answer, locale);
   const build = contractBuild(answer, locale);
+  const versions = contractVersions(answer, locale);
+  const checks = checksView(answer, locale);
+  const extra = table.contract2;
   const replay = replayTokenHref(replayToken(answer), locale);
   if (levels.length === 0 && calls.length === 0 && foot === null) return null;
   const count = Array.isArray(answer?.trace?.calls) ? answer.trace.calls.length : null;
@@ -341,19 +452,29 @@ function Trace({ answer, turn, locale }) {
           </ol>
         </section>
       ))}
+      {checks === null || checks.rows.length === 0 ? null : (
+        <section className="lx-dock-level" data-level="checks">
+          <h4 className="lx-dock-level-head"><span className="lx-dock-row-name">{extra.checks.heading}</span><Tag by="code" copy={dock} /></h4>
+          <ul className="lx-dock-step-list">
+            {checks.rows.map((row) => <li key={row.key} data-check={row.key}>{fillNext(nextCopy(locale).contract.fieldItem, { name: row.name, value: row.value })}</li>)}
+          </ul>
+        </section>
+      )}
       {calls.length === 0 ? null : (
         <section className="lx-dock-level" data-level="calls">
           <h4 className="lx-dock-level-head"><span className="lx-dock-row-name">{copy.callsHeading}</span><Tag by="model" copy={dock} /></h4>
           <div className="lx-dock-table-scroll">
             <table className="lx-dock-table" data-trace-table="calls">
               <thead><tr>{['step', 'model', 'time', 'tokens'].map((key) => <th scope="col" key={key}>{copy.callColumns[key]}</th>)}</tr></thead>
-              <tbody>{calls.map((call) => <tr key={call.key}><th scope="row"><code>{call.step}</code></th><td><code>{call.model}</code></td><td>{call.time}</td><td>{call.tokens}</td></tr>)}</tbody>
+              <tbody>{calls.map((call) => <tr key={call.key} data-call-note={call.note ? '' : undefined}><th scope="row"><code>{call.step}</code></th><td><code>{call.model}</code>{call.note ? <span className="lx-dock-caution-note"> ({call.note})</span> : null}</td><td>{call.time}</td><td>{call.tokens}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
       )}
       {foot === null ? null : <p className="lx-dock-built-note" data-dock-cost="">{foot}</p>}
-      {build === null ? null : <p className="lx-dock-registry" data-dock-build="">{build}</p>}
+      {build === null ? null : <p className="lx-dock-registry" data-dock-build="">{build}{versions === null ? null : <>{nextCopy(locale).clauseSeparator}{versions}</>}</p>}
+      {/* pages2 (K-UI-2): the trace is not logged on the server, a deliberate choice, said where the trace is. */}
+      <p className="lx-dock-built-note" data-dock-trace-kept="">{extra.traceNotKept}</p>
       {replay === null ? null : <p className="lx-dock-registry"><a className="lx-dock-link" href={replay} data-dock-replay="">{copy.replay}</a></p>}
     </details>
   );
@@ -367,19 +488,50 @@ export function ContractAnswer({ turn, locale, onAsk, onOpen, typedDay, fetchImp
   const table = nextCopy(locale);
   const answer = turn.result;
   const blocks = Array.isArray(answer.blocks) ? answer.blocks.filter((block) => block !== null && typeof block === 'object') : [];
-  const cards = blocks.map((block, at) => (
+  const card = (block, at) => (
     <ContractBlock block={block} answer={answer} state={answer.state} locale={locale} onOpen={onOpen} fetchImpl={fetchImpl} key={`${block.article_pk ?? 'block'}-${at}`} />
-  ));
+  );
+  const cards = blocks.map(card);
   // Nothing found: the state, then what Lex checked, and only then the closest passages, under a heading that says they do not answer.
   const notFound = answer.state === 'not_found';
+  // pages2: a compound question is drawn part by part: each part's question and whether it is answered, then its passages.
+  const parts = notFound ? null : partsView({ ...answer, blocks }, locale);
+  const extra = table.contract2.parts;
+  const body = parts === null ? cards : (
+    <div className="lx-dock-parts" data-dock-parts={parts.grouped ? 'grouped' : 'listed'}>
+      <p className={parts.complete ? 'lx-dock-remark' : 'lx-dock-remark lx-dock-caution'} data-dock-parts-summary="">{parts.heading}. {parts.summary}</p>
+      {parts.grouped ? null : (
+        <ol className="lx-dock-items" data-dock-parts-list="">
+          {parts.rows.map((row) => <li key={row.n} data-part={row.n} data-part-status={row.status}><span>{row.question}</span> <span className="lx-dock-chip" data-part-badge="">{row.label}</span></li>)}
+        </ol>
+      )}
+      {parts.rows.map((row) => (!parts.grouped ? null : (
+        <section className="lx-dock-part" key={row.n} data-part={row.n} data-part-status={row.status} aria-label={fillNext(extra.part, { n: String(row.n) })}>
+          <h3 className="lx-dock-passages-heading"><span>{fillNext(extra.part, { n: String(row.n) })}</span> <span className="lx-dock-chip" data-part-badge="">{row.label}</span></h3>
+          <p className="lx-dock-words" data-part-question="">{row.question}</p>
+          {row.blocks.length === 0 ? <p className="lx-dock-remark">{extra.noPassage}</p> : row.blocks.map((index) => card(blocks[index], index))}
+        </section>
+      )))}
+      {parts.grouped && parts.loose.length > 0 ? (
+        <section className="lx-dock-part" data-part="whole">
+          <h3 className="lx-dock-passages-heading">{extra.whole}</h3>
+          {parts.loose.map((index) => card(blocks[index], index))}
+        </section>
+      ) : null}
+      {parts.grouped ? null : cards}
+    </div>
+  );
   return (
     <>
       <StateHead answer={answer} locale={locale} />
+      <NotesAndChecks answer={answer} locale={locale} />
       <Understood answer={answer} turn={turn} locale={locale} onAsk={onAsk} typedDay={typedDay} initialDateOpen={initialDateOpen} />
       <NotHeld answer={answer} locale={locale} />
       <Clarify answer={answer} turn={turn} locale={locale} onAsk={onAsk} />
       <ListStatement answer={answer} locale={locale} />
-      {notFound ? null : cards}
+      <ListItems answer={answer} locale={locale} onOpen={onOpen} />
+      {notFound ? null : body}
+      <SeeAlso answer={answer} locale={locale} />
       <Evidence answer={answer} locale={locale} />
       {notFound && cards.length > 0 ? (
         <>

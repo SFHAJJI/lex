@@ -1,0 +1,2639 @@
+{
+ "state": "answer_with_exception",
+ "outcome": "answer_with_exception",
+ "pipeline": "combo",
+ "question": "Qui est assuré obligatoirement à l'assurance maladie selon le Code de la sécurité sociale ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-securite-sociale",
+   "anchor": "art_1er",
+   "date": "2026-01-01",
+   "why": "L’article 1er énumère les catégories assujetties, et les autres articles désignés précisent les exceptions et les conditions pertinentes.",
+   "act_title": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "article": "Art. 1er.",
+   "number": "1",
+   "heading": null,
+   "path": "CODE DE LA SÉCURITÉ SOCIALE > Code de la sécurité sociale > LIVRE Ier ASSURANCE MALADIE-MATERNITÉ > Chapitre I Étendue de l’assurance > Assurance obligatoire",
+   "version_from": "2026-01-01",
+   "version_to": null,
+   "article_since": "2026-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/securite_sociale/jo",
+   "article_pk": 532086,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29
+   ],
+   "wording_since": "2026-01-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 1er.",
+   "text": [
+    "Sont assurés obligatoirement conformément aux dispositions qui suivent:",
+    "1) les personnes qui exercent au Grand-Duché de Luxembourg contre rémunération une activité professionnelle pour le compte d’autrui;",
+    "2) les apprentis bénéficiant au Grand-Duché de Luxembourg d’une formation professionnelle indemnisée;",
+    "3) les gens de mer occupés sur un navire battant pavillon luxembourgeois et qui, soit possèdent la nationalité luxembourgeoise ou celle d’un pays avec lequel le Luxembourg est lié par un instrument bi- ou multilatéral de sécurité sociale, soit résident au Grand-Duché de Luxembourg;",
+    "4) les personnes qui exercent au Grand-Duché de Luxembourg pour leur propre compte une activité professionnelle ressortissant de la chambre des métiers, de la chambre de commerce ou de la chambre d’agriculture ou une activité professionnelle ayant un caractère principalement intellectuel et non commercial.",
+    "Sont assimilés à ces personnes:",
+    "- les associés de sociétés en nom collectif, de sociétés en commandite simple ou de sociétés à responsabilité limitée ayant pour objet une telle activité qui détiennent plus de vingt-cinq pour cent des parts sociales,",
+    "- les administrateurs, commandités ou mandataires de sociétés anonymes, de sociétés en commandite par actions ou de sociétés coopératives ayant pour objet une telle activité qui sont délégués à la gestion journalière,",
+    "à condition qu’il s’agisse de personnes sur lesquelles repose l’autorisation d’établissement délivrée conformément à la loi du 2 septembre 2011 réglementant l’accès aux professions d’artisan, de commerçant, d’industriel ainsi qu’à certaines professions libérales ;",
+    "5) le conjoint ou le partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats et, pour les activités ressortissant de la Chambre d’agriculture, les parents et alliés en ligne directe ou collatérale jusqu’au troisième degré inclusivement d’un assuré au titre du numéro 4), première phrase pourvu que le conjoint, le partenaire, le parent ou allié soit âgé de dix-huit ans au moins et prête à cet assuré des services nécessaires dans une mesure telle que ces services peuvent être considérés comme activité principale;",
+    "6) les membres d’associations religieuses et les personnes pouvant leur être assimilées exerçant au Grand-Duché de Luxembourg une activité dans l’intérêt des malades et de l’utilité générale;",
+    "7) les personnes visées par la loi du 6 janvier 1996 sur la coopération au développement de même que celles visées par la loi du 27 juillet 1992 relative à la participation du Grand-Duché de Luxembourg à des opérations pour le maintien de la paix dans le cadre d’organisations internationales;",
+    "8) les bénéficiaires d’une pension personnelle ou d’une pension de survie en vertu du livre III du présent code ou de la législation et réglementation sur les pensions d’un régime spécial luxembourgeois, lorsqu’ils résident au Grand-Duché de Luxembourg;",
+    "9) les bénéficiaires d’une ou de plusieurs rentes personnelles pour une réduction de la capacité de travail de cinquante pour cent au moins ainsi que d’une rente de survie en vertu de la législation concernant les dommages de guerre, à condition qu’ils résident au Grand-Duché de Luxembourg et qu’ils ne soient pas affiliés obligatoirement à un autre titre;",
+    "10) les personnes bénéficiant d’un revenu de remplacement sur lequel une retenue de cotisation au titre de la législation luxembourgeoise sur l’assurance maladie est prévue;",
+    "11) les bénéficiaires d’une allocation au titre de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale",
+    "12) les membres de la chambre des députés et les représentants luxembourgeois à l’assemblée des communautés européennes pendant la durée de leur mandat, à condition qu’ils ne soient pas assurés obligatoirement à un autre titre;",
+    "13) les enfants âgés de moins de dix-huit ans résidant au Grand-Duché de Luxembourg qui ne sont pas assurés à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+    "14) les personnes âgées de plus de dix-huit ans poursuivant au Grand-Duché de Luxembourg des études ou une formation professionnelle non indemnisée au titre d’un apprentissage, qui ne sont pas assurées à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+    "15) les personnes résidant au Grand-Duché de Luxembourg qui par suite d’infirmité physique ou intellectuelle se trouvent hors d’état de gagner leur vie, qui ne sont pas assurées à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+    "16) les volontaires de l’armée au sens de la loi du 2 août 1997 portant réorganisation de l’armée et modification de la loi du 27 juillet 1992 relative à la participation du Grand-Duché de Luxembourg à des opérations pour le maintien de la paix (OMP) dans le cadre d’organisations internationales , les personnes participant, sous l’égide d’organisations internationales, comme observateurs aux missions officielles d’observation aux élections à l’étranger, ainsi que celles remplissant la mission d’observateur prévue par la loi modifiée du 29 août 2008 sur la libre circulation des personnes et l’immigration et ses règlements d’exécution et qui assistent à l’exécution d’une mesure d’éloignement;",
+    "17) les jeunes qui exercent un service volontaire conformément à la loi du 31 octobre 2007 sur le service volontaire des jeunes;",
+    "18) aux salariés handicapés occupés dans les ateliers protégés et aux personnes bénéficiant d’un revenu pour personnes gravement handicapées au sens de la loi du 12 septembre 2003 relative aux personnes handicapées;",
+    "19) les sportifs d’élite qui participent à des activités d’élite dans le cadre de la loi du 3 août 2005 concernant le sport;",
+    "20) les bénéficiaires d’une rente partielle ou complète, d’une rente professionnelle d’attente ou d’une rente de survie en vertu du livre II du présent code du chef d’un accident survenu ou d’une maladie professionnelle déclarée après le 31 décembre 2010;",
+    "21) les jeunes au pair séjournant dans une famille d’accueil conformément à la loi du 18 février 2013 sur les jeunes au pair.",
+    "22) les bénéficiaires de la protection temporaire pourvus de l’attestation prévue à l’article 72 de la loi modifiée du 18 décembre 2015 relative à la protection internationale et à la protection temporaire.",
+    "L’assurance peut être étendue suivant des conditions et modalités à déterminer par règlement grand-ducal aux personnes poursuivant des mesures d’insertion ou de réinsertion professionnelles.",
+    "Sont assurées obligatoirement dans les conditions applicables aux personnes visées au numéro 1) de l’alinéa 1 du présent article les personnes exerçant au Grand-Duché de Luxembourg une activité professionnelle rémunérée pour un tiers sans être établies légalement à leur propre compte ou celles effectuant un stage rémunéré ou non sans être assurées au titre de l’article 91."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sont assurés obligatoirement conformément aux dispositions qui suivent:",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "1) les personnes qui exercent au Grand-Duché de Luxembourg contre rémunération une activité professionnelle pour le compte d’autrui;",
+     "label": "1)"
+    },
+    {
+     "n": 3,
+     "text": "2) les apprentis bénéficiant au Grand-Duché de Luxembourg d’une formation professionnelle indemnisée;",
+     "label": "2)"
+    },
+    {
+     "n": 4,
+     "text": "3) les gens de mer occupés sur un navire battant pavillon luxembourgeois et qui, soit possèdent la nationalité luxembourgeoise ou celle d’un pays avec lequel le Luxembourg est lié par un instrument bi- ou multilatéral de sécurité sociale, soit résident au Grand-Duché de Luxembourg;",
+     "label": "3)"
+    },
+    {
+     "n": 5,
+     "text": "4) les personnes qui exercent au Grand-Duché de Luxembourg pour leur propre compte une activité professionnelle ressortissant de la chambre des métiers, de la chambre de commerce ou de la chambre d’agriculture ou une activité professionnelle ayant un caractère principalement intellectuel et non commercial.",
+     "label": "4)"
+    },
+    {
+     "n": 6,
+     "text": "Sont assimilés à ces personnes:",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "- les associés de sociétés en nom collectif, de sociétés en commandite simple ou de sociétés à responsabilité limitée ayant pour objet une telle activité qui détiennent plus de vingt-cinq pour cent des parts sociales,",
+     "label": "-"
+    },
+    {
+     "n": 8,
+     "text": "- les administrateurs, commandités ou mandataires de sociétés anonymes, de sociétés en commandite par actions ou de sociétés coopératives ayant pour objet une telle activité qui sont délégués à la gestion journalière,",
+     "label": "-"
+    },
+    {
+     "n": 9,
+     "text": "à condition qu’il s’agisse de personnes sur lesquelles repose l’autorisation d’établissement délivrée conformément à la loi du 2 septembre 2011 réglementant l’accès aux professions d’artisan, de commerçant, d’industriel ainsi qu’à certaines professions libérales ;",
+     "label": null
+    },
+    {
+     "n": 10,
+     "text": "5) le conjoint ou le partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats et, pour les activités ressortissant de la Chambre d’agriculture, les parents et alliés en ligne directe ou collatérale jusqu’au troisième degré inclusivement d’un assuré au titre du numéro 4), première phrase pourvu que le conjoint, le partenaire, le parent ou allié soit âgé de dix-huit ans au moins et prête à cet assuré des services nécessaires dans une mesure telle que ces services peuvent être considérés comme activité principale;",
+     "label": "5)"
+    },
+    {
+     "n": 11,
+     "text": "6) les membres d’associations religieuses et les personnes pouvant leur être assimilées exerçant au Grand-Duché de Luxembourg une activité dans l’intérêt des malades et de l’utilité générale;",
+     "label": "6)"
+    },
+    {
+     "n": 12,
+     "text": "7) les personnes visées par la loi du 6 janvier 1996 sur la coopération au développement de même que celles visées par la loi du 27 juillet 1992 relative à la participation du Grand-Duché de Luxembourg à des opérations pour le maintien de la paix dans le cadre d’organisations internationales;",
+     "label": "7)"
+    },
+    {
+     "n": 13,
+     "text": "8) les bénéficiaires d’une pension personnelle ou d’une pension de survie en vertu du livre III du présent code ou de la législation et réglementation sur les pensions d’un régime spécial luxembourgeois, lorsqu’ils résident au Grand-Duché de Luxembourg;",
+     "label": "8)"
+    },
+    {
+     "n": 14,
+     "text": "9) les bénéficiaires d’une ou de plusieurs rentes personnelles pour une réduction de la capacité de travail de cinquante pour cent au moins ainsi que d’une rente de survie en vertu de la législation concernant les dommages de guerre, à condition qu’ils résident au Grand-Duché de Luxembourg et qu’ils ne soient pas affiliés obligatoirement à un autre titre;",
+     "label": "9)"
+    },
+    {
+     "n": 15,
+     "text": "10) les personnes bénéficiant d’un revenu de remplacement sur lequel une retenue de cotisation au titre de la législation luxembourgeoise sur l’assurance maladie est prévue;",
+     "label": "10)"
+    },
+    {
+     "n": 16,
+     "text": "11) les bénéficiaires d’une allocation au titre de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale",
+     "label": "11)"
+    },
+    {
+     "n": 17,
+     "text": "12) les membres de la chambre des députés et les représentants luxembourgeois à l’assemblée des communautés européennes pendant la durée de leur mandat, à condition qu’ils ne soient pas assurés obligatoirement à un autre titre;",
+     "label": "12)"
+    },
+    {
+     "n": 18,
+     "text": "13) les enfants âgés de moins de dix-huit ans résidant au Grand-Duché de Luxembourg qui ne sont pas assurés à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+     "label": "13)"
+    },
+    {
+     "n": 19,
+     "text": "14) les personnes âgées de plus de dix-huit ans poursuivant au Grand-Duché de Luxembourg des études ou une formation professionnelle non indemnisée au titre d’un apprentissage, qui ne sont pas assurées à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+     "label": "14)"
+    },
+    {
+     "n": 20,
+     "text": "15) les personnes résidant au Grand-Duché de Luxembourg qui par suite d’infirmité physique ou intellectuelle se trouvent hors d’état de gagner leur vie, qui ne sont pas assurées à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+     "label": "15)"
+    },
+    {
+     "n": 21,
+     "text": "16) les volontaires de l’armée au sens de la loi du 2 août 1997 portant réorganisation de l’armée et modification de la loi du 27 juillet 1992 relative à la participation du Grand-Duché de Luxembourg à des opérations pour le maintien de la paix (OMP) dans le cadre d’organisations internationales , les personnes participant, sous l’égide d’organisations internationales, comme observateurs aux missions officielles d’observation aux élections à l’étranger, ainsi que celles remplissant la mission d’observateur prévue par la loi modifiée du 29 août 2008 sur la libre circulation des personnes et l’immigration et ses règlements d’exécution et qui assistent à l’exécution d’une mesure d’éloignement;",
+     "label": "16)"
+    },
+    {
+     "n": 22,
+     "text": "17) les jeunes qui exercent un service volontaire conformément à la loi du 31 octobre 2007 sur le service volontaire des jeunes;",
+     "label": "17)"
+    },
+    {
+     "n": 23,
+     "text": "18) aux salariés handicapés occupés dans les ateliers protégés et aux personnes bénéficiant d’un revenu pour personnes gravement handicapées au sens de la loi du 12 septembre 2003 relative aux personnes handicapées;",
+     "label": "18)"
+    },
+    {
+     "n": 24,
+     "text": "19) les sportifs d’élite qui participent à des activités d’élite dans le cadre de la loi du 3 août 2005 concernant le sport;",
+     "label": "19)"
+    },
+    {
+     "n": 25,
+     "text": "20) les bénéficiaires d’une rente partielle ou complète, d’une rente professionnelle d’attente ou d’une rente de survie en vertu du livre II du présent code du chef d’un accident survenu ou d’une maladie professionnelle déclarée après le 31 décembre 2010;",
+     "label": "20)"
+    },
+    {
+     "n": 26,
+     "text": "21) les jeunes au pair séjournant dans une famille d’accueil conformément à la loi du 18 février 2013 sur les jeunes au pair.",
+     "label": "21)"
+    },
+    {
+     "n": 27,
+     "text": "22) les bénéficiaires de la protection temporaire pourvus de l’attestation prévue à l’article 72 de la loi modifiée du 18 décembre 2015 relative à la protection internationale et à la protection temporaire.",
+     "label": "22)"
+    },
+    {
+     "n": 28,
+     "text": "L’assurance peut être étendue suivant des conditions et modalités à déterminer par règlement grand-ducal aux personnes poursuivant des mesures d’insertion ou de réinsertion professionnelles.",
+     "label": null
+    },
+    {
+     "n": 29,
+     "text": "Sont assurées obligatoirement dans les conditions applicables aux personnes visées au numéro 1) de l’alinéa 1 du présent article les personnes exerçant au Grand-Duché de Luxembourg une activité professionnelle rémunérée pour un tiers sans être établies légalement à leur propre compte ou celles effectuant un stage rémunéré ou non sans être assurées au titre de l’article 91.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 17295,
+    "from": "2026-01-01",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 50,
+    "meaning": 1,
+    "meaning_all": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "code-securite-sociale",
+   "anchor": "art_4",
+   "date": "2026-01-01",
+   "why": "Liste des dispensés, modifie la règle d'assurance obligatoire.",
+   "act_title": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "article": "Art. 4.",
+   "number": "4",
+   "heading": null,
+   "path": "CODE DE LA SÉCURITÉ SOCIALE > Code de la sécurité sociale > LIVRE Ier ASSURANCE MALADIE-MATERNITÉ > Chapitre I Étendue de l’assurance > Exemption et dispense de l’assurance",
+   "version_from": "2026-01-01",
+   "version_to": null,
+   "article_since": "2026-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/securite_sociale/jo",
+   "article_pk": 532089,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "wording_since": "2026-01-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 4.",
+   "text": [
+    "Sont dispensées de l’assurance obligatoire les personnes qui exercent leur activité professionnelle uniquement d’une façon occasionnelle et non habituelle et ce pour une durée déterminée à l’avance qui ne doit pas dépasser trois mois par année de calendrier.",
+    "Ne sont en outre pas assujetties à l’assurance en vertu de la présente loi, les personnes soumises à un régime d’assurance maladie en raison de leur activité au service d’un organisme international ou en vertu d’une pension leur accordée à ce titre.",
+    "L’occupation d’élèves et d’étudiants pendant leurs vacances scolaires ne donne pas lieu à affiliation.",
+    "Sur demande de l’intéressé, l’activité exercée à titre accessoire dans le domaine culturel ou sportif au service d’une association ne poursuivant pas de but lucratif est dispensée de l’assurance, si le revenu professionnel en retiré ne dépasse pas deux tiers du salaire social minimum par an. Si cette activité ne couvre pas une année civile entière, le revenu professionnel annuel est calculé en fonction de la période d’activité effective.",
+    "Ne sont pas assujetties à l’assurance obligatoire les personnes qui agissent au nom et pour le compte de l’État, des communes, des branches professionnelles ou des entités créées par une disposition légale ou réglementaire au sein des organes décisionnels d’une entité économique de droit public ou de droit privé ou de toute instance du dialogue social créée par une disposition légale ou réglementaire."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sont dispensées de l’assurance obligatoire les personnes qui exercent leur activité professionnelle uniquement d’une façon occasionnelle et non habituelle et ce pour une durée déterminée à l’avance qui ne doit pas dépasser trois mois par année de calendrier.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Ne sont en outre pas assujetties à l’assurance en vertu de la présente loi, les personnes soumises à un régime d’assurance maladie en raison de leur activité au service d’un organisme international ou en vertu d’une pension leur accordée à ce titre.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "L’occupation d’élèves et d’étudiants pendant leurs vacances scolaires ne donne pas lieu à affiliation.",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "Sur demande de l’intéressé, l’activité exercée à titre accessoire dans le domaine culturel ou sportif au service d’une association ne poursuivant pas de but lucratif est dispensée de l’assurance, si le revenu professionnel en retiré ne dépasse pas deux tiers du salaire social minimum par an. Si cette activité ne couvre pas une année civile entière, le revenu professionnel annuel est calculé en fonction de la période d’activité effective.",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "Ne sont pas assujetties à l’assurance obligatoire les personnes qui agissent au nom et pour le compte de l’État, des communes, des branches professionnelles ou des entités créées par une disposition légale ou réglementaire au sein des organes décisionnels d’une entité économique de droit public ou de droit privé ou de toute instance du dialogue social créée par une disposition légale ou réglementaire.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 17295,
+    "from": "2026-01-01",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "words": 8,
+    "meaning": 5,
+    "meaning_all": 5
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "loi-2004-07-09-n3",
+   "anchor": "art_2",
+   "date": "2018-11-01",
+   "why": "ajouté par la référence: cité par Art. 1er., al. 3, point 1 (ligne 10): « … article 2 … » — renvoie pour la définition à Art. 2.",
+   "act_title": "Loi du 9 juillet 2004 relative aux effets légaux de certains partenariats.",
+   "act_id": "/eli/etat/leg/loi/2004/07/09/n3",
+   "article": "Art. 2.",
+   "number": "2",
+   "heading": null,
+   "path": "Chapitre I. Dispositions relatives aux effets de droit civil > Section I. La déclaration de partenariat",
+   "version_from": "2018-11-01",
+   "version_to": null,
+   "article_since": "2004-08-10",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2004/07/09/n3/jo",
+   "article_pk": 230578,
+   "lines": [
+    1
+   ],
+   "wording_since": "2004-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 2.",
+   "text": [
+    "Par partenariat, au sens de la présente loi, il y a lieu d'entendre une communauté de vie de deux personnes de sexe différent ou de même sexe, ci-après appelées les partenaires, qui vivent en couple et qui ont fait une déclaration conformément à l'article 3 ci-après."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Par partenariat, au sens de la présente loi, il y a lieu d'entendre une communauté de vie de deux personnes de sexe différent ou de même sexe, ci-après appelées les partenaires, qui vivent en couple et qui ont fait une déclaration conformément à l'article 3 ci-après.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 7898,
+    "from": "2018-11-01",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Art. 1er."
+  },
+  {
+   "role": "condition",
+   "kind": "article",
+   "work": "code-securite-sociale",
+   "anchor": "art_7",
+   "date": "2026-01-01",
+   "why": "ajouté par la référence: cité par Art. 1er., al. 3, point 9 (ligne 18): « … article 7 … » — renvoie à Art. 7.",
+   "act_title": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "article": "Art. 7.",
+   "number": "7",
+   "heading": null,
+   "path": "CODE DE LA SÉCURITÉ SOCIALE > Code de la sécurité sociale > LIVRE Ier ASSURANCE MALADIE-MATERNITÉ > Chapitre I Étendue de l’assurance > Extension de l’assurance",
+   "version_from": "2026-01-01",
+   "version_to": null,
+   "article_since": "2026-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/securite_sociale/jo",
+   "article_pk": 532092,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "wording_since": "2026-01-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 7.",
+   "text": [
+    "Le bénéfice de l’assurance obligatoire et de l’assurance volontaire s’étend:",
+    "1) au conjoint ou au partenaire au sens de l'article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats;",
+    "2) au parent et allié en ligne directe ou collatérale jusqu'au troisième degré qui à défaut de conjoint ou de partenaire au sens de l'article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats, tient le ménage de l'assuré principal;",
+    "3) aux enfants légitimes, légitimés, naturels et adoptifs de l’assuré principal pour lesquels il obtient une modération d’impôt en application des articles 122 et 123 de la loi modifiée du 4 décembre 1967 concernant l’impôt sur le revenu;",
+    "4) aux enfants recueillis d’une manière durable dans le ménage de l’assuré et auxquels celui-ci assure l’éducation et l’entretien, pour lesquels l’assuré, son conjoint ou son partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats obtient une modération d’impôt en application des articles 122 et 123 de la loi modifiée du 4 décembre 1967 concernant l’impôt sur le revenu;",
+    "5) aux ayants droit visés sous 3) et 4) âgés de moins de trente ans et pour lesquels la modération pour enfants n’est plus accordée, s’ils disposent de ressources inférieures aux limites fixées à l’article 5 de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale pour une personne seule.",
+    "Le bénéfice du présent article est subordonné à la condition que l'intéressé ne soit pas affilié personnellement et, sauf en cas d'études ou de formation professionnelle, qu'il réside au Grand-Duché de Luxembourg.",
+    "Dans des cas exceptionnels et pour des motifs graves, la Caisse nationale de santé peut accorder dispense des conditions d'âge et de résidence prévues aux deux alinéas qui précèdent.",
+    "Chaque personne susvisée n'est protégée que dans le chef d'un seul assuré principal, à savoir celui avec lequel elle vit en communauté domestique ou qui en assure l'éducation et l'entretien. Si ces conditions sont remplies à l'égard de plusieurs assurés principaux, la protection opère dans le chef de l'assuré principal le plus âgé."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Le bénéfice de l’assurance obligatoire et de l’assurance volontaire s’étend:",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "1) au conjoint ou au partenaire au sens de l'article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats;",
+     "label": "1)"
+    },
+    {
+     "n": 3,
+     "text": "2) au parent et allié en ligne directe ou collatérale jusqu'au troisième degré qui à défaut de conjoint ou de partenaire au sens de l'article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats, tient le ménage de l'assuré principal;",
+     "label": "2)"
+    },
+    {
+     "n": 4,
+     "text": "3) aux enfants légitimes, légitimés, naturels et adoptifs de l’assuré principal pour lesquels il obtient une modération d’impôt en application des articles 122 et 123 de la loi modifiée du 4 décembre 1967 concernant l’impôt sur le revenu;",
+     "label": "3)"
+    },
+    {
+     "n": 5,
+     "text": "4) aux enfants recueillis d’une manière durable dans le ménage de l’assuré et auxquels celui-ci assure l’éducation et l’entretien, pour lesquels l’assuré, son conjoint ou son partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats obtient une modération d’impôt en application des articles 122 et 123 de la loi modifiée du 4 décembre 1967 concernant l’impôt sur le revenu;",
+     "label": "4)"
+    },
+    {
+     "n": 6,
+     "text": "5) aux ayants droit visés sous 3) et 4) âgés de moins de trente ans et pour lesquels la modération pour enfants n’est plus accordée, s’ils disposent de ressources inférieures aux limites fixées à l’article 5 de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale pour une personne seule.",
+     "label": "5)"
+    },
+    {
+     "n": 7,
+     "text": "Le bénéfice du présent article est subordonné à la condition que l'intéressé ne soit pas affilié personnellement et, sauf en cas d'études ou de formation professionnelle, qu'il réside au Grand-Duché de Luxembourg.",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "Dans des cas exceptionnels et pour des motifs graves, la Caisse nationale de santé peut accorder dispense des conditions d'âge et de résidence prévues aux deux alinéas qui précèdent.",
+     "label": null
+    },
+    {
+     "n": 9,
+     "text": "Chaque personne susvisée n'est protégée que dans le chef d'un seul assuré principal, à savoir celui avec lequel elle vit en communauté domestique ou qui en assure l'éducation et l'entretien. Si ces conditions sont remplies à l'égard de plusieurs assurés principaux, la protection opère dans le chef de l'assuré principal le plus âgé.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 17295,
+    "from": "2026-01-01",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Art. 1er."
+  },
+  {
+   "role": "condition",
+   "kind": "article",
+   "work": "code-securite-sociale",
+   "anchor": "art_91",
+   "date": "2026-01-01",
+   "why": "ajouté par la référence: cité par Art. 1er., al. 5 (ligne 29): « … article 91 … » — renvoie à Art. 91.",
+   "act_title": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "article": "Art. 91.",
+   "number": "91",
+   "heading": null,
+   "path": "CODE DE LA SÉCURITÉ SOCIALE > Code de la sécurité sociale > LIVRE II ASSURANCE ACCIDENT > Chapitre I Champ d’application > Section 1 Personnes assurées",
+   "version_from": "2026-01-01",
+   "version_to": null,
+   "article_since": "2026-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/securite_sociale/jo",
+   "article_pk": 532188,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+   ],
+   "wording_since": "2026-01-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 91.",
+   "text": [
+    "Sont également assurés dans le cadre de régimes spéciaux d’assurance accident:",
+    "1) les écoliers, élèves et étudiants admis à l’enseignement précoce, préscolaire, scolaire et universitaire, y compris les activités péripréscolaires, périscolaires et périuniversitaires, à définir par règlement grand-ducal et les enfants âgés de moins de six ans accueillis dans un organisme agréé en vertu de la loi modifiée du 8 septembre 1998 réglant les relations entre l’État et les organismes œuvrant dans les domaines social, familial et thérapeutique;",
+    "2) les chargés de cours, moniteurs et surveillants d’activités péripréscolaires, périscolaires et périuniversitaires, les personnes participant aux cours de formation continue et examens y relatifs organisés ou agréés par l’État, les communes et les chambres professionnelles ainsi que les chargés de cours et membres ou auxiliaires des jurys afférents, à condition qu’ils ne soient pas assurés au titre de l’article 85 sous 1);",
+    "3) les délégués des différentes branches professionnelles participant aux séances des chambres professionnelles, des organes des institutions de sécurité sociale, du Conseil arbitral de la sécurité sociale, du Conseil supérieur de la sécurité sociale, du Tribunal du travail, du Conseil économique et social, du Comité de coordination tripartite, de l’Office national de conciliation ou participant à des réunions de toute autre instance du dialogue social créée par une disposition légale ou réglementaire, à condition qu’ils ne soient pas assurés à un autre titre;",
+    "4) les personnes participant aux actions de secours et de sauvetage apportées à la personne ou aux biens d’un tiers en péril, aux exercices théoriques et pratiques se rapportant directement à ces actions, pour autant que ces activités se situent dans le cadre d’une association ou d’un corps poursuivant habituellement et bénévolement de tels objectifs ainsi qu’à l’action de secours et de sauvetage apportée spontanément par un particulier à la personne ou aux biens d’un tiers exposé à un péril imminent sur le territoire du Grand-Duché;",
+    "5) les personnes bénéficiant d’une mesure d’activation au titre de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale;",
+    "6) les personnes faisant l’objet d’une mesure ordonnée en application de l’article 22 du Code pénal, de l’article 1, alinéa 3 sous b) de la loi modifiée du 10 août 1992 relative à la protection de la jeunesse, de l’article 633-7 sous 6) du Code d’instruction criminelle ou dans le cadre de l’exercice du pouvoir de grâce ainsi que les détenus ou retenus occupés respectivement pour le compte de l’administration pénitentiaire ou le Centre de rétention;",
+    "7) les demandeurs d’emploi bénéficiant d’une mesure d’insertion professionnelle visée à l’article L. 523-1 du Code du travail;",
+    "8) dans l’exercice de leurs fonctions, les membres de la Chambre des députés, les représentants luxembourgeois au Parlement européen, les membres du Conseil d’État, les bourgmestres, échevins et membres du Conseil communal, les membres des organes des établissements publics communaux et des syndicats des communes, les membres des commissions consultatives instituées auprès des communes ainsi que les personnes appelées en vertu d’une disposition légale par l’État et les communes à participer à l’exercice d’un service public;",
+    "9) les personnes qui exercent à titre bénévole une activité dans les domaines social, socio-éducatif, médico-social ou thérapeutique au profit d’un organisme agréé par l’État conformément aux dispositions de la loi du 8 septembre 1998 réglant les relations entre l’État et les organismes œuvrant dans les domaines social, familial et thérapeutique;",
+    "10) dans le cadre des examens par le Contrôle médical de la sécurité sociale ou l’Administration d’évaluation et de contrôle de l’assurance dépendance en vertu des articles 421 et 385 , l’assuré ou la personne dépendante ainsi que la tierce personne qui l’accompagne en raison de son état de santé;",
+    "11) les personnes assurées en application de l’article 2, alinéa 3;",
+    "12) le bénéficiaire de l’indemnité de chômage complet se présentant auprès de l’Agence pour le développement de l’emploi, à un entretien d’embauche ou à une mesure active en faveur de l’emploi proposés par les services de l’Agence pour le développement de l’emploi ou remplissant toute autre obligation résultant de l’article L. 521-9 du Code du travail;",
+    "13) les personnes handicapées inscrites dans un service de formation agréé en vertu de la loi du 8 septembre 1998 réglant les relations entre l’État et les organismes œuvrant dans les domaines social, familial et thérapeutique;",
+    "14) les représentants des parents d’élèves participant à une réunion d’une association de parents d’élèves de l’école fondamentale ou de l’enseignement secondaire, ainsi qu’à une réunion dans le cadre de la loi modifiée du 6 février 2009 portant organisation de l’enseignement fondamental, dans le cadre de la loi modifiée du 25 juin 2004 portant organisation des lycées ou dans le cadre de la loi du 1er août 2018 portant création d’une représentation nationale des parents;",
+    "15) les candidats effectuant le stage préparant à l’obtention de l’attestation habilitant à faire des remplacements dans l’enseignement fondamental ainsi que dans les centres, instituts et services de l’Education différenciée.",
+    "16) les jeunes participant aux activités de préparation à la vie active organisées par le Service national de la jeunesse telles que définies à l’article 7, alinéa 2, point k) de la loi modifiée du 4 juillet 2008 sur la jeunesse.",
+    "17) les bénéficiaires d’une reprise progressive du travail au sens de l’article 14bis.",
+    "18) les personnes visées aux articles 4, alinéa 5, et 177, alinéa 3, autres que celles déjà couvertes au titre des points 3) et 8), à condition qu’elles ne soient pas assurées à un autre titre."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sont également assurés dans le cadre de régimes spéciaux d’assurance accident:",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "1) les écoliers, élèves et étudiants admis à l’enseignement précoce, préscolaire, scolaire et universitaire, y compris les activités péripréscolaires, périscolaires et périuniversitaires, à définir par règlement grand-ducal et les enfants âgés de moins de six ans accueillis dans un organisme agréé en vertu de la loi modifiée du 8 septembre 1998 réglant les relations entre l’État et les organismes œuvrant dans les domaines social, familial et thérapeutique;",
+     "label": "1)"
+    },
+    {
+     "n": 3,
+     "text": "2) les chargés de cours, moniteurs et surveillants d’activités péripréscolaires, périscolaires et périuniversitaires, les personnes participant aux cours de formation continue et examens y relatifs organisés ou agréés par l’État, les communes et les chambres professionnelles ainsi que les chargés de cours et membres ou auxiliaires des jurys afférents, à condition qu’ils ne soient pas assurés au titre de l’article 85 sous 1);",
+     "label": "2)"
+    },
+    {
+     "n": 4,
+     "text": "3) les délégués des différentes branches professionnelles participant aux séances des chambres professionnelles, des organes des institutions de sécurité sociale, du Conseil arbitral de la sécurité sociale, du Conseil supérieur de la sécurité sociale, du Tribunal du travail, du Conseil économique et social, du Comité de coordination tripartite, de l’Office national de conciliation ou participant à des réunions de toute autre instance du dialogue social créée par une disposition légale ou réglementaire, à condition qu’ils ne soient pas assurés à un autre titre;",
+     "label": "3)"
+    },
+    {
+     "n": 5,
+     "text": "4) les personnes participant aux actions de secours et de sauvetage apportées à la personne ou aux biens d’un tiers en péril, aux exercices théoriques et pratiques se rapportant directement à ces actions, pour autant que ces activités se situent dans le cadre d’une association ou d’un corps poursuivant habituellement et bénévolement de tels objectifs ainsi qu’à l’action de secours et de sauvetage apportée spontanément par un particulier à la personne ou aux biens d’un tiers exposé à un péril imminent sur le territoire du Grand-Duché;",
+     "label": "4)"
+    },
+    {
+     "n": 6,
+     "text": "5) les personnes bénéficiant d’une mesure d’activation au titre de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale;",
+     "label": "5)"
+    },
+    {
+     "n": 7,
+     "text": "6) les personnes faisant l’objet d’une mesure ordonnée en application de l’article 22 du Code pénal, de l’article 1, alinéa 3 sous b) de la loi modifiée du 10 août 1992 relative à la protection de la jeunesse, de l’article 633-7 sous 6) du Code d’instruction criminelle ou dans le cadre de l’exercice du pouvoir de grâce ainsi que les détenus ou retenus occupés respectivement pour le compte de l’administration pénitentiaire ou le Centre de rétention;",
+     "label": "6)"
+    },
+    {
+     "n": 8,
+     "text": "7) les demandeurs d’emploi bénéficiant d’une mesure d’insertion professionnelle visée à l’article L. 523-1 du Code du travail;",
+     "label": "7)"
+    },
+    {
+     "n": 9,
+     "text": "8) dans l’exercice de leurs fonctions, les membres de la Chambre des députés, les représentants luxembourgeois au Parlement européen, les membres du Conseil d’État, les bourgmestres, échevins et membres du Conseil communal, les membres des organes des établissements publics communaux et des syndicats des communes, les membres des commissions consultatives instituées auprès des communes ainsi que les personnes appelées en vertu d’une disposition légale par l’État et les communes à participer à l’exercice d’un service public;",
+     "label": "8)"
+    },
+    {
+     "n": 10,
+     "text": "9) les personnes qui exercent à titre bénévole une activité dans les domaines social, socio-éducatif, médico-social ou thérapeutique au profit d’un organisme agréé par l’État conformément aux dispositions de la loi du 8 septembre 1998 réglant les relations entre l’État et les organismes œuvrant dans les domaines social, familial et thérapeutique;",
+     "label": "9)"
+    },
+    {
+     "n": 11,
+     "text": "10) dans le cadre des examens par le Contrôle médical de la sécurité sociale ou l’Administration d’évaluation et de contrôle de l’assurance dépendance en vertu des articles 421 et 385 , l’assuré ou la personne dépendante ainsi que la tierce personne qui l’accompagne en raison de son état de santé;",
+     "label": "10)"
+    },
+    {
+     "n": 12,
+     "text": "11) les personnes assurées en application de l’article 2, alinéa 3;",
+     "label": "11)"
+    },
+    {
+     "n": 13,
+     "text": "12) le bénéficiaire de l’indemnité de chômage complet se présentant auprès de l’Agence pour le développement de l’emploi, à un entretien d’embauche ou à une mesure active en faveur de l’emploi proposés par les services de l’Agence pour le développement de l’emploi ou remplissant toute autre obligation résultant de l’article L. 521-9 du Code du travail;",
+     "label": "12)"
+    },
+    {
+     "n": 14,
+     "text": "13) les personnes handicapées inscrites dans un service de formation agréé en vertu de la loi du 8 septembre 1998 réglant les relations entre l’État et les organismes œuvrant dans les domaines social, familial et thérapeutique;",
+     "label": "13)"
+    },
+    {
+     "n": 15,
+     "text": "14) les représentants des parents d’élèves participant à une réunion d’une association de parents d’élèves de l’école fondamentale ou de l’enseignement secondaire, ainsi qu’à une réunion dans le cadre de la loi modifiée du 6 février 2009 portant organisation de l’enseignement fondamental, dans le cadre de la loi modifiée du 25 juin 2004 portant organisation des lycées ou dans le cadre de la loi du 1er août 2018 portant création d’une représentation nationale des parents;",
+     "label": "14)"
+    },
+    {
+     "n": 16,
+     "text": "15) les candidats effectuant le stage préparant à l’obtention de l’attestation habilitant à faire des remplacements dans l’enseignement fondamental ainsi que dans les centres, instituts et services de l’Education différenciée.",
+     "label": "15)"
+    },
+    {
+     "n": 17,
+     "text": "16) les jeunes participant aux activités de préparation à la vie active organisées par le Service national de la jeunesse telles que définies à l’article 7, alinéa 2, point k) de la loi modifiée du 4 juillet 2008 sur la jeunesse.",
+     "label": "16)"
+    },
+    {
+     "n": 18,
+     "text": "17) les bénéficiaires d’une reprise progressive du travail au sens de l’article 14bis.",
+     "label": "17)"
+    },
+    {
+     "n": 19,
+     "text": "18) les personnes visées aux articles 4, alinéa 5, et 177, alinéa 3, autres que celles déjà couvertes au titre des points 3) et 8), à condition qu’elles ne soient pas assurées à un autre titre.",
+     "label": "18)"
+    }
+   ],
+   "version": {
+    "id": 17295,
+    "from": "2026-01-01",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "meaning": 7,
+    "meaning_all": 7
+   },
+   "meaning_only": true,
+   "retrieved_via": "reference",
+   "referenced_from": "Art. 1er.",
+   "lines_added_by_code": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    18,
+    19
+   ],
+   "lines_pointed_by_reading": [
+    1,
+    2,
+    16,
+    17
+   ],
+   "context_unit": "paragraph"
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "code-securite-sociale",
+   "anchor": "art_377",
+   "date": "2026-01-01",
+   "why": "Art. 377., al. 1 déroge à Art. 1er. (« à l’exception d »)",
+   "act_title": "Code de la sécurité sociale",
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "article": "Art. 377.",
+   "number": "377",
+   "heading": null,
+   "path": "CODE DE LA SÉCURITÉ SOCIALE > Code de la sécurité sociale > LIVRE V ASSURANCE DÉPENDANCE > Chapitre II Financement > Contribution dépendance",
+   "version_from": "2026-01-01",
+   "version_to": null,
+   "article_since": "2026-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/securite_sociale/jo",
+   "article_pk": 532438,
+   "lines": [
+    1
+   ],
+   "wording_since": "2026-01-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Art. 377.",
+   "text": [
+    "La contribution dépendance sur les revenus professionnels et les revenus de remplacement est due par les personnes assurées en vertu des articles 1er à 6, à l’exception des personnes visées à l’article 1er, alinéa 1, point 14. Toutefois, elle est à charge de l’assuré principal, de la congrégation ou de l’État pour les personnes visées respectivement au numéro 5), au numéro 6) et aux numéros 13) et 15) de l’article 1er, alinéa 1 dans les conditions prévues à l’article 32."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "La contribution dépendance sur les revenus professionnels et les revenus de remplacement est due par les personnes assurées en vertu des articles 1er à 6, à l’exception des personnes visées à l’article 1er, alinéa 1, point 14. Toutefois, elle est à charge de l’assuré principal, de la congrégation ou de l’État pour les personnes visées respectivement au numéro 5), au numéro 6) et aux numéros 13) et 15) de l’article 1er, alinéa 1 dans les conditions prévues à l’article 32.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 17295,
+    "from": "2026-01-01",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": "Art. 1er.",
+   "inbound": true
+  }
+ ],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": {
+  "heading": "Sont assurés obligatoirement conformément aux dispositions qui suivent:",
+  "items_total": 4,
+  "items_shown": 4,
+  "count_stated_by_text": null,
+  "complete": true,
+  "by": "code (structure of the article)",
+  "deleted_items": 0
+ },
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": true,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": true,
+  "references_followed": 4,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [
+      {
+       "text": "Code de la sécurité sociale",
+       "kind": "code",
+       "act_id": "/eli/etat/leg/code/securite_sociale"
+      }
+     ],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [
+      "/eli/etat/leg/code/securite_sociale"
+     ],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "list",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Qui est assuré obligatoirement à l'assurance maladie selon le Code de la sécurité sociale ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "assurance maladie",
+      "assurance obligatoire",
+      "assuré",
+      "affiliation",
+      "Code de la sécurité sociale"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "luxembourg_or_eu",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 50,
+    "considered_lines": 63,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 4,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 1,
+     "replaces": 0,
+     "transposes": 7,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 2,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "",
+      "found_by": {
+       "named": 0,
+       "lines_words": 7,
+       "lines_meaning": 15
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00517",
+      "found_by": {
+       "lines_words": 1,
+       "lines_meaning": 9,
+       "articles_words": 1
+      },
+      "tally": 7,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00001",
+      "found_by": {
+       "lines_words": 2,
+       "lines_meaning": 1
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00002",
+      "found_by": {
+       "lines_words": 4,
+       "lines_meaning": 6,
+       "articles_meaning": 1
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00186",
+      "found_by": {
+       "lines_words": 22,
+       "lines_meaning": 2
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/loi/1974/05/14/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 16,
+       "lines_meaning": 4,
+       "articles_meaning": 2
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/loi/2001/12/21/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 2
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/rgd/1975/02/06/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 3,
+       "lines_meaning": 8
+      },
+      "tally": 7,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00185",
+      "found_by": {
+       "lines_meaning": 3
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/loi/2000/12/22/n5",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/loi/2012/12/21/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 4
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/rgd/1974/12/31/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5,
+       "lines_meaning": 23
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/loi/1954/04/24/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 5
+      },
+      "tally": 5,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/rgd/1984/08/16/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 13,
+       "articles_words": 5
+      },
+      "tally": 5,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/rgd/2002/11/13/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 6
+      },
+      "tally": 7,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/loi/2009/12/18/n7",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/loi/1961/05/05/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 9,
+       "lines_meaning": 7
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/rgd/2011/12/08/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 7
+      },
+      "tally": 5,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/rgd/1985/12/24/n11",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 8
+      },
+      "tally": 7,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/rgd/2026/10/23/a525",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 21,
+       "articles_words": 8
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/rgd/2026/10/23/a526",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 23,
+       "articles_words": 9
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/loi/2015/04/12/n6",
+      "node_id": "",
+      "found_by": {
+       "transposes": 10
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00734",
+      "found_by": {
+       "lines_words": 10,
+       "lines_meaning": 28
+      },
+      "tally": 6,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00417",
+      "found_by": {
+       "lines_meaning": 10
+      },
+      "tally": 3,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00001",
+      "title": "Code de la sécurité sociale > CODE DE LA SÉCURITÉ SOCIALE [CODE_RECUEIL; code; public général; in_force] — Définit les personnes assurées obligatoirement par la sécurité sociale au Luxembourg. En clai",
+      "reason": "Le Code de la sécurité sociale, dans sa partie générale, traite directement des personnes soumises à l’assurance obligatoire.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1832
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/code/securite_sociale",
+    "node_start": "n00001",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 17295,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 1,
+      "picked": [
+       {
+        "node_id": "n00002",
+        "heading": "Code de la sécurité sociale",
+        "tally": 10,
+        "reason": "only one part at this level (code)",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "code"
+     },
+     {
+      "depth": 2,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "n00003",
+        "heading": "LIVRE Ier ASSURANCE MALADIE-MATERNITÉ",
+        "tally": 10,
+        "reason": "Le Livre Ier traite spécifiquement de l'assurance maladie-maternité, donc il est le plus pertinent pour identifier qui est assuré obligatoirement à l'assurance maladie.",
+        "whole": true,
+        "stop": "list_node"
+       },
+       {
+        "node_id": "n00152",
+        "heading": "LIVRE VI DISPOSITIONS COMMUNES",
+        "tally": 8,
+        "reason": "Le Livre VI contient des dispositions communes qui peuvent inclure des définitions ou règles générales sur l'assurance maladie obligatoire.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 3,
+      "shown": 2,
+      "picked": [
+       {
+        "node_id": "n00166",
+        "heading": "TITRE II Fonctionnement de la sécurité sociale",
+        "tally": 8,
+        "reason": "Contient plus d'articles et plus de mots-clés liés à l'assurance maladie obligatoire.",
+        "whole": true,
+        "stop": "list_node"
+       },
+       {
+        "node_id": "n00153",
+        "heading": "TITRE PREMIER Organisation de la sécurité sociale",
+        "tally": 6,
+        "reason": "Contient des articles sur l'organisation de la sécurité sociale, incluant l'assurance maladie.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 4,
+      "shown": 4,
+      "picked": [
+       {
+        "node_id": "n00154",
+        "heading": "Chapitre Ier Institutions de sécurité sociale",
+        "tally": 5,
+        "reason": "Contient des articles sur les institutions de sécurité sociale, incluant probablement les règles d'assurance maladie obligatoire.",
+        "whole": true,
+        "stop": "list_node"
+       },
+       {
+        "node_id": "n00164",
+        "heading": "Chapitre III Contrôle médical de la sécurité sociale",
+        "tally": 6,
+        "reason": "Aborde le contrôle médical de la sécurité sociale, ce qui peut inclure des dispositions sur l'assurance maladie obligatoire.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "n00003",
+      "heading": "LIVRE Ier ASSURANCE MALADIE-MATERNITÉ",
+      "stopped": "list_node",
+      "articles": 95,
+      "read": "over budget: 8 of 95 articles read, ranked by question words inside the node"
+     },
+     {
+      "node_id": "n00166",
+      "heading": "TITRE II Fonctionnement de la sécurité sociale",
+      "stopped": "list_node",
+      "articles": 43,
+      "read": "over budget: 8 of 43 articles read, ranked by meaning inside the node"
+     },
+     {
+      "node_id": "n00154",
+      "heading": "Chapitre Ier Institutions de sécurité sociale",
+      "stopped": "list_node",
+      "articles": 18
+     },
+     {
+      "node_id": "n00164",
+      "heading": "Chapitre III Contrôle médical de la sécurité sociale",
+      "stopped": "leaf",
+      "articles": 4
+     }
+    ],
+    "articles": 22,
+    "stopped": "leaf,list_node"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 532464,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532465,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532466,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532467,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532468,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532469,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532470,
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532471,
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532472,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532473,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532474,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532475,
+      "found_by": {
+       "outline": 12
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532476,
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532477,
+      "found_by": {
+       "outline": 14
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532478,
+      "found_by": {
+       "outline": 15
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532479,
+      "found_by": {
+       "outline": 16
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532480,
+      "found_by": {
+       "outline": 17
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532481,
+      "found_by": {
+       "outline": 18
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532487,
+      "found_by": {
+       "outline": 19
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532488,
+      "found_by": {
+       "outline": 20
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532489,
+      "found_by": {
+       "outline": 21
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532490,
+      "found_by": {
+       "outline": 22
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532143,
+      "found_by": {
+       "words": 1,
+       "meaning": 8,
+       "words_all": 1,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 533404,
+      "found_by": {
+       "words": 2,
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532087,
+      "found_by": {
+       "outline": 51,
+       "words": 3,
+       "meaning": 10,
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 533243,
+      "found_by": {
+       "words": 4,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 533631,
+      "found_by": {
+       "words": 5,
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 533696,
+      "found_by": {
+       "words": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 533697,
+      "found_by": {
+       "words": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532089,
+      "found_by": {
+       "words": 8,
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 533383,
+      "found_by": {
+       "words": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532157,
+      "found_by": {
+       "outline": 53,
+       "words": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 523446,
+      "found_by": {
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532086,
+      "found_by": {
+       "outline": 50,
+       "meaning": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532182,
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 532268,
+      "found_by": {
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 532413,
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 532679,
+      "found_by": {
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 532188,
+      "found_by": {
+       "meaning": 7,
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 533446,
+      "found_by": {
+       "meaning": 9
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 532122,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532172,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532168,
+      "found_by": {
+       "outline": 55
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532170,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532180,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532516,
+      "found_by": {
+       "outline": 50
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532510,
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532522,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532504,
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532509,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532505,
+      "found_by": {
+       "outline": 55
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532517,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 532507,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 3012,
+    "candidates": [
+     {
+      "article_pk": 532143,
+      "label": "Art. 53.",
+      "role": "context",
+      "reason": "Traite employeurs, pas assurés obligatoires en maladie.",
+      "found_by": {
+       "words": 1,
+       "meaning": 8,
+       "words_all": 1,
+       "meaning_all": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "code",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532086,
+      "label": "Art. 1er.",
+      "role": "rule",
+      "reason": "Énonce qui est assuré obligatoirement en assurance maladie.",
+      "found_by": {
+       "outline": 50,
+       "meaning": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "maladie",
+       "code",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 533404,
+      "label": "Art. 4.",
+      "role": "reject",
+      "reason": "Assurance volontaire, pas obligatoire.",
+      "found_by": {
+       "words": 2,
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "obligatoire",
+       "affiliation"
+      ]
+     },
+     {
+      "article_pk": 532182,
+      "label": "Art. 85 .",
+      "role": "reject",
+      "reason": "Assurance accident, pas maladie.",
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "maladie",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532087,
+      "label": "Art. 2.",
+      "role": "reject",
+      "reason": "Assurance volontaire, pas obligatoire.",
+      "found_by": {
+       "outline": 51,
+       "words": 3,
+       "meaning": 10,
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "assurance",
+       "maladie",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532268,
+      "label": "Art. 170.",
+      "role": "reject",
+      "reason": "Assurance pension, pas maladie.",
+      "found_by": {
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": true,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 533243,
+      "label": "Art. 78.",
+      "role": "context",
+      "reason": "Cotisations maladie, pas liste assurés obligatoires.",
+      "found_by": {
+       "words": 4,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "maladie",
+       "code",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532413,
+      "label": "Art. 352.",
+      "role": "reject",
+      "reason": "Assurance dépendance, pas maladie obligatoire.",
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "matched": [
+       "assure",
+       "assurance",
+       "code"
+      ]
+     },
+     {
+      "article_pk": 533631,
+      "label": "Art. 156.",
+      "role": "reject",
+      "reason": "Documents administratifs, pas assurés obligatoires.",
+      "found_by": {
+       "words": 5,
+       "words_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "assurance",
+       "maladie",
+       "code",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532089,
+      "label": "Art. 4.",
+      "role": "exception",
+      "reason": "Liste des dispensés, modifie la règle d'assurance obligatoire.",
+      "found_by": {
+       "words": 8,
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "maladie",
+       "sociale",
+       "obligatoire",
+       "affiliation"
+      ]
+     },
+     {
+      "article_pk": 532679,
+      "label": "Art. 2.",
+      "role": "reject",
+      "reason": "Régime pension spécial, pas maladie.",
+      "found_by": {
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": true,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532188,
+      "label": "Art. 91.",
+      "role": "reject",
+      "reason": "Assurance accident, pas maladie.",
+      "found_by": {
+       "meaning": 7,
+       "meaning_all": 7
+      },
+      "meaning_only": true,
+      "matched": [
+       "assure",
+       "code",
+       "securite",
+       "sociale"
+      ]
+     },
+     {
+      "article_pk": 532157,
+      "label": "Art. 64.",
+      "role": "reject",
+      "reason": "Relations prestataires, pas assurés obligatoires.",
+      "found_by": {
+       "outline": 53,
+       "words": 10
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "obligatoirement",
+       "maladie",
+       "securite",
+       "sociale",
+       "obligatoire"
+      ]
+     },
+     {
+      "article_pk": 532464,
+      "label": "Art. 396.",
+      "role": "context",
+      "reason": "Institutions sécurité sociale, pas assurés obligatoires.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "maladie",
+       "code",
+       "securite",
+       "sociale"
+      ]
+     },
+     {
+      "article_pk": 532465,
+      "label": "Art. 397.",
+      "role": "reject",
+      "reason": "Représentation institution, pas assurés obligatoires.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "securite",
+       "sociale"
+      ]
+     },
+     {
+      "article_pk": 532466,
+      "label": "Art. 398.",
+      "role": "reject",
+      "reason": "Actes institutionnels, pas assurés obligatoires.",
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "code",
+       "securite",
+       "sociale"
+      ]
+     },
+     {
+      "article_pk": 532467,
+      "label": "Art. 399.",
+      "role": "reject",
+      "reason": "Garanties institutionnelles, pas assurés obligatoires.",
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "securite",
+       "sociale"
+      ]
+     },
+     {
+      "article_pk": 532468,
+      "label": "Art. 400.",
+      "role": "reject",
+      "reason": "Délégués, pas assurés obligatoires.",
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "securite",
+       "sociale"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 5,
+    "read_amount_set_by": "list",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": false,
+      "article": "A1",
+      "lines": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29
+      ],
+      "missing": "Définition de certaines catégories, portée des protections ou assurances excluant l’affiliation à certains titres et conditions de l’éventuelle extension réglementaire.",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "Code de la sécurité sociale",
+      "items_are_headings": false,
+      "reason": "L’article 1er énumère les catégories assujetties et l’article 4 précise les exemptions et dispenses, mais certains renvois nécessaires pour délimiter ces catégories ne sont pas montrés.",
+      "pending_references": [
+       {
+        "article": "A1",
+        "line": 10,
+        "reference": "Article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats",
+        "why": "Définit le partenaire visé."
+       },
+       {
+        "article": "A1",
+        "line": 12,
+        "reference": "Loi du 6 janvier 1996 sur la coopération au développement et loi du 27 juillet 1992 relative à la participation du Luxembourg à des opérations pour le maintien de la paix",
+        "why": "Identifient les personnes visées au point 7."
+       },
+       {
+        "article": "A1",
+        "line": 18,
+        "reference": "Article 7 du Code de la sécurité sociale",
+        "why": "Détermine la protection dont l’absence conditionne l’affiliation au point 13."
+       },
+       {
+        "article": "A1",
+        "line": 19,
+        "reference": "Article 7 du Code de la sécurité sociale",
+        "why": "Détermine la protection dont l’absence conditionne l’affiliation au point 14."
+       },
+       {
+        "article": "A1",
+        "line": 20,
+        "reference": "Article 7 du Code de la sécurité sociale",
+        "why": "Détermine la protection dont l’absence conditionne l’affiliation au point 15."
+       },
+       {
+        "article": "A1",
+        "line": 28,
+        "reference": "Règlement grand-ducal prévu à l’article 1er, alinéa 2, du Code de la sécurité sociale",
+        "why": "Fixe les conditions et modalités de l’éventuelle extension de l’assurance."
+       },
+       {
+        "article": "A1",
+        "line": 29,
+        "reference": "Article 91 du Code de la sécurité sociale",
+        "why": "Détermine l’assurance dont l’absence conditionne l’affiliation des stagiaires au titre de cet alinéa."
+       }
+      ],
+      "lines_refused": []
+     },
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A1",
+      "lines": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       15,
+       16,
+       17,
+       18,
+       19,
+       20,
+       21,
+       22,
+       23,
+       24,
+       25,
+       26,
+       27,
+       28,
+       29
+      ],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "L’article 1er énumère les catégories assujetties, et les autres articles désignés précisent les exceptions et les conditions pertinentes.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 29,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "complete_answer_found = false",
+    "budget": 1,
+    "loops": 1,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [
+     {
+      "from": "Art. 1er.",
+      "from_article_pk": 532086,
+      "line": 10,
+      "to": "Art. 2.",
+      "kind": "definition",
+      "edge_id": 923868,
+      "loop": 1,
+      "article_pk": 230578,
+      "act_id": "/eli/etat/leg/loi/2004/07/09/n3",
+      "held": true,
+      "status": "resolved",
+      "why": "cité par Art. 1er., al. 3, point 1 (ligne 10): « … article 2 … » — renvoie pour la définition à Art. 2."
+     },
+     {
+      "from": "Art. 1er.",
+      "from_article_pk": 532086,
+      "line": 18,
+      "to": "Art. 7.",
+      "kind": "pointer",
+      "edge_id": 923869,
+      "loop": 1,
+      "article_pk": 532092,
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "held": true,
+      "status": "resolved",
+      "why": "cité par Art. 1er., al. 3, point 9 (ligne 18): « … article 7 … » — renvoie à Art. 7."
+     },
+     {
+      "from": "Art. 1er.",
+      "from_article_pk": 532086,
+      "line": 29,
+      "to": "Art. 91.",
+      "kind": "pointer",
+      "edge_id": 923872,
+      "loop": 1,
+      "article_pk": 532188,
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "held": true,
+      "status": "resolved",
+      "why": "cité par Art. 1er., al. 5 (ligne 29): « … article 91 … » — renvoie à Art. 91."
+     },
+     {
+      "from": "Art. 377.",
+      "to": "Art. 1er.",
+      "kind": "exception",
+      "why": "Art. 377., al. 1 déroge à Art. 1er. (« à l’exception d »)",
+      "held": true,
+      "direction": "inbound",
+      "article_pk": 532438,
+      "line": 1,
+      "status": "resolved"
+     }
+    ],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 5,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_with_exception_by_code",
+    "state": "answer_with_exception"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 342,
+    "tokens_in": 24,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1336,
+    "model_ms": 1335,
+    "queue_ms": 0,
+    "tokens_in": 570,
+    "tokens_out": 99,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1443,
+    "model_ms": 1443,
+    "queue_ms": 0,
+    "tokens_in": 4022,
+    "tokens_out": 81,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 806,
+    "model_ms": 806,
+    "queue_ms": 0,
+    "tokens_in": 553,
+    "tokens_out": 84,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 810,
+    "model_ms": 810,
+    "queue_ms": 0,
+    "tokens_in": 357,
+    "tokens_out": 65,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 751,
+    "model_ms": 751,
+    "queue_ms": 0,
+    "tokens_in": 441,
+    "tokens_out": 72,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 2886,
+    "model_ms": 2886,
+    "queue_ms": 0,
+    "tokens_in": 3035,
+    "tokens_out": 398,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 4437,
+    "model_ms": 4437,
+    "queue_ms": 0,
+    "tokens_in": 4272,
+    "tokens_out": 740,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 2423,
+    "model_ms": 2423,
+    "queue_ms": 0,
+    "tokens_in": 5632,
+    "tokens_out": 379,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.0389,
+  "ms": 16714,
+  "model_calls": 8,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "list",
+   "french": "Qui est assuré obligatoirement à l'assurance maladie selon le Code de la sécurité sociale ?",
+   "legal_terms": [
+    "assurance maladie",
+    "assurance obligatoire",
+    "assuré",
+    "affiliation",
+    "Code de la sécurité sociale"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "luxembourg_or_eu",
+   "parts": []
+  },
+  "candidates": [
+   {
+    "article_pk": 532143,
+    "role": "context",
+    "found_by": {
+     "words": 1,
+     "meaning": 8,
+     "words_all": 1,
+     "meaning_all": 8
+    }
+   },
+   {
+    "article_pk": 532086,
+    "role": "rule",
+    "found_by": {
+     "outline": 50,
+     "meaning": 1,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 533404,
+    "role": "reject",
+    "found_by": {
+     "words": 2,
+     "words_all": 2
+    }
+   },
+   {
+    "article_pk": 532182,
+    "role": "reject",
+    "found_by": {
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 532087,
+    "role": "reject",
+    "found_by": {
+     "outline": 51,
+     "words": 3,
+     "meaning": 10,
+     "words_all": 3
+    }
+   },
+   {
+    "article_pk": 532268,
+    "role": "reject",
+    "found_by": {
+     "meaning": 3,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 533243,
+    "role": "context",
+    "found_by": {
+     "words": 4,
+     "words_all": 5
+    }
+   },
+   {
+    "article_pk": 532413,
+    "role": "reject",
+    "found_by": {
+     "meaning": 4,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 533631,
+    "role": "reject",
+    "found_by": {
+     "words": 5,
+     "words_all": 6
+    }
+   },
+   {
+    "article_pk": 532089,
+    "role": "exception",
+    "found_by": {
+     "words": 8,
+     "meaning": 5,
+     "meaning_all": 5
+    }
+   },
+   {
+    "article_pk": 532679,
+    "role": "reject",
+    "found_by": {
+     "meaning": 6,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 532188,
+    "role": "reject",
+    "found_by": {
+     "meaning": 7,
+     "meaning_all": 7
+    }
+   },
+   {
+    "article_pk": 532157,
+    "role": "reject",
+    "found_by": {
+     "outline": 53,
+     "words": 10
+    }
+   },
+   {
+    "article_pk": 532464,
+    "role": "context",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 532465,
+    "role": "reject",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 532466,
+    "role": "reject",
+    "found_by": {
+     "outline": 3
+    }
+   },
+   {
+    "article_pk": 532467,
+    "role": "reject",
+    "found_by": {
+     "outline": 4
+    }
+   },
+   {
+    "article_pk": 532468,
+    "role": "reject",
+    "found_by": {
+     "outline": 5
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 532086
+   },
+   {
+    "article_pk": 532089
+   },
+   {
+    "article_pk": 532143
+   },
+   {
+    "article_pk": 533243
+   },
+   {
+    "article_pk": 532464
+   },
+   {
+    "article_pk": 230578
+   },
+   {
+    "article_pk": 532092
+   },
+   {
+    "article_pk": 532188
+   }
+  ],
+  "replay": "eNrVWstu3MgV_ZUCN7aRktRkv9tIAsFWAiGyPZHs2RgGUSKru2lXs2gWKVkxDMx29tlkl1UwQrbZZTf9J_MlObeK7GY_JT8mQQbGqFmsx33fc2_xo3fljXzuZd7Ii_TsUnvci_Bb6Ugo_I4bvzNM9cZlmkp1cOVj4D2e_1wmTJqCCWPKfH7L9KVKJqLQSS5nMi3Y_O9MPbAvRRpJNhNKxIlkRiqdMiXZEx1Lhn9KMDO_jco8KbCL0VEi8Pb3REKJY4JW0Dvw_YOAzo2NNxoLZST38MsTqbmWeXidFNNQfohkViQ6xbR817vw8iaMcC7mXHqj16-77aA16GFBqTD22ucBb_MO7_Ie7_MBH3K_xX2f-wH329zvcL_L_R73-9wfcH_IgxYPsCbgQZsHHR50edDjQZ8HAx4M33Dv7Jcf_ibyIonAkC9zNr9Ny9n8pxxMS8MiAYYnOk_wm-T0VhYFfnMmC_telEVOf9wGhsXzW5NMUvyfZRB4lBgSM71Z8GfqtZFO48SNZBIbpJgqzSHpMk9mIr_xuJNjWir1hjtBDLnXkOJSGsRJYgrSFqhITCZTaAyEznScjBOrwnz-0wRcxg2NNwxi98FBu9XtD6BZOU7SpD4ZJ4q3uiSDyETu9r8dz29ziY1HLErqN8d5cUiiPeRMqEPW5izTCaTis4c4PIXYW49G7Od_sl9--EctSRbYp5__jT9_ZdjySoOHTJf2IEi5poRM2B4QEP25HEt7_hbRDQM4Ty3ybYb01QwNFwwNNhnqb2OoJr5_B_H-YHAH8fu94EtZ69YcBcNNjob-PpaG_h08ddqDNVsGlXZpu9-vzvdJ1bmeLLcl2thDUEKhC6672IDFoOTRziOxdzpFOMHfmTeiIQhU1b_w46M3lQh-6QRx6UKni5hpNoIm9DDW-Wx-a59E-cH6mzaVL79HzDVlcoWXI5CTFHJmwkIXiNKjTv1spvo6tc-RLtMiNIUoZEyhr5AfigWBepYpWUhvVOQl4unljU0ECMgPDUaiokSY0mNWTGWtFZJALGlRHNqjvFHrE-Rcb5kJYlWJdFKKiaSUkdMKQYd8xIOercfzQq-PTHKRgHisuqH3DYLBFcZTzWhDlqSWsvclUhBEM2KFpiUgpx4Ki5uMiFAIXdhqTHqb_lfylpIToSDsnCT02tvYC1O2Rsl6fH5Lv8bjRCWiymh7D_XeWGNXpSEjcYaIqG90CjIiYeQiab7FQhMnkd0Voik_SGT-Mp-EOg9lSVEaurZbQJLvqhTpd9o2Qlht1Mmizpr2ud1pdcg73sqonuEPgrWR1qC_NhL0Bqsj5LnrR3UQdFYn9dr-xtYrucsN9vrDDZoG6yPddZo6vc4GBb3uxqTexsjmRo3DoJEciKoWXUVyJduK7-rwKiNWacVRjeUKGOw1vEteSWU9Nc9K4zX89jfIxpLQGog3SYw4hQO7reZzqAAEoN0eJPoOsrIA0IYLBJHQrR8ByHgwPZivsSdaLY_ASSZha3EoihCeF5IXhsK8wynE5kxf0XmdBkHeJ5BtYF0RnfnRS8WMpljdZUrYUZBXwA8oxNEjZGhJDK91Tliv3aoHZlKkNoDSUA2JlqNBY7Ba63dhwiIqHBf4ESaEaY-kSo4kQuIR3PSI6Dwy0jqUDGt_QjzHuJuftvCfjVVJYQWx3_9_x568eHrC8O_smF3Mf3zy6vz05fxHdvHiyenx2Ql7Ta_D85Mnr05Ozx4zOv8xy0oEgYhNgA-RkoR6jPAWIg9E8o3Nf08rTGKhnfPstAKNCBZyM41UiXgLfaJkZwuvP2QnKYuUSKwKhbFB4eyOEMcRgJGKjKBTAFiXZOMVlJkQUAQhUeFoiVdohj3MAFxNnWN3wkVrRs4kyY6wyEDTVQrzMIGCqz9oB5_40itiHZV0qMe_SOHIlHnR1DlgDZlf6KwYb6oBVohLu6xBJfeuwCUlHjrW7wdDRI2pVHGoU3UTKvhLvqxeCpk5w4zhh9OlI7qaLInIr-j1miEGHm9gif1ZASYrlAKBgG9L9RIxTIMF0h4TBdJoYpgVIHtI0qEsfz3VSjaI1ZnLwqSJhn_zBfnBgvzePvLbK-SfnX5_fsJOURgdX1y8Oj9-_uSEPTs-O356enLw7Pjlyflzcp0dfMBMz5IrYBRaX5mdyagsGieAAJXpbUvlBzNSRUqygi3rNGKJsogA7pEhiS4rJlcUIHamBdU5ucVfn48dDpcSdVjLCdQikzCtJbkiKr8bbBHV96fs6enFdy8uTl-evnh-gVDz7Nmr5ycXSxENtkkIyyihJbU3rkBK4MBZSZ5JvGWyJGyJ8AM0kVcF37IgQqApq0rPNNweXk210xbQtObTd5pV5e9Lu2ov7CrYbVd-r7cirJenL8muTtkfoFyiO12aw35PaYrvSS0yaxMobOs6XNZD4FMX5iBShORVQv_fAR63y-H-xtDewt935yfPTk_O2Yt8giRohCtU7mSxt43FuNlncMrU99mWO0sR1IfYa_efofLOQuWdPSrvdlYj4VRkSVFFg9MUBUBROosF6fvE0b2fOPA3uXPXhjSyXF9SipjVLZraa-Jvbx29XaKABxBL-fxfiGyoKQH8hfpMEzm-BJqifpUNIffcirNI1vFkLZg0Q89XRA1kfDH21o3oDSHXlIrhb5Z66LhMxisqWGJNbzR0BkQTgIBzdlnGE1mM2IBq52F3aUY0iTMwCntmlzeLypVZuErWhTxja9pdav7qIHcXL532Hl467d28VDD8Hkx8tdvexYM_-DUdpHE62d-K8Mj6lo9BsD6br_rwArLKAlBZ56u1HAC6jC292OZd4raxaNHNxjz5ARDXuseN64vUvTNbZ603SKxzuD5_FVkwK6UTwiXRwFdpGAkMU3WHgW67SarILxMCsWuwd2YLNZ9aoI2lm50D7r10ME3OMqVvZJkbDhRqtnbDkGbTZR5Zbzpwb_5jqtMqyuxDZNhlS17abFpw73gx7UorkCywhaNvJR5tdjeaS0UUWbjoFm7Q3__S85qdkuZSasVDu9uOW-2lUAupqNL5YqZbpmxvf6sSDrf0YJrHAxuCgph-r5CwhYWVrg33nlaVGrQfzwAvDSA8QPY-izjc3uz5BpcTm_0i7p3PbyfJbCHhqrYQaqtmm42le5tDs_eE86SqlJOBV5SrZA_3EcdKw4p7K1F0W2q-x4bdFbrosomumhwUbMCge-3VawomKlaBVCrV_VhsSuqPAsKlm7K1ndQ9xdVU1dP5LdD7pLQWs2_tm2YgtElyLQou2k8ug1awIBQz14OXRWinV91o19R6X-qCAnsAw3PJlvpkjWQG4UVTQY24zgAYhrukt5zQpv57jhPiqsvlLj3HNFLH-brRH66-rOBUtRchPb-mC1t965vQZVH6JVei9lazsbCzuACtrj-RURbXn1UMIGOYiQR7opoXsJTqFskwVK2RNMb6l6vwEcZUMqPchtmrVKTAIdp21OC_FivcwhzIGD5D1lXC_X8Q9a96-_xpzYuqy7QV6ENlSJ5MJtQs2y5P9ltmjddbOg0yi9KaOmo-VTE5Bk2Io8MpFQs2dxmtruyeIsuOcLQ5zG5GTGK9a-axhwaICBG7eMw0kFPe6JPSKESBo0_KXGdAu26Eunvc9dCku5ayDfFHqH-mMqrAsWvx5nIiPzDtQBlFBpk_MBX2v54CpQDAETGPYXGEvQWrA8tUV53C6gJtcVVpL7X0rA4HYfaOAJtDSWRcrmFmr9iWt9jvEjLIlet2j861aHkYtAcUHkmWVpTNreub-h2NVaWTo6DV6hy1-ket4VHq6i0VLwtZUZTGqt2qIl5A1__BbT6Z4ReIc9AUZ78hTkumRcarshzukGX9zcBnNqm_lTy_6mOCL5Mdpbil7NwF_n7h9YPdwrN4678rvK_8XGFdavQdgtcUSSXGSiZNeOsI-wZfLzQl4G5o3DVwkl7aPLUhZvsZRWX724RGNWWqi9Bt_Nomn3Fp5OpDaD9DsNWlkQjlymj3HoDVgWt7PVhTMbIRj9GHW2xBJXtQvX5ADWvJSJRVKEUSyWV8UOgDBFtIT34YIVSzxeZsrCkUXLOHdrQWih7jPTNJYepSuVZmMUVEhx0gkdkTUHA-esz-JP8yFemDRUZkvo-dldLX1BUvLHGsMmWMpOrGa37VZHbxtZzyAHQz-4jEQV8P1J9fELJnJMn1op5lpVJmMQfE6euULXfk9rRqUeMgFAb2mxBmImQz71MzK9vbYtRTaXSzlparnGaxbZxXrQ2rZ3dDTBeCgFUwyUu56AO5xM0Au2xT1wqGJWNGcocDM2RjZSEIpEdjlBFtK8mxRRdViVUh1WzpWqJda6QAkziPaVJdE3fH54BWIDs_KbQ3kBaQ9wHIvNKA89Zhq02VaFoZc1l_qJLXLe7_AHDfMuY"
+ }
+}

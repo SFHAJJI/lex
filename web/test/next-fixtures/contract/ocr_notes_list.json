@@ -1,0 +1,1747 @@
+{
+ "state": "partial",
+ "outcome": "partial",
+ "pipeline": "combo",
+ "question": "Quel est le délai pour déclarer un sinistre à mon assureur habitation ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_26",
+   "date": "2025-11-25",
+   "why": "L’article 26 régit la déclaration du sinistre, mais le délai exact dépend du contrat non fourni.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 26",
+   "number": "26",
+   "heading": "Déclaration du sinistre",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96069,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "repeal": null,
+   "label": "Article 26",
+   "text": [
+    "L'assuré doit, dès que possible et en tout cas dans le délai fixé par le contrat, donner avis à l'assureur de la survenance du sinistre.",
+    "Toutefois, l'assureur ne peut se prévaloir de ce que le délai prévu au contrat pour donner l'avis mentionné au 1er alinéa n'a pas été respecté, si cet avis a été donné aussi rapidement que cela pouvait raisonnablement se faire.",
+    "L'assuré doit fournir sans retard à l'assureur tous renseignements utiles et répondre aux demandes qui lui sont faites pour déterminer les circonstances et fixer l'étendue du sinistre."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "L'assuré doit, dès que possible et en tout cas dans le délai fixé par le contrat, donner avis à l'assureur de la survenance du sinistre.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Toutefois, l'assureur ne peut se prévaloir de ce que le délai prévu au contrat pour donner l'avis mentionné au 1er alinéa n'a pas été respecté, si cet avis a été donné aussi rapidement que cela pouvait raisonnablement se faire.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "L'assuré doit fournir sans retard à l'assureur tous renseignements utiles et répondre aux demandes qui lui sont faites pour déterminer les circonstances et fixer l'étendue du sinistre.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 10,
+    "words": 1,
+    "meaning": 1,
+    "words_all": 1,
+    "meaning_all": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    3
+   ],
+   "lines_pointed_by_reading": [
+    1,
+    2
+   ],
+   "context_unit": "article (short: whole article)",
+   "source": {
+    "identity_from": "memorial-ocr",
+    "ocr": true,
+    "pdf": true
+   }
+  }
+ ],
+ "missing": "Le délai exact fixé par le contrat d’assurance habitation de l’assuré.",
+ "not_held": [],
+ "clarify": null,
+ "evidence": {
+  "coverage": "Lex tient 20 741 textes luxembourgeois, dont 16 666 des 17 787 lois et règlements grand-ducaux que l'éditeur marque en vigueur, et 492 textes européens; un texte qui n'est pas tenu n'est pas cherché.",
+  "coverage_source": "data/coverage.json (2026-11-21 19:34:50)",
+  "coverage_detail": {
+   "held": {
+    "luxembourg_acts": 20741,
+    "eu_acts": 492,
+    "luxembourg_versions": 23258,
+    "eu_versions": 766
+   },
+   "in_force": {
+    "held": 16666,
+    "listed": 17787,
+    "what": "laws and grand-ducal regulations the publisher marks in force"
+   },
+   "not_held_named": [
+    "Loi du 9 juillet 1937 sur l’impôt sur les assurances"
+   ],
+   "date_floor_of_the_texts_picked": [
+    {
+     "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+     "first_held": "2006-12-25"
+    }
+   ]
+  },
+  "terms": [
+   {
+    "term": "delai",
+    "variants": [
+     "delai*"
+    ],
+    "hits": 13042
+   },
+   {
+    "term": "declarer",
+    "variants": [
+     "decla*"
+    ],
+    "hits": 12215
+   },
+   {
+    "term": "sinistre",
+    "variants": [
+     "sinis*"
+    ],
+    "hits": 369
+   },
+   {
+    "term": "assureur",
+    "variants": [
+     "assur*"
+    ],
+    "hits": 21099
+   },
+   {
+    "term": "habitation",
+    "variants": [
+     "habitat*"
+    ],
+    "hits": 1992
+   },
+   {
+    "term": "assurance",
+    "variants": [
+     "assura*"
+    ],
+    "hits": 11952
+   },
+   {
+    "term": "declaration",
+    "variants": [
+     "declarat*"
+    ],
+    "hits": 8145
+   },
+   {
+    "term": "contrat",
+    "variants": [
+     "contr*"
+    ],
+    "hits": 44232
+   }
+  ],
+  "sweep": {
+   "acts": 0,
+   "articles": 0,
+   "articles_in_the_texts_picked": 0,
+   "grade": "medium: the terms never appear together"
+  },
+  "closest": {
+   "article_pk": 96069,
+   "label": "Article 26",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "why_not": "L’article 26 régit la déclaration du sinistre, mais le délai exact dépend du contrat non fourni."
+  }
+ },
+ "list": {
+  "heading": "L'assuré doit déclarer :",
+  "items_total": 4,
+  "items_shown": 3,
+  "count_stated_by_text": null,
+  "complete": false,
+  "by": "code (structure of the article)",
+  "deleted_items": 1
+ },
+ "see_also": [
+  {
+   "article": "Art. 27",
+   "heading": null,
+   "why": "cite plusieurs articles (art. 27 à 30)"
+  }
+ ],
+ "notes": [
+  "conflicting_evidence",
+  "several_versions_in_period"
+ ],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": true,
+  "found_by_words": true,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "value",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Quel est le délai pour déclarer un sinistre à mon assureur habitation ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "assurance habitation",
+      "déclaration de sinistre",
+      "délai de déclaration",
+      "contrat d’assurance"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": true,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 96,
+    "considered_lines": 100,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 8,
+      "by": "code"
+     },
+     {
+      "rule": "no_longer_in_force_at_the_date_asked",
+      "removed": 2,
+      "by": "code"
+     },
+     {
+      "rule": "not_in_the_store",
+      "removed": 8,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "replaces": 0,
+     "transposes": 22,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 20,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/loi/2021/12/17/a917",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 1
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/loi/2019/12/06/a833",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 24,
+       "lines_meaning": 1
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 9,
+       "articles_meaning": 1,
+       "articles_words": 1
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/rgd/1979/04/23/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 2
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/loi/1976/12/28/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 2
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_22",
+      "found_by": {
+       "articles_meaning": 2
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "celex:31991L0674",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 2
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/rgd/2023/02/08/a85",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 3
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/loi/1891/05/16/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/loi/1979/02/25/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 11,
+       "articles_meaning": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/loi/1950/02/25/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 10,
+       "articles_words": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/rgd/1999/12/23/n3",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/loi/2022/12/23/a703",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5,
+       "lines_meaning": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00002",
+      "found_by": {
+       "articles_meaning": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/loi/1994/12/08/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 4,
+       "transposes": 31
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/loi/2026/07/24/a434",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/code/consommation",
+      "node_id": "title_i.livre_2",
+      "found_by": {
+       "articles_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "celex:32015R0035",
+      "node_id": "titre_i__chapitre_iii",
+      "found_by": {
+       "articles_words": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/loi/1978/10/31/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 6,
+       "lines_meaning": 10
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/loi/1927/02/25/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 6,
+       "articles_words": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "celex:32009L0103",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/rgd/2019/02/15/a104",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 7
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_36",
+      "found_by": {
+       "lines_meaning": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "title": "Loi du 27 juillet 1997 sur le contrat d'assurance. [LOI; loi_de_fond; public général; in_force] — Réglementation générale du contrat d'assurance, incluant assurances de dommages et de personnes. En cl",
+      "reason": "La loi générale sur le contrat d’assurance peut fixer les délais et modalités de déclaration d’un sinistre à l’assureur.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1306
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 3149,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 5,
+      "picked": [
+       {
+        "node_id": "section_2",
+        "heading": "TITRE II DES ASSURANCES DE DOMMAGES",
+        "tally": 5,
+        "reason": "Contient des articles spécifiques aux assurances de dommages, incluant probablement l'assurance habitation et les délais de déclaration de sinistre.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_1",
+        "heading": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+        "tally": 7,
+        "reason": "Contient les dispositions générales sur le contrat d'assurance, incluant les délais et obligations de déclaration de sinistre.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "titre_iv",
+        "heading": "TITRE IV Dispositions pénales",
+        "tally": 5,
+        "reason": "Contient des dispositions pénales liées à la déclaration de sinistre, pouvant préciser les délais et conséquences.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 9,
+      "picked": [
+       {
+        "node_id": "section_1.section_2",
+        "heading": "Chapitre II - Dispositions communes à tous les contrats",
+        "tally": 7,
+        "reason": "Contient le plus grand nombre de mots clés pertinents (délai, déclarer, sinistre, assureur) et traite des dispositions communes à tous les contrats, ce qui inclut probablement le délai de déclaration de sinistre.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_2.section_2",
+        "heading": "Chapitre II - Des contrats d'assurance de choses",
+        "tally": 5,
+        "reason": "Chapitre sur les contrats d'assurance de choses, qui inclut l'assurance habitation, avec plusieurs mots clés pertinents (délai, sinistre, assureur).",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_1.section_1",
+        "heading": "Chapitre Ier - Dispositions générales",
+        "tally": 4,
+        "reason": "Chapitre sur les dispositions générales incluant le mot 'déclarer' et 'assureur', ce qui peut contenir des règles générales sur la déclaration de sinistre.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 3,
+      "shown": 15,
+      "picked": [
+       {
+        "node_id": "section_1.section_2.section_4",
+        "heading": "Section IV - Exécution du contrat",
+        "tally": 7,
+        "reason": "Contient le délai et la déclaration du sinistre à l'assureur, très pertinent pour la question.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "section_1.section_2.section_6",
+        "heading": "Section VI - Inexistence et modification du risque",
+        "tally": 7,
+        "reason": "Traite du délai et de la déclaration du sinistre, ce qui est central à la question.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "section_1.section_2.section_9",
+        "heading": "Section IX - Fin du contrat",
+        "tally": 7,
+        "reason": "Aborde le délai de déclaration du sinistre à l'assureur, ce qui correspond à la question posée.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "titre_iv",
+      "heading": "TITRE IV Dispositions pénales",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "section_1.section_2.section_4",
+      "heading": "Section IV - Exécution du contrat",
+      "stopped": "leaf",
+      "articles": 12
+     },
+     {
+      "node_id": "section_1.section_2.section_6",
+      "heading": "Section VI - Inexistence et modification du risque",
+      "stopped": "leaf",
+      "articles": 3
+     },
+     {
+      "node_id": "section_1.section_2.section_9",
+      "heading": "Section IX - Fin du contrat",
+      "stopped": "leaf",
+      "articles": 5
+     }
+    ],
+    "articles": 21,
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 96186,
+      "found_by": {
+       "outline": 1,
+       "words": 2,
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96061,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96062,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96063,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96064,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96065,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96066,
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96067,
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96068,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96069,
+      "found_by": {
+       "outline": 10,
+       "words": 1,
+       "meaning": 1,
+       "words_all": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96070,
+      "found_by": {
+       "outline": 11,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96071,
+      "found_by": {
+       "outline": 12
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96072,
+      "found_by": {
+       "outline": 13,
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96075,
+      "found_by": {
+       "outline": 14
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96076,
+      "found_by": {
+       "outline": 15
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96077,
+      "found_by": {
+       "outline": 16,
+       "words": 4,
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96082,
+      "found_by": {
+       "outline": 17
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96083,
+      "found_by": {
+       "outline": 18
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96084,
+      "found_by": {
+       "outline": 19,
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96085,
+      "found_by": {
+       "outline": 20
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96086,
+      "found_by": {
+       "outline": 21
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96054,
+      "found_by": {
+       "words": 3,
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96088,
+      "found_by": {
+       "words": 5,
+       "meaning_all": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96079,
+      "found_by": {
+       "words": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96157,
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 96087,
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 104229,
+      "found_by": {
+       "meaning_all": 8
+      },
+      "meaning_only": true,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 3350,
+    "candidates": [
+     {
+      "article_pk": 96186,
+      "label": "Article 127-1",
+      "role": "reject",
+      "reason": "Article pénal, ne traite pas du délai de déclaration.",
+      "found_by": {
+       "outline": 1,
+       "words": 2,
+       "words_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "declarer",
+       "sinistre",
+       "assureur",
+       "declaration",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96069,
+      "label": "Article 26",
+      "role": "rule",
+      "reason": "Indique le délai pour déclarer un sinistre à l'assureur.",
+      "found_by": {
+       "outline": 10,
+       "words": 1,
+       "meaning": 1,
+       "words_all": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "declarer",
+       "sinistre",
+       "assureur",
+       "declaration",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96157,
+      "label": "Article 100.",
+      "role": "reject",
+      "reason": "Délai de rétractation, hors sujet sinistre habitation.",
+      "found_by": {
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": true,
+      "matched": [
+       "delai",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96070,
+      "label": "Article 27",
+      "role": "condition",
+      "reason": "Décrit les devoirs de l'assuré en cas de sinistre.",
+      "found_by": {
+       "outline": 11,
+       "meaning": 3,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "sinistre",
+       "assureur"
+      ]
+     },
+     {
+      "article_pk": 96054,
+      "label": "Article 13",
+      "role": "exception",
+      "reason": "Traite omission non intentionnelle, modifie déclaration.",
+      "found_by": {
+       "words": 3,
+       "words_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "declarer",
+       "sinistre",
+       "assureur",
+       "assurance",
+       "declaration",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96077,
+      "label": "Article 34",
+      "role": "condition",
+      "reason": "Obligation de déclarer aggravation du risque en cours de contrat.",
+      "found_by": {
+       "outline": 16,
+       "words": 4,
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "declarer",
+       "sinistre",
+       "assureur",
+       "assurance",
+       "declaration",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96087,
+      "label": "Article 44",
+      "role": "reject",
+      "reason": "Délai de prescription, pas délai déclaration sinistre.",
+      "found_by": {
+       "meaning": 4,
+       "meaning_all": 4
+      },
+      "meaning_only": true,
+      "matched": [
+       "delai",
+       "assureur",
+       "assurance",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96072,
+      "label": "Article 29",
+      "role": "context",
+      "reason": "Prestations de l'assureur après sinistre, utile mais non essentiel.",
+      "found_by": {
+       "outline": 13,
+       "meaning": 5,
+       "meaning_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "sinistre",
+       "assureur"
+      ]
+     },
+     {
+      "article_pk": 96088,
+      "label": "Article 45",
+      "role": "exception",
+      "reason": "Suspension/interruption de prescription liée à déclaration sinistre.",
+      "found_by": {
+       "words": 5,
+       "meaning_all": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "declarer",
+       "sinistre",
+       "assureur",
+       "declaration",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96084,
+      "label": "Article 41",
+      "role": "context",
+      "reason": "Résiliation après sinistre, contexte utile mais pas délai.",
+      "found_by": {
+       "outline": 19,
+       "meaning": 6,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "sinistre",
+       "assureur",
+       "assurance",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96061,
+      "label": "Article 18",
+      "role": "reject",
+      "reason": "Déchéance du droit à prestation, hors délai déclaration.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "sinistre",
+       "assureur",
+       "assurance",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96062,
+      "label": "Article 19",
+      "role": "reject",
+      "reason": "Polices combinées, hors sujet délai déclaration.",
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "assureur",
+       "assurance",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96063,
+      "label": "Article 20",
+      "role": "reject",
+      "reason": "Modalités paiement prime, hors délai déclaration sinistre.",
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96064,
+      "label": "Article 21",
+      "role": "reject",
+      "reason": "Défaut paiement prime, hors délai déclaration sinistre.",
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "assureur",
+       "assurance",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96065,
+      "label": "Article 22",
+      "role": "reject",
+      "reason": "Mise en demeure pour prime, hors délai déclaration sinistre.",
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "delai",
+       "assureur",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96066,
+      "label": "Article 23",
+      "role": "reject",
+      "reason": "Remise en vigueur garantie, hors délai déclaration sinistre.",
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "assureur",
+       "contrat"
+      ]
+     },
+     {
+      "article_pk": 96067,
+      "label": "Article 24",
+      "role": "reject",
+      "reason": "Assurances vie, hors délai déclaration sinistre habitation.",
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "assureur",
+       "assurance"
+      ]
+     },
+     {
+      "article_pk": 96068,
+      "label": "Article 25",
+      "role": "reject",
+      "reason": "Suspension garantie, hors délai déclaration sinistre.",
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "matched": [
+       "assureur",
+       "assurance",
+       "contrat"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 7,
+    "read_amount_set_by": "outline node",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": false,
+      "article": "A1",
+      "lines": [
+       1,
+       2
+      ],
+      "missing": "Le délai exact prévu par le contrat d’assurance habitation de l’assuré.",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "Contrat d’assurance habitation de l’assuré",
+      "items_are_headings": false,
+      "reason": "L’article 26 régit le délai de déclaration et son exception, mais le contrat n’est pas fourni.",
+      "pending_references": [],
+      "lines_refused": []
+     },
+     {
+      "answer_found": true,
+      "complete_answer_found": false,
+      "article": "A1",
+      "lines": [
+       1,
+       2
+      ],
+      "missing": "Le délai exact fixé par le contrat d’assurance habitation de l’assuré.",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "Contrat d’assurance habitation de l’assuré",
+      "items_are_headings": false,
+      "reason": "L’article 26 régit la déclaration du sinistre, mais le délai exact dépend du contrat non fourni.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 2,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "complete_answer_found = false",
+    "budget": 1,
+    "loops": 1,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [
+     {
+      "from": "missing",
+      "to": "Article 62-3",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Le délai exact prévu par le contrat d’assurance habitation de l’assuré. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 96108
+     },
+     {
+      "from": "missing",
+      "to": "Art. 100-1.",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Le délai exact prévu par le contrat d’assurance habitation de l’assuré. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 96158
+     },
+     {
+      "from": "missing",
+      "to": "Article 11",
+      "kind": "widened on complete_answer_found = false",
+      "why": "ajouté parce que la lecture dit qu'il manque: « Le délai exact prévu par le contrat d’assurance habitation de l’assuré. » (cherché par ses mots dans les textes choisis)",
+      "held": true,
+      "article_pk": 96052
+     }
+    ],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 0,
+    "dropped": [],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_incomplete_after_the_hop",
+    "state": "partial"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 378,
+    "tokens_in": 22,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1226,
+    "model_ms": 1225,
+    "queue_ms": 0,
+    "tokens_in": 568,
+    "tokens_out": 95,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1091,
+    "model_ms": 1091,
+    "queue_ms": 0,
+    "tokens_in": 3787,
+    "tokens_out": 51,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1035,
+    "model_ms": 1035,
+    "queue_ms": 0,
+    "tokens_in": 490,
+    "tokens_out": 108,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1357,
+    "model_ms": 1357,
+    "queue_ms": 0,
+    "tokens_in": 700,
+    "tokens_out": 158,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 923,
+    "model_ms": 923,
+    "queue_ms": 0,
+    "tokens_in": 949,
+    "tokens_out": 105,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 3291,
+    "model_ms": 3291,
+    "queue_ms": 0,
+    "tokens_in": 3062,
+    "tokens_out": 446,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1530,
+    "model_ms": 1530,
+    "queue_ms": 0,
+    "tokens_in": 3703,
+    "tokens_out": 183,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1454,
+    "model_ms": 1454,
+    "queue_ms": 0,
+    "tokens_in": 2703,
+    "tokens_out": 183,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.02282,
+  "ms": 14526,
+  "model_calls": 8,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Quel est le délai pour déclarer un sinistre à mon assureur habitation ?",
+   "legal_terms": [
+    "assurance habitation",
+    "déclaration de sinistre",
+    "délai de déclaration",
+    "contrat d’assurance"
+   ],
+   "exclusions": [],
+   "personal_case": true,
+   "jurisdiction": "not_said",
+   "parts": []
+  },
+  "candidates": [
+   {
+    "article_pk": 96186,
+    "role": "reject",
+    "found_by": {
+     "outline": 1,
+     "words": 2,
+     "words_all": 2
+    }
+   },
+   {
+    "article_pk": 96069,
+    "role": "rule",
+    "found_by": {
+     "outline": 10,
+     "words": 1,
+     "meaning": 1,
+     "words_all": 1,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 96157,
+    "role": "reject",
+    "found_by": {
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 96070,
+    "role": "condition",
+    "found_by": {
+     "outline": 11,
+     "meaning": 3,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 96054,
+    "role": "exception",
+    "found_by": {
+     "words": 3,
+     "words_all": 3
+    }
+   },
+   {
+    "article_pk": 96077,
+    "role": "condition",
+    "found_by": {
+     "outline": 16,
+     "words": 4,
+     "words_all": 4
+    }
+   },
+   {
+    "article_pk": 96087,
+    "role": "reject",
+    "found_by": {
+     "meaning": 4,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 96072,
+    "role": "context",
+    "found_by": {
+     "outline": 13,
+     "meaning": 5,
+     "meaning_all": 5
+    }
+   },
+   {
+    "article_pk": 96088,
+    "role": "exception",
+    "found_by": {
+     "words": 5,
+     "meaning_all": 7
+    }
+   },
+   {
+    "article_pk": 96084,
+    "role": "context",
+    "found_by": {
+     "outline": 19,
+     "meaning": 6,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 96061,
+    "role": "reject",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 96062,
+    "role": "reject",
+    "found_by": {
+     "outline": 3
+    }
+   },
+   {
+    "article_pk": 96063,
+    "role": "reject",
+    "found_by": {
+     "outline": 4
+    }
+   },
+   {
+    "article_pk": 96064,
+    "role": "reject",
+    "found_by": {
+     "outline": 5
+    }
+   },
+   {
+    "article_pk": 96065,
+    "role": "reject",
+    "found_by": {
+     "outline": 6
+    }
+   },
+   {
+    "article_pk": 96066,
+    "role": "reject",
+    "found_by": {
+     "outline": 7
+    }
+   },
+   {
+    "article_pk": 96067,
+    "role": "reject",
+    "found_by": {
+     "outline": 8
+    }
+   },
+   {
+    "article_pk": 96068,
+    "role": "reject",
+    "found_by": {
+     "outline": 9
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96069
+   },
+   {
+    "article_pk": 96054
+   },
+   {
+    "article_pk": 96088
+   },
+   {
+    "article_pk": 96070
+   },
+   {
+    "article_pk": 96077
+   },
+   {
+    "article_pk": 96072
+   },
+   {
+    "article_pk": 96084
+   },
+   {
+    "article_pk": 96108
+   },
+   {
+    "article_pk": 96158
+   },
+   {
+    "article_pk": 96052
+   }
+  ],
+  "replay": "eNrtWktv3LoV_iuENk5aeTzSvDxjFIWRuEVQ36R10osCQTCgJc4ME46kiJIfDQLcH9FNd11eo9vuurv-J_eX9DukHhzNePJAeld3Y48okTz8eM53HuQH78qbBb6XeTMvSteXqed7EX6rNOIKv2Pnd4ZPvUWZJEIdXgVoeI_nv5RCMaELpgSL7-8UlyxLy5x-R4rnImdlwrRMpC5ywe7_xdZpwrjWZS7w1YpfyoIXEm2_p9lKjBj2w_FhEByGNEWsvdmCKy18D7-8jOeFNMLkeOKJvhb5XCaQPFOiEHO-KNBQrMR8lWb46tKbvX49HffHU_QolfD814Ef-oM3vnf-8w__pNEiCB6OWX5_t5RYBa8lt1LFZSO8z9Zcamed4oZHBT1kIonpyyhNCvRjCTouAEIiewRbLtc8v_V8u46kVOoN5k9WkA3_11jIeWfMhby5v2NYLM1WjxqTwAQcTyLhIhcLpup393c0ZaS8Gc3je80P4c0-YIevRM6Xwkx5wwopkoKFfTYZBqwQN4XA8sobATUo86VIpfZZjNlZMGbj8RgTaRZM2OR4whReMlEAth-XSqwxjmZLSBYfxmXEyxv2voRUB_d3sSxoo4EAtYiEXclliRafeg-nYT0vmtLs_k4k-oQ0xrRiEMmSA9KujGu0JaXzGK1EHq2qBVcLm2tIHtH6Yl7wo7q591YDp0etZrFgOhsMZ6P-Y7dzLAouFQG1Eiqm_y0ac-wLNDDsAyugWVbPWIHvfoWRNPaEvhyEo2PzZds2GY8_-p5M5ovUSFlPFADdMcaBngl6nABi37te8YLMj19rBmQdfBXLxbJUZvuBy0qwrLxEbyBCSL_TTJIG0hyYL0mLOc0zT_iahn_tnaeS9HXK3pZSwXAAx2DCoD5GkeQ6u_9PYR-xM43OaQ_qClzFfKHSNJ-nC2NptFV6nsnonRn8gwdk5pKI40goeQRMiyMllkdQmaNgOp0c9SdH4eQoCfrAfiFzbaUzlt_H_oSH4cj7-AaCw5bX2gxJv2hTBWwEva54LnlC-L-2bb8h0VaSWoJBfxh-9J0-loe2uqHZ7RaGwcjpVlt9p5tpdroNxlOnU81rnU6m2ekUBv2p26215U7H6oUr5nQadiekvdk148byguloG5Vdc9ZvnM7HwdCFpiKkTj_T6nQaDmEBH_EIjhYZ6bq1mL7vVbS7-QAa36FO-ABqH5NFQ3dluZ4ZdTeawRIB02I8ywSYskiXAq9y0vhIpRo0YSa1w8-zd96scgSKXwpYuXfasD-WQkpbyEIZbrTmEU4c-5hW9uHw8UGDPlHQ9ep2Dkuj7r-MZ_mIhWbcsBRPlqWl9QXpHtkotS_ydN11qEXabQG-MjGMeUvvAX_tM1bpNdqTlNGARCkEPWhc0wKwESl1gRR107y4zUiIK65K0shFLpJo9a2DBHAJV_OaG7xdLpEw2MBaMMeeKwlisbEhxhHs8LSk0eImUmXF4eSzMzB6mkCKiGssuMhLxCdvy1zqWEZmsJlhXc3Bg76JWkxPYPXORiTBMfg-F29FVGCCjRDFPAajSef9pG8EhD-l8W3baGhkE5nTNplsf3e8NVhoV0ubXX1yvD3U8bD71TjoSh12GwbdhmG3YdRt2IKiK-74uG0A_Dn5GQuZBcHKb0GyENg12jUAzT69DUbmm1GIIdSV8SsKDKIMpeVZqSlgvDVPsfjtGn-UVQotY5ETG03H7vNcyYRILOhja94BORNJa1gNLCGd2wFm4ZC8nIK-Wldm9niG5YC1FAbhhaE941e5JtKjta4Rk2DCY0cijyi46p2kc5UmSxP82mBi_zjhg-MUNe_qIjXW8cDcROQmttLELFUk0afPM8WjisthPYnOiHsxJQVGBND8Os0pjB_064a14IlMlrap4f-mNXRbq87kmysH8oURRgLx7cfEbl_N8Oz1-YtnJxT3IkwE5El8YoOuiC3v75L7u5yrE1bvxhv28w__YBdgfhscWxpqPhQupzuz-BgATAOX6kRdhqjS9RoEb0JuPFr-AZQ9dpawyORDgmvDO-echHTn6q5qI4_IRGnyDWGDPcuNZh7oL1eyuL_TXao0Q3QYu8lAwNi92pCsCZDurKXG18u5dS-0FWsbq41JG2szjNOoJLgqf_xFW6wL6IwdOi0LUrQ2GagaWMEvKQd0hUMQY8NzM9sgGIKGTbCcJup2jhAbEUWTgRYiswoYw9pXrbl7M3CaEwG3OqeF8Qfz0KNheWwU3Hv17NXFGXv2jD09e8lOX77868Xp8yf4-fSMPX3x3Xenfzx7ScrKlbo1Qzeb-wR7aJI2SsVqG2EaiVMkF5L8MKPka7fyONqV5eklYUFgI03bmVaKYkMjtnSg9ak2_EnJshqkkH6bKIK2dxuOYBcc7PyMPXnx_NXF6Sv29KCBhZ09Z388e352cXregjLZBYoRVxIBSZsZtUag99i2g0vHBFLY97LKsr7J-sE_OX5e7Vr-9-ypKzv2NCHBP0MR4l39mJJIp7WxTf6g6D4FYldWJUiJ9DYPkMO7v4NukT49tFSYMF8YS3cN328sJWwsZfoJSwl6u23myYpnhB6ZzeEmVBEUvEzsWou01GYF1UbrT-oMyxDb2eQa8fX6ElMAoHVaYAxF7Ae2LcAeVOJ4ZHHx28jVd6Cs-e8xwYbJZSG292evsD6LbNXDaGTXTpvg-ZvaYvh5gDtSusZDc0cr4_J3K2o9Sl1O2D-I765-NzEB5ysRmV2TAFt_aqt27M9XEFZvN3W1IMFwOmrpsE-LzXAfNg-Sl0NQtFx20OjfAenaQb2yg0aBjF83wXsic6OFtlS3gxT51ynTg7Y-aGw9GH2-sTe_hhsAv7StRI-H7OwGgpZ1-tzWIT5h4HVWvTcJN0TZAOnDfu9_dBTKJqzoXye7n2BC_3OXO9653O_J5p4l4oZKgqT_NiCDk48ayZFuvjd59o7lv6rYp3QWT3XifUWISnMoT48EQasq5_GtlzzdvcN_w5L_ID-9taeXyAnEPjp8eFerNSLfywVsDZS_uURsM5yd-DI394YyPDjdjpJ_nbOniTIR13O51bLg8yH-CiPaN3H4i-rzHkkG_x8t2zPjiLa3fQyDra83MhhRYKI036wliPWliI0g6PxO2s4mjbBf4ztT8rNlRFtzqyuIJtXuFt-Mztnzuqr6hK8SmmG-UVxN5hHCGklFAZJ94orKc3hUUxffSIcoLxsMRlRtcrp2a1Z-Uz21quszSq8s6dDhTEs8HePsdctdvvcM05jjos8sDrb23Nsulvne02ZeRLQQKarDhhW2BR7vLVSvGa4NK3o762xmuCiXVWogrlKZm1ygEuL-js60Iq433eau8pxfk3JqkmHoIlVzJXloep8IpagSbIxiN2abpT3fe9GkJw7KVBFfIpq96tiVkTMtrfSV5ve264Mufhk4EmvPLHxmW6t3Ltt2V-3WFn3vzxijaFOodu8Yz4yHbf0POInCG0o7CBmhNSEjVG9nidL3XpY6EwkheUQo5nmZ1Vi4kttEiBRnr9husdP3LhBNSiXtp1uSVt8JV-QWnt52sdSq0er-zka7MI48hU5BpqzBp1LQHRD3toutADZVMjLx9PpSJpTqbWj4vmEGzjDftVWejEubaNCJtXhYnC3onBKvWeiCU-ry1aONXPGQkZLmxhgLamOZ4YtHdHnrQqyrMauTaLZEP1K0LxnRNZjTttpy9Vmj7GAdp8LtKvYXyvbG5XfES3GX3JuyqnlZRVXxnK_TMinmWhRz83ldLyNH69VV2_dlWtS15DJeCvd4jWIEqo2vOFW5h8f9ft8eZzvuaND_iOkwUVwVce3tjQW11F6svcix8bKKwaqxKAQMarEwVOBTRb8tgO4-fnswWiR3QP9qZmlP45pTN4xY3zpoTt_8X3wF3_wAsaMuC5GbGo8bulAEnsvlkqqgu9fGfsfM4rxWLcB7Kk2pVBpQAJ-jUc-RSZlLOTPDPjpVV2ZMnmVHmFr3stsZE-hvi7TskUZEw7CKE5bSsS47by5ZUKu9EXFGl0YET2wLlW2R5BcmUjJHluYc5LFPV0UoCWWXt4wWdULXJ8QNS21QRSaARFozc9bArleCXLMR5qQ-Y2a1Ba3SqgRcHa5Whe36ZLWOisbh4QBt7yRtvnctY5Fg_pRc8H4MbfzH38IE7RUgk7GYzE2BHYgD4f_RdCAVdj3Buxn76d-se4WIynlX5dfeIWI__Zc9qi_YmEG0qAotMQQ3wVB1cSdapVJL_djzq8ssVTy6ce4e9I9J1x7ErMeCfv8w6P0KWQvZaD9kRs2C4FfE2ssdI3PfpL7uZI_qwS2lFpsP84jcnUmQtABISqf2PU2WVOf8HzyZXFryNkbPrmWxAix5lUgeVK8PCG3BaJ8qNgGP5iI-LNJD8A32RtzMwFasGZxuZgHqa_aIO26HpQu8B6UXus72ah9QrIBqJAkIMwPSpscn7E_i7yueHDTnQFAGjKxUeq0ZNtYIh3jJhMZoSRRd74jFAj6jsEvcva72kwPIzcwj1IouXEDG6vrNTcEIyW5eyrJSKd18A-HS64S1I_pmtqqTMxGiVugIxtMRCJ2utrhn80DNVA1uO56ponWzkQioq7T6jV-fbnPy2JrDp1wKOrO3oBqTYHCXpkhpgGFywQh30mk4JCWF9S_URk4BlkcdqHuaiOZyXe1AWl_TqQVEUttUxZW6Fu6Tl1cNJM6lV3OOSk51OAoRbJWaVt7rh-ExQrKk0uCyvryT13Xa_wHtf21H"
+ },
+ "_synthetic": "pages2: b1-partial with an OCR-sourced block, two notes, a see-also and a list with a deleted item (fields the engine may send)"
+}

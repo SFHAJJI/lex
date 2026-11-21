@@ -357,6 +357,91 @@ export function TextOutline({ outline, current = null, order = [], onSelect = ()
   );
 }
 
+/**
+ * pages2 (21/11/2026): the address the engine answers a whole text at (`GET /api/next/text`), for a text the reading service
+ * does not hold (the texts added to the engine's store since: the codes read from the publisher's PDF, the EU insurance
+ * texts, the older laws): its versions, the version read on `date`, its articles in order and one page of their lines.
+ */
+export function nextTextAddress(identifier, date, { page = null, article = null } = {}) {
+  const work = /^\/lu-legilux\/([^/?#]+)$/u.exec(identifier ?? '')?.[1] ?? (/^[0-9CE][0-9]{4}[A-Z]{1,2}[0-9]{4}/u.test(identifier ?? '') ? identifier : undefined);
+  if (work === undefined) return null;
+  const query = [`work=${encodeURIComponent(work)}`];
+  if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(date ?? '')) query.push(`date=${date}`);
+  if (Number.isInteger(page) && page > 0) query.push(`page=${page}`);
+  else if (typeof article === 'string' && article.length > 0) query.push(`article=${encodeURIComponent(article)}`);
+  return `/api/next/text?${query.join('&')}`;
+}
+
+/** One article of the engine's text, in the shape the page draws: its id, its lines (each a paragraph) and its source. */
+function nextArticle(entry) {
+  const lines = Array.isArray(entry?.lines) ? entry.lines.filter((line) => typeof line?.text === 'string' && line.text.trim().length > 0) : [];
+  return Object.freeze({
+    publisher_id: entry.publisher_id,
+    heading: typeof entry.heading === 'string' && entry.heading.trim().length > 0 ? entry.heading.trim() : null,
+    lines,
+    text: lines.map((line) => line.text).join('\n'),
+    official_source: /^https:\/\//u.test(entry.official_source ?? '') ? entry.official_source : null,
+    language: 'fra',
+    fromEngine: true,
+  });
+}
+
+/**
+ * The engine's answer for a text read into the page's state: the text (versions, contents, its source) and the page of
+ * articles it carries. Null when the answer is not a text.
+ */
+export function nextTextState(value, identifier) {
+  if (value === null || typeof value !== 'object' || !Array.isArray(value.contents) || value.page === null || typeof value.page !== 'object') return null;
+  const iso = (date) => typeof date === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(date);
+  const europe = value.europe === true;
+  const read = value.version ?? {};
+  const held = (Array.isArray(value.versions) ? value.versions : []).filter((version) => iso(version?.from));
+  // An EU act is read in one wording, as the reading service reads it; a Luxembourg text with each of its versions on the axis.
+  const chosen = europe ? held.filter((version) => version.id === read.id) : held;
+  const versions = Object.freeze(chosen.map((version, at) => Object.freeze({
+    date: version.from, until: iso(version.until) ? version.until : null, articleCount: Number.isInteger(version.articles) ? version.articles : null,
+    first: at === 0, changed: null, added: null, removed: null, unchanged: null, bar: null, previous: at > 0 ? chosen[at - 1].from : null, textHeld: true,
+  })));
+  const contents = value.contents.filter((item) => typeof item?.publisher_id === 'string').map((item) => Object.freeze({
+    id: item.publisher_id, page: Number.isInteger(item.page) ? item.page : 1, textHeld: true, number: typeof item.number === 'string' ? item.number : '',
+  }));
+  const source = value.source !== null && typeof value.source === 'object' ? value.source : null;
+  // The language the store holds the version in (a law of 1937 is held only in German): the page marks its words so.
+  const language = ['fra', 'deu', 'eng'].includes(source?.language) ? source.language : 'fra';
+  const articles = (Array.isArray(value.page.articles) ? value.page.articles : []).filter((entry) => typeof entry?.publisher_id === 'string').map((entry) => ({ ...nextArticle(entry), language }));
+  return {
+    text: {
+      identifier, publisher: europe ? 'eu-eurlex' : 'lu-legilux', title: typeof value.title === 'string' ? cleanTitle(value.title) : null, language, versions,
+      contents, articleCount: Number.isInteger(read.articles) ? read.articles : contents.length, official: /^https:\/\//u.test(value.official ?? '') ? value.official : null,
+      holder: { date: iso(read.from) ? read.from : null, permalink: null }, euDate: null, source: 'next', textSource: source,
+    },
+    page: Number.isInteger(value.page.number) ? value.page.number : 1,
+    articles,
+  };
+}
+
+/** Reads the engine's text at an address, once: its value, or null. */
+async function readNextText(address, fetchImpl) {
+  if (address === null) return null;
+  try {
+    const response = await (fetchImpl ?? globalThis.fetch)(address, { method: 'GET', headers: { accept: 'application/json' } });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/** The sentence a text read from the publisher's PDF, or from a character recognition of a scanned page, carries; or null. */
+export function textSourceLine(source, locale = CHROME_LOCALE) {
+  const copy = nextCopy(locale).textSource;
+  if (source === null || typeof source !== 'object') return null;
+  const other = source.language === 'deu' ? copy.german : null;
+  if (source.ocr === true) return other === null ? copy.ocr : `${copy.ocr} ${other}`;
+  if (source.pdf === true) return other === null ? copy.pdf : `${copy.pdf} ${other}`;
+  return other;
+}
+
 /** The address the side build's engine answers a text's links with other texts at, named as the current site names the text. */
 export function linksAddress(identifier) {
   const work = /^\/lu-legilux\/([^/?#]+)$/u.exec(identifier ?? '')?.[1];
@@ -442,7 +527,7 @@ export function ReadArticle({ entry, article, parts, versions, changedDates, ide
         ) : null}
         {article ? <SourceAndCitation article={article} version={version} /> : null}
       </div>
-      <div className="lx-article-body" lang={article?.language === 'eng' ? 'en' : 'fr'}>
+      <div className="lx-article-body" lang={article?.language === 'eng' ? 'en' : article?.language === 'deu' ? 'de' : 'fr'}>
         {parts?.heading ? <h2>{parts.heading}</h2> : null}
         {article && parts ? <Paragraphs parts={parts} marked={marked} /> : entry.textHeld === false ? <p className="lx-without-text">{copy.withoutText}</p> : <p className="lx-skeleton" aria-hidden="true" />}
         {article && references ? <ArticleReferences references={references} identifier={identifier} onOpen={onOpenReference} /> : null}
@@ -621,7 +706,18 @@ export function TextPage({ contract, fetchImpl, now = null }) {
       const dossier = await ask('dossier', { identifier: address.identifier }, 'work_record');
       if (!live) return;
       if (dossier.state !== 'success') {
-        setLoad({ state: 'failed' });
+        // A text the reading service does not hold: read from the engine's own store, when it holds it (pages2).
+        const engine = nextTextState(await readNextText(nextTextAddress(address.identifier, address.date ?? today, { article: address.article }), fetchImpl), address.identifier);
+        if (!live) return;
+        if (engine === null) {
+          setLoad({ state: 'failed' });
+          return;
+        }
+        setText(engine.text);
+        setPages(new Map([[engine.page, engine.articles]]));
+        setDiffs([]);
+        setDiffsTried(true);
+        setLoad({ state: 'ready' });
         return;
       }
       const value = dossier.envelope.result.value;
@@ -655,12 +751,29 @@ export function TextPage({ contract, fetchImpl, now = null }) {
     if (text === null || address === null || compare !== null) return;
     let live = true;
     (async () => {
+      // The engine's text: the version read and the page holding the article asked for, from the engine's store.
+      const fromEngine = async () => {
+        const engine = nextTextState(await readNextText(nextTextAddress(text.identifier, readDate, { article: address.article }), fetchImpl), text.identifier);
+        if (!live) return;
+        if (engine === null) {
+          setLoad({ state: 'failed' });
+          return;
+        }
+        setText((current) => ({ ...current, ...engine.text }));
+        setPages(new Map([[engine.page, engine.articles]]));
+        setDiffsTried(true);
+        setLoad({ state: 'ready' });
+      };
+      if (text.source === 'next') {
+        await fromEngine();
+        return;
+      }
       const parameters = { identifier: text.identifier, date: readDate, language: text.language, contents: true };
       if (address.article) parameters.article = address.article;
       const answer = await ask('evidence_bundle', parameters, 'evidence_bundle');
       if (!live) return;
       if (answer.state !== 'success') {
-        setLoad({ state: 'failed' });
+        await fromEngine();
         return;
       }
       const value = answer.envelope.result.value;
@@ -689,6 +802,11 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   /** Loads one page of the version read, if not yet loaded. */
   const loadPage = useCallback(async (number) => {
     if (text === null || pages.has(number)) return;
+    if (text.source === 'next') {
+      const engine = nextTextState(await readNextText(nextTextAddress(text.identifier, readDate, { page: number }), fetchImpl), text.identifier);
+      if (engine !== null) setPages((current) => new Map([...current, [engine.page, engine.articles]]));
+      return;
+    }
     const answer = await ask('evidence_bundle', { identifier: text.identifier, date: readDate, language: text.language, page: number }, 'evidence_bundle');
     if (answer.state !== 'success') return;
     const holder = answer.envelope.result.value.states?.[0] ?? answer.envelope.result.value.wordings?.[0];
@@ -704,7 +822,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
 
   // Which versions changed each article: each version with changes against the one before, a few at a time, after first paint.
   useEffect(() => {
-    if (text === null || text.publisher !== 'lu-legilux' || load.state !== 'ready' || diffs.length > 0) return;
+    if (text === null || text.publisher !== 'lu-legilux' || text.source === 'next' || load.state !== 'ready' || diffs.length > 0) return;
     const pairs = text.versions.filter((v) => !v.first && v.previous && (v.bar ?? 0) + (v.removed ?? 0) > 0).slice(-DIFF_CAP);
     let live = true;
     (async () => {
@@ -880,10 +998,20 @@ export function TextPage({ contract, fetchImpl, now = null }) {
     for (const articles of pages.values()) for (const article of articles) map.set(article.publisher_id, article);
     return map;
   }, [pages]);
-  const partsOf = useCallback((article) => (article ? (text?.publisher === 'eu-eurlex' ? europeParts(article.text) : articleParts(article.text)) : null), [text?.publisher]);
+  // An article read from the engine's store comes as its numbered lines: each line is a paragraph, as the store holds it.
+  const partsOf = useCallback((article) => {
+    if (!article) return null;
+    if (article.fromEngine === true) return { heading: article.heading, paragraphs: article.lines.map((line) => ({ marker: null, text: line.text })) };
+    return text?.publisher === 'eu-eurlex' ? europeParts(article.text) : articleParts(article.text);
+  }, [text?.publisher]);
 
   const onMark = (date) => {
     if (text === null || text.versions.length < 2) return;
+    // A text read from the engine's store is read at a date; two versions are compared only by the reading service.
+    if (text.source === 'next') {
+      go({ date, article: address?.article ?? null });
+      return;
+    }
     if (compare !== null) {
       // In compare mode, a click moves the nearer end of the pair.
       const nearFrom = Math.abs(date.localeCompare(compare.from)) <= Math.abs(date.localeCompare(compare.to));
@@ -932,6 +1060,9 @@ export function TextPage({ contract, fetchImpl, now = null }) {
 
   const versions = text.versions;
   const isEurope = text.publisher === 'eu-eurlex';
+  // A text read from the engine's store: no comparison of two versions (the reading service compares), its source said.
+  const fromEngine = text.source === 'next';
+  const sourceLine = fromEngine ? textSourceLine(text.textSource) : null;
   // The statute's language, apart from the interface's (the launch contract): French for Luxembourg, the wording read for the EU.
   const textLang = text.language === 'eng' ? 'en' : text.language === 'deu' ? 'de' : 'fr';
   const contents = text.contents ?? [];
@@ -991,6 +1122,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
               {isEurope ? copy.kindEu : copy.kindLu} {compare ? copy.compareHint : facts}
               {isEurope ? ` ${copy.euDate}` : ''}
             </p>
+            {sourceLine === null ? null : <p className="lx-muted lx-next-gap" data-text-source={text.textSource?.ocr === true ? 'ocr' : text.textSource?.pdf === true ? 'pdf' : 'language'}>{sourceLine}</p>}
           </div>
           <div className="lx-text-actions">
             {text.official ? <a className="lx-button" href={text.official} rel="noopener noreferrer">{copy.officialSource}</a> : null}
@@ -1020,7 +1152,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
           ) : (
             <span>
               {fill(until ? copy.readingUntil : copy.readingToday, until ? { date: '\u0000', until: numericDate(until) } : { date: '\u0000' }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<strong className="lx-date" key="d">{numericDate(readVersion?.date)}</strong>, part]))}
-              {' '}{pending ? copy.pickSecond : copy.barsHint}
+              {fromEngine ? null : <>{' '}{pending ? copy.pickSecond : copy.barsHint}</>}
             </span>
           )}
           <span className="lx-text-controls">
@@ -1039,7 +1171,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
                   <input id="lx-showon-date" type="text" inputMode="numeric" autoComplete="off" value={typed ?? numericDate(readDate)} onChange={(e) => setTyped(e.target.value)} />
                   <button type="submit" className="lx-visually-hidden">{copy.showOnSubmit}</button>
                 </form>
-                {versions.length > 1 ? (
+                {versions.length > 1 && !fromEngine ? (
                   <button type="button" className="lx-button lx-button-indigo" onClick={() => {
                     const at = versions.findIndex((v) => v.date === readVersion?.date);
                     const to = versions[Math.max(1, at)]?.date;
@@ -1069,13 +1201,13 @@ export function TextPage({ contract, fetchImpl, now = null }) {
                 <button type="button" aria-pressed="false" onClick={() => go({ from: null, to: null, date: compare.to })}>{fill(copy.allArticles, { count: grouped(counts ? counts.changed + counts.added + counts.removed + counts.unchanged : contents.length) })}</button>
                 <button type="button" aria-pressed="true">{fill(copy.changedArticles, { count: grouped(changedRows.length) })}</button>
               </span>
-            ) : isEurope ? null : (
+            ) : isEurope || fromEngine ? null : (
               <span className="lx-segmented" role="group" aria-label={copy.filterLabel}>
                 <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>{fill(copy.allArticles, { count: grouped(text.articleCount ?? contents.length) })}</button>
                 <button type="button" aria-pressed={filter === 'changed'} onClick={() => setFilter('changed')} disabled={!diffsDone}>{fill(copy.changedArticles, { count: diffsDone ? grouped(changedList.size) : '…' })}</button>
               </span>
             )}
-            {compare || isEurope ? null : <p className="lx-list-hint">{copy.yearHint}</p>}
+            {compare || isEurope || fromEngine ? null : <p className="lx-list-hint">{copy.yearHint}</p>}
           </div>
           {compare === null && outline !== null && outline.at === outlineAt ? (
             <TextOutline outline={outline.value} current={address?.article ?? null} order={contents.map((item) => item.id)} identifier={text.identifier} date={address?.date ?? null} onSelect={(id) => { setHighlight(id); select(id); }} />

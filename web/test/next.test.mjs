@@ -592,7 +592,11 @@ test('the contract: each state said as a state, never as a percentage, with what
   assert.ok(fixtures.size >= 10, 'one fixture a state, and the lists');
   for (const [, answer] of fixtures) assert.ok(isContractAnswer(answer));
   assert.equal(isContractAnswer({ outcome: 'answer', row: {} }), false, 'the earlier shape is not the contract');
-  assert.deepEqual(contractStateOf(fixtures.get('answer_with_exception'), 'fr'), { key: 'answer_with_exception', badge: 'Réponse, avec une exception', lead: 'D’après le texte officiel, avec une exception à lire.', more: null });
+  assert.deepEqual(contractStateOf(fixtures.get('answer_with_exception'), 'fr'), { key: 'answer_with_exception', badge: 'Réponse, avec une exception', lead: 'D’après le texte officiel, avec une exception à lire.', more: null, moreBy: null });
+  // pages2: who wrote what is missing: the reading model, or code for the parts of a compound question.
+  assert.equal(contractStateOf(fixtures.get('partial'), 'fr').moreBy, 'model');
+  assert.equal(contractStateOf(fixtures.get('compound_split'), 'fr').more, 'Ce qui manque : la partie 2 (Non trouvé)');
+  assert.equal(contractStateOf(fixtures.get('compound_split'), 'fr').moreBy, 'code');
   assert.equal(contractStateOf(fixtures.get('partial'), 'fr').more, `Ce qui manque : ${fixtures.get('partial').missing}`);
   assert.equal(contractStateOf({ state: 'partial' }, 'en').more, 'The reading says this passage does not answer the whole question.');
   assert.equal(contractStateOf({ state: 'a_state_of_tomorrow' }, 'fr'), null);
@@ -602,7 +606,9 @@ test('the contract: each state said as a state, never as a percentage, with what
 test('the contract: a version is dated from and until, or says that no later one is known, or that Lex does not know', () => {
   assert.equal(versionLine({ from: '2011-04-16', until: '2013-01-01', until_known: true }, 'fr'), 'Version applicable du 16/04/2011 au 01/01/2013.');
   assert.equal(versionLine({ from: '2025-11-25', until: null, until_known: true }, 'fr'), 'Version applicable depuis le 25/11/2025 ; aucune version plus récente n’est connue.');
-  assert.equal(versionLine({ from: '2025-11-25', until: null, until_known: false }, 'en'), 'Version applicable since 25/11/2025; Lex does not know whether it still applies.');
+  // pages2: an end not known is said as it is (no end date known), not as a doubt the engine did not state.
+  assert.equal(versionLine({ from: '2025-11-25', until: null, until_known: false }, 'en'), 'Version applicable since 25/11/2025; no end date is known.');
+  assert.equal(versionLine({ from: '2025-11-25', until: null, until_known: false, still_applies: true }, 'fr'), 'Version applicable depuis le 25/11/2025\u00a0; aucune version plus récente n’est connue.');
   assert.equal(versionLine({ from: null }, 'fr'), 'La date de cette version n’est pas connue.', 'an undated version is never said to apply always');
   assert.equal(versionLine(null, 'fr'), 'La date de cette version n’est pas connue.');
 });
@@ -641,7 +647,9 @@ test('the contract: a "not found" shows what was checked, the rarest word first,
   const view = evidenceView(answer, 'fr');
   assert.equal(view.terms[0].term, 'boîte aux lettres');
   assert.equal(view.terms[0].said, 'dans aucun article');
-  assert.equal(view.swept, '31 textes et 412 articles parcourus par les recherches.');
+  // pages2: the sweep counts the articles holding every word together (funnel.sweep), said so.
+  assert.match(view.swept, /^412 articles détenus, dans 31 textes, contiennent tous ces mots ensemble\./u);
+  assert.equal(evidenceView({ evidence: { sweep: { acts: 0, articles: 0, grade: 'medium: the terms never appear together' } } }, 'fr').swept, 'Aucun article détenu ne contient tous ces mots ensemble.');
   assert.match(view.closest, /^Le passage le plus proche, Article 1er, ne répond pas : /u);
   assert.equal(evidenceView({}, 'fr'), null);
 });
@@ -695,4 +703,84 @@ test('the contract: an answer is shown again from its token, by POST, the token 
   assert.deepEqual(asked, [['/api/next/replay', 'POST', { token: 'abcdefgh123' }]]);
   assert.equal((await fr.runReplay('abcdefgh123', async () => ({ ok: false, status: 404, json: async () => ({}) }))).kind, 'failure');
   assert.equal((await fr.runQuestion('Bonjour', null, async () => ({ ok: true, status: 200, json: async () => answer }))).kind, 'done', 'an answer in the contract is an answer');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// pages2 (21/11/2026): the contract's added fields, the engine's text for the text page, the build the results describe.
+
+test('pages2: a compound question is drawn part by part; a list of headings item by item; notes and checks in words, never a percentage', async () => {
+  const { partsView, listItemsView, notesView, checksView, notHeldWhy, blockVia, pointedLines } = await import('../scripts/next-contract.mjs');
+  const real = (name) => readFile(new URL(`../test/next-fixtures/funnel-real/${name}.json`, import.meta.url), 'utf8').then(JSON.parse);
+  const compound = await real('b1-compound');
+  const parts = partsView(compound, 'fr');
+  assert.equal(parts.rows.length, 2);
+  assert.ok(parts.rows.every((row) => row.status === 'answered'));
+  assert.equal(parts.summary, 'Chaque partie a sa réponse.');
+  // One funnel per part: the blocks carry their part and are grouped under it; a part with no answer is said.
+  const split = { blocks: [{ part: 1 }, { part: 2 }, { part: 2 }, {}], parts: [{ question: 'Quel est le délai ?', state: 'answer' }, { question: 'Quel est le montant ?', state: 'not_found' }] };
+  const grouped = partsView(split, 'fr');
+  assert.deepEqual(grouped.rows.map((row) => row.blocks), [[0], [1, 2]]);
+  assert.deepEqual(grouped.loose, [3]);
+  assert.equal(grouped.rows[1].status, 'not_answered');
+  assert.equal(grouped.summary, '1 partie reste sans réponse\u00a0: la réponse n’est pas complète.');
+  assert.equal(partsView({ parts: [{ question: 'Une seule question ?' }] }, 'fr'), null);
+  const list = listItemsView(await real('b1-list-headings'), 'fr');
+  assert.equal(list.items.length, 13);
+  assert.ok(list.items.every((item) => item.block !== null), 'every item opens the article that stands for it');
+  assert.equal(listItemsView({ list: { items_shown: 3, deleted_items: 2 } }, 'fr').deleted, '2 points supprimés par la loi («\u00a0(...)\u00a0») ne sont pas comptés.');
+  assert.deepEqual(notesView({ notes: ['reading_unavailable', 'reading_unavailable', 'an_unknown_code'] }, 'fr').map((note) => note.key), ['reading_unavailable']);
+  const checks = checksView({ state: 'answer', blocks: [{}], checks: { exact_path: false, found_by_outline: true, found_by_words: true, meaning_only: false, list_complete_by_structure: null, references_followed: 1 } }, 'fr');
+  assert.equal(checks.lead.text, 'Trouvé par la table des matières et les mots de la loi.');
+  assert.ok(checks.rows.every((row) => !/%/u.test(row.value)));
+  assert.equal(checksView({ state: 'answer', blocks: [{}], checks: { meaning_only: true } }, 'fr').lead.caution, true);
+  assert.equal(notHeldWhy('held only from 2025-02-10; the date asked is 2024-01-01', 'fr'), 'détenu seulement à partir du 10/02/2025\u00a0; la date demandée est le 01/01/2024');
+  assert.equal(notHeldWhy('the wording held applies from 2006-07-05 until 2026-06-18; the wording in force on 2014-01-01 is not held', 'en'), 'the wording held applies from 05/07/2006 to 18/06/2026; the wording in force on 01/01/2014 is not held');
+  assert.equal(blockVia({ retrieved_via: 'reference', referenced_from: 'Art. 12.' }, 'fr'), 'Trouvé en suivant un renvoi depuis Art. 12.');
+  assert.deepEqual([...pointedLines({ lines_pointed_by_reading: [2], lines_added_by_code: [1, 3] })], [2]);
+  assert.equal(pointedLines({ lines: [1, 2] }), null);
+});
+
+test('pages2: a text the reading service does not hold is read from the engine, its PDF or OCR source said', async () => {
+  const { fr } = await loadRenderers('test-pages2');
+  const css = JSON.parse(await readFile(new URL('../test/next-fixtures/text-css.json', import.meta.url), 'utf8'));
+  assert.equal(fr.nextTextAddress('/lu-legilux/code-securite-sociale', '2026-11-21', { article: 'art_1er' }), '/api/next/text?work=code-securite-sociale&date=2026-11-21&article=art_1er');
+  assert.equal(fr.nextTextAddress('32009L0138', null, { page: 2 }), '/api/next/text?work=32009L0138&page=2');
+  assert.equal(fr.nextTextAddress('nothing', null), null);
+  const state = fr.nextTextState(css, '/lu-legilux/code-securite-sociale');
+  assert.equal(state.text.source, 'next');
+  assert.equal(state.text.publisher, 'lu-legilux');
+  assert.equal(state.text.versions.length, css.versions.length);
+  assert.equal(state.articles[0].publisher_id, 'art_1er');
+  assert.ok(state.articles[0].lines.length > 0 && state.articles[0].fromEngine === true);
+  assert.equal(fr.textSourceLine(state.text.textSource), nextCopy('fr').textSource.pdf);
+  assert.equal(fr.textSourceLine({ identity_from: 'memorial-ocr', ocr: true, pdf: true }), nextCopy('fr').textSource.ocr, 'an OCR text is said as such, before its PDF');
+  const solvency = JSON.parse(await readFile(new URL('../test/next-fixtures/text-solvency.json', import.meta.url), 'utf8'));
+  const eu = fr.nextTextState(solvency, '32009L0138');
+  assert.equal(eu.text.publisher, 'eu-eurlex');
+  assert.equal(eu.text.versions.length, 1, 'an EU act is read in the wording that applies, as the reading service reads it');
+  assert.equal(fr.nextTextState({ error: 'unknown text' }, 'x'), null);
+});
+
+test('pages2: the results say whether they describe the build that answers', async () => {
+  const { fr } = await loadRenderers('test-pages2');
+  const config = JSON.parse(await readFile(new URL('../test/next-fixtures/config.json', import.meta.url), 'utf8'));
+  const results2 = JSON.parse(await readFile(new URL('../test/next-fixtures/results-v2.json', import.meta.url), 'utf8'));
+  const other = fr.renderResults(results2, { locale: 'fr', config });
+  assert.ok(other.includes('data-results-build="other"'));
+  assert.ok(other.includes('Le site répond aujourd’hui avec le code t8 et les données 20261120c (l’entonnoir)'));
+  const same = fr.renderResults({ ...results2, build: config.build }, { locale: 'fr', config });
+  assert.ok(same.includes('data-results-build="same"'));
+  const earlier = JSON.parse(await readFile(new URL('../test/next-fixtures/results.json', import.meta.url), 'utf8'));
+  assert.ok(fr.renderResults(earlier, { locale: 'fr', config }).includes('Le fichier de ces résultats ne nomme pas la version mesurée.'));
+  assert.ok(!fr.renderResults(earlier, { locale: 'fr' }).includes('data-results-build'), 'nothing said before the configuration is read');
+});
+
+test('pages2: a reason under a quotation says who wrote it (K-GEN-7)', async () => {
+  const { reasonBy } = await import('../scripts/next-contract.mjs');
+  assert.equal(reasonBy({ why: 'L’article 26 régit la déclaration du sinistre.' }), 'model');
+  assert.equal(reasonBy({ why: 'ajouté par la référence: cité par Art. 1er., al. 3 (ligne 10)' }), 'code');
+  assert.equal(reasonBy({ why: 'ajouté parce que la lecture dit qu’il manque: « délai »' }), 'code');
+  assert.equal(reasonBy({ why: '« preneur d’assurance » est défini par ce texte' }), 'code');
+  assert.equal(reasonBy({ why: 'Art. 377., al. 1 déroge à Art. 1er. (« à l’exception d »)' }), 'code');
+  assert.equal(reasonBy({ why: 'anything', why_by: 'code' }), 'code', 'the engine’s own word first');
 });

@@ -38,7 +38,10 @@ export function renderDockState(state, { locale, page = 'live-home' } = {}) {
 }
 
 export const renderHow = (corpus, { locale, state = 'ready' } = {}) => renderToStaticMarkup(<HowView corpus={corpus} state={state} locale={locale} />);
-export const renderResults = (results, { locale, state = 'ready' } = {}) => renderToStaticMarkup(<ResultsView results={results} state={state} locale={locale} />);
+export const renderResults = (results, { locale, state = 'ready', config = null } = {}) => renderToStaticMarkup(<ResultsView results={results} state={state} locale={locale} config={config} />);
+
+/** pages2: a text as the engine holds it, read into the text page's state (`/api/next/text`), and its source's sentence. */
+export { nextTextAddress, nextTextState, textSourceLine } from './TextPage.jsx';
 export const renderCorpus = (corpus, { locale, state = 'ready' } = {}) => renderToStaticMarkup(<CorpusView corpus={corpus} state={state} locale={locale} />);
 export const renderHowFunnel = (corpus, config, { locale, state = 'ready', configState = 'ready' } = {}) => renderToStaticMarkup(<HowForPipeline corpus={corpus} config={config} state={state} configState={configState} locale={locale} />);
 export const renderDecisions = ({ locale, pipeline = 'funnel', state = 'ready' } = {}) => renderToStaticMarkup(<DecisionsView pipeline={pipeline} state={state} locale={locale} />);

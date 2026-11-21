@@ -44,6 +44,7 @@ import { HOW_ANSWER_RECORD } from '../scripts/how-answer-record.mjs';
 import { howAnswerStages } from '../scripts/how-answer.mjs';
 import { textHref } from '../scripts/text-address.mjs';
 import { NEXT_HOW_ROOT, NEXT_SCRIPT } from './NextPages.jsx';
+import { nextCopy } from '../scripts/next-copy.mjs';
 import { NEXT_DECISIONS_ROOT, NextDecisions, NextHowFunnel } from './NextHow.jsx';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
@@ -1062,10 +1063,12 @@ export function renderLiveReferencePage(pageKey, { developers = null, live = nul
   // How it works and Decisions are V4 pages (the owner's brief of 2026-11-15, V5How): the V4 header and frame, no dock and
   // no skin of their own; Get help, How to read Lex and Developers keep their look.
   const v4 = V4_REFERENCE_PAGES.includes(pageKey);
+  // pages2 (21/11/2026): the tab of `decisions.html` names what the page shows (Design choices), not the earlier "Décisions".
+  const title = pageKey === 'decisions' ? nextCopy(CHROME_LOCALE).decisions2.title : liveChrome()[pageKey].title;
   return renderDocument(
     <Document
       state={page.state}
-      title={liveChrome()[pageKey].title}
+      title={title}
       shell={v4 ? null : 'ask'}
       density={v4 ? null : skinFor('ask').density}
       banner="live"

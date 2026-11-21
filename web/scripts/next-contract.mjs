@@ -88,8 +88,36 @@ export function contractStateOf(answer, locale) {
   if (!Object.hasOwn(copy.states, key)) return null;
   const state = copy.states[key];
   let more = state.more ?? null;
-  if (key === 'partial') more = text(answer.missing) === null ? copy.missingUnsaid : fillNext(copy.missing, { missing: text(answer.missing) });
-  return { key, badge: state.badge, lead: state.lead, more };
+  let moreBy = null;
+  if (key === 'partial') {
+    // pages2: a compound question answered one funnel per part says its missing parts by code ("partie 2: not_found"): said
+    // in words from the parts' own states; any other `missing` is the reading model's sentence.
+    const coded = /^partie [0-9]+: [a-z_]+(?:; partie [0-9]+: [a-z_]+)*$/u.test(text(answer.missing) ?? '');
+    if (coded) {
+      const parts = text(answer.missing).split('; ').map((piece) => /^partie ([0-9]+): ([a-z_]+)$/u.exec(piece)).filter((match) => match !== null)
+        .map((match) => fillNext(nextCopy(locale).contract2.parts.missingPart, { n: match[1], state: copy.states[match[2]]?.badge ?? match[2] }));
+      more = fillNext(copy.missing, { missing: parts.join(nextCopy(locale).clauseSeparator) });
+      moreBy = 'code';
+    } else {
+      more = text(answer.missing) === null ? copy.missingUnsaid : fillNext(copy.missing, { missing: text(answer.missing) });
+      moreBy = text(answer.missing) === null ? null : 'model';
+    }
+  }
+  return { key, badge: state.badge, lead: state.lead, more, moreBy };
+}
+
+/**
+ * pages2 (K-GEN-7): who wrote a block's reason. The engine's `why_by` when it says; otherwise by the reason's own form: code
+ * writes "ajouté par la référence…", "ajouté parce que…", "élément de la liste…", "« … » est défini par ce texte", "désigné
+ * par la lecture" and "Art. N déroge à Art. M (…)"; any other reason is a model's (the reading's or the arbiter's).
+ */
+export function reasonBy(block) {
+  if (block?.why_by === 'code' || block?.why_by === 'model') return block.why_by;
+  const why = text(block?.why) ?? '';
+  if (/^(?:ajouté par la référence|ajouté parce que|élément de la liste|désigné par la lecture)/u.test(why)) return 'code';
+  if (/^«[^»]+»\s+est défini par ce texte/u.test(why)) return 'code';
+  if (/^(?:Art\.|Article)\s[^—]{0,40}\s(?:écarte|déroge à|réserve|rend applicable|renvoie à|cite)\s(?:Art\.|Article)\s/u.test(why)) return 'code';
+  return 'model';
 }
 
 /**
@@ -114,10 +142,29 @@ export function enginePhrase(phrase, locale, kind = 'reasons') {
  * The texts not held that the answer names, each `{ name, why }` said in one line; whatever the state. A reason the copy does
  * not know is shown on an English page as the engine wrote it, and left out on a French one (French pages stay French).
  */
+/**
+ * pages2: the engine's English reasons for a text not held at the date asked, said in the page's language with their dates
+ * as dd/mm/yyyy ("held only from 2025-02-10; the date asked is 2024-01-01", "the wording held applies from … until …; the
+ * wording in force on … is not held"); null for another reason.
+ */
+export function notHeldWhy(why, locale) {
+  const copy = nextCopy(locale).contract2.notHeldWhy;
+  const value = text(why);
+  if (value === null) return null;
+  const day = (date) => (isIsoDate(date) ? numericDate(date) : date);
+  let match = /^held only from ([0-9]{4}-[0-9]{2}-[0-9]{2}); the date asked is ([0-9]{4}-[0-9]{2}-[0-9]{2})$/u.exec(value);
+  if (match !== null) return fillNext(copy.onlyFrom, { from: day(match[1]), asked: day(match[2]) });
+  match = /^the wording held applies from ([0-9]{4}-[0-9]{2}-[0-9]{2}) until ([0-9]{4}-[0-9]{2}-[0-9]{2})(?: \([^)]*\))?; the wording in force on ([0-9]{4}-[0-9]{2}-[0-9]{2}) is not held$/u.exec(value);
+  if (match !== null) return fillNext(copy.wording, { from: day(match[1]), until: day(match[2]), asked: day(match[3]) });
+  match = /^held only from ([0-9]{4}-[0-9]{2}-[0-9]{2})$/u.exec(value);
+  if (match !== null) return fillNext(copy.onlyFromBare, { from: day(match[1]) });
+  return null;
+}
+
 export function notHeldLines(answer, locale) {
   const copy = nextCopy(locale).contract;
   return list(answer?.not_held).filter((entry) => text(entry?.name) !== null).map((entry) => {
-    const why = enginePhrase(entry.why, locale) ?? (locale === 'en' ? text(entry.why) : null);
+    const why = enginePhrase(entry.why, locale) ?? notHeldWhy(entry.why, locale) ?? (locale === 'en' ? text(entry.why) : /^(?:cité|nommé|publié)/u.test(text(entry.why) ?? '') ? text(entry.why) : null);
     return { name: text(entry.name), line: why === null ? text(entry.name) : fillNext(copy.notHeldItem, { name: text(entry.name), why }) };
   });
 }
@@ -174,7 +221,6 @@ export function understoodFields(answer, locale) {
     legal_terms: (value) => fieldValue(value, locale), terms: (value) => fieldValue(value, locale),
     named_acts: (value) => fieldValue(value, locale), acts: (value) => fieldValue(value, locale), act: (value) => fieldValue(value, locale),
     named_articles: (value) => fieldValue(value, locale), articles: (value) => fieldValue(value, locale), article: (value) => fieldValue(value, locale),
-    acts_named_not_held: (value) => fieldValue(value, locale),
     personal_case: (value) => (value === true ? '' : null),
   };
   return list(answer?.trace?.question?.fields).filter((field) => text(field?.name) !== null && Object.hasOwn(said, field.name)).flatMap((field) => {
@@ -192,7 +238,8 @@ export function versionLine(version, locale) {
   const value = objectOr(version);
   if (value === null || !isIsoDate(value.from)) return copy.versionUndated;
   if (isIsoDate(value.until)) return fillNext(copy.versionSpan, { from: numericDate(value.from), until: numericDate(value.until) });
-  return fillNext(value.until_known === false ? copy.versionUnsure : copy.versionOpen, { from: numericDate(value.from) });
+  // `still_applies` (engine2): the store says this wording applies today, with no end recorded.
+  return fillNext(value.until_known === false && value.still_applies !== true ? copy.versionUnsure : copy.versionOpen, { from: numericDate(value.from) });
 }
 
 /**
@@ -238,6 +285,7 @@ export function contractBlockView(block, locale, state = null) {
     why: text(block?.why),
     lines: quotedLines(block),
     heading: text(block?.heading),
+    missingNow: list(block?.lines_missing_now).length > 0 || block?.lines_missing_now === true,
     identifier,
     anchor,
     date: isIsoDate(version?.from) ? version.from : null,
@@ -289,6 +337,150 @@ export function listStatement(answer, locale) {
   return { complete, main, stated };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// pages2 (21/11/2026): the fields TRACE-CONTRACT.md added that the panel did not draw yet: the parts of a compound question,
+// the items of a list made of headings, the engine's notes, the checks by code, "see also", how a block was found, the lines
+// the reading pointed at against those code added, and where a text's words come from (its PDF, or a character recognition).
+
+/**
+ * The parts of a compound question (`parts`, two or more): each `{ n, question, status, label, blocks }`, `blocks` the
+ * indexes of the answer's blocks that carry this part (`block.part`, 1-based); `loose` the blocks that carry no part. A part
+ * is "answered", "not answered" or "not said" (`answered`), or has its own state (one funnel per part). Null for one question.
+ */
+export function partsView(answer, locale) {
+  const copy = nextCopy(locale).contract2.parts;
+  const states = nextCopy(locale).contract.states;
+  const parts = list(answer?.parts).filter((part) => text(part?.question) !== null);
+  if (parts.length < 2) return null;
+  const blocks = list(answer?.blocks);
+  const grouped = blocks.some((block) => isCount(block?.part));
+  const rows = parts.map((part, at) => {
+    const n = at + 1;
+    let status = 'unsaid';
+    if (typeof part.state === 'string') status = CONTRACT_ASSERTED.includes(part.state) && part.state !== 'partial' ? 'answered' : part.state === 'partial' ? 'partial' : 'not_answered';
+    else if (part.answered === true) status = 'answered';
+    else if (part.answered === false) status = 'not_answered';
+    const own = typeof part.state === 'string' && Object.hasOwn(states, part.state) ? states[part.state].badge : null;
+    return {
+      n, question: text(part.question), status, label: own ?? copy.status[status],
+      blocks: grouped ? blocks.map((block, index) => (block?.part === n ? index : null)).filter((index) => index !== null) : [],
+    };
+  });
+  const loose = grouped ? blocks.map((block, index) => (isCount(block?.part) && block.part >= 1 && block.part <= parts.length ? null : index)).filter((index) => index !== null) : blocks.map((_, index) => index);
+  const open = rows.filter((row) => row.status !== 'answered').length;
+  return {
+    heading: fillNext(copy.heading, { count: groupedCount(parts.length, locale) }),
+    rows, grouped, loose,
+    complete: open === 0,
+    summary: open === 0 ? copy.allAnswered : countedForm(copy.open, open, locale),
+  };
+}
+
+/**
+ * The items of a list the engine built from the headings of an outline node (`list.items`): each `{ key, heading, articles,
+ * cite, block }`, `block` the index of the block that stands for the item (`block.list_item`, or its article), so the item is a
+ * link to its article. Also the items the law deleted (`list.deleted_items`, a count or a list). Null when the list has no items.
+ */
+export function listItemsView(answer, locale) {
+  const copy = nextCopy(locale).contract2.list;
+  const value = objectOr(answer?.list);
+  if (value === null) return null;
+  const blocks = list(answer?.blocks);
+  const items = list(value.items).filter((item) => text(item?.heading) !== null).map((item, at) => {
+    const index = blocks.findIndex((block) => (isCount(item.article_pk) && block?.article_pk === item.article_pk) || text(block?.list_item) === text(item.heading));
+    return {
+      key: String(item.node_id ?? at),
+      heading: text(item.heading),
+      articles: isCount(item.articles) && item.articles > 0 ? countedForm(copy.articles, item.articles, locale) : null,
+      first: text(item.first_article),
+      block: index >= 0 ? index : null,
+    };
+  });
+  const deletedCount = isCount(value.deleted_items) ? value.deleted_items : Array.isArray(value.deleted_items) ? value.deleted_items.length : 0;
+  const deleted = deletedCount > 0 ? countedForm(copy.deleted, deletedCount, locale) : null;
+  if (items.length === 0 && deleted === null) return null;
+  return { heading: text(value.heading), items, deleted };
+}
+
+/** The engine's notes (`notes`) said in words: each `{ key, text, caution }`; a note the copy does not know is left out. */
+export function notesView(answer, locale) {
+  const copy = nextCopy(locale).contract2.notes;
+  const caution = new Set(['reading_unavailable', 'question_model_unavailable', 'corpus_model_unavailable', 'arbiter_unavailable', 'conflicting_evidence', 'cost_cap_reached_no_second_reading']);
+  const seen = new Set();
+  return list(answer?.notes).filter((note) => typeof note === 'string' && Object.hasOwn(copy, note) && !seen.has(note) && seen.add(note))
+    .map((note) => ({ key: note, text: copy[note], caution: caution.has(note) }));
+}
+
+/**
+ * The checks by code about the first block (`checks`), as yes/no facts and never a percentage (K-UI-6): `lead`, one sentence
+ * a reader can weigh (found by meaning alone: to be checked; or the searches that found it), and `rows` for the trace.
+ */
+export function checksView(answer, locale) {
+  const copy = nextCopy(locale).contract2.checks;
+  const checks = objectOr(answer?.checks);
+  if (checks === null) return null;
+  const yes = (value) => (value === true ? copy.yes : value === false ? copy.no : copy.unknown);
+  const rows = [];
+  for (const key of ['exact_path', 'found_by_outline', 'found_by_words', 'meaning_only', 'list_complete_by_structure', 'conflicting_evidence']) {
+    if (!Object.hasOwn(checks, key) || !Object.hasOwn(copy.names, key)) continue;
+    if (key === 'list_complete_by_structure' && checks[key] === null) continue;
+    rows.push({ key, name: copy.names[key], value: yes(checks[key]) });
+  }
+  if (isCount(checks.references_followed)) rows.push({ key: 'references_followed', name: copy.names.references_followed, value: groupedCount(checks.references_followed, locale) });
+  let lead = null;
+  if (CONTRACT_ASSERTED.includes(answer?.state) && list(answer?.blocks).length > 0) {
+    if (checks.meaning_only === true) lead = { text: copy.meaningOnly, caution: true };
+    else {
+      const by = ['exact_path', 'found_by_outline', 'found_by_words'].filter((key) => checks[key] === true).map((key) => copy.by[key]);
+      if (by.length > 0) lead = { text: fillNext(copy.foundBy, { searches: joinWords(by, locale) }), caution: false };
+    }
+  }
+  return rows.length === 0 && lead === null ? null : { lead, rows };
+}
+
+/** Words joined as a sentence lists them: "a, b and c". */
+function joinWords(words, locale) {
+  const table = nextCopy(locale);
+  if (words.length <= 1) return words.join('');
+  return `${words.slice(0, -1).join(table.listSeparator)}${table.pairSeparator ?? ' and '}${words.at(-1)}`;
+}
+
+/** "See also" (`see_also`): each `{ key, article, why }`, in words; empty when the answer names none. */
+export function seeAlsoView(answer) {
+  // The answer's own list; else the one the reference level kept (a pointer to several articles at once, not followed).
+  const own = list(answer?.see_also);
+  const fromLevel = list(answer?.trace?.levels).filter((level) => level?.level === 'references').flatMap((level) => list(level.see_also));
+  return (own.length > 0 ? own : fromLevel).filter((entry) => text(entry?.article) !== null || text(entry?.heading) !== null)
+    .map((entry, at) => ({ key: `${entry.article ?? 'see'}-${at}`, article: text(entry.article) ?? text(entry.heading), heading: text(entry.article) === null ? null : text(entry.heading), why: text(entry.why) }));
+}
+
+/** How a block came into the answer, in words: through a reference, the "cited by" index, or code widening on what was missing; null for the first search. */
+export function blockVia(block, locale) {
+  const copy = nextCopy(locale).contract2.via;
+  // The engine names the article as its number is printed ("Art. 12."): its final full stop is left to the sentence.
+  const from = text(String(block?.referenced_from ?? '').replace(/\.\s*$/u, ''));
+  if (block?.inbound === true) return from === null ? copy.inboundBare : fillNext(copy.inbound, { from });
+  if (block?.retrieved_via === 'reference') return from === null ? copy.referenceBare : fillNext(copy.reference, { from });
+  if (block?.retrieved_via === 'widened') return copy.widened;
+  return null;
+}
+
+/** Where a block's words come from, as the engine marks it: a character recognition (OCR) or the publisher's PDF; or null. */
+export function blockSource(block) {
+  const value = objectOr(block?.source) ?? objectOr(block?.version?.source) ?? objectOr(block?.text_source);
+  const how = typeof block?.source === 'string' ? block.source : typeof block?.identity_from === 'string' ? block.identity_from : typeof value?.identity_from === 'string' ? value.identity_from : '';
+  if (block?.ocr === true || value?.ocr === true || /ocr/iu.test(how)) return 'ocr';
+  if (value?.pdf === true || /pdf/iu.test(how)) return 'pdf';
+  return null;
+}
+
+/** The lines the reading pointed at, when code widened them to their whole paragraph (`lines_pointed_by_reading`); null otherwise. */
+export function pointedLines(block) {
+  const pointed = list(block?.lines_pointed_by_reading).filter(isCount);
+  const added = list(block?.lines_added_by_code).filter(isCount);
+  return pointed.length > 0 && added.length > 0 ? new Set(pointed) : null;
+}
+
 /** An article named by its pk, from the blocks and the candidates the answer carries; null when none names it. */
 export function articleNamer(answer) {
   const names = new Map();
@@ -312,11 +504,27 @@ export function evidenceView(answer, locale) {
   const evidence = objectOr(answer?.evidence);
   if (evidence === null) return null;
   const terms = list(evidence.terms).filter((term) => text(term?.term) !== null && isCount(term?.hits))
-    .map((term) => ({ term: text(term.term), variants: list(term.variants).map(text).filter((one) => one !== null && one !== text(term.term)), hits: term.hits, said: countedForm(copy.hits, term.hits, locale) }))
+    // A form the index searches by its start ("patern*") is said in words (K-UI-4): "words starting with « patern »".
+    .map((term) => ({
+      term: text(term.term),
+      variants: list(term.variants).map(text).filter((one) => one !== null && one !== text(term.term))
+        .map((one) => (/^[^*\s]+\*$/u.test(one) ? fillNext(nextCopy(locale).contract2.startsWith, { stem: one.slice(0, -1) }) : one)),
+      hits: term.hits,
+      said: countedForm(copy.hits, term.hits, locale),
+    }))
     .sort((a, b) => a.hits - b.hits);
   const sweep = objectOr(evidence.sweep);
-  const swept = sweep !== null && isCount(sweep.acts) && isCount(sweep.articles)
-    ? fillNext(copy.sweep, { acts: countedForm(copy.acts, sweep.acts, locale), articles: countedForm(copy.articles, sweep.articles, locale) }) : null;
+  const gradeKey = typeof sweep?.grade === 'string' ? sweep.grade.split(':')[0].trim() : null;
+  const grade = gradeKey === null ? null : copy.grades[gradeKey] ?? null;
+  // pages2: the sweep counts the articles of the whole store that hold every word searched together (`funnel.sweep`), not
+  // the articles gone through: said so, with those in the texts picked; the grade only when it adds to the count.
+  const extra = nextCopy(locale).contract2.sweep;
+  let swept = grade;
+  if (sweep !== null && isCount(sweep.acts) && isCount(sweep.articles)) {
+    const together = sweep.articles === 0 ? extra.none : countedForm(extra.together, sweep.articles, locale, { acts: countedForm(copy.acts, sweep.acts, locale) });
+    const picked = isCount(sweep.articles_in_the_texts_picked) && sweep.articles > 0 ? countedForm(extra.picked, sweep.articles_in_the_texts_picked, locale) : null;
+    swept = [together, picked, gradeKey === 'medium' && sweep.articles === 0 ? null : grade].filter((part) => part !== null).join(' ');
+  }
   const closest = objectOr(evidence.closest);
   const named = closest === null ? null : articleNamer(answer)(closest.article_pk) ?? text(closest.label);
   const near = closest === null || named === null ? null
@@ -343,6 +551,7 @@ function row(key, said, by, extra = {}) {
 export function traceLevels(answer, locale) {
   const table = nextCopy(locale);
   const copy = table.contract.trace;
+  const extra = table.contract2.trace;
   const name = articleNamer(answer);
   const article = (pk) => name(pk) ?? (isCount(pk) ? `#${pk}` : '');
   const titles = new Map();
@@ -366,7 +575,17 @@ export function traceLevels(answer, locale) {
           rows.push(row('filter', fillNext(copy.filter, { rule, removed: countedForm(copy.removed, filter.removed, locale) }), byOf(filter.by)));
         }
         const acts = list(level.acts).filter((act) => text(act?.title) !== null || text(act?.act_id) !== null);
-        if (acts.length > 0) rows.push(row('acts', '', 'code', { items: acts.map((act) => ({ title: actTitle(act.title) ?? act.act_id, reason: text(act.reason), by: byOf(act.by) })) }));
+        // A reason code wrote ("named in the question") is said in the page's language; a model's own reason as it wrote it.
+        if (acts.length > 0) rows.push(row('acts', '', 'code', { items: acts.map((act) => ({ title: actTitle(act.title) ?? act.act_id, reason: enginePhrase(act.reason, locale) ?? text(act.reason), by: byOf(act.by) })) }));
+        // pages2: where the lines shown to the model came from, each source with its count (by code), and a text the model
+        // named that is not in the list it was shown.
+        const sources = objectOr(level.sources);
+        if (sources !== null) {
+          const said = Object.entries(sources).filter(([key, value]) => isCount(value) && value > 0 && Object.hasOwn(extra.sources, key))
+            .map(([key, value]) => fillNext(extra.sourceItem, { source: extra.sources[key], count: groupedCount(value, locale) }));
+          if (said.length > 0) rows.push(row('sources', fillNext(extra.sourcesLine, { sources: said.join(table.listSeparator) }), 'code'));
+        }
+        if (text(level.missing_text) !== null) rows.push(row('missing-text', fillNext(extra.missingText, { name: text(level.missing_text) }), 'model'));
         break;
       }
       case 'document': {
@@ -383,22 +602,31 @@ export function traceLevels(answer, locale) {
         if (parts.length > 0) {
           rows.push(row('parts', copy.partsRead, 'code', { items: parts.map((part) => ({ title: isCount(part.articles) ? fillNext(copy.part, { heading: text(part.heading), articles: countedForm(copy.partArticles, part.articles, locale) }) : text(part.heading), reason: null, by: 'code' })) }));
         }
-        const stop = copy.stopped[level.stopped] ?? table.contract.engine.stopped[level.stopped] ?? null;
-        if (stop !== null) rows.push(row('stopped', stop, 'code'));
+        // The engine may write several stops joined ("leaf,list_node"): each is said.
+        const stops = String(level.stopped ?? '').split(',').map((one) => one.trim()).filter((one) => one.length > 0)
+          .map((one) => copy.stopped[one] ?? table.contract.engine.stopped[one] ?? null).filter((one) => one !== null);
+        for (const stop of [...new Set(stops)]) rows.push(row('stopped', stop, 'code'));
+        // pages2: where the headings came from (the outline table, or the version's own headings counted by code), and a
+        // text held only from a later date than the one asked.
+        if (Object.hasOwn(extra.outlineSource, level.outline_source ?? '')) rows.push(row('outline-source', extra.outlineSource[level.outline_source], 'code'));
+        else if (typeof level.outline_source === 'string' && level.outline_source.startsWith('node table')) rows.push(row('outline-source', extra.outlineSource.node, 'code'));
+        if (level.held_only_later === true) rows.push(row('held-later', extra.heldOnlyLater, 'code'));
         break;
       }
       case 'detectors': {
-        const columns = ['exact', 'outline', 'words', 'meaning'];
+        // pages2: the whole-store searches of the combined pipeline, and the consolidated article holding an amended wording.
+        const more = ['words_all', 'meaning_all', 'amended_text'].filter((column) => list(level.candidates).some((candidate) => isCount(candidate?.found_by?.[column])));
+        const columns = ['exact', 'outline', 'words', 'meaning', ...more];
         const candidates = list(level.candidates).filter((candidate) => isCount(candidate?.article_pk));
         if (candidates.length > 0) {
           rows.push(row('table', '', 'code', {
             table: {
-              columns: ['article', ...columns].map((column) => copy.detectorColumns[column]),
+              columns: ['article', ...columns].map((column) => copy.detectorColumns[column] ?? extra.detectorColumns[column]),
               rows: candidates.map((candidate) => ({
                 key: String(candidate.article_pk),
                 head: article(candidate.article_pk),
                 cells: columns.map((column) => (isCount(candidate.found_by?.[column]) ? fillNext(copy.rank, { rank: groupedCount(candidate.found_by[column], locale) }) : copy.notFoundBy)),
-                note: candidate.meaning_only === true ? copy.meaningOnly : null,
+                note: candidate.meaning_only === true ? copy.meaningOnly : candidate.amending === true ? extra.amending : null,
               })),
             },
           }));
@@ -433,6 +661,18 @@ export function traceLevels(answer, locale) {
             ?? (fixed === null ? null : fillNext(table.contract.engine.fixedK, { count: groupedCount(Number(fixed[1]), locale) })) ?? text(level.read_amount_set_by);
           if (setBy !== null) rows.push(row('read', fillNext(copy.read, { articles: countedForm(copy.readArticles, level.articles_read, locale), setBy, lines: countedForm(copy.readLines, level.lines_quoted, locale) }), byOf(level.by)));
         }
+        // pages2: each round of reading, what it found (an answer, complete or not; what it said was missing), by the model.
+        const rounds = list(level.rounds).filter((round) => objectOr(round) !== null);
+        if (rounds.length > 0) {
+          rows.push(row('rounds', countedForm(extra.rounds, rounds.length, locale), byOf(level.by), {
+            items: rounds.map((round, at) => {
+              const found = round.complete_answer_found === true ? extra.roundComplete : round.answer_found === true ? extra.roundPartial : extra.roundNone;
+              const parts = list(round.parts_answered).filter((one) => typeof one === 'boolean');
+              const answered = parts.length > 0 ? fillNext(extra.roundParts, { answered: groupedCount(parts.filter(Boolean).length, locale), parts: groupedCount(parts.length, locale) }) : null;
+              return { title: fillNext(extra.round, { n: groupedCount(at + 1, locale), found }), reason: [answered, text(round.missing) === null ? null : fillNext(extra.roundMissing, { missing: text(round.missing) })].filter((one) => one !== null).join(' ') || null, by: 'model' };
+            }),
+          }));
+        }
         break;
       }
       case 'references': {
@@ -441,20 +681,45 @@ export function traceLevels(answer, locale) {
         const hops = list(level.hops).filter((hop) => text(hop?.from) !== null && text(hop?.to) !== null);
         if (hops.length > 0) {
           rows.push(row('hops', '', byOf(level.by), {
-            items: hops.map((hop) => ({ title: fillNext(hop.held === false ? copy.hopUnheld : copy.hop, { from: text(hop.from), to: text(hop.to), why: text(hop.why) ?? text(hop.kind) ?? '' }).replace(/\s*:\s*$| :\s*$/u, ''), reason: null, by: byOf(level.by) })),
+            items: hops.map((hop) => ({ title: fillNext(hop.held === false ? copy.hopUnheld : copy.hop, { from: hop.from === 'missing' ? extra.fromMissing : text(hop.from), to: text(hop.to), why: text(hop.why) ?? text(hop.kind) ?? '' }).replace(/\s*:\s*$| :\s*$/u, ''), reason: hop.direction === 'inbound' ? extra.inboundHop : null, by: byOf(level.by) })),
           }));
         }
+        // pages2: what the resolver refused (a pointer it could not tie, a text not held), counted; the texts not held it met;
+        // the loops run.
+        const refused = isCount(level.refused_count) ? level.refused_count : list(level.refused).length;
+        if (refused > 0) rows.push(row('refused', countedForm(extra.refused, refused, locale), 'code'));
+        const unheld = list(level.not_held).map((entry) => (typeof entry === 'string' ? text(entry) : text(entry?.name) ?? text(entry?.title) ?? text(entry?.act_id))).filter((name) => name !== null);
+        if (unheld.length > 0) rows.push(row('not-held', '', 'code', { items: [...new Set(unheld)].map((name) => ({ title: fillNext(extra.refNotHeld, { name }), reason: null, by: 'code' })) }));
+        if (isCount(level.loops) && level.loops > 0) rows.push(row('loops', countedForm(extra.loops, level.loops, locale), 'code'));
         break;
       }
       case 'decision':
         if (text(level.rule) !== null) rows.push(row('rule', fillNext(copy.decision, { rule: enginePhrase(level.rule, locale, 'rules') ?? text(level.rule) }), 'code'));
         break;
+      // pages2: the check by code that a passage beside the answer applies on the date asked (engine2, 21/11/2026).
+      case 'consistency': {
+        const dropped = list(level.dropped);
+        if (isCount(level.checked)) rows.push(row('checked', fillNext(extra.consistency, { checked: countedForm(extra.consistencyChecked, level.checked, locale), dropped: countedForm(extra.consistencyDropped, dropped.length, locale) }), 'code'));
+        const rule = text(level.rule);
+        const said = rule === null ? null : extra.consistencyRules[rule] ?? (locale === 'en' ? rule : null);
+        if (said !== null) rows.push(row('rule', said, 'code'));
+        if (dropped.length > 0) {
+          rows.push(row('dropped', '', 'code', {
+            items: dropped.map((entry) => {
+              const name = typeof entry === 'string' ? text(entry) : article(entry?.article_pk) || text(entry?.label) || text(entry?.article) || text(entry?.act_title) || '';
+              const why = typeof entry === 'object' && entry !== null ? enginePhrase(entry.why, locale) ?? notHeldWhy(entry.why, locale) ?? (locale === 'en' ? text(entry.why) : null) : null;
+              return { title: name, reason: why, by: 'code' };
+            }).filter((item) => item.title.length > 0),
+          }));
+        }
+        break;
+      }
       default:
         break;
     }
     // The searches side by side: by meaning (a model's vectors), by words and names (code), by the table of contents (a model).
     const by = key === 'detectors' && level.by === undefined ? 'both' : byOf(level.by);
-    return { key: `${key}-${at}`, level: key, name: copy.levels[key] ?? key.replaceAll('_', ' '), by, rows };
+    return { key: `${key}-${at}`, level: key, name: copy.levels[key] ?? extra.levels[key] ?? key.replaceAll('_', ' '), by, rows };
   });
 }
 
@@ -468,14 +733,44 @@ export function callRows(answer, locale) {
     model: text(call.model) ?? '',
     time: isCount(call.ms) ? (call.ms < 1000 ? fillNext(table.milliseconds, { value: groupedCount(Math.round(call.ms), locale) }) : fillNext(table.seconds, { value: decimal(call.ms / 1000, locale, 1) })) : '',
     tokens: isCount(call.tokens_in) && isCount(call.tokens_out) ? fillNext(copy.tokens, { in: groupedCount(call.tokens_in, locale), out: groupedCount(call.tokens_out, locale) }) : '',
+    // pages2: a retry, the fallback deployment, a failed call, the wait for the in-flight limit, each said (K-OPS-5).
+    note: [
+      call.failed === true ? table.contract2.calls.failed : null,
+      call.fallback === true || (typeof call.fallback === 'string' && call.fallback.length > 0) ? table.contract2.calls.fallback : null,
+      isCount(call.tries) && call.tries > 1 ? countedForm(table.contract2.calls.tries, call.tries, locale) : null,
+      isCount(call.queue_ms) && call.queue_ms >= 100 ? fillNext(table.contract2.calls.queued, { value: decimal(call.queue_ms / 1000, locale, 1) }) : null,
+    ].filter((one) => one !== null).join(table.listSeparator),
   }));
+}
+
+/** The versions of the routing lines and of the prompts the answer was built with (`meta.build.routing`, `meta.prompts.version`); null when unsaid. */
+export function contractVersions(answer, locale) {
+  const copy = nextCopy(locale).contract2.trace;
+  const routing = text(answer?.meta?.build?.routing);
+  const prompts = text(answer?.meta?.prompts?.version);
+  const parts = [
+    routing === null ? null : fillNext(copy.routing, { date: isIsoDate(routing.slice(0, 10)) ? numericDate(routing.slice(0, 10)) : routing }),
+    prompts === null ? null : fillNext(copy.prompts, { version: prompts }),
+  ].filter((one) => one !== null);
+  return parts.length === 0 ? null : parts.join(nextCopy(locale).clauseSeparator);
 }
 
 /** The trace's foot line: the calls counted from the list of calls, the whole time, the cost at list price. Null when unknown. */
 export function contractFoot(answer, locale) {
   const table = nextCopy(locale);
   const trace = objectOr(answer?.trace);
-  if (trace === null || !Array.isArray(trace.calls) || !isCount(trace.ms) || !isCount(trace.cost_usd)) return null;
+  if (trace === null) return null;
+  // An answer shown again from its token: no model was called now; the first answer's own time and cost, as the token keeps them.
+  const original = objectOr(trace.original);
+  if (original !== null && isCount(original.ms) && isCount(original.cost_usd)) {
+    const replayed = objectOr(answer?.meta?.replayed);
+    const changed = replayed === null ? null : replayed.same_data === false ? table.contract.trace.replayedDataChanged : replayed.same_code === false ? table.contract.trace.replayedCodeChanged : null;
+    return [fillNext(table.contract.trace.replayed, {
+      seconds: fillNext(table.seconds, { value: decimal(original.ms / 1000, locale, 1) }),
+      cost: fillNext(table.dock.costUsd, { value: decimal(original.cost_usd, locale) }),
+    }), changed].filter((part) => part !== null).join(' ');
+  }
+  if (!Array.isArray(trace.calls) || !isCount(trace.ms) || !isCount(trace.cost_usd)) return null;
   return fillNext(table.contract.trace.foot, {
     calls: countedForm(table.dock.calls, trace.calls.length, locale),
     seconds: fillNext(table.seconds, { value: decimal(trace.ms / 1000, locale, 1) }),

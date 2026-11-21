@@ -1,0 +1,766 @@
+{
+ "state": "answer_with_exception",
+ "outcome": "answer_with_exception",
+ "pipeline": "funnel",
+ "question": "Mon assureur peut-il suspendre ma garantie si je ne paie pas ma prime ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_21",
+   "date": "2025-11-25",
+   "why": "A1 régit la suspension pour défaut de paiement, A8 précise la mise en demeure et A4 et A3 établissent le régime distinct de l’assurance sur la vie.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 21",
+   "number": "21",
+   "heading": "Défaut de paiement de la prime",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96064,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "label": "Article 21",
+   "text": [
+    "A défaut de paiement d'une prime, ou d'une fraction de prime, dans les dix jours de son échéance et indépendamment du droit pour l'assureur de poursuivre l'exécution du contrat en justice, la garantie peut être suspendue à l'expiration d'un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "A défaut de paiement d'une prime, ou d'une fraction de prime, dans les dix jours de son échéance et indépendamment du droit pour l'assureur de poursuivre l'exécution du contrat en justice, la garantie peut être suspendue à l'expiration d'un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "candidate": false
+  },
+  {
+   "role": "condition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_22",
+   "date": "2025-11-25",
+   "why": "Condition mise en demeure avant suspension ou résiliation.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 22",
+   "number": "22",
+   "heading": "Mise en demeure et faculté de résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96065,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "label": "Article 22",
+   "text": [
+    "La lettre recommandée doit comporter mise en demeure du preneur de payer la prime échue, rappeler la date d'échéance et le montant de cette prime et indiquer les conséquences du défaut de paiement à l'expiration du délai visé ci-dessus."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "La lettre recommandée doit comporter mise en demeure du preneur de payer la prime échue, rappeler la date d'échéance et le montant de cette prime et indiquer les conséquences du défaut de paiement à l'expiration du délai visé ci-dessus.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "candidate": false
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_24",
+   "date": "2025-11-25",
+   "why": "Exception pour assurances vie, articles 21-23 non applicables.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 24",
+   "number": "24",
+   "heading": "Assurances sur la vie",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96067,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "label": "Article 24",
+   "text": [
+    "Les dispositions des articles 21 à 23 ne sont pas applicables aux assurances sur la vie."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les dispositions des articles 21 à 23 ne sont pas applicables aux assurances sur la vie.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "candidate": false
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_105",
+   "date": "2025-11-25",
+   "why": "Exception pour assurances vie, conditions spécifiques.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 105",
+   "number": "105",
+   "heading": "Défaut de paiement d'une prime",
+   "path": "TITRE III DES ASSURANCES DE PERSONNES > Chapitre II - Des contrats d'assurance sur la vie > Section IV - Paiement des primes et prise d'effet du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96163,
+   "lines": [
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "label": "Article 105",
+   "text": [
+    "A défaut de paiement d'une prime ou d'une fraction de prime dans les dix jours de son échéance, l'assureur peut, dans la mesure où le contrat d'assurance le prévoit et dans un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu:",
+    "soit résilier le contrat en versant la valeur de rachat s'il y a lieu;",
+    "soit transformer la prime ou fraction de prime non payée en avance sur contrat, dans la limite de la valeur de rachat du contrat;",
+    "soit opérer la réduction des garanties du contrat.",
+    "La lettre recommandée doit rappeler la date d'échéance et le montant des primes non payées et indiquer les conséquences du défaut de paiement à l'expiration du délai indiqué ci-dessus."
+   ],
+   "quote": [
+    {
+     "n": 2,
+     "text": "A défaut de paiement d'une prime ou d'une fraction de prime dans les dix jours de son échéance, l'assureur peut, dans la mesure où le contrat d'assurance le prévoit et dans un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu:",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "soit résilier le contrat en versant la valeur de rachat s'il y a lieu;",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "soit transformer la prime ou fraction de prime non payée en avance sur contrat, dans la limite de la valeur de rachat du contrat;",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "soit opérer la réduction des garanties du contrat.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "La lettre recommandée doit rappeler la date d'échéance et le montant des primes non payées et indiquer les conséquences du défaut de paiement à l'expiration du délai indiqué ci-dessus.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "candidate": false
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_1er",
+   "date": "2025-11-25",
+   "why": "« Prime » est défini par ce texte",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 1er",
+   "number": "1",
+   "heading": "Définitions",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre Ier - Dispositions générales > Section Ière - Définitions et dispositions préliminaires",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2016-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96042,
+   "lines": [
+    14
+   ],
+   "wording_since": "2016-01-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+    "effective": "2016-01-01",
+    "title": null
+   },
+   "label": "Article 1er",
+   "text": [
+    "G. Prime: toute espèce de rémunération demandée par l'assureur en contrepartie de ses engagements."
+   ],
+   "quote": [
+    {
+     "n": 14,
+     "text": "G. Prime: toute espèce de rémunération demandée par l'assureur en contrepartie de ses engagements.",
+     "label": "G."
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {},
+   "meaning_only": false,
+   "retrieved_via": "reference",
+   "referenced_from": null,
+   "candidate": false
+  }
+ ],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "notes": [],
+ "trace": {
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 22,
+    "considered_lines": 35,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "ended_before_the_date_asked",
+      "removed": 3,
+      "by": "code"
+     },
+     {
+      "rule": "repealed_by_another_act",
+      "removed": 2,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "transposes": 0,
+     "lines_words": 0,
+     "lines_meaning": 12,
+     "articles_meaning": 12,
+     "articles_words": 15
+    },
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "title": "Loi du 27 juillet 1997 sur le contrat d'assurance. [LOI; loi_de_fond; public général; in_force] — Réglementation générale du contrat d'assurance, incluant assurances de dommages et de personnes. En cl",
+      "reason": "Réglementation générale du contrat d’assurance, comprenant les obligations des parties et les conséquences du non-paiement de la prime.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1497
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 3149,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 5,
+      "picked": [
+       {
+        "node_id": "section_1",
+        "heading": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+        "tally": 8,
+        "reason": "Contient les règles générales sur le contrat d'assurance, incluant les obligations de paiement et les conséquences en cas de non-paiement.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_2",
+        "heading": "TITRE II DES ASSURANCES DE DOMMAGES",
+        "tally": 8,
+        "reason": "Traite des assurances de dommages, où la suspension de garantie pour non-paiement de prime est souvent prévue.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_3",
+        "heading": "TITRE III DES ASSURANCES DE PERSONNES",
+        "tally": 8,
+        "reason": "Concerne les assurances de personnes, pouvant aussi inclure des dispositions sur la suspension de garantie en cas de non-paiement.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 12,
+      "picked": [
+       {
+        "node_id": "section_1.section_2",
+        "heading": "Chapitre II - Dispositions communes à tous les contrats",
+        "tally": 8,
+        "reason": "Contient tous les mots clés de la question et traite des dispositions communes à tous les contrats, donc probablement la suspension de garantie en cas de non-paiement.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "section_2.section_2",
+        "heading": "Chapitre II - Des contrats d'assurance de choses",
+        "tally": 8,
+        "reason": "Chapitre sur les contrats d'assurance de choses, avec tous les mots clés, pertinent pour la suspension de garantie liée au non-paiement.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "section_3.section_2",
+        "heading": "Chapitre II - Des contrats d'assurance sur la vie",
+        "tally": 8,
+        "reason": "Chapitre sur les contrats d'assurance sur la vie, avec tous les mots clés, pertinent pour la suspension de garantie liée au non-paiement.",
+        "whole": true,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 3,
+      "shown": 19,
+      "picked": [
+       {
+        "node_id": "section_1.section_2.section_4",
+        "heading": "Section IV - Exécution du contrat",
+        "tally": 8,
+        "reason": "Contient explicitement les mots 'assureur', 'suspendre', 'garantie', 'paie', 'prime' et traite de l'exécution du contrat, ce qui inclut le paiement des primes et la suspension de garantie.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "section_2.section_2.section_1",
+        "heading": "Section I - Dispositions communes à toutes les assurances de choses",
+        "tally": 8,
+        "reason": "Section commune aux assurances de choses mentionnant la suspension de garantie liée au paiement de la prime, donc pertinente pour la question.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "section_3.section_2.section_4",
+        "heading": "Section IV - Paiement des primes et prise d'effet du contrat",
+        "tally": 6,
+        "reason": "Section spécifique sur le paiement des primes et la prise d'effet du contrat, directement liée à la question du paiement et des conséquences sur la garantie.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 4,
+      "shown": 4,
+      "picked": [
+       {
+        "node_id": "section_2.section_2.section_1.section_4",
+        "heading": "Sous-section IV - Paiement de l'indemnité et privilège de l'assureur",
+        "tally": 8,
+        "reason": "Cette sous-section traite explicitement du paiement et contient tous les mots clés de la question, notamment 'assureur', 'suspendre', 'garantie', 'paie', 'prime'.",
+        "whole": true,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "section_1.section_2.section_4",
+      "heading": "Section IV - Exécution du contrat",
+      "stopped": "leaf",
+      "articles": 12
+     },
+     {
+      "node_id": "section_3.section_2.section_4",
+      "heading": "Section IV - Paiement des primes et prise d'effet du contrat",
+      "stopped": "leaf",
+      "articles": 1
+     },
+     {
+      "node_id": "section_2.section_2.section_1.section_4",
+      "heading": "Sous-section IV - Paiement de l'indemnité et privilège de l'assureur",
+      "stopped": "leaf",
+      "articles": 3
+     }
+    ],
+    "articles": 16,
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": false,
+    "n_candidates": 17
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 2829,
+    "candidates": [
+     [
+      96061,
+      "condition",
+      "Condition liée au manquement et sinistre pour déchéance."
+     ],
+     [
+      96064,
+      "rule",
+      "Article précise suspension garantie en cas de non-paiement prime."
+     ],
+     [
+      96068,
+      "condition",
+      "Condition sur suspension et mise en demeure pour primes ultérieures."
+     ],
+     [
+      96062,
+      "exception",
+      "Exception pour polices combinées, suspension partielle."
+     ],
+     [
+      96124,
+      "reject",
+      "Ne traite pas du paiement prime ou suspension garantie."
+     ],
+     [
+      96063,
+      "context",
+      "Modalités paiement prime, utile mais pas règle suspension."
+     ],
+     [
+      96163,
+      "exception",
+      "Exception pour assurances vie, conditions spécifiques."
+     ],
+     [
+      96066,
+      "condition",
+      "Condition remise en vigueur après paiement prime."
+     ],
+     [
+      96065,
+      "condition",
+      "Condition mise en demeure avant suspension ou résiliation."
+     ],
+     [
+      96067,
+      "exception",
+      "Exception pour assurances vie, articles 21-23 non applicables."
+     ],
+     [
+      96069,
+      "reject",
+      "Ne traite pas du paiement prime ou suspension garantie."
+     ],
+     [
+      96070,
+      "reject",
+      "Ne traite pas du paiement prime ou suspension garantie."
+     ],
+     [
+      96071,
+      "reject",
+      "Sanctions liées sinistre, pas paiement prime."
+     ],
+     [
+      96072,
+      "reject",
+      "Prestation assureur, pas suspension garantie."
+     ],
+     [
+      96125,
+      "reject",
+      "Faillite assuré, hors sujet paiement prime."
+     ],
+     [
+      96126,
+      "context",
+      "Privilège assureur sur prime, contexte paiement."
+     ],
+     [
+      96080,
+      "condition",
+      "Condition prise d'effet garantie liée au paiement."
+     ]
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 9,
+    "read_amount_set_by": "outline node",
+    "lines_quoted": 1,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    },
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A1",
+      "lines": [
+       1
+      ],
+      "reason": "A1 régit la suspension pour défaut de paiement, A8 précise la mise en demeure et A4 et A3 établissent le régime distinct de l’assurance sur la vie."
+     }
+    ]
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "exception index",
+    "budget": 1,
+    "targets_per_hop": 3,
+    "hops": [],
+    "resolver": "edge table (app/refs.py not delivered yet)"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_with_exception_by_code",
+    "state": "answer_with_exception"
+   }
+  ],
+  "calls": [],
+  "cost_usd": 0.0,
+  "ms": 0,
+  "original": {
+   "ms": 12027,
+   "cost_usd": 0.01331
+  }
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "rule",
+   "french": "Mon assureur peut-il suspendre ma garantie si je ne paie pas ma prime ?",
+   "legal_terms": [
+    "assureur",
+    "garantie",
+    "prime d’assurance",
+    "suspension du contrat d’assurance"
+   ],
+   "exclusions": [],
+   "personal_case": true,
+   "jurisdiction": "not_said"
+  },
+  "candidates": [
+   {
+    "article_pk": 96061,
+    "role": "condition"
+   },
+   {
+    "article_pk": 96064,
+    "role": "rule"
+   },
+   {
+    "article_pk": 96068,
+    "role": "condition"
+   },
+   {
+    "article_pk": 96062,
+    "role": "exception"
+   },
+   {
+    "article_pk": 96124,
+    "role": "reject"
+   },
+   {
+    "article_pk": 96063,
+    "role": "context"
+   },
+   {
+    "article_pk": 96163,
+    "role": "exception"
+   },
+   {
+    "article_pk": 96066,
+    "role": "condition"
+   },
+   {
+    "article_pk": 96065,
+    "role": "condition"
+   },
+   {
+    "article_pk": 96067,
+    "role": "exception"
+   },
+   {
+    "article_pk": 96069,
+    "role": "reject"
+   },
+   {
+    "article_pk": 96070,
+    "role": "reject"
+   },
+   {
+    "article_pk": 96071,
+    "role": "reject"
+   },
+   {
+    "article_pk": 96072,
+    "role": "reject"
+   },
+   {
+    "article_pk": 96125,
+    "role": "reject"
+   },
+   {
+    "article_pk": 96126,
+    "role": "context"
+   },
+   {
+    "article_pk": 96080,
+    "role": "condition"
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96064
+   },
+   {
+    "article_pk": 96062
+   },
+   {
+    "article_pk": 96163
+   },
+   {
+    "article_pk": 96067
+   },
+   {
+    "article_pk": 96061
+   },
+   {
+    "article_pk": 96068
+   },
+   {
+    "article_pk": 96066
+   },
+   {
+    "article_pk": 96065
+   },
+   {
+    "article_pk": 96080
+   }
+  ],
+  "replay": "eNrNWstuHLkV_RWiNkqQUqsfsh49i0CwOwMDtmxITjaCUKCq2N20WQ8XWS0JhoH5iGyyy3KEfEGQ3fSfzJfkXLKqmt2qlmQrg8lGXcUiL-_j3Acv9SVYBONBGBTBOJhWWSZUEAYxXlQec3pOvOdi0c7aXQww8Bnvb_OMca2rUlQlK0RldqViutKFyJJSsJSzGS95ZqRgWrKPgmWCFVzSH01fi1Kmgv2ZtqpAbtgfHuwOBrtDop_oYDzlSoswwFPAM30tyuhamnkkbmJRGJlnmFZu-xZd3UZxngjMuQrGFxfHB_2DfcyvFIYuBpdhcDJg5fJuJg1TvOZaYyErckiTLO-mvDIscRynIjMhOzkCy8u7WGpBa1L6FRnmpFAAHg072bd_R2x5Z_iVklpjIVPC7QRhE6mNzGJLWP360z-s-ngWQ0PYFUQXUvRI31ANL2-D0Okgq5S6DK0QL2CkPEukU4CV5GXzfo8lvoD6feHyiljRUklOCx7e6jAMPF3brSbNu1NTy74mxkPGSyNjhbchzDhiGQGkKJSMoQyhH9ptcDBa320YjsL98EV48PiurT400wXZZyo_Vw9v198fAmNiKrNWkfvY6Jd_sfcWlL_8hwltLAwwBRgoGWxkxI0hRJViKkoBBtboYn02B9bwmwZjGoKpVPPUPojmoeDB-EugeDar-EyQf5UEfI4tMD4t83TTKUy-OTIrucwwmPBb-g7-Gurz_BrjWc6IIJMZM3PBSC0k75iZnJZ8hSPXQ5G5LYgJ5yHYHvLN_6dOrsSMq8iIMoVHXwQNUZKiplAbDG7iuwZGPQQnFdnblNxszLq0-FEVzdLODIUodZ5h05hryGbKCuHkY1VKncjY2p00ZCLNZUK6-NREioHvZLU3NNGjfj3qmDL0IexgPaRl4qOITTNpZBdaU3Uhv5510EH-RcfYYcfa440tD_ubA4PNgeH6wGD4YnPgYIPt_lF_jR2ou0TGqFXltOGEc2w6tTrNOQGdSJYSFitkmAu4g1ggEY1BuSwqTdH71r4l4k8p_tgcBfvKBA6I7YZD_z1SMhOw_Qjcf4JObH7T8ASgO4_c-jFZZCoVcKjtjtao4wBwBoErMc1LEcFXIvKbiOtP2IZ0keYL2nDkcQTItMtLUQiuiMJtxIGpOTISh_a8pcO1pRBZI5jFxO-XIOMpTYFKgexMF7mmcbxaiaLrvEz891TwTGYzyAeiTdDdMlqvHbwAwMGRExoPkaQEvyeU3BOGmz24557K5d7g-Phwr3-4NzzcywZ9CJCBXzeZQow0Vt43uSRXHB6yj5VUClmP1rksJlYeutP6Z49dvHn3-geGLSLQmwI5P7CiQpKM2Wx5ly3vSq5-QKDCJ2jlkv3609_ZGdKmstnXpqvVRLEWB1a7hCCAGEBZz8sSSLZJnqaIspryMyV1Gxmgyh6bZCxW1k5c24jwxE394EM5KC0QMrlN95rlkGvGXU5K8F6QOdzu9Jkgu7xD6HXsVZQpd5tCw9YGdeDsNR7gwEuoQY7XsHLkgj3ZhOLpYP_4kODY-E-SxxURC8Jvt7U24NaRzitDiIscVDFWDzAqb8Q6c2GwgFYpldBuI3CELCRUEuWZuo0U3Klc1XRGFA6JCfx0vnLUYAzfLWRMbkefV-DTwobsiNLeXPDEIj348PrD2YS9Zm8m7OW70w9nJx_Yq52T8_O_np2cvpywySn7cXI6OTt5Q9jlSoHdI8_WKJ1gl9po5fLnGf2uDK4fALQHtfsWb6vGboujRENKonm-4cnY1_Oc_KtVU164hE62va-LYZcuXrNXk3PW6uAcr-zVu7dvT36cnHdr4QOqCBQJBNRurwlZvvz3Rp2Mz23mt2XZJoZdKqcyCuhZ0CBVz4tKfLuco045uwR9Pzk7f3d6uk1S2DsWJfCr7snahoSQxLGFM6_gas7MpVMP6nfE5qbYdCX7Fp18h40v1509bL1j2HoHhfaH3aPXDY6Xc15IAzGgtl32ypcDsSutIDhb_hN1YaUbwBLi9SN-085Pc4NFCoeLOn41hSV5gFkBLHnyziHgl8UATX5FwcbC6hnqdtXfox71NPV5bPoxgbaP5zZ5d6utoeLCymNEcKBaiLhLxyHBFSdJ61X5gzhUcnmHk2D1PL2MnqeX1en2OYpZUfl9NLPVP0cr_zx-un-2T_trKj13o-z136DRyQ0OtJVZP_k84pPiho7ccLi0yWxWPTvNiWsnZDvtCY5eGo3QM-nB_lL03llzXqZ2RBc7IZ2NP1d1pLT9Di8PaJcIXO2zzRbbwiLqGT4NHnXVXndx0GrykYhnhO5ICA85ckO5JgQQ3XSuZqQETHSF4eNI7KoBmzjYwFq0uG5C7Hck1G9D4ftuc-JJAxg7YjqlsroDnwcdOvN6NE15tR0u27aAUmQJgjXGrf5gTD_vJNVaFZbcq8LqcPJEDG51_v3W-fcf8f1OxG7TP0Lbrt5iBHiixHk1zaRZ3tWWWEiF-rX2U6-50hUphAGKtL9D7eTroWNDg_HTk36ImGp4ald-T9zZEoW7TXFJB_qMq9824hIHhUgaJlYnbCrKficve4inbwiavzUEH2BzRNbzuD64N3vtVCsM2MnL9caQSK9EYnnG4k_SLbZHSzebujs3rhlzPb91XdF6S2YbL5vtUQsphParvA0FWRTzLJHUFCI2187avLySdLjdOA3TsXx4NERB4C_taDD6Hfw2E6Q8AzuN6-HELzXVR83tRDxf3tm2ymZ7MgxOatHauwov6TxSLjdNh64ep88lRU6PKhjcvHmwfNYYrhQgUkoa173OXum9Fn-RIwzZgJ1eSRzGqRb272hsO0WphlW_zRoGp6IJZ9SD9oOYO5LmVZdKeh0N2jB4mydcEcT1BpWQIUYoaoBLbfdx3QOPcq-zv_v9txldnWHfKKVojLCQs4ra9RwQ-HmT8V5nO_l5t0idF0bPvSy6181-rmW9PvizSQ08UucQyhnMeq9uvTW0tLvV77Xcw-A9PKPuNjZh063dzoLfog-Dv3CpFAljly_vQjZHlMTyjxSZuxhY6-gTB230bm97dOPCFpT28outjkldtwA-itbT1vZSF5Qu_WiKKiXZDKVtM9t-HFtI8CTiaV5lJtLCRHZ605zM3MWv65V_rnJDCQEWu6qSmTDUb1_POPGc02XA_lG_b1vs2kRehup_xXbYKKlb5-66eUojTXVC3V8l6L6g42NNCvydDBquQImuU9uK7P_4MvrrhnXqq8-1FExlZilnM-FybeP2VCDcBCu9D6gaLfGoI5xmojmVdCO6qizqCzu4Qa4WjgqWuC4z-wPCwh421r3ilupK8Kvkgi582K0wf9yoEKARB0Wfu_qW5rF_FSAn3DrPdd9tudcfItRVmm5sev3BaATBMpLg638BLliOgw",
+  "replayed": {
+   "model_calls": 0,
+   "now": {
+    "code": "local",
+    "data": "local"
+   },
+   "same_data": true,
+   "same_code": true
+  }
+ }
+}

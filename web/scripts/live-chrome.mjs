@@ -665,7 +665,7 @@ const EN = Object.freeze({
     // The Changes page (the owner's brief of 2026-11-15, V4Changes): one row per new version of a text in a period.
     title: "Changes",
     heading: "What changed in Luxembourg law",
-    intro: "Every text whose wording changed in the period you choose. Open one to see the old and the new wording side by side.",
+    intro: "The texts of which Lex holds a new version for the period you choose. Open one to see the old and the new wording side by side.",
     // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
     sent: "The dates of the period, and the texts whose titles this page shows, go to this server in the requests and nowhere else; the title filter stays in this page, and this page keeps nothing.",
     // The period: four presets as one segmented control, then the two dates, written day first.
@@ -719,7 +719,7 @@ const EN = Object.freeze({
     loadingEarlier: "Loading earlier changes…",
     earlierFailed: "The earlier changes could not be loaded.",
     tryAgain: "Try again",
-    allShown: "Every change of this period is shown.",
+    allShown: "Every new version held for this period is shown; a change whose version Lex does not hold is not listed.",
     cut: "This period holds more versions than this page lists at once; choose a shorter period to see them all.",
     // The platform's caveat, in the page's language (`RADAR_PLATFORM_CAVEAT`); another caveat is shown as the API says it.
     caveat: "A version row does not by itself assert a wording change, legal effect, or entry into force.",

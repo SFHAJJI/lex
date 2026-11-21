@@ -1,0 +1,330 @@
+{
+ "act_id": "/eli/etat/leg/code/securite_sociale",
+ "work": "code-securite-sociale",
+ "title": "Code de la sécurité sociale",
+ "type": "CODE_RECUEIL",
+ "europe": false,
+ "asked": "2026-11-21",
+ "before_first_held": false,
+ "official": "https://legilux.public.lu/eli/etat/leg/code/securite_sociale/jo",
+ "versions": [
+  {
+   "id": 17295,
+   "from": "2026-01-01",
+   "until": null,
+   "articles": 2121
+  }
+ ],
+ "version": {
+  "id": 17295,
+  "from": "2026-01-01",
+  "until": null,
+  "until_known": true,
+  "articles": 2153
+ },
+ "source": {
+  "identity_from": "publisher-pdf",
+  "ocr": false,
+  "pdf": true
+ },
+ "contents": [
+  {
+   "publisher_id": "art_1er",
+   "number": "1er",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_2",
+   "number": "2",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_3",
+   "number": "3",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_4",
+   "number": "4",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_5",
+   "number": "5",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_6",
+   "number": "6",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_7",
+   "number": "7",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  },
+  {
+   "publisher_id": "art_8",
+   "number": "8",
+   "heading": null,
+   "kind": "article",
+   "page": 1
+  }
+ ],
+ "page": {
+  "number": 1,
+  "pages": 1,
+  "size": 60,
+  "articles": [
+   {
+    "publisher_id": "art_1er",
+    "article_pk": 532086,
+    "number": "1er",
+    "heading": null,
+    "kind": "article",
+    "official_source": "https://data.legilux.public.lu/filestore/eli/etat/leg/code/securite_sociale/20260101/fr/pdf/eli-etat-leg-code-securite_sociale-20260101-fr-pdf.pdf#page=69",
+    "lines": [
+     {
+      "n": 1,
+      "text": "Sont assurés obligatoirement conformément aux dispositions qui suivent:",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "1) les personnes qui exercent au Grand-Duché de Luxembourg contre rémunération une activité professionnelle pour le compte d’autrui;",
+      "label": "1)"
+     },
+     {
+      "n": 3,
+      "text": "2) les apprentis bénéficiant au Grand-Duché de Luxembourg d’une formation professionnelle indemnisée;",
+      "label": "2)"
+     },
+     {
+      "n": 4,
+      "text": "3) les gens de mer occupés sur un navire battant pavillon luxembourgeois et qui, soit possèdent la nationalité luxembourgeoise ou celle d’un pays avec lequel le Luxembourg est lié par un instrument bi- ou multilatéral de sécurité sociale, soit résident au Grand-Duché de Luxembourg;",
+      "label": "3)"
+     },
+     {
+      "n": 5,
+      "text": "4) les personnes qui exercent au Grand-Duché de Luxembourg pour leur propre compte une activité professionnelle ressortissant de la chambre des métiers, de la chambre de commerce ou de la chambre d’agriculture ou une activité professionnelle ayant un caractère principalement intellectuel et non commercial.",
+      "label": "4)"
+     },
+     {
+      "n": 6,
+      "text": "Sont assimilés à ces personnes:",
+      "label": null
+     },
+     {
+      "n": 7,
+      "text": "- les associés de sociétés en nom collectif, de sociétés en commandite simple ou de sociétés à responsabilité limitée ayant pour objet une telle activité qui détiennent plus de vingt-cinq pour cent des parts sociales,",
+      "label": "-"
+     },
+     {
+      "n": 8,
+      "text": "- les administrateurs, commandités ou mandataires de sociétés anonymes, de sociétés en commandite par actions ou de sociétés coopératives ayant pour objet une telle activité qui sont délégués à la gestion journalière,",
+      "label": "-"
+     },
+     {
+      "n": 9,
+      "text": "à condition qu’il s’agisse de personnes sur lesquelles repose l’autorisation d’établissement délivrée conformément à la loi du 2 septembre 2011 réglementant l’accès aux professions d’artisan, de commerçant, d’industriel ainsi qu’à certaines professions libérales ;",
+      "label": null
+     },
+     {
+      "n": 10,
+      "text": "5) le conjoint ou le partenaire au sens de l’article 2 de la loi du 9 juillet 2004 relative aux effets légaux de certains partenariats et, pour les activités ressortissant de la Chambre d’agriculture, les parents et alliés en ligne directe ou collatérale jusqu’au troisième degré inclusivement d’un assuré au titre du numéro 4), première phrase pourvu que le conjoint, le partenaire, le parent ou allié soit âgé de dix-huit ans au moins et prête à cet assuré des services nécessaires dans une mesure telle que ces services peuvent être considérés comme activité principale;",
+      "label": "5)"
+     },
+     {
+      "n": 11,
+      "text": "6) les membres d’associations religieuses et les personnes pouvant leur être assimilées exerçant au Grand-Duché de Luxembourg une activité dans l’intérêt des malades et de l’utilité générale;",
+      "label": "6)"
+     },
+     {
+      "n": 12,
+      "text": "7) les personnes visées par la loi du 6 janvier 1996 sur la coopération au développement de même que celles visées par la loi du 27 juillet 1992 relative à la participation du Grand-Duché de Luxembourg à des opérations pour le maintien de la paix dans le cadre d’organisations internationales;",
+      "label": "7)"
+     },
+     {
+      "n": 13,
+      "text": "8) les bénéficiaires d’une pension personnelle ou d’une pension de survie en vertu du livre III du présent code ou de la législation et réglementation sur les pensions d’un régime spécial luxembourgeois, lorsqu’ils résident au Grand-Duché de Luxembourg;",
+      "label": "8)"
+     },
+     {
+      "n": 14,
+      "text": "9) les bénéficiaires d’une ou de plusieurs rentes personnelles pour une réduction de la capacité de travail de cinquante pour cent au moins ainsi que d’une rente de survie en vertu de la législation concernant les dommages de guerre, à condition qu’ils résident au Grand-Duché de Luxembourg et qu’ils ne soient pas affiliés obligatoirement à un autre titre;",
+      "label": "9)"
+     },
+     {
+      "n": 15,
+      "text": "10) les personnes bénéficiant d’un revenu de remplacement sur lequel une retenue de cotisation au titre de la législation luxembourgeoise sur l’assurance maladie est prévue;",
+      "label": "10)"
+     },
+     {
+      "n": 16,
+      "text": "11) les bénéficiaires d’une allocation au titre de la loi modifiée du 28 juillet 2018 relative au revenu d’inclusion sociale",
+      "label": "11)"
+     },
+     {
+      "n": 17,
+      "text": "12) les membres de la chambre des députés et les représentants luxembourgeois à l’assemblée des communautés européennes pendant la durée de leur mandat, à condition qu’ils ne soient pas assurés obligatoirement à un autre titre;",
+      "label": "12)"
+     },
+     {
+      "n": 18,
+      "text": "13) les enfants âgés de moins de dix-huit ans résidant au Grand-Duché de Luxembourg qui ne sont pas assurés à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+      "label": "13)"
+     },
+     {
+      "n": 19,
+      "text": "14) les personnes âgées de plus de dix-huit ans poursuivant au Grand-Duché de Luxembourg des études ou une formation professionnelle non indemnisée au titre d’un apprentissage, qui ne sont pas assurées à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+      "label": "14)"
+     },
+     {
+      "n": 20,
+      "text": "15) les personnes résidant au Grand-Duché de Luxembourg qui par suite d’infirmité physique ou intellectuelle se trouvent hors d’état de gagner leur vie, qui ne sont pas assurées à un autre titre et qui ne bénéficient pas d’une protection en vertu de l’article 7;",
+      "label": "15)"
+     },
+     {
+      "n": 21,
+      "text": "16) les volontaires de l’armée au sens de la loi du 2 août 1997 portant réorganisation de l’armée et modification de la loi du 27 juillet 1992 relative à la participation du Grand-Duché de Luxembourg à des opérations pour le maintien de la paix (OMP) dans le cadre d’organisations internationales , les personnes participant, sous l’égide d’organisations internationales, comme observateurs aux missions officielles d’observation aux élections à l’étranger, ainsi que celles remplissant la mission d’observateur prévue par la loi modifiée du 29 août 2008 sur la libre circulation des personnes et l’immigration et ses règlements d’exécution et qui assistent à l’exécution d’une mesure d’éloignement;",
+      "label": "16)"
+     },
+     {
+      "n": 22,
+      "text": "17) les jeunes qui exercent un service volontaire conformément à la loi du 31 octobre 2007 sur le service volontaire des jeunes;",
+      "label": "17)"
+     },
+     {
+      "n": 23,
+      "text": "18) aux salariés handicapés occupés dans les ateliers protégés et aux personnes bénéficiant d’un revenu pour personnes gravement handicapées au sens de la loi du 12 septembre 2003 relative aux personnes handicapées;",
+      "label": "18)"
+     },
+     {
+      "n": 24,
+      "text": "19) les sportifs d’élite qui participent à des activités d’élite dans le cadre de la loi du 3 août 2005 concernant le sport;",
+      "label": "19)"
+     },
+     {
+      "n": 25,
+      "text": "20) les bénéficiaires d’une rente partielle ou complète, d’une rente professionnelle d’attente ou d’une rente de survie en vertu du livre II du présent code du chef d’un accident survenu ou d’une maladie professionnelle déclarée après le 31 décembre 2010;",
+      "label": "20)"
+     },
+     {
+      "n": 26,
+      "text": "21) les jeunes au pair séjournant dans une famille d’accueil conformément à la loi du 18 février 2013 sur les jeunes au pair.",
+      "label": "21)"
+     },
+     {
+      "n": 27,
+      "text": "22) les bénéficiaires de la protection temporaire pourvus de l’attestation prévue à l’article 72 de la loi modifiée du 18 décembre 2015 relative à la protection internationale et à la protection temporaire.",
+      "label": "22)"
+     },
+     {
+      "n": 28,
+      "text": "L’assurance peut être étendue suivant des conditions et modalités à déterminer par règlement grand-ducal aux personnes poursuivant des mesures d’insertion ou de réinsertion professionnelles.",
+      "label": null
+     },
+     {
+      "n": 29,
+      "text": "Sont assurées obligatoirement dans les conditions applicables aux personnes visées au numéro 1) de l’alinéa 1 du présent article les personnes exerçant au Grand-Duché de Luxembourg une activité professionnelle rémunérée pour un tiers sans être établies légalement à leur propre compte ou celles effectuant un stage rémunéré ou non sans être assurées au titre de l’article 91.",
+      "label": null
+     }
+    ]
+   },
+   {
+    "publisher_id": "art_2",
+    "article_pk": 532087,
+    "number": "2",
+    "heading": null,
+    "kind": "article",
+    "official_source": "https://data.legilux.public.lu/filestore/eli/etat/leg/code/securite_sociale/20260101/fr/pdf/eli-etat-leg-code-securite_sociale-20260101-fr-pdf.pdf#page=71",
+    "lines": [
+     {
+      "n": 1,
+      "text": "La personne qui est âgée de dix-huit ans au moins, qui réside au Grand-Duché de Luxemburg et qui perd la qualité d’assuré obligatoire ou la protection en qualité de membre de famille au sens de l’article 7 après en avoir bénéficié pendant une période continue de six mois précédant immédiatement la perte de cette qualité et qui ne peut bénéficier autrement d’une protection en matière d’assurance maladie, peut demander à continuer son assurance. La condition de continuité ne vient pas à défaillir par une interruption de moins de huit jours. La demande doit être présentée au Centre commun de la sécurité sociale sous peine de forclusion dans un délai de trois mois suivant la perte de l’affiliation.",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "Les personnes résidant au Grand-Duché de Luxembourg qui ne peuvent bénéficier autrement d’une protection en matière d’assurance maladie ont la faculté de s’assurer volontairement. Le droit aux prestations n’est ouvert qu’après un stage d’assurance de trois mois à partir de la présentation de la demande au Centre commun de la sécurité sociale.",
+      "label": null
+     },
+     {
+      "n": 3,
+      "text": "Dans les conditions prévues à l’alinéa 2, l’État procède à l’affiliation des personnes occupées auprès d’une représentation diplomatique, économique ou touristique luxembourgeoise à l’étranger, pour autant que ces personnes ne sont pas soumises à un autre titre à un régime d’assurance maladie.",
+      "label": null
+     },
+     {
+      "n": 4,
+      "text": "Les conditions et modalités de l’assurance continuée et de l’assurance facultative peuvent être précisées par règlement grand-ducal.",
+      "label": null
+     }
+    ]
+   },
+   {
+    "publisher_id": "art_3",
+    "article_pk": 532088,
+    "number": "3",
+    "heading": null,
+    "kind": "article",
+    "official_source": "https://data.legilux.public.lu/filestore/eli/etat/leg/code/securite_sociale/20260101/fr/pdf/eli-etat-leg-code-securite_sociale-20260101-fr-pdf.pdf#page=71",
+    "lines": [
+     {
+      "n": 1,
+      "text": "Les assurés normalement occupés au Grand-Duché de Luxembourg qui sont détachés temporairement à l’étranger par leur employeur restent affiliés à l’assurance maladie luxembourgeoise.",
+      "label": null
+     }
+    ]
+   },
+   {
+    "publisher_id": "art_4",
+    "article_pk": 532089,
+    "number": "4",
+    "heading": null,
+    "kind": "article",
+    "official_source": "https://data.legilux.public.lu/filestore/eli/etat/leg/code/securite_sociale/20260101/fr/pdf/eli-etat-leg-code-securite_sociale-20260101-fr-pdf.pdf#page=71",
+    "lines": [
+     {
+      "n": 1,
+      "text": "Sont dispensées de l’assurance obligatoire les personnes qui exercent leur activité professionnelle uniquement d’une façon occasionnelle et non habituelle et ce pour une durée déterminée à l’avance qui ne doit pas dépasser trois mois par année de calendrier.",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "Ne sont en outre pas assujetties à l’assurance en vertu de la présente loi, les personnes soumises à un régime d’assurance maladie en raison de leur activité au service d’un organisme international ou en vertu d’une pension leur accordée à ce titre.",
+      "label": null
+     },
+     {
+      "n": 3,
+      "text": "L’occupation d’élèves et d’étudiants pendant leurs vacances scolaires ne donne pas lieu à affiliation.",
+      "label": null
+     },
+     {
+      "n": 4,
+      "text": "Sur demande de l’intéressé, l’activité exercée à titre accessoire dans le domaine culturel ou sportif au service d’une association ne poursuivant pas de but lucratif est dispensée de l’assurance, si le revenu professionnel en retiré ne dépasse pas deux tiers du salaire social minimum par an. Si cette activité ne couvre pas une année civile entière, le revenu professionnel annuel est calculé en fonction de la période d’activité effective.",
+      "label": null
+     },
+     {
+      "n": 5,
+      "text": "Ne sont pas assujetties à l’assurance obligatoire les personnes qui agissent au nom et pour le compte de l’État, des communes, des branches professionnelles ou des entités créées par une disposition légale ou réglementaire au sein des organes décisionnels d’une entité économique de droit public ou de droit privé ou de toute instance du dialogue social créée par une disposition légale ou réglementaire.",
+      "label": null
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -97,7 +97,9 @@ export function keptLine(config, locale) {
 function Limits({ corpus, locale }) {
   const table = nextCopy(locale);
   const copy = table.how;
-  const limits = copy.limits;
+  // pages2 (21/11/2026, K-UI-7): the funnel's own limits (references to other texts followed, the EU insurance texts held),
+  // over the earlier engine's, which the topk page keeps.
+  const limits = { ...copy.limits, ...table.how2.limits };
   const lawLang = locale === 'fr' ? undefined : 'fr';
   const said = [['not-read', 'notRead', 'notReadText'], ['references', 'references', 'referencesText'], ['dictionary', 'dictionary', 'dictionaryText'], ['languages', 'languages', 'languagesText'], ['european', 'european', 'europeanText']]
     .filter(([, head, body]) => typeof limits[head] === 'string' && typeof limits[body] === 'string');
@@ -145,7 +147,10 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
                   <h3>{stage.name}</h3>
                   <Tag by={stage.by} dock={dock} />
                 </div>
-                <div className="lx-how-body"><p>{stage.text}</p></div>
+                <div className="lx-how-body">
+                  <p>{stage.text}</p>
+                  {stage.key === 'detectors' && config?.pipeline === 'combo' ? <p data-how-combo="">{copy.comboNote}</p> : null}
+                </div>
               </li>
             ))}
           </ol>
@@ -194,7 +199,7 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
         <Limits corpus={corpus} locale={locale} />
         <section className="lx-how-block lx-how-wide" aria-labelledby="how-commitments" data-reference-section="commitments" id="commitments">
           <h2 id="how-commitments">{table.how.commitmentsHeading}</h2>
-          <ul className="lx-how-lines">{table.how.commitments.map((line) => <li key={line}>{line}</li>)}</ul>
+          <ul className="lx-how-lines">{copy.commitments.map((line) => <li key={line}>{line}</li>)}</ul>
         </section>
         {counts.length === 0 ? null : (
           <details className="lx-how-fold lx-how-wide" data-how-counts="">

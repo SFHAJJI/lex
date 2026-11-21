@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url';
 
 import { NEXT_COPY, countedForm, decimal, fillNext, groupedCount, nextCopy, numericDate } from './next-copy.mjs';
 import { ASSERTED_OUTCOMES, identifierOf, outcomeOf } from './next-view.mjs';
-import { legacyAnswer } from './next-contract.mjs';
+import { contractStateOf, legacyAnswer } from './next-contract.mjs';
 
 /** The sample answers of the new engine (the contract the dock is built to): `lex-next/web-samples/`, beside this folder. */
 export const SAMPLES = new URL('../../web-samples/', import.meta.url);
@@ -102,6 +102,7 @@ export const KNOWN_DIGITS = Object.freeze([
   /^dock\.examples\.\d+\.question$/u,
   /^how\.choices\.\d+\.why$/u,
   /^how\.commitments\.\d+$/u,
+  /^how2\.commitments\.\d+$/u,
   /^how\.limits\.leftOutReasons\.tiny$/u,
   /^corpus\.leftOutReasons\.tiny$/u,
   /^results\.firstNote$/u,
@@ -557,7 +558,7 @@ export function contractFaults(html, answer, locale) {
   const own = html.replace(/<div class="lx-dock-extract[^"]*"[\s\S]*?<\/div>/gu, '');
   if (/[0-9]\s?%|[0-9] %/u.test(own)) faults.push('a percentage is shown: confidence is said as a state');
   if (answer.state === 'partial') {
-    const said = typeof answer.missing === 'string' && answer.missing.trim().length > 0 ? fillNext(copy.missing, { missing: answer.missing.trim() }) : copy.missingUnsaid;
+    const said = contractStateOf(answer, locale).more;
     if (!html.includes(inMarkup(said))) faults.push('the partial answer does not name what is missing');
   }
   for (const entry of Array.isArray(answer.not_held) ? answer.not_held : []) {
@@ -594,9 +595,34 @@ export function contractFaults(html, answer, locale) {
     else if (/\sopen/u.test(details[1])) faults.push('the trace is drawn open');
     for (const level of trace.levels) if (Object.hasOwn(copy.trace.levels, level.level) && !html.includes(inMarkup(copy.trace.levels[level.level]))) faults.push(`the level ${level.level} is not named`);
     for (const call of trace.calls ?? []) if (!html.includes(`<code>${inMarkup(call.model)}</code>`)) faults.push(`the model call ${call.step} is not listed`);
-    if (Array.isArray(trace.calls) && Number.isFinite(trace.ms) && Number.isFinite(trace.cost_usd) && !html.includes(inMarkup(countedForm(table.dock.calls, trace.calls.length, locale)))) faults.push('the foot line does not count the model calls');
+    // An answer shown again from its token says that no model was called now, and what the first answer took and cost.
+    const original = trace.original !== null && typeof trace.original === 'object' && Number.isFinite(trace.original.ms) && Number.isFinite(trace.original.cost_usd) ? trace.original : null;
+    if (original !== null && !html.includes(inMarkup(fillNext(copy.trace.replayed, { seconds: fillNext(table.seconds, { value: decimal(original.ms / 1000, locale, 1) }), cost: fillNext(table.dock.costUsd, { value: decimal(original.cost_usd, locale) }) })))) faults.push('a replayed answer does not say it called no model, and what the first one cost');
+    if (original === null && Array.isArray(trace.calls) && Number.isFinite(trace.ms) && Number.isFinite(trace.cost_usd) && !html.includes(inMarkup(countedForm(table.dock.calls, trace.calls.length, locale)))) faults.push('the foot line does not count the model calls');
   }
   if (typeof answer.meta?.replay === 'string' && !html.includes(`href="/${locale}/#r=${inMarkup(encodeURIComponent(answer.meta.replay))}"`)) faults.push('the replay link (the token after "#r=") is missing');
+  // pages2 (21/11/2026): the fields TRACE-CONTRACT.md added, each drawn.
+  const extra = table.contract2;
+  const reasons = blocks.filter((block) => typeof block.why === 'string' && block.why.trim().length > 0 && !(typeof block.list_item === 'string' && block.list_item.trim().length > 0)).length;
+  if (count(/data-why-by="(?:model|code)"/gu) < reasons) faults.push('a reason under a quotation does not say who wrote it (K-GEN-7)');
+  const parts = (Array.isArray(answer.parts) ? answer.parts : []).filter((part) => typeof part?.question === 'string');
+  if (parts.length >= 2 && answer.state !== 'not_found') {
+    if (!html.includes('data-dock-parts=')) faults.push('a compound question is not drawn part by part');
+    for (const part of parts) if (!html.includes(inMarkup(part.question))) faults.push(`the part ${part.question} is not said`);
+  }
+  const items = (Array.isArray(answer.list?.items) ? answer.list.items : []).filter((item) => typeof item?.heading === 'string' && item.heading.trim().length > 0);
+  if (items.length > 0 && count(/data-list-item=""/gu) !== items.length) faults.push(`${count(/data-list-item=""/gu)} list items drawn for ${items.length}`);
+  for (const note of Array.isArray(answer.notes) ? answer.notes : []) if (Object.hasOwn(extra.notes, note) && !html.includes(`data-dock-note="${note}"`)) faults.push(`the note ${note} is not said`);
+  if (Array.isArray(trace.levels) && trace.levels.length > 0 && !html.includes(inMarkup(extra.traceNotKept))) faults.push('the trace does not say it is kept nowhere');
+  for (const block of blocks) if (block.source?.ocr === true && !html.includes('data-dock-source="ocr"')) faults.push(`the OCR source of ${block.label} is not said`);
+  if (parts.some((part) => typeof part.state === 'string') && blocks.some((block) => Number.isFinite(block.part))) {
+    for (const [at] of parts.entries()) if (!html.includes(`data-part="${at + 1}"`)) faults.push(`the passages of part ${at + 1} are not grouped under it`);
+  }
+  if ((Array.isArray(answer.see_also) ? answer.see_also : []).length > 0 && !html.includes('data-dock-card="see-also"')) faults.push('see also is not drawn');
+  if (Number.isFinite(answer.list?.deleted_items) && answer.list.deleted_items > 0 && !html.includes('data-dock-list-deleted=""')) faults.push('the items the law deleted are not said');
+  for (const level of trace.levels ?? []) if (!Object.hasOwn(copy.trace.levels, level.level) && !Object.hasOwn(extra.trace.levels, level.level)) faults.push(`the level ${level.level} has no name in words`);
+  if (/>[^<]*\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b[^<]*</u.test(own.replace(/<details[\s\S]*<\/details>/u, ''))) faults.push('a date outside the trace is not dd/mm/yyyy');
+  for (const chip of html.matchAll(/data-chip="([a-z_]+)"[^>]*>([^<]*)</gu)) if (chip[1] !== 'date' && !Object.values(copy.fields).some((name) => chip[2].startsWith(name))) faults.push(`a chip of what Lex understood is not named in words: ${chip[2]}`);
   for (const key of CONTRACT_KEYS) if (html.includes(`>${key}<`) || new RegExp(`[>\\s]${key.replace(/ /gu, '\\s')}[.<]`, 'u').test(html)) faults.push(`the engine's key ${key} is shown`);
   if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
   return faults;
@@ -667,6 +693,7 @@ export async function renderAll({ write = false, tag = '' } = {}) {
   const results2 = JSON.parse(await readFile(RESULTS2_FIXTURE, 'utf8'));
   const config = JSON.parse(await readFile(new URL('../test/next-fixtures/config.json', import.meta.url), 'utf8'));
   const coverage = JSON.parse(await readFile(new URL('../test/next-fixtures/coverage.json', import.meta.url), 'utf8'));
+  const coverageReal = JSON.parse(await readFile(new URL('../test/next-fixtures/coverage-real.json', import.meta.url), 'utf8'));
   const outlineInsurance = JSON.parse(await readFile(new URL('../test/next-fixtures/outline-insurance.json', import.meta.url), 'utf8'));
   const outlineLabour = JSON.parse(await readFile(new URL('../test/next-fixtures/outline-labour-2014.json', import.meta.url), 'utf8'));
   const context = JSON.parse(await readFile(new URL('context-art16.json', CONTRACT_FIXTURES), 'utf8'));
@@ -759,6 +786,28 @@ export async function renderAll({ write = false, tag = '' } = {}) {
       renderings.push({ name: 'coverage', locale, html: cover, faults: cFaults });
       const none = render.renderCoverage({ none: true }, { locale });
       renderings.push({ name: 'coverage-none', locale, html: none, faults: none === '' ? [] : ['a coverage section drawn with no file'] });
+      // pages2: the data builders' own file (data/coverage.json of 21/11/2026, its long lists cut): every count the page
+      // draws is the file's, every type is named in words, every key text is listed, dates are dd/mm/yyyy.
+      {
+        const real = coverageReal;
+        const html = render.renderCoverage(real, { locale });
+        const rFaults = markupFaults(html);
+        const words = nextCopy(locale).coverage;
+        for (const row of real.by_type) {
+          if (!html.includes(`data-type="${inMarkup(row.type)}"`)) rFaults.push(`the type ${row.type} is not drawn`);
+          if (!Object.hasOwn(words.types, row.type)) rFaults.push(`the type ${row.type} is not named in words`);
+        }
+        if (!html.includes(inMarkup(fillNext(words.inForce, { held: groupedCount(real.in_force.held, locale), listed: groupedCount(real.in_force.listed, locale), share: String(Math.round((100 * real.in_force.held) / real.in_force.listed)) })))) rFaults.push('the share in force is not said with the file\'s two counts');
+        if (!html.includes(groupedCount(real.held.luxembourg_acts, locale)) || !html.includes(groupedCount(real.held.eu_acts, locale))) rFaults.push('the texts held are not counted');
+        for (const row of real.named) if (!html.includes(inMarkup(row.name))) rFaults.push(`the key text ${row.name} is not listed`);
+        for (const [key, value] of Object.entries(real.status)) if (!html.includes(`data-status="${key}"`) || !html.includes(groupedCount(value, locale))) rFaults.push(`the status ${key} is not counted`);
+        for (const row of real.date_floor) if (!html.includes(numericDate(row.first_held))) rFaults.push(`the date floor of ${row.title} is not said`);
+        if (/[0-9]{4}-[0-9]{2}-[0-9]{2}/u.test(html.replace(/<[^>]+>/gu, ' '))) rFaults.push('a date is not written dd/mm/yyyy');
+        if (!html.includes(`<details data-coverage="details">`)) rFaults.push('the checks are not behind one fold');
+        if (!html.includes(inMarkup(countedForm(words.quarantine, real.ingest.quarantined.length, locale)))) rFaults.push('the files set aside are not counted');
+        if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) rFaults.push(`an English sentence on the French page: ${sentence}`);
+        renderings.push({ name: 'coverage-real', locale, html, faults: rFaults });
+      }
     }
     // The text's table of contents: one link a heading to its first article, the version's dates, the earliest version held.
     for (const [name, outline] of [['outline-insurance', outlineInsurance], ['outline-labour-2014', outlineLabour]]) {

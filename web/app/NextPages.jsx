@@ -22,6 +22,7 @@ export const NEXT_RESULTS_ROOT = 'lx-next-results';
 export const NEXT_CORPUS_ROOT = 'lx-next-corpus';
 export const CORPUS_ADDRESS = '/api/next/corpus';
 export const RESULTS_ADDRESS = '/api/next/results';
+export const CONFIG_ADDRESS = '/api/next/config';
 
 /** The script every such page loads (`scripts/build-live.mjs` builds it under each language). */
 export const NEXT_SCRIPT = 'client-live-next.js';
@@ -359,8 +360,30 @@ function ResultRow({ group, name, locale }) {
   );
 }
 
+/**
+ * pages2 (21/11/2026, K-UI-7): which build the results were measured on, against the build that answers on this site (the
+ * server's configuration): `{ same, text }`, or null while either is not known. A file that names no build is said so.
+ */
+export function resultsBuildNote(results, config, locale) {
+  const copy = nextCopy(locale).results3;
+  const now = config !== null && typeof config === 'object' ? config.build : null;
+  if (now === null || typeof now !== 'object' || typeof now.code !== 'string' || typeof now.data !== 'string' || results === null || typeof results !== 'object') return null;
+  const pipeline = copy.pipelines[config.pipeline] ?? null;
+  const answering = fillNext(pipeline === null ? copy.answeringBare : copy.answering, { code: now.code, data: now.data, ...(pipeline === null ? {} : { pipeline }) });
+  const measured = results.build !== null && typeof results.build === 'object' && typeof results.build.code === 'string' && typeof results.build.data === 'string' ? results.build : null;
+  if (measured !== null && measured.code === now.code && measured.data === now.data) return { same: true, text: fillNext(copy.same, { code: now.code, data: now.data }) };
+  const before = measured === null ? copy.unnamed : fillNext(copy.measured, { code: measured.code, data: measured.data });
+  return { same: false, text: `${before} ${answering}` };
+}
+
+/** The note drawn under the results' heading. */
+function BuildNote({ note }) {
+  if (note === null) return null;
+  return <p className={note.same ? 'lx-muted' : 'lx-muted lx-next-gap'} data-results-build={note.same ? 'same' : 'other'}>{note.text}</p>;
+}
+
 /** The scored test, drawn from the results answer (`results` null while it is not known). */
-export function ResultsView({ results = null, state = 'loading', locale = CHROME_LOCALE }) {
+export function ResultsView({ results = null, state = 'loading', locale = CHROME_LOCALE, config = null }) {
   const table = nextCopy(locale);
   const copy = table.results;
   const dataLang = locale === 'fr' ? undefined : 'fr';
@@ -372,8 +395,9 @@ export function ResultsView({ results = null, state = 'loading', locale = CHROME
       </div>
     );
   }
+  const note = <BuildNote note={resultsBuildNote(results, config, locale)} />;
   // An evaluation in the schema of RESULTS-SCHEMA.md is drawn by its own view; an earlier file as it was.
-  if (isResults2(results)) return <Results2View results={results} locale={locale} />;
+  if (isResults2(results)) return <Results2View results={results} locale={locale} note={note} />;
   const bench = objectOr(results.all);
   const fresh = objectOr(results.fresh);
   const independent = objectOr(results.independent);
@@ -416,6 +440,7 @@ export function ResultsView({ results = null, state = 'loading', locale = CHROME
   return (
     <div data-next-page="results" data-next-state="ready" data-run={results.run ?? ''}>
       <h1>{copy.heading}</h1>
+      {note}
       {fresh === null ? null : <FreshSection fresh={fresh} locale={locale} />}
       {independent === null ? null : (
         <section aria-labelledby="results-independent" data-results-independent="">
@@ -585,7 +610,9 @@ export function ResultsView({ results = null, state = 'loading', locale = CHROME
 /** Results, live: built in its loading state, the test asked once the page is drawn. */
 export function NextResults({ fetchImpl = undefined, locale = CHROME_LOCALE }) {
   const answer = useJson(RESULTS_ADDRESS, fetchImpl);
-  return <ResultsView results={answer.data} state={answer.state} locale={locale} />;
+  // The build that answers on this site, to say whether the results were measured on it (pages2).
+  const config = useJson(CONFIG_ADDRESS, fetchImpl);
+  return <ResultsView results={answer.data} state={answer.state} locale={locale} config={config.data} />;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

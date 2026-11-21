@@ -50,8 +50,11 @@ async function nextFixture(method, url, body) {
   const { pathname, searchParams } = new URL(url, "http://preview");
   const tryRead = async (name) => { try { return await readJson(name); } catch { return null; } };
   if (pathname === "/api/next/config") return readJson("config.json");
-  if (pathname === "/api/next/coverage") return readJson("coverage.json");
-  if (pathname === "/api/next/results") return readJson("results-v2.json");
+  // pages2 (21/11/2026): the data builders' own coverage file, the results file as the server holds it today (with the
+  // configuration, the page says which build they describe), and a text the reading service does not hold, from the engine.
+  if (pathname === "/api/next/coverage") return readJson("coverage-real.json");
+  if (pathname === "/api/next/results") return readJson("results.json");
+  if (pathname === "/api/next/text") return tryRead({ "code-securite-sociale": "text-css.json", "32009L0138": "text-solvency.json" }[searchParams.get("work")] ?? "none.json");
   if (pathname === "/api/next/text-outline") return tryRead(`contexts/outline-${searchParams.get("work")}.json`);
   if (pathname === "/api/next/context") return tryRead(`contexts/${Number(searchParams.get("article_pk"))}.json`);
   if (method === "POST" && (pathname === "/api/next/ask" || pathname === "/api/next/replay")) {
