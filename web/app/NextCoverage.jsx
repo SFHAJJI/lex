@@ -139,7 +139,7 @@ export function CoverageView({ coverage = null, locale = CHROME_LOCALE }) {
         <>
           <h3 id="next-coverage-key">{copy.namedHeading2}</h3>
           <div className="lx-how-table-scroll">
-            <table className="lx-how-table lx-next-counts" data-coverage="key-texts">
+            <table className="lx-how-table lx-next-keytexts" data-coverage="key-texts">
               <thead><tr><th scope="col">{copy.namedColumns.text}</th><th scope="col">{copy.namedColumns.held}</th><th scope="col">{copy.namedColumns.status}</th><th scope="col">{copy.namedColumns.version}</th></tr></thead>
               <tbody>
                 {view.keyTexts.map((row) => (

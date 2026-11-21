@@ -23,7 +23,7 @@ import { countedForm, fillNext, nextCopy } from '../scripts/next-copy.mjs';
 import {
   CONTRACT_ASSERTED, callRows, readableReason, clarifiedQuestion, clarifyOf, contextAddress, contractBlockView, contractBuild, contractFoot, contractStateOf, dateLine,
   evidenceView, listStatement, notHeldLines, replayToken, replayTokenHref, traceLevels, understoodFields, widened,
-  blockSource, blockVia, checksView, contractVersions, listItemsView, notesView, partsView, pointedLines, reasonBy, seeAlsoView,
+  blockSource, blockVia, checksView, contractVersions, engineSaid, listItemsView, notesView, partsView, pointedLines, reasonBy, seeAlsoView, sourcesAddress,
 } from '../scripts/next-contract.mjs';
 
 /** The language tag the law's own words are marked with on a page written in another language. */
@@ -86,6 +86,38 @@ function NotesAndChecks({ answer, locale }) {
       {notes.map((note) => <p key={note.key} className={note.caution ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-note={note.key}>{note.text}</p>)}
     </div>
   );
+}
+
+/** pages2: the words of the law that give the short answer (engine2's `short_answer`), with who found them. */
+function ShortAnswer({ answer, locale }) {
+  const said = engineSaid(answer, locale).shortAnswer;
+  if (said === null) return null;
+  const copy = nextCopy(locale).contract2.shortAnswer;
+  return (
+    <div className="lx-dock-short" data-dock-short-answer="">
+      <p className="lx-dock-remark"><span className="lx-dock-why-by">{copy.heading}</span></p>
+      <p className="lx-dock-words" lang={lawLang(locale)}><strong>{said.line}</strong></p>
+      <p className="lx-dock-remark">{copy.by}{said.kind === null ? null : <> {said.kind}</>} <Tag by="both" copy={nextCopy(locale).dock} /></p>
+    </div>
+  );
+}
+
+/** pages2: what engine2 says beside the answer: texts named and no longer law on that date, a directive's Luxembourg law, EU texts not held. */
+function EngineNotes({ answer, locale }) {
+  const said = engineSaid(answer, locale);
+  const copy = nextCopy(locale).contract2;
+  const cards = [
+    ['repealed', copy.repealedHeading, said.repealed],
+    ['transposed-by', copy.directiveHeading, said.transposedBy],
+    ['eu-not-held', copy.euNotHeldHeading, said.euNotHeld],
+  ].filter(([, , lines]) => lines.length > 0);
+  if (cards.length === 0) return null;
+  return cards.map(([key, heading, lines]) => (
+    <div className="lx-dock-card lx-dock-notheld" data-dock-card={key} key={key}>
+      <p className="lx-dock-lead">{heading}</p>
+      <ul className="lx-dock-step-list">{lines.map((line) => <li key={line} lang={key === 'eu-not-held' ? undefined : lawLang(locale)}>{line}</li>)}</ul>
+    </div>
+  ));
 }
 
 /** pages2: the items of a list made of headings, in the text's order, each opening the article that stands for it. */
@@ -244,7 +276,7 @@ function Line({ line, first, last, table }) {
 }
 
 /** One block: its role, the lines it quotes (widened on demand), the article and its act, the version and its dates. */
-export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer = null, initialLevel = 'lines', initialContext = null }) {
+export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer = null, initialLevel = 'lines', initialContext = null, versionSource = null, explain = true, explainException = true }) {
   const table = nextCopy(locale);
   const copy = table.contract;
   const view = contractBlockView(block, locale, state);
@@ -272,11 +304,12 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
   const pointed = pointedLines(block);
   const extra = table.contract2;
   const via = blockVia(block, locale);
-  const source = blockSource(block);
+  // The block's own word on its source, else the store's (`/api/next/sources`, asked once for the answer's versions).
+  const source = blockSource(block) ?? (versionSource?.ocr === true ? 'ocr' : versionSource?.pdf === true ? 'pdf' : null);
   const item = typeof block?.list_item === 'string' && block.list_item.trim().length > 0 ? block.list_item.trim() : null;
   const whyBy = reasonBy(block);
   // An exception is read with the rule it may set aside (K-REF-6): said once on its card.
-  const exceptionNote = view.role === 'exception' && (state === 'answer' || state === 'answer_with_exception');
+  const exceptionNote = explainException && view.role === 'exception' && (state === 'answer' || state === 'answer_with_exception');
   return (
     <article className="lx-dock-card lx-dock-answer lx-dock-block" data-dock-card="block" data-role={view.role ?? ''} aria-label={view.label}>
       <div className="lx-dock-card-head"><span className="lx-dock-verdict">{view.label}</span></div>
@@ -317,7 +350,9 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
           {wide.lines.map((line, at) => <Line key={`w-${at}`} line={line} first={at === 0} last={at === wide.lines.length - 1} table={table} />)}
         </div>
       )}
-      {wide === null && marked && pointed !== null ? <p className="lx-dock-remark" data-dock-pointed="">{extra.pointed}</p> : null}
+      {explain && wide === null && marked && (pointed !== null || Object.hasOwn(extra.pointedUnits, block?.context_unit ?? '')) ? (
+        <p className="lx-dock-remark" data-dock-pointed={block?.context_unit ?? ''}>{extra.pointedUnits[block?.context_unit ?? ''] ?? extra.pointed}</p>
+      ) : null}
       {typeof block?.version?.until_cut === 'string' && block.version.until_cut.length > 0 ? <p className="lx-dock-remark" data-dock-until-cut="">{extra.untilCut}</p> : null}
       {view.missingNow ? <p className="lx-dock-remark lx-dock-caution" data-dock-missing-now="">{copy.trace.missingNow}</p> : null}
       {level !== 'lines' && context.state === 'loading' ? <p className="lx-dock-remark" role="status">{copy.widen.loading}</p> : null}
@@ -372,6 +407,7 @@ function Evidence({ answer, locale }) {
     <div className="lx-dock-card" data-dock-card="searched" data-dock-evidence="">
       <p className="lx-dock-lead">{partial ? nextCopy(locale).contract2.evidencePartial : copy.heading}</p>
       {view.coverage === null ? null : <p className="lx-dock-words" data-evidence="coverage"><strong>{copy.coverage}</strong>{' '}<span lang={lang}>{view.coverage}</span></p>}
+      {(view.floors ?? []).map((line) => <p className="lx-dock-words" data-evidence="floor" key={line}>{line}</p>)}
       {view.terms.length === 0 ? null : (
         <table className="lx-dock-table" data-evidence="terms">
           <thead><tr><th scope="col">{copy.terms.term}</th><th scope="col">{copy.terms.variants}</th><th scope="col">{copy.terms.hits}</th></tr></thead>
@@ -488,8 +524,21 @@ export function ContractAnswer({ turn, locale, onAsk, onOpen, typedDay, fetchImp
   const table = nextCopy(locale);
   const answer = turn.result;
   const blocks = Array.isArray(answer.blocks) ? answer.blocks.filter((block) => block !== null && typeof block === 'object') : [];
+  // pages2: where the quoted versions' words come from (an OCR of a scanned Mémorial page is said on its card), asked once.
+  const [sources, setSources] = useState({});
+  const sourcesAt = sourcesAddress(answer);
+  useEffect(() => {
+    if (sourcesAt === null) return undefined;
+    let live = true;
+    readContext(sourcesAt, fetchImpl).then((read) => { if (live && read.state === 'ready') setSources(read.data); });
+    return () => { live = false; };
+  }, [sourcesAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The sentences that explain how lines are marked and how an exception is read are said once, on the first card that needs them.
+  const firstPointed = blocks.findIndex((block) => ['rule', 'exception'].includes(block.role) && (pointedLines(block) !== null || Object.hasOwn(table.contract2.pointedUnits, block.context_unit ?? '')));
+  const firstException = blocks.findIndex((block) => block.role === 'exception');
   const card = (block, at) => (
-    <ContractBlock block={block} answer={answer} state={answer.state} locale={locale} onOpen={onOpen} fetchImpl={fetchImpl} key={`${block.article_pk ?? 'block'}-${at}`} />
+    <ContractBlock block={block} answer={answer} state={answer.state} locale={locale} onOpen={onOpen} fetchImpl={fetchImpl} key={`${block.article_pk ?? 'block'}-${at}`}
+      versionSource={sources[String(block?.version?.id)] ?? null} explain={at === firstPointed} explainException={at === firstException} />
   );
   const cards = blocks.map(card);
   // Nothing found: the state, then what Lex checked, and only then the closest passages, under a heading that says they do not answer.
@@ -524,9 +573,11 @@ export function ContractAnswer({ turn, locale, onAsk, onOpen, typedDay, fetchImp
   return (
     <>
       <StateHead answer={answer} locale={locale} />
+      <ShortAnswer answer={answer} locale={locale} />
       <NotesAndChecks answer={answer} locale={locale} />
       <Understood answer={answer} turn={turn} locale={locale} onAsk={onAsk} typedDay={typedDay} initialDateOpen={initialDateOpen} />
       <NotHeld answer={answer} locale={locale} />
+      <EngineNotes answer={answer} locale={locale} />
       <Clarify answer={answer} turn={turn} locale={locale} onAsk={onAsk} />
       <ListStatement answer={answer} locale={locale} />
       <ListItems answer={answer} locale={locale} onOpen={onOpen} />

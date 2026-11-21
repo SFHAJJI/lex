@@ -221,6 +221,8 @@ export function understoodFields(answer, locale) {
     legal_terms: (value) => fieldValue(value, locale), terms: (value) => fieldValue(value, locale),
     named_acts: (value) => fieldValue(value, locale), acts: (value) => fieldValue(value, locale), act: (value) => fieldValue(value, locale),
     named_articles: (value) => fieldValue(value, locale), articles: (value) => fieldValue(value, locale), article: (value) => fieldValue(value, locale),
+    // engine2: the words of the question found in no text held (K-QUEST-4).
+    vocabulary_misses: (value) => fieldValue(value, locale),
     personal_case: (value) => (value === true ? '' : null),
   };
   return list(answer?.trace?.question?.fields).filter((field) => text(field?.name) !== null && Object.hasOwn(said, field.name)).flatMap((field) => {
@@ -445,6 +447,37 @@ function joinWords(words, locale) {
   return `${words.slice(0, -1).join(table.listSeparator)}${table.pairSeparator ?? ' and '}${words.at(-1)}`;
 }
 
+/**
+ * engine2's fields (TRACE-CONTRACT.md, "Fields added by engine2"), said in words:
+ *   - `shortAnswer`: the words of the law that give the short answer, kept by code only when they stand in a quoted line, with
+ *     the reader's reading of their kind (said as the model's);
+ *   - `repealed`: each text the person named that no longer applies on the date asked, with the text that repealed it;
+ *   - `transposedBy`: the Luxembourg texts held that transpose a directive the answer first quoted;
+ *   - `euNotHeld`: the sentence for a European text named and not held, in the question's language.
+ */
+export function engineSaid(answer, locale) {
+  const table = nextCopy(locale);
+  const copy = table.contract2;
+  const short = objectOr(answer?.short_answer);
+  const shortAnswer = short !== null && text(short.words) !== null
+    ? {
+      line: fillNext(copy.shortAnswer.line, { words: text(short.words), label: text(short.label) ?? articleNamer(answer)(short.article_pk) ?? '' }).replace(/\s*\(\)$/u, ''),
+      kind: typeof short.kind === 'string' && Object.hasOwn(copy.shortAnswer.kinds, short.kind) ? fillNext(copy.shortAnswer.kind, { kind: copy.shortAnswer.kinds[short.kind] }) : null,
+    } : null;
+  const repealed = list(answer?.repealed_named).filter((entry) => text(entry?.act_title) !== null || text(entry?.named_as) !== null).map((entry) => {
+    const title = actTitle(entry.act_title) ?? text(entry.named_as);
+    const by = actTitle(entry.by_title) ?? text(entry.by);
+    if (isIsoDate(entry.from) && by !== null) {
+      return fillNext(entry.status === 'repealed_in_part' ? table.dock.repealedNamedPartial : table.dock.repealedNamed, { title, date: numericDate(entry.from), by, article: text(entry.article) ?? '' }).replace(/\s*\(\)/u, '');
+    }
+    return title;
+  });
+  const directive = objectOr(answer?.directive_transposed_by);
+  const transposedBy = directive === null ? [] : list(directive.transposed_by).map((entry) => actTitle(entry?.title) ?? text(entry?.act_id)).filter((one) => one !== null);
+  const euNotHeld = list(answer?.eu_not_held).map((entry) => text(entry?.sentence)).filter((one) => one !== null);
+  return { shortAnswer, repealed, transposedBy, euNotHeld };
+}
+
 /** "See also" (`see_also`): each `{ key, article, why }`, in words; empty when the answer names none. */
 export function seeAlsoView(answer) {
   // The answer's own list; else the one the reference level kept (a pointer to several articles at once, not followed).
@@ -530,8 +563,15 @@ export function evidenceView(answer, locale) {
   const near = closest === null || named === null ? null
     : text(closest.why_not) === null ? fillNext(copy.closestBare, { article: named }) : fillNext(copy.closest, { article: named, why: text(closest.why_not) });
   const coverage = text(evidence.coverage) ?? text(objectOr(evidence.coverage)?.summary) ?? text(objectOr(evidence.coverage)?.text);
-  if (coverage === null && terms.length === 0 && swept === null && near === null) return null;
-  return { coverage, terms, swept, closest: near };
+  // pages2 (K-SCOPE-4): the date floor of the texts picked (engine2's `coverage_detail`), each named by its title in the answer.
+  const titles = new Map();
+  for (const level of list(answer?.trace?.levels)) for (const act of list(level?.acts)) if (text(act?.act_id) !== null && actTitle(act?.title) !== null) titles.set(act.act_id, actTitle(act.title));
+  for (const block of list(answer?.blocks)) if (text(block?.act_id) !== null && actTitle(block?.act_title) !== null) titles.set(block.act_id, actTitle(block.act_title));
+  const floors = list(objectOr(evidence.coverage_detail)?.date_floor_of_the_texts_picked)
+    .filter((entry) => isIsoDate(entry?.first_held) && titles.has(entry?.act_id))
+    .map((entry) => fillNext(nextCopy(locale).contract2.floor, { title: titles.get(entry.act_id).replace(/\s*>.*$/u, ''), date: numericDate(entry.first_held) }));
+  if (coverage === null && terms.length === 0 && swept === null && near === null && floors.length === 0) return null;
+  return { coverage, terms, swept, closest: near, floors };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -631,6 +671,8 @@ export function traceLevels(answer, locale) {
             },
           }));
         }
+        // engine2: articles read in the wording their own dates give (a dated question), counted by code.
+        if (isCount(level.wordings_by_article_dates) && level.wordings_by_article_dates > 0) rows.push(row('wordings', countedForm(extra.wordingsByDates, level.wordings_by_article_dates, locale), 'code'));
         for (const skipped of list(level.skipped)) {
           if (text(skipped?.detector) === null) continue;
           const detector = copy.detectorNames[skipped.detector] ?? skipped.detector;
@@ -813,6 +855,15 @@ export function replayRequest(token) {
     address: REPLAY_ADDRESS,
     init: Object.freeze({ method: 'POST', headers: Object.freeze({ 'content-type': 'application/json', accept: 'application/json' }), body: JSON.stringify({ token }) }),
   });
+}
+
+/**
+ * pages2: the address that says where the words of the versions an answer quotes come from (`GET /api/next/sources`), for
+ * the blocks that do not say it themselves; null when every block says it, or none names its version.
+ */
+export function sourcesAddress(answer) {
+  const ids = [...new Set(list(answer?.blocks).filter((block) => blockSource(block) === null && !objectOr(block?.source) && isCount(block?.version?.id)).map((block) => block.version.id))].slice(0, 40);
+  return ids.length === 0 ? null : `/api/next/sources?${ids.map((id) => `version=${id}`).join('&')}`;
 }
 
 /** The address that answers an article's lines and its section (to widen a quotation). */

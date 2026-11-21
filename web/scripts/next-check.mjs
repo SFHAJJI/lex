@@ -619,6 +619,11 @@ export function contractFaults(html, answer, locale) {
     for (const [at] of parts.entries()) if (!html.includes(`data-part="${at + 1}"`)) faults.push(`the passages of part ${at + 1} are not grouped under it`);
   }
   if ((Array.isArray(answer.see_also) ? answer.see_also : []).length > 0 && !html.includes('data-dock-card="see-also"')) faults.push('see also is not drawn');
+  // engine2's fields (TRACE-CONTRACT.md, 21/11/2026).
+  if (typeof answer.short_answer?.words === 'string' && !(html.includes('data-dock-short-answer=""') && html.includes(inMarkup(answer.short_answer.words)))) faults.push('the short answer\'s words are not drawn');
+  if ((answer.repealed_named ?? []).length > 0 && !html.includes('data-dock-card="repealed"')) faults.push('a text named and repealed is not said');
+  if ((answer.directive_transposed_by?.transposed_by ?? []).length > 0 && !html.includes('data-dock-card="transposed-by"')) faults.push('the law that transposes the directive is not named');
+  for (const entry of answer.eu_not_held ?? []) if (typeof entry?.sentence === 'string' && !html.includes(inMarkup(entry.sentence))) faults.push('an EU text not held is not said');
   if (Number.isFinite(answer.list?.deleted_items) && answer.list.deleted_items > 0 && !html.includes('data-dock-list-deleted=""')) faults.push('the items the law deleted are not said');
   for (const level of trace.levels ?? []) if (!Object.hasOwn(copy.trace.levels, level.level) && !Object.hasOwn(extra.trace.levels, level.level)) faults.push(`the level ${level.level} has no name in words`);
   if (/>[^<]*\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b[^<]*</u.test(own.replace(/<details[\s\S]*<\/details>/u, ''))) faults.push('a date outside the trace is not dd/mm/yyyy');

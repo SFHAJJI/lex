@@ -411,7 +411,9 @@ export function nextTextState(value, identifier) {
   const articles = (Array.isArray(value.page.articles) ? value.page.articles : []).filter((entry) => typeof entry?.publisher_id === 'string').map((entry) => ({ ...nextArticle(entry), language }));
   return {
     text: {
-      identifier, publisher: europe ? 'eu-eurlex' : 'lu-legilux', title: typeof value.title === 'string' ? cleanTitle(value.title) : null, language, versions,
+      identifier, publisher: europe ? 'eu-eurlex' : 'lu-legilux',
+      // An EU title without the Official Journal's "(Texte présentant de l'intérêt pour l'EEE)", as the reading service's page names it.
+      title: typeof value.title === 'string' ? cleanTitle(value.title.replace(/\s*\((?:Text with EEA relevance|Texte présentant de l['’]intérêt pour l['’]EEE)\)\s*$/u, '')) : null, language, versions,
       contents, articleCount: Number.isInteger(read.articles) ? read.articles : contents.length, official: /^https:\/\//u.test(value.official ?? '') ? value.official : null,
       holder: { date: iso(read.from) ? read.from : null, permalink: null }, euDate: null, source: 'next', textSource: source,
     },

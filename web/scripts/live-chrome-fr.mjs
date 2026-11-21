@@ -1087,7 +1087,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     retry: 'Réessayer',
     none: 'Cette adresse ne désigne aucun texte. Cherchez un texte par son nom ou son numéro dans le champ ci-dessus.',
     kindLu: 'Droit luxembourgeois, texte consolidé en français.',
-    kindEu: 'Règlement de l’UE, la version détenue.',
+    kindEu: 'Texte de l’Union européenne, la version détenue.',
     articles: Object.freeze({ one: '{count} article.', other: '{count} articles.' }),
     versionsHeld: Object.freeze({ one: 'Une version détenue, du {first}.', other: '{count} versions détenues, du {first} à aujourd’hui.' }),
     euDate: 'La date d’une version de l’UE est celle de son libellé, pas une date d’application.',
@@ -1738,7 +1738,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       assistant: Object.freeze({
         heading: 'L’assistant',
-        processor: 'Une question que vous saisissez dans l’assistant est envoyée au serveur de ce site, qui l’envoie, telle que vous l’avez saisie, à un modèle de langage du service Azure OpenAI de Microsoft, fourni dans l’Espace économique européen par Microsoft Ireland Operations Limited (zone de données de l’UE), qui agit en qualité de sous-traitant. Ce traitement a pour seule finalité de lire la question et de désigner, parmi des lignes de loi que le code de Lex a trouvées, celles qui y répondent ; le modèle n’écrit aucune phrase de la réponse. N’accompagnent la question que les consignes de Lex et des lignes du droit publié ; rien d’autre vous concernant n’est envoyé au modèle : ni votre adresse IP, ni l’agent utilisateur de votre navigateur, ni aucun cookie, ni vos questions précédentes. Le serveur ne conserve ni la question ni la réponse ; le panneau de l’assistant garde votre conversation dans cet onglet du navigateur seulement, jusqu’à sa fermeture. Microsoft n’utilise ni les invites ni les réponses pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut les conserver jusqu’à 30 jours. Vos droits au titre du RGPD sont exposés ci-dessous.',
+        processor: 'Une question que vous saisissez dans l’assistant est envoyée au serveur de ce site, qui l’envoie, telle que vous l’avez saisie, à un modèle de langage du service Azure OpenAI de Microsoft, fourni dans l’Espace économique européen par Microsoft Ireland Operations Limited (zone de données de l’UE), qui agit en qualité de sous-traitant. Ce traitement a pour seule finalité de lire la question et de désigner, parmi des lignes de loi que le code de Lex a trouvées, celles qui y répondent ; le modèle n’écrit aucune phrase de la réponse. N’accompagnent la question que les consignes de Lex et des lignes du droit publié ; rien d’autre vous concernant n’est envoyé au modèle : ni votre adresse IP, ni l’agent utilisateur de votre navigateur, ni aucun cookie, ni vos questions précédentes. Le serveur ne conserve ni la question ni la réponse : il note seulement chaque mot d’une question qu’aucun texte détenu par Lex ne contient, seul, avec le jour et la langue de la question, jamais la question ni son auteur ; le panneau de l’assistant garde votre conversation dans cet onglet du navigateur seulement, jusqu’à sa fermeture. Microsoft n’utilise ni les invites ni les réponses pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut les conserver jusqu’à 30 jours. Vos droits au titre du RGPD sont exposés ci-dessous.',
       }),
       rights: Object.freeze({
         heading: 'Vos droits',
@@ -1993,7 +1993,8 @@ export const LIVE_CHROME_FR = Object.freeze({
   // The decisions Lex is built on, each with what it gains and what it costs (the owner's order of 2026-11-14, evening):
   // every figure is a test run's or the coverage answer's (`ReferencePages.jsx`, `measured`).
   decisions: Object.freeze({
-    title: 'Décisions',
+    // pages2 (21/11/2026): the page at this address is the design choices (`NextHow.jsx`), and its tab says so.
+    title: 'Choix de conception',
     heading: 'Les décisions de Lex, ce qu’elles apportent et ce qu’elles coûtent',
     gain: 'Gain :',
     cost: 'Coût :',

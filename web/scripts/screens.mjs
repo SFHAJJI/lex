@@ -159,6 +159,22 @@ SHOTS.push(
   ["q-en-01-compound--tall", "/en/radar.html", 1366, 3600, false, false, ASK(B1.compound), 9000],
   ["q-en-02-coverage--1366-whole", "/en/coverage.html", 1366, 768, false, true, null, 6000],
 );
+// pages2, second run: only the views changed since run 44939497094.
+SHOTS.length = 0;
+SHOTS.push(
+  ["r-fr-01-list-headings--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(B1.listHeadings), 9000],
+  ["r-fr-02-compound--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.compound), 9000],
+  ["r-fr-03-compound-trace--tall", "/fr/radar.html", 1366, 7000, false, false, ASK_THEN(B1.compound, OPEN_TRACE), 9000],
+  ["r-fr-04-not-held-2014--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.notHeld), 9000],
+  ["r-fr-05-css--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(B1.css), 9000],
+  ["r-fr-06-text-solvency-from-engine--1366x768", `/fr/text.html?text=32009L0138&article=001`, 1366, 768, false, false, null, 8000],
+  ["r-fr-07-coverage-key-texts--tall", "/fr/coverage.html", 1366, 2400, false, false, null, 6000],
+  ["r-fr-08-how--tall", "/fr/evidence.html", 1366, 3000, false, false, null, 5000],
+  ["r-fr-09-decisions-tab--1366x768", "/fr/decisions.html", 1366, 768, false, false, null, 5000],
+  ["r-fr-10-list-headings--phone", "/fr/radar.html", 390, 844, true, false, ASK(B1.listHeadings), 9000],
+  ["r-fr-11-partial--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.partial), 9000],
+  ["r-en-01-list-headings--1366x768", "/en/radar.html", 1366, 768, false, false, ASK(B1.listHeadings), 9000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });

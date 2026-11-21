@@ -784,3 +784,15 @@ test('pages2: a reason under a quotation says who wrote it (K-GEN-7)', async () 
   assert.equal(reasonBy({ why: 'Art. 377., al. 1 déroge à Art. 1er. (« à l’exception d »)' }), 'code');
   assert.equal(reasonBy({ why: 'anything', why_by: 'code' }), 'code', 'the engine’s own word first');
 });
+
+test('pages2: the answer asks once where its versions\' words come from; a refused replay token is said as such', async () => {
+  const { sourcesAddress } = await import('../scripts/next-contract.mjs');
+  const real = JSON.parse(await readFile(new URL('../test/next-fixtures/funnel-real/b1-css-pdf.json', import.meta.url), 'utf8'));
+  assert.equal(sourcesAddress(real), `/api/next/sources?${[...new Set(real.blocks.map((block) => block.version.id))].map((id) => `version=${id}`).join('&')}`);
+  assert.equal(sourcesAddress({ blocks: [{ version: { id: 3 }, source: { ocr: true } }] }), null, 'a block that says its source is not asked about');
+  assert.equal(sourcesAddress({ blocks: [] }), null);
+  const { fr } = await loadRenderers('test-replay');
+  const refused = await fr.runReplay('abcdefgh123', async () => ({ ok: false, status: 400, json: async () => ({ error: 'token_not_from_this_server' }) }));
+  assert.equal(refused.kind, 'failure');
+  assert.equal(refused.refused, true);
+});

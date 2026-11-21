@@ -773,7 +773,7 @@ const EN = Object.freeze({
     retry: "Try again",
     none: "This address names no text. Find a text by its name or number in the field above.",
     kindLu: "Luxembourg law, consolidated text in French.",
-    kindEu: "EU regulation, the wording held.",
+    kindEu: "Text of the European Union, the wording held.",
     articles: Object.freeze({ one: "{count} article.", other: "{count} articles." }),
     versionsHeld: Object.freeze({ one: "One version held, of {first}.", other: "{count} versions held, from {first} to today." }),
     euDate: "An EU wording's date is the date of that wording, not a date of application.",
@@ -1220,7 +1220,7 @@ const EN = Object.freeze({
       // what that processor may keep; on every privacy page, since it says what happens when the assistant is switched on.
       assistant: Object.freeze({
         heading: "The assistant",
-        processor: "A question you type in the assistant is sent to this site's server, which sends it, as you typed it, to a language model on Microsoft's Azure OpenAI service, provided in the European Economic Area by Microsoft Ireland Operations Limited (EU data zone), which acts as a processor. This processing has one purpose: to read the question and to point, among lines of law that Lex's code found, at those that answer it; the model writes no sentence of the answer. With the question go only Lex's own instructions and lines of the published law; nothing else about you is sent to the model: not your IP address, your browser's user agent, any cookie or your earlier questions. The server keeps neither the question nor the answer; the assistant's panel keeps your conversation in this browser tab only, until you close the tab. Microsoft does not use prompts or answers to train models; for abuse monitoring, Microsoft may keep them for up to 30 days. Your rights under the GDPR are set out below.",
+        processor: "A question you type in the assistant is sent to this site's server, which sends it, as you typed it, to a language model on Microsoft's Azure OpenAI service, provided in the European Economic Area by Microsoft Ireland Operations Limited (EU data zone), which acts as a processor. This processing has one purpose: to read the question and to point, among lines of law that Lex's code found, at those that answer it; the model writes no sentence of the answer. With the question go only Lex's own instructions and lines of the published law; nothing else about you is sent to the model: not your IP address, your browser's user agent, any cookie or your earlier questions. The server keeps neither the question nor the answer: it writes down only each word of a question that appears in no text Lex holds, alone, with the day and the question's language, never the question and never who asked; the assistant's panel keeps your conversation in this browser tab only, until you close the tab. Microsoft does not use prompts or answers to train models; for abuse monitoring, Microsoft may keep them for up to 30 days. Your rights under the GDPR are set out below.",
       }),
       // The reader's right to complain to the supervisory authority (GDPR art. 77): the regulator, named with a link to its
       // site and no postal address, not a contact of Lex's (the driver's decision of 2026-10-19, STATUS-WEB.md).
@@ -1493,7 +1493,8 @@ const EN = Object.freeze({
   // The decisions Lex is built on, each with what it gains and what it costs (the owner's order of 2026-11-14, evening):
   // every figure is a test run's or the coverage answer's (`ReferencePages.jsx`, `measured`).
   decisions: Object.freeze({
-    title: "Decisions",
+    // pages2 (21/11/2026): the page at this address is the design choices (`NextHow.jsx`), and its tab says so.
+    title: "Design choices",
     heading: "The decisions Lex is built on, what they gain and what they cost",
     gain: "Gain:",
     cost: "Cost:",

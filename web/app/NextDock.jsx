@@ -99,7 +99,12 @@ export async function runReplay(token, fetchImpl) {
   try {
     const request = replayRequest(token);
     const response = await doFetch(request.address, request.init);
-    if (!response.ok) return { kind: 'failure', question: '', day: null, replay: true };
+    if (!response.ok) {
+      // engine2 signs its tokens (K-OPS-8): a token another start of the server signed is refused, and said so.
+      let refused = false;
+      try { refused = response.status === 400 && (await response.json())?.error === 'token_not_from_this_server'; } catch { refused = false; }
+      return { kind: 'failure', question: '', day: null, replay: true, refused };
+    }
     const result = await response.json();
     const question = typeof result?.question === 'string' ? result.question : typeof result?.trace?.question?.text === 'string' ? result.trace.question.text : '';
     return isAnyAnswer(result) ? { kind: 'done', question, day: null, result, replay: true } : { kind: 'failure', question, day: null, replay: true };
@@ -353,7 +358,7 @@ function Turn({ turn, copy, locale, today, onAsk, onOpen, initialDateOpen, fetch
       <>
         {bubble}
         <div className="lx-dock-card" data-dock-card={turn.kind === 'rate' ? 'rate' : 'failure'}>
-          <p className="lx-dock-lead">{turn.kind === 'rate' ? copy.rateLimited : turn.replay ? nextCopy(locale).contract.trace.replayFailed : copy.failure}</p>
+          <p className="lx-dock-lead">{turn.kind === 'rate' ? copy.rateLimited : turn.replay ? (turn.refused ? nextCopy(locale).contract2.replayRefused : nextCopy(locale).contract.trace.replayFailed) : copy.failure}</p>
           {turn.question ? <p className="lx-dock-actions"><button type="button" className="lx-dock-action" onClick={() => onAsk(turn.question, turn.day ?? null)}>{copy.tryAgain}</button></p> : null}
         </div>
       </>

@@ -107,7 +107,9 @@ test("every live page renders its chrome from the table", () => {
     // Every page as built carries the freshness strip in its footer (R87, R23), and no staleness banner: the as-built line on
     // a page that asks the server, and on one that never does (the maintenance page and the legal pages) that it carries no
     // answer, never the as-built line's "once it has an answer" (the review of #990).
-    const quiet = key === "maintenance" || LEGAL.has(key);
+    // Trust and Coverage (pages2, 21/11/2026) reads the data builders' coverage file and the engine's counts, never an answer
+    // that carries freshness: it says it carries none.
+    const quiet = key === "maintenance" || key === "coverage" || LEGAL.has(key);
     assert.ok(html.includes(`<p>${escaped(quiet ? copy.freshness.noAnswer : copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
     assert.ok(!html.includes(escaped(quiet ? copy.freshness.asBuilt : copy.freshness.noAnswer)), `${key}: only that strip`);
     assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);

@@ -88,7 +88,8 @@ export function keptLine(config, locale) {
   const copy = nextCopy(locale).how2;
   const kept = objectOr(objectOr(config)?.kept_on_server);
   if (kept === null) return null;
-  if (kept.questions === false && kept.answers === false) return copy.keptNothing;
+  // pages2: engine2's log of the words found in no text held (K-QUEST-4) is said beside "no question, no answer".
+  if (kept.questions === false && kept.answers === false) return typeof kept.vocabulary_misses === 'string' ? `${copy.keptNothing} ${copy.keptVocabulary}` : copy.keptNothing;
   const what = Object.entries(kept).filter(([, value]) => value !== false && value !== null).map(([key, value]) => (typeof value === 'string' ? `${key} (${value})` : key));
   return what.length === 0 ? null : fillNext(copy.keptSome, { what: what.join(nextCopy(locale).listSeparator) });
 }

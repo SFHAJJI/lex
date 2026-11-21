@@ -54,6 +54,7 @@ async function nextFixture(method, url, body) {
   // configuration, the page says which build they describe), and a text the reading service does not hold, from the engine.
   if (pathname === "/api/next/coverage") return readJson("coverage-real.json");
   if (pathname === "/api/next/results") return readJson("results.json");
+  if (pathname === "/api/next/sources") return Object.fromEntries(searchParams.getAll("version").filter((id) => id === "17295").map((id) => [id, { identity_from: "publisher-pdf", ocr: false, pdf: true, language: "fra" }]));
   if (pathname === "/api/next/text") return tryRead({ "code-securite-sociale": "text-css.json", "32009L0138": "text-solvency.json" }[searchParams.get("work")] ?? "none.json");
   if (pathname === "/api/next/text-outline") return tryRead(`contexts/outline-${searchParams.get("work")}.json`);
   if (pathname === "/api/next/context") return tryRead(`contexts/${Number(searchParams.get("article_pk"))}.json`);

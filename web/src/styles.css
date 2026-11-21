@@ -4228,4 +4228,6 @@ html[data-layout="v4"] .lx-dock-part > .lx-dock-passages-heading { display: flex
 html[data-layout="v4"] .lx-dock-notes { margin: 6px 0 0; }
 html[data-layout="v4"] .lx-dock-notes > p { margin: 2px 0; }
 html[data-layout="v4"] [data-part-status="not_answered"] [data-part-badge], html[data-layout="v4"] [data-part-status="unsaid"] [data-part-badge] { color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-dock-items > li > a, html[data-layout="v4"] .lx-dock-items > li > span { display: inline; }
+html[data-layout="v4"] .lx-next-keytexts td, html[data-layout="v4"] .lx-next-keytexts th { text-align: left; vertical-align: top; }
 /* == v4: pages2 end == */

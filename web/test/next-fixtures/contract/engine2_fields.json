@@ -1,0 +1,1847 @@
+{
+ "state": "answer",
+ "outcome": "answer",
+ "pipeline": "combo",
+ "question": "Quelles mentions doit contenir la police d'assurance ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_16",
+   "date": "2025-11-25",
+   "why": "L’article 16 énumère les mentions communes aux contrats d’assurance, et l’article 38 complète cette liste sur les points qu’il régit.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 16",
+   "number": "16",
+   "heading": "Preuve et contenu du contrat",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section III - Preuve et contenu du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2016-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96058,
+   "lines": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+   ],
+   "wording_since": "2016-01-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+    "effective": "2016-01-01",
+    "title": "Loi du 7 décembre 2015 portant modification de: 1) la loi modifiée du 27 juillet 1997 sur le contrat …"
+   },
+   "repeal": null,
+   "label": "Article 16",
+   "text": [
+    "Le contrat d'assurance est daté du jour où il est établi.",
+    "Il indique:",
+    "le nom de l'entreprise d'assurances et l'adresse de son siège social et, le cas échéant, celle de la succursale qui accorde la couverture;",
+    "les nom et domicile du preneur d'assurance;",
+    "la chose ou la personne assurée;",
+    "la nature des risques garantis;",
+    "le moment à partir duquel le risque est garanti et la durée de cette garantie;",
+    "le montant de cette garantie;",
+    "la prime ou la cotisation de l'assurance ou la manière de les déterminer;",
+    "les cas et les modalités de la résiliation du contrat;",
+    "la juridiction compétente pour connaître des litiges nés du contrat.",
+    "Sans préjudice des dispositions du 2e alinéa, le contrat d’assurance relevant de la branche R.C. véhicules terrestres automoteurs et tout autre document accordant une couverture dans cette branche, conclus au Grand-Duché de Luxembourg en régime de libre prestation de services, doivent indiquer le nom et l’adresse du représentant désigné en vertu de l’article 145, paragraphe 1er, de la loi sur le secteur des assurances.",
+    "Les contrats ne sont valables que s'ils sont rédigés dans l'une des langues officielles du Grand-Duché de Luxembourg ou dans une langue comprise par le preneur d'assurance.",
+    "Ils doivent être rédigés en caractères lisibles et toute limitation ou exclusion de garantie doit être mise en évidence.",
+    "Les indications visées au premier tiret du deuxième l'alinéa doivent également figurer sur tout autre document accordant la couverture ainsi que sur les propositions d'assurance dans les cas où elles lient le preneur d'assurance."
+   ],
+   "quote": [
+    {
+     "n": 4,
+     "text": "Le contrat d'assurance est daté du jour où il est établi.",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "Il indique:",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "le nom de l'entreprise d'assurances et l'adresse de son siège social et, le cas échéant, celle de la succursale qui accorde la couverture;",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "les nom et domicile du preneur d'assurance;",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "la chose ou la personne assurée;",
+     "label": null
+    },
+    {
+     "n": 9,
+     "text": "la nature des risques garantis;",
+     "label": null
+    },
+    {
+     "n": 10,
+     "text": "le moment à partir duquel le risque est garanti et la durée de cette garantie;",
+     "label": null
+    },
+    {
+     "n": 11,
+     "text": "le montant de cette garantie;",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "la prime ou la cotisation de l'assurance ou la manière de les déterminer;",
+     "label": null
+    },
+    {
+     "n": 13,
+     "text": "les cas et les modalités de la résiliation du contrat;",
+     "label": null
+    },
+    {
+     "n": 14,
+     "text": "la juridiction compétente pour connaître des litiges nés du contrat.",
+     "label": null
+    },
+    {
+     "n": 15,
+     "text": "Sans préjudice des dispositions du 2e alinéa, le contrat d’assurance relevant de la branche R.C. véhicules terrestres automoteurs et tout autre document accordant une couverture dans cette branche, conclus au Grand-Duché de Luxembourg en régime de libre prestation de services, doivent indiquer le nom et l’adresse du représentant désigné en vertu de l’article 145, paragraphe 1er, de la loi sur le secteur des assurances.",
+     "label": null
+    },
+    {
+     "n": 16,
+     "text": "Les contrats ne sont valables que s'ils sont rédigés dans l'une des langues officielles du Grand-Duché de Luxembourg ou dans une langue comprise par le preneur d'assurance.",
+     "label": null
+    },
+    {
+     "n": 17,
+     "text": "Ils doivent être rédigés en caractères lisibles et toute limitation ou exclusion de garantie doit être mise en évidence.",
+     "label": null
+    },
+    {
+     "n": 18,
+     "text": "Les indications visées au premier tiret du deuxième l'alinéa doivent également figurer sur tout autre document accordant la couverture ainsi que sur les propositions d'assurance dans les cas où elles lient le preneur d'assurance.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 52,
+    "words": 4,
+    "meaning": 3,
+    "words_all": 6,
+    "meaning_all": 3
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    15,
+    16,
+    18
+   ],
+   "lines_pointed_by_reading": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    17
+   ],
+   "context_unit": "paragraph + the paragraph of this article it cites"
+  },
+  {
+   "role": "condition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_38",
+   "date": "2025-11-25",
+   "why": "Durée contrat, mentions évoquées mais pas liste obligatoire.",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 38",
+   "number": "38",
+   "heading": "Durée des obligations",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section VIII - Prise d'effet de la garantie et durée du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2013-03-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96081,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "wording_since": "2013-03-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "replacement",
+    "act_id": "/eli/etat/leg/loi/2012/12/21/n6",
+    "effective": "2013-03-01",
+    "title": "Loi du 21 décembre 2012 portant modification de: 1) la loi modifiée du 16 avril 2003 relative à l'assurance …"
+   },
+   "repeal": null,
+   "label": "Article 38",
+   "text": [
+    "La durée du contrat est fixée par les parties.",
+    "Toutefois, et sauf pour les assurances sur la vie et l’assurance maladie, le preneur d’assurance a le droit de résilier le contrat chaque année à l’échéance de la prime annuelle, ou, à défaut à la date anniversaire de la prise d’effet du contrat, ci-après dénommée date de reconduction, dans les formes prévues à l’article 39, en notifiant cette résiliation à l’assureur trente jours avant cette date. Ce droit appartient dans les mêmes conditions à l’assureur moyennant le respect d’un délai de résiliation de soixante jours. Le droit de résilier le contrat tous les ans doit être rappelé dans chaque contrat.",
+    "Sans préjudice de l’alinéa précédent, pour les contrats à primes annuelles l’avis d’échéance visé à l’article 20 doit accorder à ce dernier un délai minimum de trente jours pour résilier le contrat. Ce délai court à partir de la date d’envoi de cet avis et expire au plus tôt trente jours avant la date d’échéance. Lorsque la date limite d’exercice par le preneur d’assurance du droit de résiliation ne lui a pas été communiquée explicitement dans l’avis d’échéance, le preneur d’assurance peut mettre un terme au contrat, sans pénalités, à tout moment à compter de la date d’échéance, mais au plus tard soixante jours après la date d’échéance du contrat.",
+    "Dans les cas visés aux alinéas 2 et 3 la résiliation prend effet le deuxième jour ouvrable suivant la date d’envoi de la lettre de résiliation, mais au plus tôt à la date de reconduction.",
+    "La prime au titre de la période de couverture des risques se situant après la date de reconduction est calculée prorata temporis sur la base du tarif en vigueur au cours de la précédente période de couverture annuelle.",
+    "Le contrat doit également mentionner que la durée de la tacite reconduction ne peut en aucun cas être supérieure à une année."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "La durée du contrat est fixée par les parties.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Toutefois, et sauf pour les assurances sur la vie et l’assurance maladie, le preneur d’assurance a le droit de résilier le contrat chaque année à l’échéance de la prime annuelle, ou, à défaut à la date anniversaire de la prise d’effet du contrat, ci-après dénommée date de reconduction, dans les formes prévues à l’article 39, en notifiant cette résiliation à l’assureur trente jours avant cette date. Ce droit appartient dans les mêmes conditions à l’assureur moyennant le respect d’un délai de résiliation de soixante jours. Le droit de résilier le contrat tous les ans doit être rappelé dans chaque contrat.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Sans préjudice de l’alinéa précédent, pour les contrats à primes annuelles l’avis d’échéance visé à l’article 20 doit accorder à ce dernier un délai minimum de trente jours pour résilier le contrat. Ce délai court à partir de la date d’envoi de cet avis et expire au plus tôt trente jours avant la date d’échéance. Lorsque la date limite d’exercice par le preneur d’assurance du droit de résiliation ne lui a pas été communiquée explicitement dans l’avis d’échéance, le preneur d’assurance peut mettre un terme au contrat, sans pénalités, à tout moment à compter de la date d’échéance, mais au plus tard soixante jours après la date d’échéance du contrat.",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "Dans les cas visés aux alinéas 2 et 3 la résiliation prend effet le deuxième jour ouvrable suivant la date d’envoi de la lettre de résiliation, mais au plus tôt à la date de reconduction.",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "La prime au titre de la période de couverture des risques se situant après la date de reconduction est calculée prorata temporis sur la base du tarif en vigueur au cours de la précédente période de couverture annuelle.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "Le contrat doit également mentionner que la durée de la tacite reconduction ne peut en aucun cas être supérieure à une année.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 56,
+    "words": 7,
+    "meaning": 7
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null,
+   "lines_added_by_code": [
+    1,
+    3,
+    4,
+    5
+   ],
+   "lines_pointed_by_reading": [
+    2,
+    6
+   ],
+   "context_unit": "article (short: whole article)"
+  }
+ ],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [
+  "named_text_repealed",
+  "european_text_not_held"
+ ],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": true,
+  "found_by_words": true,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "list",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Quelles mentions doit contenir la police d'assurance ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "police d'assurance",
+      "contrat d'assurance",
+      "preneur d'assurance",
+      "assuré",
+      "risques assurés",
+      "prime d'assurance"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "not_said",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "vocabulary_misses",
+     "value": [
+      "machin"
+     ],
+     "by": "code"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 83,
+    "considered_lines": 87,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "repealed_at_the_date_asked",
+      "removed": 12,
+      "by": "code"
+     },
+     {
+      "rule": "no_longer_in_force_at_the_date_asked",
+      "removed": 6,
+      "by": "code"
+     },
+     {
+      "rule": "not_in_the_store",
+      "removed": 5,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "replaces": 0,
+     "transposes": 15,
+     "lines_words": 30,
+     "lines_meaning": 30,
+     "articles_meaning": 11,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 1,
+       "articles_meaning": 1,
+       "articles_words": 1,
+       "transposes": 21
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/code/route",
+      "node_id": "n00419",
+      "found_by": {
+       "lines_meaning": 2,
+       "articles_meaning": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 11,
+       "articles_meaning": 2
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/rgd/1979/10/22/n15",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/rgd/1987/02/17/n7",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/loi/2024/07/24/a310",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 4,
+       "articles_words": 3
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/rgd/1994/12/14/n4",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/rgd/1989/04/05/n2",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 5
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/code/securite_sociale",
+      "node_id": "n00186",
+      "found_by": {
+       "lines_meaning": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/reg/2019/02/26/a148",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/rgd/1982/09/20/n4",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2",
+      "found_by": {
+       "lines_meaning": 6
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_iii",
+      "found_by": {
+       "lines_meaning": 10,
+       "articles_meaning": 6
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/code/procedure_penale",
+      "node_id": "livre_premier.titre_ii",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/rgd/2018/09/07/a879",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 7
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_ii",
+      "found_by": {
+       "lines_meaning": 7
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/reg/2019/02/26/a150",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 7
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "celex:32009L0138",
+      "node_id": "titre_ii",
+      "found_by": {
+       "articles_meaning": 11,
+       "articles_words": 7
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/loi/1910/12/20/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 8,
+       "articles_words": 9
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/loi/2018/08/17/a706",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 8
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/rgd/2020/11/03/a900",
+      "node_id": "",
+      "found_by": {
+       "lines_words": 9
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/rgd/2013/03/13/n1",
+      "node_id": "",
+      "found_by": {
+       "lines_meaning": 9
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/code/consommation",
+      "node_id": "title_i.livre_2",
+      "found_by": {
+       "articles_meaning": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/loi/1994/12/08/n1",
+      "node_id": "",
+      "found_by": {
+       "transposes": 10
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "title": "Loi du 27 juillet 1997 sur le contrat d'assurance. [LOI; loi_de_fond; public général; in_force] — Réglementation générale du contrat d'assurance, incluant assurances de dommages et de personnes. En cl",
+      "reason": "La loi générale sur le contrat d’assurance est la source la plus précise pour les mentions que doit comporter une police.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1497
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "node_start": "",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 3149,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 5,
+      "picked": [
+       {
+        "node_id": "section_1",
+        "heading": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+        "tally": 10,
+        "reason": "Contient tous les mots clés de la question et traite du contrat d'assurance en général, donc probablement des mentions obligatoires dans la police.",
+        "whole": true,
+        "stop": "list_node"
+       },
+       {
+        "node_id": "section_2",
+        "heading": "TITRE II DES ASSURANCES DE DOMMAGES",
+        "tally": 10,
+        "reason": "Contient tous les mots clés et concerne les assurances de dommages, où les mentions dans la police sont souvent détaillées.",
+        "whole": true,
+        "stop": "list_node"
+       },
+       {
+        "node_id": "section_3",
+        "heading": "TITRE III DES ASSURANCES DE PERSONNES",
+        "tally": 8,
+        "reason": "Contient la plupart des mots clés et traite des assurances de personnes, pouvant aussi préciser les mentions dans la police.",
+        "whole": true,
+        "stop": "list_node"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "section_1",
+      "heading": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+      "stopped": "list_node",
+      "articles": 75,
+      "read": "over budget: 8 of 75 articles read, ranked by meaning inside the node"
+     },
+     {
+      "node_id": "section_2",
+      "heading": "TITRE II DES ASSURANCES DE DOMMAGES",
+      "stopped": "list_node",
+      "articles": 38,
+      "read": "over budget: 8 of 38 articles read, ranked by meaning inside the node"
+     },
+     {
+      "node_id": "section_3",
+      "heading": "TITRE III DES ASSURANCES DE PERSONNES",
+      "stopped": "list_node",
+      "articles": 31,
+      "read": "over budget: 8 of 31 articles read, ranked by meaning inside the node"
+     }
+    ],
+    "articles": 0,
+    "stopped": "list_node"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 96042,
+      "found_by": {
+       "outline": 50,
+       "words": 1,
+       "meaning": 1,
+       "words_all": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96050,
+      "found_by": {
+       "outline": 53,
+       "words": 2,
+       "meaning": 4,
+       "words_all": 2,
+       "meaning_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96077,
+      "found_by": {
+       "words": 3,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96058,
+      "found_by": {
+       "outline": 52,
+       "words": 4,
+       "meaning": 3,
+       "words_all": 6,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96054,
+      "found_by": {
+       "words": 5
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96076,
+      "found_by": {
+       "words": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96081,
+      "found_by": {
+       "outline": 56,
+       "words": 7,
+       "meaning": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96182,
+      "found_by": {
+       "words": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96075,
+      "found_by": {
+       "words": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96062,
+      "found_by": {
+       "words": 10
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 443845,
+      "found_by": {
+       "words_all": 4
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96051,
+      "found_by": {
+       "outline": 51,
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96080,
+      "found_by": {
+       "outline": 54,
+       "meaning": 5,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96059,
+      "found_by": {
+       "outline": 55,
+       "meaning": 6,
+       "meaning_all": 7
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96180,
+      "found_by": {
+       "outline": 50,
+       "meaning": 8
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96069,
+      "found_by": {
+       "outline": 57,
+       "meaning": 9
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96107,
+      "found_by": {
+       "meaning": 10
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 78936,
+      "found_by": {
+       "meaning_all": 8
+      },
+      "meaning_only": true,
+      "amending": false
+     },
+     {
+      "article_pk": 96127,
+      "found_by": {
+       "outline": 50
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96120,
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96137,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96128,
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96135,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96122,
+      "found_by": {
+       "outline": 55
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96141,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96123,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96183,
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96177,
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96161,
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96163,
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96157,
+      "found_by": {
+       "outline": 55
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96175,
+      "found_by": {
+       "outline": 56
+      },
+      "meaning_only": false,
+      "amending": false
+     },
+     {
+      "article_pk": 96156,
+      "found_by": {
+       "outline": 57
+      },
+      "meaning_only": false,
+      "amending": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     },
+     {
+      "detector": "outline",
+      "why": "no node read whole: list_node"
+     }
+    ],
+    "combo": true,
+    "amending_articles": 0
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 2670,
+    "candidates": [
+     {
+      "article_pk": 96042,
+      "label": "Article 1er",
+      "role": "context",
+      "reason": "Définitions générales, pas liste mentions police.",
+      "found_by": {
+       "outline": 50,
+       "words": 1,
+       "meaning": 1,
+       "words_all": 1,
+       "meaning_all": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "mentions",
+       "contenir",
+       "police",
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "risques",
+       "assures",
+       "prime"
+      ]
+     },
+     {
+      "article_pk": 96050,
+      "label": "Article 9",
+      "role": "context",
+      "reason": "Parle police présignée, pas mentions obligatoires.",
+      "found_by": {
+       "outline": 53,
+       "words": 2,
+       "meaning": 4,
+       "words_all": 2,
+       "meaning_all": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "mentions",
+       "police",
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "risques",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96051,
+      "label": "Article 10",
+      "role": "context",
+      "reason": "Information avant contrat, pas liste mentions police.",
+      "found_by": {
+       "outline": 51,
+       "meaning": 2,
+       "meaning_all": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "police",
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "risques",
+       "assures",
+       "prime"
+      ]
+     },
+     {
+      "article_pk": 96077,
+      "label": "Article 34",
+      "role": "reject",
+      "reason": "Aggravation risque, hors sujet mentions police.",
+      "found_by": {
+       "words": 3,
+       "words_all": 5
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "risques",
+       "assures",
+       "prime"
+      ]
+     },
+     {
+      "article_pk": 96058,
+      "label": "Article 16",
+      "role": "rule",
+      "reason": "Article sur preuve et contenu du contrat, liste mentions possibles.",
+      "found_by": {
+       "outline": 52,
+       "words": 4,
+       "meaning": 3,
+       "words_all": 6,
+       "meaning_all": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "contenir",
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "risques",
+       "assures",
+       "prime"
+      ]
+     },
+     {
+      "article_pk": 96080,
+      "label": "Article 37",
+      "role": "reject",
+      "reason": "Prise d'effet garantie, pas mentions police.",
+      "found_by": {
+       "outline": 54,
+       "meaning": 5,
+       "meaning_all": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "contrat",
+       "prime"
+      ]
+     },
+     {
+      "article_pk": 96059,
+      "label": "Article 17",
+      "role": "context",
+      "reason": "Information en cours de contrat, pas mentions police.",
+      "found_by": {
+       "outline": 55,
+       "meaning": 6,
+       "meaning_all": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96081,
+      "label": "Article 38",
+      "role": "context",
+      "reason": "Durée contrat, mentions évoquées mais pas liste obligatoire.",
+      "found_by": {
+       "outline": 56,
+       "words": 7,
+       "meaning": 7
+      },
+      "meaning_only": false,
+      "matched": [
+       "mentions",
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "risques",
+       "assures",
+       "prime"
+      ]
+     },
+     {
+      "article_pk": 96180,
+      "label": "Article 122",
+      "role": "reject",
+      "reason": "Forme acceptation bénéficiaire, hors sujet mentions police.",
+      "found_by": {
+       "outline": 50,
+       "meaning": 8
+      },
+      "meaning_only": false,
+      "matched": [
+       "police",
+       "assurance",
+       "preneur",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96069,
+      "label": "Article 26",
+      "role": "reject",
+      "reason": "Déclaration sinistre, hors sujet mentions police.",
+      "found_by": {
+       "outline": 57,
+       "meaning": 9
+      },
+      "meaning_only": false,
+      "matched": [
+       "mentions",
+       "contrat",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96127,
+      "label": "Article 73",
+      "role": "reject",
+      "reason": "Assurance incendie, hors sujet mentions police.",
+      "found_by": {
+       "outline": 50
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "contrat",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96120,
+      "label": "Article 66",
+      "role": "reject",
+      "reason": "Fixation montant assuré, hors sujet mentions police.",
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "preneur",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96183,
+      "label": "Article 125",
+      "role": "reject",
+      "reason": "Caractère garanties, hors sujet mentions police.",
+      "found_by": {
+       "outline": 51
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96137,
+      "label": "Article 83",
+      "role": "reject",
+      "reason": "Transmission pièces sinistre, hors sujet mentions police.",
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "matched": [
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96177,
+      "label": "Article 119",
+      "role": "reject",
+      "reason": "Cession droits contrat, hors sujet mentions police.",
+      "found_by": {
+       "outline": 52
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "contrat",
+       "preneur",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96128,
+      "label": "Art. 74.",
+      "role": "reject",
+      "reason": "Garanties accessoires, hors sujet mentions police.",
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "assure",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96161,
+      "label": "Article 103",
+      "role": "reject",
+      "reason": "Risques exclus, hors sujet mentions police.",
+      "found_by": {
+       "outline": 53
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "contrat",
+       "assure",
+       "risques",
+       "assures"
+      ]
+     },
+     {
+      "article_pk": 96135,
+      "label": "Article 81",
+      "role": "reject",
+      "reason": "Obligations post contrat, hors sujet mentions police.",
+      "found_by": {
+       "outline": 54
+      },
+      "meaning_only": false,
+      "matched": [
+       "assurance",
+       "contrat",
+       "assure",
+       "assures"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 6,
+    "read_amount_set_by": "list",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A1",
+      "lines": [
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13,
+       14,
+       17
+      ],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "general",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "L’article 16 énumère les mentions communes aux contrats d’assurance, et l’article 38 complète cette liste sur les points qu’il régit.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 12,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "none",
+    "budget": 1,
+    "loops": 0,
+    "targets_per_hop": 3,
+    "resolver": "app/refs.py: edge table (same act; other Luxembourg acts and European acts held, at the date asked), checked by code; regex on the reader's words when no edge; never a model",
+    "hops": [],
+    "not_held": [],
+    "refused": [],
+    "refused_count": 0,
+    "see_also": [],
+    "extensions": {
+     "inbound": "hops with direction 'inbound' come from the referred-to-by index: an extension for law (an exception often sits in the article that cites the rule); Kezhan's article 11 follows outbound pointers only",
+     "definitions": "hops with direction 'definition': a defined term of the text used in the question pulls the text's own definition, within the definition's stated scope"
+    }
+   },
+   {
+    "level": "consistency",
+    "by": "code",
+    "checked": 1,
+    "dropped": [
+     {
+      "article_pk": 1,
+      "label": "Art. 87",
+      "act_id": "/eli/etat/leg/loi/1991/12/06/n1",
+      "why": "act repealed on the date asked"
+     }
+    ],
+    "rule": "a passage beside the answer is shown only if its act applies and its wording is the one in force on the date asked"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_complete",
+    "state": "answer"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 348,
+    "tokens_in": 13,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1222,
+    "model_ms": 1222,
+    "queue_ms": 0,
+    "tokens_in": 563,
+    "tokens_out": 95,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1178,
+    "model_ms": 1178,
+    "queue_ms": 0,
+    "tokens_in": 3789,
+    "tokens_out": 49,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1228,
+    "model_ms": 1228,
+    "queue_ms": 0,
+    "tokens_in": 474,
+    "tokens_out": 114,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 2553,
+    "model_ms": 2553,
+    "queue_ms": 0,
+    "tokens_in": 3162,
+    "tokens_out": 406,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1927,
+    "model_ms": 1927,
+    "queue_ms": 0,
+    "tokens_in": 6168,
+    "tokens_out": 222,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.01936,
+  "ms": 9130,
+  "model_calls": 5,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T19:17:04"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "list",
+   "french": "Quelles mentions doit contenir la police d'assurance ?",
+   "legal_terms": [
+    "police d'assurance",
+    "contrat d'assurance",
+    "preneur d'assurance",
+    "assuré",
+    "risques assurés",
+    "prime d'assurance"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "not_said",
+   "parts": []
+  },
+  "candidates": [
+   {
+    "article_pk": 96042,
+    "role": "context",
+    "found_by": {
+     "outline": 50,
+     "words": 1,
+     "meaning": 1,
+     "words_all": 1,
+     "meaning_all": 1
+    }
+   },
+   {
+    "article_pk": 96050,
+    "role": "context",
+    "found_by": {
+     "outline": 53,
+     "words": 2,
+     "meaning": 4,
+     "words_all": 2,
+     "meaning_all": 4
+    }
+   },
+   {
+    "article_pk": 96051,
+    "role": "context",
+    "found_by": {
+     "outline": 51,
+     "meaning": 2,
+     "meaning_all": 2
+    }
+   },
+   {
+    "article_pk": 96077,
+    "role": "reject",
+    "found_by": {
+     "words": 3,
+     "words_all": 5
+    }
+   },
+   {
+    "article_pk": 96058,
+    "role": "rule",
+    "found_by": {
+     "outline": 52,
+     "words": 4,
+     "meaning": 3,
+     "words_all": 6,
+     "meaning_all": 3
+    }
+   },
+   {
+    "article_pk": 96080,
+    "role": "reject",
+    "found_by": {
+     "outline": 54,
+     "meaning": 5,
+     "meaning_all": 6
+    }
+   },
+   {
+    "article_pk": 96059,
+    "role": "context",
+    "found_by": {
+     "outline": 55,
+     "meaning": 6,
+     "meaning_all": 7
+    }
+   },
+   {
+    "article_pk": 96081,
+    "role": "context",
+    "found_by": {
+     "outline": 56,
+     "words": 7,
+     "meaning": 7
+    }
+   },
+   {
+    "article_pk": 96180,
+    "role": "reject",
+    "found_by": {
+     "outline": 50,
+     "meaning": 8
+    }
+   },
+   {
+    "article_pk": 96069,
+    "role": "reject",
+    "found_by": {
+     "outline": 57,
+     "meaning": 9
+    }
+   },
+   {
+    "article_pk": 96127,
+    "role": "reject",
+    "found_by": {
+     "outline": 50
+    }
+   },
+   {
+    "article_pk": 96120,
+    "role": "reject",
+    "found_by": {
+     "outline": 51
+    }
+   },
+   {
+    "article_pk": 96183,
+    "role": "reject",
+    "found_by": {
+     "outline": 51
+    }
+   },
+   {
+    "article_pk": 96137,
+    "role": "reject",
+    "found_by": {
+     "outline": 52
+    }
+   },
+   {
+    "article_pk": 96177,
+    "role": "reject",
+    "found_by": {
+     "outline": 52
+    }
+   },
+   {
+    "article_pk": 96128,
+    "role": "reject",
+    "found_by": {
+     "outline": 53
+    }
+   },
+   {
+    "article_pk": 96161,
+    "role": "reject",
+    "found_by": {
+     "outline": 53
+    }
+   },
+   {
+    "article_pk": 96135,
+    "role": "reject",
+    "found_by": {
+     "outline": 54
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96058
+   },
+   {
+    "article_pk": 96042
+   },
+   {
+    "article_pk": 96050
+   },
+   {
+    "article_pk": 96051
+   },
+   {
+    "article_pk": 96059
+   },
+   {
+    "article_pk": 96081
+   }
+  ],
+  "replay": "eNrNWU1y2zgWvgqKG3fXMLYo2ZYsL6ZciSeVGrfTY2dWLhcLIiEJCQQwBOifSaWqDzGbuUF8hFnrJn2S-R5AUpRkJ-50FrOxyUfg4f187w_6FN1E4ySOimgcZWYxMVEcZXhWJuMKz3nnucDSaFppLdSLmwSEj3j_RyWUEpYthHbSaMtyIx3LjHZCy5IpzgqjZCZYvsOtrUqu8fxX4lxhd7_XP3yRJC_6xC630XjKlRVxhKeIa3srStDL9iWFiIUSToA6icZXV0eHvYMRVlQKpKv9-CA-jIfxKD6Kk16cJHHSj5NBnOzHyUGcHMbJME5G13F09vtv_-Glk5kSLDlkywddLZZfSsHWNMFhi0qDwqs7r1HJHfSjvY0mMROOqQ63wYh5GZdfnGCZcPirpMVfbPDcCyM1uHyssEkqVi4fZtLtknVLueDlfRQHE-hKqeuYFBzBPTg9lyQVtEzifjyIva5Q5VUFFqIRL15Jv3y4MR8rfINGXOJgbmtRzETJGXdGluKpg8FYz2Fg_F9EYyJBBtU8tQ-ieSh4NP4UKa5nFZ8Jggk5LufwFOjT0iw2ne3MJmVWcqlBzPk9fRd3ruE-N7ega8OIIZOaubmABYUlTcfMGdryGXisSam7L0gIUhespqXQ2fzPYFWJGVepE-UCwLyKtldF3kXkgQ1qgbMFXL9O9c_LB8K2tCQ1qym29sc6c3hB3GWqsiR08EohSms0hMq4FW3YvK_AL5eZRwpZzKWWy5yYAqB-K8z0oY6c_X6QmiwdoHbQ26Ikm5ThEFKL9yJrlzQBWMO1t_n9aJPFaJNpsrXp8GidkPSHm4SNLclosEEYbG4ZbvEYbRAOk00eBysCzF4iH9Y6BwMGowVDBV29fliqkC2vEBPiRiifXMuiIvdO7v1bLv6ywB8VkGNlLkoB5qTE6j1VEvkHVAj-QRTOp2qLcADETRr2j_v7gLhUQKf1J3pfjCF1IbgCD-5SxEtKsZNy-0EQHEqxMDd0HhLkSiLEULtdm1QZPUPOlTqdmjITX2d0-CQfRxxoo3WmFN09B2t7YDNrKhxkKWdovqAl3smF4p6KF4SYtoWx9IqcHnkDpbempOIx6DWEheBa6lkg1bm5Q0VlWFHrzckBQoNnLhgRD6mk4rcnlNwTjrs9JIE9ZeRecnQ03OsN9_rDPZ30oI-G-GEx5S3pvN5nRrK8Yv0he19JZB3HaF9dBtgjyWKXXZ29fXPMcEQKflNk_GNWVMjVGZuhQi0fSq6OWeONa_b7b_9mFygfSlA-4xTzq4WCDn_klBgMkEm4dqylIQ9iOYodUrelgobXkF9gyl12qlmmvNu49WnljJOQ3bM2teqWSIacTKk1-NYnWWQyViDbZdLiJFNXxjYrIyE2mXlRmBLAZijDdW7ebUIooJ9Qs5DWwq1pKBnkBErTyf7RkHDYBGBusoqOiOI_7lzrgJbA2lSOIJYGdUCrCczxiRLrwsXRDcxIBYlOG0Ai1DKh8tRodZ8qxFG56nicKAL0cgT6fBXpPkwKmVG80ecV2qzwiT6l4jkXPPfQjt69eXdxyt6ws1P28u35u4uTd-zVzsnl5T8vTs5fnrLTc_b69Pz04uSMwMqVgrhJr-Pdl3CihJ1QVuEm7xiDhiVTqE6EDDiwqbOEFThcuqfQxkQHkjGcqjM43kzIVOQL8Ov4vdOX4CTE-aoik9dv54Yiy5WVN5cp6gqf6iblbJum_5hp3rBXp5esNcklXtmrt7_8cvL69PJ7jCJ8D5GJUocG8vHAiplZ_ncd6Os6IkJwAHB14y2zfHAciYMauO_VfvCo9o-p_-vpxeXb8_Ou_qPH1A_RS81EcN2aERoobJmgTSYxRfuNTz4VYrZNAuXX7PIM7a-3csJUojn64fFCJxciXzt8VUmi8dB3C5wWoMKVbFLlM-HGbMTMlA0PWLOS0aKYwUKIaja5Z3VlQnKmyu_72x-M6m-JPhh9RXRMNT9I9O-D5DeFT74mfPIdwl932fcel2CtumAozdDfrHd4YjERudcVHD7IwMGn-LAa68QdqpFH-H2YcZpJ0jdAm8OOP7Ozuy4-3f0kmteT-aAZs_U4CUN-HUk4QpN46ZquGkMFyNTnkW0HXT15OZHOT-VrdY4Kbv9wSONDZ-vWlIFxdfmA0JQhzlcdBGWGdj5t80AT_9vDSRz9ykvV9AQ-j1g5AzMRGD1aU3YfmWni6I1GP7UI7RP3uamdpb8pUmegiKOTGSbYm8AojHUxmwMR6I7eIzs-pVV7fRGd1J6nbgpzI-pAXVownladChtvC4VkipLaatgZp2CpktqsfEdMp2A340A_kvmGnTaEOnrKQijoGTofn9bX7PQEp9Garf_sZcXWsBhHf4NogvEsQ9cURJx4VE1lJjk2PccHnWHTIzRTMJLnhb4SUjyLS3dChS_bFgj9NgXZ81isaSbvghALmKtt2JcPz2HUmYXj6CW0yZy_32q8b5_DZNBV6B0NXr7ThkSFXH6h2v5HzLMWKy9FYJSX6PPtChDPMNGow-Z1o44HgLU-zJ_DpTPnx9FFfQcT7lieZZmDzva3AaFNJLpnanPdTau-eG3k1HZADZXtMJS4lC9MpV1qhUv98vqSK8y9Hyvj2rHeF0GapVfZPQGXbM7ppmB_1Ov5eRnVoVNJe5iCS5yQ13NwuHedEqWpGs0lbPrYx5oVBDtJGrHA6WtXs8Pr7nD5f3c1-3nDU1NB94lirdJT21zK2YwGOhRhX5Eb-wNqypiivr_gJYg2RUuczqmN9YFqjbrxW3lR7OEEu1vcj5nA_jBWsp8s91nOHTODfqBkZ9Udmgtk4hlRYQeds9OqNAUamkChQTNmmMeof_AXp_7O5ueYZXOR1f0PyX6MbmEm7pgJrQaBTJQ7lvl7ETQRSPloK0iYY6YFtVecNRide73oQpLueejI8AYdKivWX9KMgBu6KQHwKGvCd9QGoeu7zU-R1JOAJ8-c3Uo3Zzni2vePbKf-vEO-FIxulmup4ZZS5C-ceQG9pM7F3RhWYS1zhiKGoeKW_eSpVC-Iaqb4jkQGi9W9VoMXN4fxMnQ7NpyAIv3zMfu7-Neca5inBWkCzkqZWzQblfPCBSRh6GE06NNFuGibnqf0Wi3ZgdzMv8JHdOdMTSxJQEWUkSU3u0JWVErZdg2EM7earTjG_rR6U-cgJCfUTPCzGYATfe7i3F9CIjp0dr8B9Bo-HtjI33VTex03N36cqrfFyMsmou2qQ6pgKO3-UsMbhskpI7sDrgzAVz6Pw3pEI_D5xjyohYgipf3NVwPUFaY3OnFMlP6XkjWpG-G2fkfyJlj93OQvlOClo4SuDitLd5C7veRogMypa7xWzQ8TZRGePv8PNitMMw"
+ },
+ "short_answer": {
+  "words": "Le contrat d'assurance est daté du jour où il est établi.",
+  "kind": "list",
+  "kind_fr": "une liste",
+  "article_pk": 96058,
+  "label": "Article 16",
+  "line": 4,
+  "by": "reader (model) + code (found in a quoted line)"
+ },
+ "repealed_named": [
+  {
+   "act_id": "/eli/etat/leg/loi/1991/12/06/n1",
+   "act_title": "Loi du 6 décembre 1991 sur le secteur des assurances",
+   "status": "repealed",
+   "from": "2016-01-01",
+   "by": "/eli/etat/leg/loi/2015/12/07/n1",
+   "by_title": "Loi du 7 décembre 2015 sur le secteur des assurances",
+   "article": "art. 323",
+   "by_held": true,
+   "named_as": "loi de 1991",
+   "rule": "act_repeal",
+   "source": "data"
+  }
+ ],
+ "directive_transposed_by": {
+  "directive": "celex:32016L0097",
+  "transposed_by": [
+   {
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+    "title": "Loi du 7 décembre 2015 sur le secteur des assurances"
+   }
+  ]
+ },
+ "eu_not_held": [
+  {
+   "celex": "32019R2088",
+   "named_as": "SFDR",
+   "transposed_by_the_text_shown": false,
+   "sentence": "Le règlement (UE) 2019/2088 (SFDR) n’est pas détenu par Lex."
+  }
+ ],
+ "_synthetic": "pages2: b1-list-structure with engine2's added fields (short_answer, repealed_named, directive_transposed_by, eu_not_held, context_unit, vocabulary_misses, a consistency drop)"
+}
