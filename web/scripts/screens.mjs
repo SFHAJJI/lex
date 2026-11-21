@@ -79,16 +79,20 @@ const Q = {
   english: "Can my insurer suspend my cover if I do not pay my premium?",
 };
 SHOTS.length = 0;
+// Release-a of 2026-11-21 (code t8): the pages that changed, and the answers that changed (a European text not held, a law
+// a held text repealed, a "not found" with what Lex does not hold).
 SHOTS.push(
-  ["live-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 0],
-  ["live-fr-02-ask-premium--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.premium), 30000],
-  ["live-fr-03-ask-premium--tall", "/fr/radar.html", 1366, 3200, false, false, ASK(Q.premium), 30000],
-  ["live-fr-04-ask-gdpr-fine--tall", "/fr/radar.html", 1366, 3000, false, false, ASK("Quelle amende maximale pour une entreprise qui ne respecte pas le RGPD ?"), 30000],
-  ["live-fr-05-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 6000],
-  ["live-fr-06-results--tall", "/fr/results.html", 1366, 3600, false, false, null, 5000],
-  ["live-fr-07-how-it-works--tall", "/fr/evidence.html", 1366, 4200, false, false, null, 5000],
-  ["live-en-08-ask-ai-act--tall", "/en/radar.html", 1366, 3000, false, false, ASK("What is a high-risk AI system under the AI Act?"), 30000],
-  ["live-fr-09-home--phone", "/fr/", 390, 844, true, false, null, 0],
+  ["relA-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 0],
+  ["relA-fr-02-ask-premium--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.premium), 30000],
+  ["relA-fr-03-ask-solvency--tall", "/fr/radar.html", 1366, 3200, false, false, ASK("Quel est le capital de solvabilité requis d'un assureur selon Solvabilité II ?"), 35000],
+  ["relA-fr-04-ask-authorisation--tall", "/fr/radar.html", 1366, 3200, false, false, ASK("Une entreprise d'assurance a-t-elle besoin d'un agrément pour exercer son activité au Luxembourg ?"), 35000],
+  ["relA-fr-05-ask-not-found--tall", "/fr/radar.html", 1366, 3400, false, false, ASK("Combien de boîtes aux lettres faut-il installer dans un immeuble de dix appartements ?"), 35000],
+  ["relA-fr-06-how-it-works--tall", "/fr/evidence.html", 1366, 4600, false, false, null, 5000],
+  ["relA-fr-07-coverage--tall", "/fr/coverage.html", 1366, 3400, false, false, null, 5000],
+  ["relA-fr-08-decisions--1366x768", "/fr/decisions.html", 1366, 768, false, false, null, 5000],
+  ["relA-en-09-ask-solvency--tall", "/en/radar.html", 1366, 3200, false, false, ASK("Under Solvency II, how is the solvency capital requirement calculated?"), 35000],
+  ["relA-en-10-how-it-works--tall", "/en/evidence.html", 1366, 4600, false, false, null, 5000],
+  ["relA-fr-11-home--phone", "/fr/", 390, 844, true, false, null, 0],
 );
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
