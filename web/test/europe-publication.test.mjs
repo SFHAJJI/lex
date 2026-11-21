@@ -29,8 +29,8 @@ import { searchOutcome } from "../scripts/live-search.mjs";
 import { readEuropeEvidenceBundle } from "../scripts/reading-answer.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 const NB = " ";
 const EXPRESSION = `${EUROPE_SAMPLE.work}.0006`;
 const TITLE = "Regulation (EU) 2016/679 of the European Parliament and of the Council of 27 April 2016 on the protection of natural persons with regard to the processing of personal data and on the free movement of such data, and repealing Directive 95/46/EC (General Data Protection Regulation) (Text with EEA relevance)";

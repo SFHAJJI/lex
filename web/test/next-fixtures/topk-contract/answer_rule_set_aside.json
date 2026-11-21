@@ -1,0 +1,810 @@
+{
+ "question": "Je ne paie plus la prime de mon assurance sur la vie. L'assureur peut-il suspendre la garantie ?",
+ "row": {
+  "question": "Je ne paie plus la prime de mon assurance sur la vie. L'assureur peut-il suspendre la garantie ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 7,
+   "de": 0,
+   "en": 0,
+   "lb": 1
+  },
+  "question_type": "rule",
+  "personal_case": true,
+  "french": "Je ne paie plus la prime de mon assurance sur la vie. L'assureur peut-il suspendre la garantie ?",
+  "legal_terms": [
+   "assurance sur la vie",
+   "prime",
+   "suspension de la garantie",
+   "assureur"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_105",
+   "date": "2025-11-25",
+   "why": null,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 105",
+   "number": "105",
+   "heading": "Défaut de paiement d'une prime",
+   "path": "TITRE III DES ASSURANCES DE PERSONNES > Chapitre II - Des contrats d'assurance sur la vie > Section IV - Paiement des primes et prise d'effet du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96163,
+   "lines": [
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 2,
+     "text": "A défaut de paiement d'une prime ou d'une fraction de prime dans les dix jours de son échéance, l'assureur peut, dans la mesure où le contrat d'assurance le prévoit et dans un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu:",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "soit résilier le contrat en versant la valeur de rachat s'il y a lieu;",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "soit transformer la prime ou fraction de prime non payée en avance sur contrat, dans la limite de la valeur de rachat du contrat;",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "soit opérer la réduction des garanties du contrat.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "La lettre recommandée doit rappeler la date d'échéance et le montant des primes non payées et indiquer les conséquences du défaut de paiement à l'expiration du délai indiqué ci-dessus.",
+     "label": null
+    }
+   ],
+   "text": [
+    "A défaut de paiement d'une prime ou d'une fraction de prime dans les dix jours de son échéance, l'assureur peut, dans la mesure où le contrat d'assurance le prévoit et dans un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu:",
+    "soit résilier le contrat en versant la valeur de rachat s'il y a lieu;",
+    "soit transformer la prime ou fraction de prime non payée en avance sur contrat, dans la limite de la valeur de rachat du contrat;",
+    "soit opérer la réduction des garanties du contrat.",
+    "La lettre recommandée doit rappeler la date d'échéance et le montant des primes non payées et indiquer les conséquences du défaut de paiement à l'expiration du délai indiqué ci-dessus."
+   ],
+   "label": "Article 105",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_1er",
+   "date": "2025-11-25",
+   "why": "« Prime » est défini par ce texte",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 1er",
+   "number": "1",
+   "heading": "Définitions",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre Ier - Dispositions générales > Section Ière - Définitions et dispositions préliminaires",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2016-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96042,
+   "lines": [
+    14
+   ],
+   "wording_since": "2016-01-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+    "effective": "2016-01-01",
+    "title": null
+   },
+   "quote": [
+    {
+     "n": 14,
+     "text": "G. Prime: toute espèce de rémunération demandée par l'assureur en contrepartie de ses engagements.",
+     "label": "G."
+    }
+   ],
+   "text": [
+    "G. Prime: toute espèce de rémunération demandée par l'assureur en contrepartie de ses engagements."
+   ],
+   "label": "Article 1er",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [
+  {
+   "article": "Article 126",
+   "heading": "Application des dispositions relatives aux assurances sur la vie",
+   "why": "Article 126 déroge à Article 105 (à l'exception d)"
+  }
+ ],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 96068,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 25",
+   "heading": "Effets de la suspension à l'égard des primes à échoir",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.6599
+  },
+  {
+   "label": "A2",
+   "article_pk": 96064,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 21",
+   "heading": "Défaut de paiement de la prime",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.6498
+  },
+  {
+   "label": "A3",
+   "article_pk": 96163,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 105",
+   "heading": "Défaut de paiement d'une prime",
+   "path": "TITRE III DES ASSURANCES DE PERSONNES > Chapitre II - Des contrats d'assurance sur la vie > Section IV - Paiement des primes et prise d'effet du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.635
+  },
+  {
+   "label": "A4",
+   "article_pk": 96066,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 23",
+   "heading": "Remise en vigueur de la garantie",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.5705
+  },
+  {
+   "label": "A5",
+   "article_pk": 96063,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 20",
+   "heading": "Modalités de paiement de la prime et avis d’échéance",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.5167
+  },
+  {
+   "label": "A6",
+   "article_pk": 96065,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 22",
+   "heading": "Mise en demeure et faculté de résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "meaning+outline",
+   "score": 0.5416
+  },
+  {
+   "label": "A7",
+   "article_pk": 96161,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 103",
+   "heading": "Risques exclus",
+   "path": "TITRE III DES ASSURANCES DE PERSONNES > Chapitre II - Des contrats d'assurance sur la vie > Section III - Le risque assuré",
+   "how": "keywords+meaning",
+   "score": 0.511
+  },
+  {
+   "label": "A8",
+   "article_pk": 96088,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 45",
+   "heading": "Suspension et interruption de la prescription",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section X - Prescription",
+   "how": "keywords+meaning",
+   "score": 0.5091
+  },
+  {
+   "label": "A9",
+   "article_pk": 205227,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 181-2",
+   "heading": "Demandes aux preneurs d’assurance d’un contrat d’assurance-vie",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre II Dispositions particulières relatives à l’assurance et à la réassurance > Chapitre 2bis Dispositions propres à l’assurance vie",
+   "how": "outline",
+   "score": 0.4852
+  },
+  {
+   "label": "A10",
+   "article_pk": 205226,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 181-1",
+   "heading": "Prestations des contrats d’assurance vie",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre II Dispositions particulières relatives à l’assurance et à la réassurance > Chapitre 2bis Dispositions propres à l’assurance vie",
+   "how": "outline",
+   "score": 0.4645
+  },
+  {
+   "label": "A11",
+   "article_pk": 96124,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 70",
+   "heading": "Créanciers privilégiés et hypothécaires",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section I - Dispositions communes à toutes les assurances de choses > Sous-section IV - Paiement de l'indemnité et privilège de l'assureur",
+   "how": "keywords",
+   "score": 0.4494
+  },
+  {
+   "label": "A12",
+   "article_pk": 96083,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 40",
+   "heading": "Crédit de prime",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "how": "meaning",
+   "score": 0.5474
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "paie": 3429,
+   "prime": 1291,
+   "assurance": 5364,
+   "assureur": 9723,
+   "suspendre": 1695,
+   "garantie": 4228,
+   "suspension": 977
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "Loi du 7 décembre 2015 sur le secteur des assurances."
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "exception_not_this_case",
+  "personal_case",
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 1
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "rule",
+     "personal_case": true,
+     "french": "Je ne paie plus la prime de mon assurance sur la vie. L'assureur peut-il suspendre la garantie ?",
+     "legal_terms": [
+      "assurance sur la vie",
+      "prime",
+      "suspension de la garantie",
+      "assureur"
+     ],
+     "in_scope": true
+    },
+    "ms": 1827,
+    "tokens_in": 270,
+    "tokens_out": 121,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "paie",
+      "prime",
+      "assurance",
+      "assureur",
+      "suspendre",
+      "garantie"
+     ],
+     "terms_a_statute_would_use": [
+      "suspension"
+     ],
+     "articles_holding_each_word": {
+      "paie": 3429,
+      "prime": 1291,
+      "assurance": 5364,
+      "assureur": 9723,
+      "suspendre": 1695,
+      "garantie": 4228,
+      "suspension": 977
+     },
+     "articles_kept": 10
+    },
+    "ms": 63
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 2,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+       "title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+       "outline_rows": 53,
+       "parts_named": [
+        "Section IV - Paiement des primes et prise d'effet du contrat",
+        "Section IV - Exécution du contrat"
+       ],
+       "articles_in_parts": 13,
+       "ms": 2495,
+       "tokens_in": 2463,
+       "tokens_out": 178,
+       "reason": "S39 traite du paiement des primes en assurance-vie; S9 des conséquences générales du défaut de paiement."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+       "title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+       "outline_rows": 170,
+       "parts_named": [
+        "Chapitre 2bis Dispositions propres à l’assurance vie"
+       ],
+       "articles_in_parts": 2,
+       "ms": 1223,
+       "tokens_in": 8395,
+       "tokens_out": 32,
+       "reason": "La section porte sur les dispositions propres à l’assurance vie et les contrats concernés."
+      }
+     ],
+     "articles_from_the_parts": 8,
+     "whole_part_for_a_list": false
+    },
+    "ms": 812,
+    "tokens_in": 10858,
+    "tokens_out": 210,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 2
+    },
+    "ms": 1051,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 6
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "A3",
+     "lines": [
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Les preneurs d’une assurance sur la vie en défaut de paiement de prime",
+     "text_reach": "special_group",
+     "question_is_about_that_group": true,
+     "reason": "L’article 105 fixe le régime propre à l’assurance sur la vie en cas de non-paiement de la prime."
+    },
+    "ms": 1157,
+    "tokens_in": 3666,
+    "tokens_out": 103,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 5,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [
+      "prime"
+     ],
+     "inbound_checked": 2,
+     "outbound_checked": 0,
+     "followed": 1,
+     "see_also": 0
+    },
+    "ms": 5
+   },
+   {
+    "step": "exception_decision",
+    "who": "model",
+    "detail": {
+     "applies": "no",
+     "pointed": "",
+     "lines": [],
+     "articles_read": 6,
+     "reason": "La question porte sur une assurance sur la vie, et non sur un contrat d’assurance de personnes à caractère forfaitaire visé par l’article 126."
+    },
+    "ms": 877,
+    "tokens_in": 1491,
+    "tokens_out": 51,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer",
+     "notes": [
+      "exception_not_this_case",
+      "personal_case",
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 4812,
+  "tokens": {
+   "text-embedding-3-large": [
+    27,
+    0
+   ],
+   "gpt-6-luna": [
+    11128,
+    331
+   ],
+   "gpt-6.2-sol": [
+    5157,
+    154
+   ]
+  },
+  "cost_usd_list_price": 0.01473,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 4,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer",
+    "state": "answer"
+   }
+  ],
+  "cost_usd": 0.01473,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 1827,
+    "tokens_in": 270,
+    "tokens_out": 121
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 812,
+    "tokens_in": 10858,
+    "tokens_out": 210
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1157,
+    "tokens_in": 3666,
+    "tokens_out": 103
+   },
+   {
+    "step": "exception_decision",
+    "model": "gpt-6.2-sol",
+    "ms": 877,
+    "tokens_in": 1491,
+    "tokens_out": 51
+   }
+  ]
+ },
+ "state": "answer",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "rule",
+   "french": "Je ne paie plus la prime de mon assurance sur la vie. L'assureur peut-il suspendre la garantie ?",
+   "legal_terms": [
+    "assurance sur la vie",
+    "prime",
+    "suspension de la garantie",
+    "assureur"
+   ],
+   "personal_case": true
+  },
+  "candidates": [
+   {
+    "article_pk": 96068,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96064,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96163,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96066,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96063,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96065,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96161,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 96088,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 205227,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 205226,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96124,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 96083,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96068
+   },
+   {
+    "article_pk": 96064
+   },
+   {
+    "article_pk": 96163
+   },
+   {
+    "article_pk": 96066
+   },
+   {
+    "article_pk": 96063
+   },
+   {
+    "article_pk": 96065
+   },
+   {
+    "article_pk": 96161
+   },
+   {
+    "article_pk": 96088
+   },
+   {
+    "article_pk": 205227
+   },
+   {
+    "article_pk": 205226
+   },
+   {
+    "article_pk": 96124
+   },
+   {
+    "article_pk": 96083
+   }
+  ],
+  "replay": "eNq9VMtu2zAQ_BWCl17kQFJkxdWl96KH3g1DoKW1TYQmFT6cGIE_qOgn9Jb-WIeiHSS2zr2Yq-Fydoa79Cs_8KbI-MAb7s3wyDPeIVSmEwpx_yEekMk3QWtSs0MB4Anf34lpYoOQ-FHBMSXYYOWeWE9sbzQTzgUrdEcMa9w9SLpjP76MOAEaKPiZVNh2A-neUkzaCpzx4PwWNQTUKfOynhXFrMwj4nizEcpRxhFxod0zWeD2bKJ5R9a8WS6_1kV9j92giGfLMrvPqmye1auM80wHpbLEFcNVhuy8KlGDNlJLL43GmaJC8ttv9nO09vaHkfOs__srpsC8ZfDn6cXTLSEO6h1UYN3zZtzlnbpE7wFdgkHw5pUrobdBbCneePTRC3AD31izv74Nb66RrRVSA-zFMe5D2IV9Z56Ba8MiIZOa-R2xpwA7MNowb-KRE1p7hlp_HKKIdHcoT7rb_Z-2K9oK1Xqye_R4yacY41DGqlgTj4PkKOEDF_YuRTl6MJB1RoO4Ew7GvA0Eu49pTPJ6geYI3cvxvtMw1NUNNo7TTV49gU3lzSf4itu8xbWWMp-X5cMUeFu5KKsJxs9qcBsW7_vsOzlN3pKbpD8pThqTqrOOc-VUa2QHocJ_xBLjSwdScQCpk258Qnx9xHdn-tiQcZqun6rz44xfXvMpPhh0vloUeI3BQWl-lxfVA0zoOBD00tEwzqg2vvU76VJPr3uMqTVB9-362Aql2p48dd5Yx1enf1e7kIM"
+ }
+}

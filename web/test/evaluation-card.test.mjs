@@ -15,7 +15,7 @@ import { EvaluationCardView, renderLiveCoveragePage } from "../.react-build/app.
 import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { CARD_ROUTE, EMPTY_CASES_SHA256, NOT_YET_LABELLED, readEvaluationCard, ruleOfThree, wilson95 } from "../scripts/evaluation-card.mjs";
 
-const card = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
+const card = JSON.parse(await readFile(new URL("../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
 const mutate = (change) => { const copy = structuredClone(card); change(copy); return copy; };
 // The page is rendered for hydration, so React marks text boundaries with empty comments; they are not text.
 const unescape = (markup) => markup.replaceAll("<!-- -->", "").replaceAll("&#x27;", "'").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
@@ -81,11 +81,13 @@ test("each rule of the card, broken, is refused with that rule's reason", () => 
   for (const [what, change, reason] of cases) assert.throws(() => readEvaluationCard(mutate(change)), reason, what);
 });
 
-test("the page prints the card after the answer, its target first, every table whole, and asks nothing for it", async () => {
-  const html = renderLiveCoveragePage();
-  const root = html.indexOf('<div id="live-coverage-root">');
+test("the card prints its target first, every table whole, and asks nothing for it; the coverage page no longer carries it", async () => {
+  // Release-a (21/11/2026): the card is a fixture's ("THE MOUNT IS A FIXTURE"), in English, and its negative result denies the
+  // live engine's design, so Trust and Coverage no longer prints it; the card itself is still drawn as before.
+  assert.ok(!renderLiveCoveragePage().includes("data-evaluation-card"), "the coverage page carries no evaluation card");
+  const html = renderToStaticMarkup(h(EvaluationCardView, { view: readEvaluationCard(card) }));
   const at = html.indexOf("data-evaluation-card");
-  assert.ok(root > 0 && at > root, "the card follows the answer");
+  assert.ok(at >= 0, "the card is drawn");
   const section = unescape(html.slice(at, html.indexOf("</section>", html.lastIndexOf("data-negative-results"))));
   const target = section.indexOf(`Run over: ${card.target}`);
   assert.ok(target >= 0 && target < section.indexOf("<table"), "what the card was run over, before any number");
@@ -98,7 +100,7 @@ test("the page prints the card after the answer, its target first, every table w
   const said = section.slice(scope, section.indexOf("</p>", scope));
   const separator = LIVE_CHROME.en.common.listSeparator;
   assert.ok(said.includes(`(${gates.map((gate) => `<code>${gate}</code>`).join(separator)})`), said);
-  const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
+  const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
   assert.ok(census.not_produced.length > 0);
   assert.ok(said.includes(`(${census.not_produced.map((code) => `<code>${code}</code>`).join(separator)})`), said);
   for (const absent of ["gates on the data", "the quality of answers", "speed", "two systems deriving the same index"]) assert.ok(said.includes(absent), absent);
@@ -138,7 +140,8 @@ test("the live build carries the card it is handed, as a release build will hand
     // Tagged, so this build's intermediate bundles never collide with another test file's build (review of #955).
     await buildLive(new URL(`file:///${destination.replaceAll("\\", "/")}/`), { card: release, buildTag: "card-test" });
     const index = await readFile(join(destination, "en", "coverage.html"), "utf8");
-    assert.ok(index.includes("RELEASE CARD TARGET: the release"), "the handed card is the one printed");
+    // Release-a (21/11/2026): the coverage page prints no card; the card handed stays at its stable route.
+    assert.ok(!index.includes("RELEASE CARD TARGET: the release") && !index.includes("data-evaluation-card"), "the coverage page prints no card");
     assert.ok(!index.includes("THE MOUNT IS A FIXTURE"), "and not the platform's rendered one");
     const served = JSON.parse(await readFile(join(destination, CARD_ROUTE.slice(1)), "utf8"));
     assert.deepEqual(served, release, "the stable route holds the same card, for machines");

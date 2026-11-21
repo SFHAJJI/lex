@@ -21,9 +21,9 @@ import {
   loadLiveCompare,
 } from "../scripts/live-compare.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
-const payloads = JSON.parse(await readFile(new URL("../../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const payloads = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const envelopeOf = (scenarioStart) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === "diff" && candidate.scenario.startsWith(scenarioStart));

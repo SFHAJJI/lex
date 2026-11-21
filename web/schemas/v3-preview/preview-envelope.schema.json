@@ -1,0 +1,730 @@
+{
+  "type": "object",
+  "required": [
+    "branch"
+  ],
+  "anyOf": [
+    {
+      "properties": {
+        "branch": {
+          "const": "success"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "object_set_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+            },
+            "object_set_sha256": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "object_set_id",
+            "object_set_sha256"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 128
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
+          "const": "lex-v3-preview-envelope/1"
+        },
+        "object_type": {
+          "type": "string",
+          "const": "envelope"
+        },
+        "status": {
+          "type": "string",
+          "const": "ok"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "request_ref": {
+              "type": "string",
+              "const": "req_0123456789abcdef0123456789abcdef"
+            },
+            "operation": {
+              "type": "object",
+              "properties": {
+                "operation_id": {
+                  "type": "string",
+                  "enum": [
+                    "resolve",
+                    "search",
+                    "browse",
+                    "concepts",
+                    "dossier",
+                    "manifestation",
+                    "as_of",
+                    "as_observed",
+                    "knowable_on",
+                    "timeline",
+                    "article_history",
+                    "diff",
+                    "status_on",
+                    "in_force_on",
+                    "changes_in_period",
+                    "relations",
+                    "classification",
+                    "cited_by",
+                    "citation",
+                    "transposition",
+                    "provenance",
+                    "verify",
+                    "evidence_bundle",
+                    "events",
+                    "answer_drift",
+                    "coverage",
+                    "ask"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                },
+                "catalog_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                },
+                "catalog_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "operation_id",
+                "catalog_id",
+                "catalog_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "refusal_registry": {
+              "type": "object",
+              "properties": {
+                "registry_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                },
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
+                  "const": "lex-v3-preview-refusal-registry/1"
+                },
+                "sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "registry_id",
+                "schema",
+                "sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "snapshot": {
+              "type": "object",
+              "properties": {
+                "snapshot_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                },
+                "snapshot_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "snapshot_id",
+                "snapshot_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "artifact": {
+              "type": "object",
+              "properties": {
+                "artifact_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "artifact_id"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "index_format": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+            },
+            "runtime": {
+              "type": "object",
+              "properties": {
+                "component_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                },
+                "source_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "component_id",
+                "source_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "builder": {
+              "type": "object",
+              "properties": {
+                "component_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                },
+                "source_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                }
+              },
+              "required": [
+                "component_id",
+                "source_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "capabilities": {
+              "enum": [
+                "preview_mechanics_only"
+              ]
+            },
+            "freshness": {
+              "type": "object",
+              "properties": {
+                "observed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "upstream_health": {
+                  "enum": [
+                    "not_applicable_synthetic"
+                  ],
+                  "const": "not_applicable_synthetic"
+                }
+              },
+              "required": [
+                "observed_at",
+                "upstream_health"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            },
+            "jurisdiction": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+            },
+            "provisionality": {
+              "enum": [
+                "all"
+              ]
+            },
+            "source": {
+              "type": "object",
+              "properties": {
+                "source_kind": {
+                  "enum": [
+                    "synthetic_test"
+                  ]
+                }
+              },
+              "required": [
+                "source_kind"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 128
+            }
+          },
+          "required": [
+            "request_ref",
+            "operation",
+            "refusal_registry",
+            "snapshot",
+            "artifact",
+            "index_format",
+            "runtime",
+            "builder",
+            "capabilities",
+            "freshness",
+            "jurisdiction",
+            "provisionality",
+            "source"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 128
+        }
+      },
+      "required": [
+        "result",
+        "schema",
+        "object_type",
+        "status",
+        "context"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "branch": {
+          "const": "refusal"
+        },
+        "refusal": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "identifier_unknown"
+              ],
+              "const": "identifier_unknown"
+            },
+            "checked_identifier_family": {
+              "enum": [
+                "eli",
+                "celex",
+                "memorial",
+                "historical_legal_id"
+              ]
+            },
+            "requested_coordinate": {
+              "type": "string",
+              "enum": [
+                "eli/synthetic-preview",
+                "celex:synthetic-preview",
+                "memorial:synthetic-preview",
+                "historical_legal_id:synthetic-preview"
+              ]
+            },
+            "publisher_contexts_checked": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "lu-legilux",
+                  "eu-eurlex"
+                ]
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "possible_held_records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "identifier": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "pattern": "^(?=[\\s\\S]*[^\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000])[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]\u002B(?![\\s\\S])",
+                    "x_runtime_invariants": [
+                      "valid Unicode scalar sequence",
+                      "contains at least one non-whitespace Unicode scalar"
+                    ]
+                  },
+                  "publisher": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ]
+                  }
+                },
+                "required": [
+                  "identifier",
+                  "title",
+                  "publisher"
+                ],
+                "additionalProperties": false,
+                "maxProperties": 128,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "lu-legilux"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "identifier": {
+                          "const": "preview:held:lu-legilux"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "eu-eurlex"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "identifier": {
+                          "const": "preview:held:eu-eurlex"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "maxItems": 4096
+            },
+            "official_search_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "publisher_search"
+                  },
+                  "publisher": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ]
+                  },
+                  "uri": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "publisher",
+                  "uri"
+                ],
+                "additionalProperties": false,
+                "maxProperties": 128,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "lu-legilux"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "uri": {
+                          "const": "https://legilux.public.lu/search"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "publisher": {
+                          "const": "eu-eurlex"
+                        }
+                      },
+                      "required": [
+                        "publisher"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "uri": {
+                          "const": "https://eur-lex.europa.eu/advanced-search-form.html"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "maxItems": 4096,
+              "minItems": 1
+            },
+            "what_would_answer": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "corrected_identifier",
+                  "new_official_observation",
+                  "expanded_official_scope"
+                ]
+              },
+              "maxItems": 4096,
+              "minItems": 1
+            },
+            "asserts_absence_of_law": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "required": [
+            "code",
+            "checked_identifier_family",
+            "requested_coordinate",
+            "publisher_contexts_checked",
+            "possible_held_records",
+            "official_search_actions",
+            "what_would_answer",
+            "asserts_absence_of_law"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 128,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "eli"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "eli/synthetic-preview"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "celex"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "celex:synthetic-preview"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "memorial"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "memorial:synthetic-preview"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "checked_identifier_family": {
+                    "const": "historical_legal_id"
+                  }
+                },
+                "required": [
+                  "checked_identifier_family"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "requested_coordinate": {
+                    "const": "historical_legal_id:synthetic-preview"
+                  }
+                }
+              }
+            }
+          ],
+          "x_runtime_invariants": [
+            "official search actions exactly cover publisher_contexts_checked in canonical order",
+            "possible held records are unique by publisher and identifier, publisher-ordered, and limited to publisher_contexts_checked",
+            "publisher_contexts_checked is unique and uses canonical LU then EU order",
+            "what_would_answer is non-empty, unique, defined, and uses declared enum order"
+          ]
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
+          "const": "lex-v3-preview-envelope/1"
+        },
+        "object_type": {
+          "type": "string",
+          "const": "envelope"
+        },
+        "status": {
+          "type": "string",
+          "const": "identifier_unknown"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "request_ref": {
+              "type": "string",
+              "const": "req_0123456789abcdef0123456789abcdef"
+            },
+            "operation": {
+              "$ref": "#/anyOf/0/properties/context/properties/operation"
+            },
+            "refusal_registry": {
+              "$ref": "#/anyOf/0/properties/context/properties/refusal_registry"
+            },
+            "snapshot": {
+              "$ref": "#/anyOf/0/properties/context/properties/snapshot"
+            },
+            "artifact": {
+              "$ref": "#/anyOf/0/properties/context/properties/artifact"
+            },
+            "index_format": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+            },
+            "runtime": {
+              "$ref": "#/anyOf/0/properties/context/properties/runtime"
+            },
+            "builder": {
+              "$ref": "#/anyOf/0/properties/context/properties/builder"
+            },
+            "capabilities": {
+              "enum": [
+                "preview_mechanics_only"
+              ]
+            },
+            "freshness": {
+              "$ref": "#/anyOf/0/properties/context/properties/freshness"
+            },
+            "jurisdiction": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+            },
+            "provisionality": {
+              "enum": [
+                "all"
+              ]
+            },
+            "source": {
+              "$ref": "#/anyOf/0/properties/context/properties/source"
+            }
+          },
+          "required": [
+            "request_ref",
+            "operation",
+            "refusal_registry",
+            "snapshot",
+            "artifact",
+            "index_format",
+            "runtime",
+            "builder",
+            "capabilities",
+            "freshness",
+            "jurisdiction",
+            "provisionality",
+            "source"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 128
+        }
+      },
+      "required": [
+        "refusal",
+        "schema",
+        "object_type",
+        "status",
+        "context"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$id": "urn:uuid:caee1a0e-fe35-4c42-bf0e-5ad5106114c0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "runtime and builder component identifiers are distinct",
+    "refusal status exactly equals its payload refusal code"
+  ]
+}

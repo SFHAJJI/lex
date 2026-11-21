@@ -1,0 +1,327 @@
+{
+ "schema": "lex-results/2",
+ "run": "fixture-results-2",
+ "made": "2026-11-22",
+ "build": {
+  "code": "f1",
+  "data": "20261122a"
+ },
+ "models": {
+  "question": "gpt-6-luna",
+  "read": "gpt-6.2-sol",
+  "embedding": "text-embedding-3-large"
+ },
+ "set": {
+  "name": "jeu de démonstration",
+  "n": 120,
+  "written_by": "une session qui n’a jamais vu le code de Lex, à partir du texte des lois",
+  "fixed_before_run": true,
+  "used_before": false
+ },
+ "scoring": {
+  "by": "code",
+  "rule": "l’article attendu est le premier bloc et une phrase clé est dans ses lignes",
+  "lenient": [
+   "une seule phrase clé parmi plusieurs suffit"
+  ]
+ },
+ "totals": {
+  "right": 88,
+  "wrong": 3,
+  "partial": 6,
+  "candidates": 9,
+  "not_held": 7,
+  "not_found": 4,
+  "clarify": 2,
+  "out_of_scope": 1,
+  "intervals": {
+   "right": [
+    64.8,
+    80.4
+   ],
+   "wrong": [
+    0.9,
+    7.1
+   ]
+  }
+ },
+ "wrong": [
+  {
+   "id": "X1",
+   "question": "Quel délai pour déclarer un sinistre ?",
+   "expected": "Art. 63, loi du 27 juillet 1997",
+   "given": "Art. 37, loi de 1991",
+   "what": "repealed"
+  },
+  {
+   "id": "X2",
+   "question": "Quelle prime en cas de résiliation ?",
+   "expected": "Art. 40",
+   "given": "Art. 41",
+   "what": "article"
+  },
+  {
+   "id": "X3",
+   "question": "Quel capital minimum ?",
+   "expected": "Art. 104, loi du 7 décembre 2015",
+   "given": "Art. 104 (version 2016)",
+   "what": "version"
+  }
+ ],
+ "retrieval": {
+  "right_article_read": 101,
+  "of": 110,
+  "interval": [
+   85.2,
+   95.6
+  ]
+ },
+ "slices": [
+  {
+   "slice": "insurance",
+   "n": 48,
+   "right": 37,
+   "wrong": 2,
+   "not_found": 1,
+   "interval": [
+    63.5,
+    86.7
+   ]
+  },
+  {
+   "slice": "other_laws",
+   "n": 40,
+   "right": 31,
+   "wrong": 1,
+   "not_found": 2,
+   "interval": [
+    62.5,
+    87.7
+   ]
+  },
+  {
+   "slice": "eu",
+   "n": 12,
+   "right": 8,
+   "wrong": 0,
+   "not_found": 1,
+   "interval": [
+    39.1,
+    86.2
+   ]
+  },
+  {
+   "slice": "dated",
+   "n": 10,
+   "right": 8,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    49.0,
+    94.3
+   ]
+  },
+  {
+   "slice": "list",
+   "n": 8,
+   "right": 5,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    30.6,
+    86.3
+   ]
+  },
+  {
+   "slice": "absent",
+   "n": 10,
+   "right": 0,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    0.0,
+    27.8
+   ]
+  },
+  {
+   "slice": "en",
+   "n": 8,
+   "right": 6,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    40.9,
+    92.9
+   ]
+  },
+  {
+   "slice": "de",
+   "n": 4,
+   "right": 3,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    30.1,
+    95.4
+   ]
+  }
+ ],
+ "by_law": [
+  {
+   "law": "contrat-assurance",
+   "n": 30,
+   "right": 25,
+   "wrong": 1
+  },
+  {
+   "law": "secteur-assurances",
+   "n": 12,
+   "right": 9,
+   "wrong": 1
+  }
+ ],
+ "by_type": [
+  {
+   "type": "value",
+   "n": 30,
+   "right": 22,
+   "wrong": 1
+  },
+  {
+   "type": "list",
+   "n": 8,
+   "right": 5,
+   "wrong": 0
+  }
+ ],
+ "misses": {
+  "corpus_gap": 9,
+  "retrieval": 12,
+  "reading": 8,
+  "items": [
+   {
+    "id": "X9",
+    "question": "Quel est le seuil de Solvabilité II ?",
+    "label": "corpus_gap",
+    "note": "directive 2009/138/CE non détenue"
+   }
+  ]
+ },
+ "absent": {
+  "n": 10,
+  "said_not_held": 7,
+  "said_not_found": 2,
+  "asserted": 1,
+  "other": 0
+ },
+ "ablation": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "rows": [
+   {
+    "what": "all",
+    "n": 120,
+    "right": 88,
+    "wrong": 3,
+    "interval": [
+     64.8,
+     80.4
+    ]
+   },
+   {
+    "what": "no_outline",
+    "n": 120,
+    "right": 79,
+    "wrong": 5,
+    "interval": [
+     57.0,
+     73.7
+    ]
+   },
+   {
+    "what": "no_words",
+    "n": 120,
+    "right": 83,
+    "wrong": 4,
+    "interval": [
+     60.4,
+     76.7
+    ]
+   },
+   {
+    "what": "no_meaning",
+    "n": 120,
+    "right": 85,
+    "wrong": 3,
+    "interval": [
+     62.2,
+     78.2
+    ]
+   },
+   {
+    "what": "no_references",
+    "n": 120,
+    "right": 84,
+    "wrong": 3,
+    "interval": [
+     61.3,
+     77.5
+    ]
+   },
+   {
+    "what": "no_routing",
+    "n": 120,
+    "right": 71,
+    "wrong": 7,
+    "interval": [
+     50.2,
+     67.5
+    ]
+   }
+  ]
+ },
+ "baseline": {
+  "what": "les 12 passages les plus proches par le sens, le même lecteur",
+  "n": 120,
+  "right": 64,
+  "wrong": 14,
+  "interval": [
+   44.4,
+   62.0
+  ],
+  "naive_right_lex_not": 4,
+  "lex_right_naive_not": 28
+ },
+ "noise": {
+  "runs": 3,
+  "right": [
+   88,
+   86,
+   89
+  ],
+  "wrong": [
+   3,
+   3,
+   4
+  ]
+ },
+ "cost": {
+  "usd_per_answer": {
+   "mean": 0.0121,
+   "median": 0.0109,
+   "p90": 0.0214
+  },
+  "model_calls_per_answer": {
+   "mean": 3.6,
+   "max": 6
+  },
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; not yet compared with the bill"
+ },
+ "latency": {
+  "median_ms": 5400,
+  "p90_ms": 11200,
+  "max_ms": 24800
+ }
+}

@@ -27,7 +27,7 @@ import { buildLive } from "../scripts/build-live.mjs";
 import { LEGAL_PAGE_PATHS } from "../scripts/legal-pages.mjs";
 import { REFERENCE_PAGE_PATHS } from "../scripts/reference-pages.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const envelopeOf = (operation, scenarioStart = "") => structuredClone(census.envelopes.find((entry) => entry.operation === operation && entry.envelope.result !== null && entry.scenario.startsWith(scenarioStart)).envelope);
 const COVERAGE = envelopeOf("coverage");
@@ -226,19 +226,26 @@ test("a page that ships no script says its strip carries no answer, in English a
       const copy = liveChrome(language).freshness;
       const strip = html.slice(html.indexOf(`<div id="${FRESHNESS_STRIP_ID}"`), html.indexOf("</footer>"));
       const line = (said) => `<section class="freshness-strip" aria-label="${escaped(copy.heading)}" data-freshness="${said === copy.noAnswer ? "no-answer" : "as-built"}"><p>${escaped(said)}</p>${guideNote(language)}</section>`;
-      if (/<script src="/.test(html)) {
+      // The side build's script (`client-live-next.js`: How it works, Design choices, Results, the coverage section) reads the
+      // new engine's counts and configuration, never an answer that carries freshness: its pages say they carry no answer.
+      const scripts = [...html.matchAll(/<script src="([^"]+)"/gu)].map((match) => match[1]);
+      if (scripts.some((src) => !src.endsWith('/client-live-next.js'))) {
         // A script that asks the server, and redraws the strip from each answer (`client.jsx`): the as-built line is true.
         assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.asBuilt)}</div>`, label);
       } else {
         quiet.push(label);
         assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.noAnswer)}</div>`, label);
-        assert.ok(!html.includes("<form"), `${label}: asks nothing`);
+        // The V4 header's find field (How it works, Decisions) is a plain GET form to the search page, sent only when the reader
+        // types a name: the page itself asks nothing.
+        assert.ok(!html.replace(/<form class="lx-find" role="search" action="\/(?:en|fr)\/search\.html" method="get" data-header-find="">/, "").includes("<form"), `${label}: asks nothing`);
       }
     }
     // The pages that never ask: the ten legal pages, the six reference pages (Get help, How to read Lex and Developers, in
     // each language), the maintenance page in each language and the two language pages.
     assert.deepEqual(quiet.sort(), [
       ...LEGAL_PAGE_PATHS.map((path) => path.slice(1)), ...REFERENCE_PAGE_PATHS.map((path) => path.slice(1)), "locale-de.html", "locale-lb.html", "maintenance/en.html", "maintenance/fr.html",
+      // The side build's Results page: it reads the engine's scored test, which carries no freshness.
+      "en/results.html", "fr/results.html",
     ].sort());
     // And the 404 page, which offers the search and so may have an answer, keeps the as-built line.
     assert.ok(pages.some(([label]) => label === "not-found/fr.html") && !quiet.includes("not-found/fr.html"));

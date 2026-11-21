@@ -32,7 +32,7 @@ import { homeFacts } from "../scripts/live-home.mjs";
 
 const TABLE = JSON.parse(await readFile(new URL("../../tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json", import.meta.url), "utf8"));
 const ENGINES = TABLE.searchEngines;
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (operation, scenarioStart) => census.envelopes.find((entry) => entry.operation === operation && entry.scenario.startsWith(scenarioStart)).envelope;
 const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const STATE = READING.result.value.states[0];

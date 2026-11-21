@@ -29,7 +29,7 @@ import { builtOnOf, searchOutcome } from "../scripts/live-search.mjs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 
 /** The pack's figures and dates (the specification of record, "V2 facts are context, not requirements"). */
 export const PACK_FIGURES = Object.freeze(["1402", "1250", "24579", "23370", "24622", "1252", "2026-08-27", "54cceec"]);
@@ -86,6 +86,21 @@ const NUMBERS_ALLOWED = Object.freeze({
   // Decisions: the incident behind "not found rather than a guess", named by the two articles and the dates it was seen and
   // fixed (a citation and two dates, not counts; every count on the page is a run's, filled in its placeholder).
   "decisions.cards.notFound.note": ["70", "44", "13", "11", "2026", "14", "11", "2026"],
+  // How Lex works (the owner's order of 2026-11-15): the OpenAPI version, the model's monthly cap in the code (a limit, not a
+  // count), the processor's retention period, and the dated incidents and improvements, named by their dates, articles and
+  // releases. Every count on the page is a run's, the registry's or the coverage answer's, filled in its placeholder.
+  "evidence.apiDocumented": ["3", "1"],
+  "evidence.apiOpenApi": ["3", "1"],
+  "evidence.card.cost.text": ["5000"],
+  "evidence.supLimits": ["5000"],
+  "evidence.safeguards.mask": ["30"],
+  "evidence.improvement.first": ["11", "11", "13", "11", "1", "5"],
+  "evidence.improvement.incident": ["13", "11", "70", "44", "14", "11"],
+  "evidence.improvement.gate": ["14", "11", "57", "15", "11"],
+  "evidence.improvement.bricks": ["18", "11", "19", "11"],
+  "evidence.incidents.art70": ["13", "11", "2026", "70", "44", "14", "11"],
+  "evidence.incidents.release6": ["14", "11", "2026", "6"],
+  "evidence.incidents.release11": ["14", "11", "2026", "11", "57", "37", "12"],
 });
 
 /** The English table's own entries that differ from the French table's (the example questions, in English). */
@@ -93,7 +108,6 @@ const ENGLISH_ALLOWED = Object.freeze({
   "home.askExamples.first": ["5"],
   "home.askExamples.second": ["33"],
   "home.askExamples.third": ["50"],
-  "decisions.cards.notFound.note": ["70", "44", "2026", "11", "13", "2026", "11", "14"],
 });
 
 const TABLES = Object.freeze([
@@ -184,7 +198,7 @@ function yieldServing(value, articles) {
 /** An answer given long after any build the census records: its index is older than today, so today is said beside it. */
 const LATER = "2026-12-01T10:00:00.0000000Z";
 
-test("the home page's coverage line says the counts the coverage answer serves, and no other number than its build's date and today's", () => {
+test("the home page's coverage line says the counts the coverage answer serves, and no other number", () => {
   const base = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
   // Counts no table holds, and the pack's own figures served as counts: a served figure is shown, as served; and the same
   // answered once the index is older than today (R13; the plan's item 3.4), when today's date is said beside the build's.
@@ -201,7 +215,9 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     const html = renderLiveHomePage({ facts });
     const line = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn, ...(later ? ["2026-12-01"] : [])], line);
+    // The V4 line (the mockup V1Home, 2026-11-15): the texts and their dated versions, grouped as the language groups them;
+    // the index's date is the footer's freshness strip's.
+    assert.deepEqual(line.replace(/(\d),(\d)/g, "$1$2").match(/\d+(?:-\d+)*/g), [String(works), String(states)], line);
   }
 });
 

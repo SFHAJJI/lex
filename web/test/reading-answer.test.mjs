@@ -14,7 +14,7 @@ import test from "node:test";
 
 import { ADMITTING_RIGHTS_DISPOSITION, ADMITTING_RIGHTS_DISPOSITIONS, DISCLOSED_RIGHTS_DISPOSITIONS, readEvidenceBundle } from "../scripts/reading-answer.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
 async function capturedAnswer() {

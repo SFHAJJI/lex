@@ -1,0 +1,77 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-source-profile-topology/1"
+    },
+    "identity_profile_ref": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "resource_id",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "topology": {
+      "type": "object",
+      "properties": {
+        "registry_ref": {
+          "type": "object",
+          "properties": {
+            "resource_id": {
+              "type": "string",
+              "pattern": "^urn:uuid:(?!00000000-0000-0000-0000-000000000000)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\\s\\S])",
+              "minLength": 45,
+              "maxLength": 45
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "resource_id",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "member_key": {
+          "type": "string",
+          "pattern": "^[!-~]{1,256}(?![\\s\\S])",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry_ref",
+        "member_key"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "identity_profile_ref",
+    "topology"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:6c66e724-8fb2-4521-81b9-12a2f15c508d",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

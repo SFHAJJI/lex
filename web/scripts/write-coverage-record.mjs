@@ -3,9 +3,13 @@
 // answer, asked of an origin: its totals, its index's build date, and its text yield summed over its publishers and classes
 // (the versions the catalogues list, those with text here, the files held back by their licence). Nothing else is computed.
 //
-//   node scripts/write-coverage-record.mjs https://law.soufien.lu
+//   node scripts/write-coverage-record.mjs https://law.soufien.lu [acts the publisher's catalogue lists]
+//
+// Two figures come from elsewhere than that answer, and say so: the Luxembourg acts the assistant reads (the acts of the
+// law index the API embeds, counted in this checkout's file) and, when given, the acts the publisher's catalogue lists as
+// Lex collected it (counted in the release's Luxembourg index: the resources typed jolux:Act).
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const origin = (process.argv[2] ?? '').replace(/\/$/u, '');
@@ -18,7 +22,9 @@ const response = await fetch(`${origin}/api/v3/coverage`, { method: 'POST', head
 const envelope = await response.json();
 const value = envelope?.result?.value;
 if (value?.totals === undefined) throw new Error(`${origin} answered no coverage totals`);
-const classes = (value.text_yield?.publishers ?? []).flatMap((publisher) => publisher.classes ?? []);
+const publishers = value.text_yield?.publishers ?? [];
+const classes = publishers.flatMap((publisher) => publisher.classes ?? []);
+const bySum = (pick) => publishers.reduce((total, one) => total + (pick(one) ?? 0), 0);
 const sum = (pick) => classes.reduce((total, one) => total + (pick(one) ?? 0), 0);
 const builtAt = envelope?.context?.freshness?.index_built_at;
 const record = {
@@ -28,10 +34,15 @@ const record = {
   works: value.totals.works,
   states: value.totals.states,
   articles: value.totals.articles,
-  versionsCatalogued: sum((one) => one.versions),
-  versionsWithText: sum((one) => one.versions_with_text),
+  // Every publisher's own figures (a work in two classes is one work).
+  versionsCatalogued: bySum((one) => one.versions),
+  versionsWithText: bySum((one) => one.versions_with_text),
+  worksWithText: bySum((one) => one.works_with_text),
   files: sum((one) => one.files),
   filesWithheld: sum((one) => (one.files_withheld ?? []).reduce((total, withheld) => total + (withheld.files ?? 0), 0)),
+  // The Luxembourg acts the assistant's law index holds (the file the API embeds), and the acts the publisher's catalogue lists.
+  assistantActs: JSON.parse(readFileSync(new URL('../../src/Lex.V3.Contracts/Platform/Assistant/Bricks/law-index.json', import.meta.url), 'utf8')).acts.length,
+  actsCatalogued: /^\d+$/u.test(process.argv[3] ?? '') ? Number(process.argv[3]) : null,
 };
 const target = fileURLToPath(new URL('./coverage-record.mjs', import.meta.url));
 writeFileSync(target, [

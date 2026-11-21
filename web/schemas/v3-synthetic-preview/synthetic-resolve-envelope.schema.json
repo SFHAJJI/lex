@@ -1,0 +1,489 @@
+{
+  "type": "object",
+  "required": [
+    "branch"
+  ],
+  "anyOf": [
+    {
+      "properties": {
+        "branch": {
+          "const": "success"
+        },
+        "matched_identifier_family": {
+          "enum": [
+            "eli",
+            "celex",
+            "memorial",
+            "historical_legal_id"
+          ],
+          "const": "eli"
+        },
+        "matched_coordinate": {
+          "type": "string",
+          "const": "eli/synthetic-preview"
+        },
+        "result": {
+          "$ref": "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831",
+          "properties": {
+            "objects": {
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "synthetic": {
+                    "const": true
+                  },
+                  "body_holding_state": {
+                    "const": "held_public"
+                  },
+                  "body_holding_disposition": {
+                    "const": "synthetic_fixture"
+                  },
+                  "body": {
+                    "type": "string",
+                    "pattern": "This text is synthetic and has no legal authority\\."
+                  }
+                },
+                "required": [
+                  "synthetic",
+                  "body_holding_state",
+                  "body_holding_disposition",
+                  "body"
+                ]
+              }
+            }
+          },
+          "required": [
+            "objects"
+          ]
+        },
+        "schema": {
+          "type": "string",
+          "const": "lex-v3-synthetic-resolve-envelope/1"
+        },
+        "synthetic": {
+          "type": "boolean",
+          "const": true
+        },
+        "object_type": {
+          "type": "string",
+          "const": "envelope"
+        },
+        "status": {
+          "type": "string",
+          "const": "ok"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "request_ref": {
+              "type": "string",
+              "minLength": 36,
+              "maxLength": 36,
+              "pattern": "^req_[0-9a-f]{32}$"
+            },
+            "operation": {
+              "type": "object",
+              "properties": {
+                "operation_id": {
+                  "type": "string",
+                  "const": "resolve"
+                },
+                "catalog_id": {
+                  "type": "string",
+                  "const": "s0-05-resolve-only"
+                },
+                "catalog_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "operation_id",
+                "catalog_id",
+                "catalog_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            },
+            "refusal_registry": {
+              "type": "object",
+              "properties": {
+                "registry_id": {
+                  "type": "string",
+                  "const": "s0-04-identifier-boundary"
+                },
+                "schema": {
+                  "type": "string",
+                  "const": "lex-v3-preview-refusal-registry/1"
+                },
+                "sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "registry_id",
+                "schema",
+                "sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            },
+            "snapshot": {
+              "type": "object",
+              "properties": {
+                "snapshot_id": {
+                  "type": "string"
+                },
+                "snapshot_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "snapshot_id",
+                "snapshot_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            },
+            "artifact": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            },
+            "index": {
+              "type": "object",
+              "properties": {
+                "schema": {
+                  "type": "string",
+                  "const": "lex-v3-synthetic-sqlite/1"
+                },
+                "sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "build_id": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "schema",
+                "sha256",
+                "build_id"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            },
+            "runtime": {
+              "type": "object",
+              "properties": {
+                "component_id": {
+                  "type": "string"
+                },
+                "source_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "component_id",
+                "source_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            },
+            "builder": {
+              "type": "object",
+              "properties": {
+                "component_id": {
+                  "type": "string"
+                },
+                "source_sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64,
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "component_id",
+                "source_sha256"
+              ],
+              "additionalProperties": false,
+              "maxProperties": 64
+            }
+          },
+          "required": [
+            "request_ref",
+            "operation",
+            "refusal_registry",
+            "snapshot",
+            "artifact",
+            "index",
+            "runtime",
+            "builder"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 64
+        }
+      },
+      "required": [
+        "matched_identifier_family",
+        "matched_coordinate",
+        "result",
+        "schema",
+        "synthetic",
+        "object_type",
+        "status",
+        "context"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "branch": {
+          "const": "refusal"
+        },
+        "refusal": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "identifier_unknown"
+              ],
+              "const": "identifier_unknown"
+            },
+            "checked_identifier_family": {
+              "enum": [
+                "eli",
+                "celex",
+                "memorial",
+                "historical_legal_id"
+              ],
+              "const": "historical_legal_id"
+            },
+            "requested_coordinate": {
+              "type": "string",
+              "const": "historical_legal_id:synthetic-preview"
+            },
+            "publisher_contexts_checked": {
+              "type": "array",
+              "items": false,
+              "maxItems": 1,
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "const": "lu-legilux"
+                }
+              ]
+            },
+            "possible_held_records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "identifier_family": {
+                    "enum": [
+                      "eli",
+                      "celex",
+                      "memorial",
+                      "historical_legal_id"
+                    ],
+                    "const": "eli"
+                  },
+                  "coordinate": {
+                    "type": "string",
+                    "const": "eli/synthetic-preview"
+                  },
+                  "publisher": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ],
+                    "const": "lu-legilux"
+                  }
+                },
+                "required": [
+                  "identifier_family",
+                  "coordinate",
+                  "publisher"
+                ],
+                "additionalProperties": false,
+                "maxProperties": 64
+              },
+              "maxItems": 1,
+              "minItems": 0
+            },
+            "official_search_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "publisher_search"
+                  },
+                  "publisher": {
+                    "enum": [
+                      "lu-legilux",
+                      "eu-eurlex"
+                    ],
+                    "const": "lu-legilux"
+                  },
+                  "uri": {
+                    "type": "string",
+                    "format": "uri",
+                    "const": "https://legilux.public.lu/search"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "publisher",
+                  "uri"
+                ],
+                "additionalProperties": false,
+                "maxProperties": 64
+              },
+              "maxItems": 1,
+              "minItems": 1
+            },
+            "what_would_answer": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "corrected_identifier",
+                  "new_official_observation",
+                  "expanded_official_scope"
+                ]
+              },
+              "maxItems": 64,
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "asserts_absence_of_law": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "required": [
+            "code",
+            "checked_identifier_family",
+            "requested_coordinate",
+            "publisher_contexts_checked",
+            "possible_held_records",
+            "official_search_actions",
+            "what_would_answer",
+            "asserts_absence_of_law"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 64
+        },
+        "schema": {
+          "type": "string",
+          "const": "lex-v3-synthetic-resolve-envelope/1"
+        },
+        "synthetic": {
+          "type": "boolean",
+          "const": true
+        },
+        "object_type": {
+          "type": "string",
+          "const": "envelope"
+        },
+        "status": {
+          "type": "string",
+          "const": "identifier_unknown"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "request_ref": {
+              "type": "string",
+              "minLength": 36,
+              "maxLength": 36,
+              "pattern": "^req_[0-9a-f]{32}$"
+            },
+            "operation": {
+              "$ref": "#/anyOf/0/properties/context/properties/operation"
+            },
+            "refusal_registry": {
+              "$ref": "#/anyOf/0/properties/context/properties/refusal_registry"
+            },
+            "snapshot": {
+              "$ref": "#/anyOf/0/properties/context/properties/snapshot"
+            },
+            "artifact": {
+              "$ref": "#/anyOf/0/properties/context/properties/artifact"
+            },
+            "index": {
+              "$ref": "#/anyOf/0/properties/context/properties/index"
+            },
+            "runtime": {
+              "$ref": "#/anyOf/0/properties/context/properties/runtime"
+            },
+            "builder": {
+              "$ref": "#/anyOf/0/properties/context/properties/builder"
+            }
+          },
+          "required": [
+            "request_ref",
+            "operation",
+            "refusal_registry",
+            "snapshot",
+            "artifact",
+            "index",
+            "runtime",
+            "builder"
+          ],
+          "additionalProperties": false,
+          "maxProperties": 64
+        }
+      },
+      "required": [
+        "refusal",
+        "schema",
+        "synthetic",
+        "object_type",
+        "status",
+        "context"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$id": "urn:uuid:e957da31-81bf-4d88-8fb7-aea19d95413a",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 64,
+  "x_max_stream_bytes": 65536,
+  "x_runtime_invariants": [
+    "response lineage binds the admitted artifact, index, snapshot, runtime, and builder",
+    "success carries one public synthetic object projected from the exact held ELI SQL row",
+    "identifier_unknown is possible only for the exact complete synthetic scope"
+  ]
+}

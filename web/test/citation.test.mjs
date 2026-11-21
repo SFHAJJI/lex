@@ -27,7 +27,7 @@ import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 const NB = String.fromCharCode(0xa0);
 const FR = liveChrome("fr");
 const EN = liveChrome("en");
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (operation, scenarioStart) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === operation && candidate.scenario.startsWith(scenarioStart));
   assert.ok(entry, `the census holds the ${operation} envelope "${scenarioStart}..."`);
@@ -38,7 +38,7 @@ const EU = envelopeOf("evidence_bundle", "an EU wording's permalink whose next w
 // An EU act dated before 1 July 2013 (a fixture's date): the dated authenticity statement (the owner's decision of 2026-10-18, O4).
 const EU_DATED = envelopeOf("evidence_bundle", "an EU act dated before 1 July 2013");
 const LU_VERIFIED = envelopeOf("verify", "an article's permalink");
-const ANSWERS = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const ANSWERS = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 const EU_VERIFIED = envelopeOf("verify", "an EU provision's permalink");
 const OBSERVED = LU.context.freshness.observed_at;
 const WORK = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";

@@ -121,7 +121,7 @@ test('the React card renders the platform\'s own ambiguous_version payload, and 
   // `candidate.hash`, so a live page meeting the ambiguity would have lost its whole state. Found by
   // the live reading screen's tests (PR #777).
   const { readFile } = await import('node:fs/promises');
-  const census = JSON.parse(await readFile(new URL('../../schemas/v3-platform/refusal-payload-samples.json', import.meta.url), 'utf8'));
+  const census = JSON.parse(await readFile(new URL('../schemas/v3-platform/refusal-payload-samples.json', import.meta.url), 'utf8'));
   const { payload } = census.produced.find((row) => row.code === 'ambiguous_version');
   assert.ok(payload.candidates.every((candidate) => typeof candidate === 'string'), 'the platform sends bare links');
   const props = { code: 'ambiguous_version', sentence: 'Several states apply on that date, and none is chosen.', payload };

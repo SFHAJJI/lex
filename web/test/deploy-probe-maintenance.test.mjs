@@ -35,7 +35,7 @@ const { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } = await im
 beforeEach(() => { takeTouches(); });
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
+const CARD = readFileSync(new URL("../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const CORPUS = "c".repeat(64);
 const SOURCE = { epoch: 1790799760, from: "commit", commit: "23af798d9c78602726280978edcedf07f9408e98", clean: true };
 const TRAP_URL = new URL("../scripts/browser-trap.mjs", import.meta.url).href;

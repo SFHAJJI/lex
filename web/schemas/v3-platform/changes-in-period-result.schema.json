@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-changes_in_period-result/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {
+      "const": "changes_in_period"
+    },
+    "object_type": {
+      "type": "string",
+      "enum": [
+        "change_list"
+      ]
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation_id",
+    "object_type",
+    "value"
+  ]
+}

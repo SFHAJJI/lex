@@ -52,6 +52,11 @@ const PAGES = Object.freeze([
   ["live-compare-page", "renderLiveComparePage", "compare.html", "client-live-compare-entry.jsx", "client-live-compare.js"],
   ["live-radar-page", "renderLiveRadarPage", "radar.html", "client-live-radar-entry.jsx", "client-live-radar.js"],
   ["live-export-page", "renderLiveExportPage", "export.html", "client-live-export-entry.jsx", "client-live-export.js"],
+  // The text page (the owner's brief of 2026-11-15): one page per text, its versions, its articles, two versions compared.
+  ["live-text-page", "renderLiveTextPage", "text.html", "client-live-text-entry.jsx", "client-live-text.js"],
+  // The side build's Results page, with the script that draws the three pieces that read the new engine's counts
+  // (How it works at evidence.html, Results, and the section at the top of Trust and Coverage): `NextPages.jsx`.
+  ["live-results-page", "renderLiveResultsPage", "results.html", "client-live-next-entry.jsx", "client-live-next.js"],
 ]);
 
 /**
@@ -82,6 +87,9 @@ async function buildPages(destination, { card, developers, locale, buildTag = ""
   // The assistant page's script, which the server serves only while the assistant is switched on (V3WebRoot); its page is
   // never built as a file: the server renders it then, and only then (`live-assistant-page.jsx`).
   await cp(await bundleClient("app/client-live-assistant-entry.jsx", `client-live-assistant${suffix}.js`, options), new URL("client-live-assistant.js", out));
+  // The assistant dock's script (the owner's brief of 2026-11-15): every page that carries the dock loads it beside its own.
+  await cp(await bundleClient("app/client-live-header-entry.jsx", `client-live-header${suffix}.js`, options), new URL("client-live-header.js", out));
+  await cp(await bundleClient("app/client-live-dock-entry.jsx", `client-live-dock${suffix}.js`, options), new URL("client-live-dock.js", out));
   const { bundleServerRenderer } = await import("./react-build.mjs");
   await mkdir(new URL("ssr/", destination), { recursive: true });
   // The renderer is handed the Developers page's contracts as data, since it reads nothing (`ssr-entry.jsx`).
@@ -130,10 +138,13 @@ ${tokenCss()}`, "utf8");
     await mkdir(new URL(path.slice(0, path.lastIndexOf("/") + 1), destination), { recursive: true });
     await writeFile(new URL(path, destination), bytes);
   }
+  // The API's OpenAPI 3.1 description, generated from the same contracts as the Developers page (`openapi.mjs`).
+  const { OPENAPI_FILE, openApiDocument } = await import("./openapi.mjs");
+  await writeFile(new URL(OPENAPI_FILE, destination), `${JSON.stringify(openApiDocument(developers), null, 2)}\n`, "utf8");
   await buildPages(destination, { card, developers, locale: "en", buildTag, examples });
   // The card as JSON at its stable route, for machines (36 s6): the same card the page renders.
   const { CARD_ROUTE } = await import("./evaluation-card.mjs");
-  const platformCard = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
+  const platformCard = JSON.parse(await readFile(new URL("../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
   await writeFile(new URL(CARD_ROUTE.slice(1), destination), `${JSON.stringify(card ?? platformCard, null, 2)}
 `, "utf8");
   // Every other reviewed interface language, under its own path, its bundles compiled for it

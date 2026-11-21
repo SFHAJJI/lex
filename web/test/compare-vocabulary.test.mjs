@@ -29,8 +29,8 @@ import { sameTextHeldNote } from "../scripts/as-published.mjs";
 import { LIVE_CHROME, entriesOf, fillText } from "../scripts/live-chrome.mjs";
 import { FORBIDDEN_TIME_WORDS, SAME_STATE_SENTENCE, assertTimeVocabulary, vocabularyText } from "../scripts/publisher-vocabulary.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 
 const OLD_NOTE = "the same version applied on both dates";
 const LABEL_SAID = "As published; may have been amended since; no consolidated text.";

@@ -78,17 +78,55 @@ const Q = {
   hello: "Bonjour",
   english: "Can my insurer suspend my cover if I do not pay my premium?",
 };
+// The pages builder's preview of 21/11/2026: this branch's pages, the answers in the engine's contract served from the
+// fixtures they are checked against (`preview-server.mjs`): four answers the funnel really gave, and one fixture a state.
+const P = {
+  exception: "Mon assureur peut-il suspendre ma garantie si je ne paie pas ma prime ?",
+  list: "Quelles mentions la police d'assurance doit-elle contenir ?",
+  solvency: "Quel est le capital de solvabilité requis d'un assureur selon Solvabilité II ?",
+  none: "Combien de boîtes aux lettres une commune doit-elle installer ?",
+  clarify: "Quel est le délai pour résilier ?",
+  partial: "En 2012, quel délai pour résilier mon contrat d’assurance et sous quelle forme ?",
+  notHeld: "Quel est le capital de solvabilité requis d’un assureur selon Solvabilité II ?",
+  candidates: "Quelles sont mes obligations d’information envers mon assureur ?",
+  out: "Quel cadeau de départ offrir à un collègue ?",
+};
+// Ask, then (after the answer) open every trace, or press a widening choice.
+const ASK_THEN = (question, then) => `(() => { const asked = ${ASK(question)}; setTimeout(() => { ${then} }, 5000); return asked; })()`;
+const OPEN_TRACE = "document.querySelectorAll('details[data-dock-trace]').forEach((d) => { d.open = true; });";
+const WIDEN = (level) => `document.querySelector('[data-widen="${level}"]')?.click();`;
 SHOTS.length = 0;
 SHOTS.push(
-  ["live-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 0],
-  ["live-fr-02-ask-premium--1366x768", "/fr/", 1366, 768, false, false, ASK(Q.premium), 30000],
-  ["live-fr-03-ask-premium--tall", "/fr/radar.html", 1366, 3200, false, false, ASK(Q.premium), 30000],
-  ["live-fr-04-ask-gdpr-fine--tall", "/fr/radar.html", 1366, 3000, false, false, ASK("Quelle amende maximale pour une entreprise qui ne respecte pas le RGPD ?"), 30000],
-  ["live-fr-05-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 6000],
-  ["live-fr-06-results--tall", "/fr/results.html", 1366, 3600, false, false, null, 5000],
-  ["live-fr-07-how-it-works--tall", "/fr/evidence.html", 1366, 4200, false, false, null, 5000],
-  ["live-en-08-ask-ai-act--tall", "/en/radar.html", 1366, 3000, false, false, ASK("What is a high-risk AI system under the AI Act?"), 30000],
-  ["live-fr-09-home--phone", "/fr/", 390, 844, true, false, null, 0],
+  ["p-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 0],
+  ["p-fr-02-ask-exception-opens-art21--1366x768", "/fr/", 1366, 768, false, false, ASK(P.exception), 16000],
+  ["p-fr-03-ask-exception--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(P.exception), 9000],
+  ["p-fr-04-trace-open--tall", "/fr/radar.html", 1366, 6000, false, false, ASK_THEN(P.exception, OPEN_TRACE), 9000],
+  ["p-fr-05-ask-list--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(P.list), 9000],
+  ["p-fr-06-widen-section--tall", "/fr/radar.html", 1366, 3600, false, false, ASK_THEN(P.list, WIDEN("section")), 11000],
+  ["p-fr-07-ask-solvency--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(P.solvency), 9000],
+  ["p-fr-08-ask-solvency--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(P.solvency), 9000],
+  ["p-fr-09-ask-not-found--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(P.none), 9000],
+  ["p-fr-10-ask-clarify--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(P.clarify), 9000],
+  ["p-fr-11-ask-partial--tall", "/fr/radar.html", 1366, 2200, false, false, ASK(P.partial), 9000],
+  ["p-fr-12-ask-not-held--tall", "/fr/radar.html", 1366, 2200, false, false, ASK(P.notHeld), 9000],
+  ["p-fr-13-ask-candidates--tall", "/fr/radar.html", 1366, 2400, false, false, ASK(P.candidates), 9000],
+  ["p-fr-14-ask-out-of-scope--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(P.out), 9000],
+  ["p-fr-15-text-art21-outline--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 6000],
+  ["p-fr-16-how--1366x768", "/fr/evidence.html", 1366, 768, false, false, null, 5000],
+  ["p-fr-17-how--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 5000],
+  ["p-fr-18-decisions--1366x768", "/fr/decisions.html", 1366, 768, false, false, null, 5000],
+  ["p-fr-19-decisions--1366-whole", "/fr/decisions.html", 1366, 768, false, true, null, 5000],
+  ["p-fr-20-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 6000],
+  ["p-fr-21-coverage--1366-whole", "/fr/coverage.html", 1366, 768, false, true, null, 6000],
+  ["p-fr-22-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 5000],
+  ["p-fr-23-results--1366-whole", "/fr/results.html", 1366, 768, false, true, null, 5000],
+  ["p-fr-24-text-answer--phone", `/fr${text("&article=art_21")}`, 390, 844, true, false, ASK(P.exception), 9000],
+  ["p-fr-25-radar-answer--phone", "/fr/radar.html", 390, 844, true, false, ASK(P.list), 9000],
+  ["p-fr-26-home--phone", "/fr/", 390, 844, true, false, null, 0],
+  ["p-en-01-home--1366x768", "/en/", 1366, 768, false, false, null, 0],
+  ["p-en-03-ask-exception--tall", "/en/radar.html", 1366, 3600, false, false, ASK(P.exception), 9000],
+  ["p-en-16-how--1366x768", "/en/evidence.html", 1366, 768, false, false, null, 5000],
+  ["p-en-22-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 5000],
 );
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

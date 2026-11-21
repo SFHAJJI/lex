@@ -18,7 +18,7 @@ import { AMENDED_AFTER_STATUSES, RELATION_VIEWS, readAmendedAfter, readPublisher
 import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const sample = census.envelopes.find((entry) => entry.operation === "dossier" && entry.scenario.startsWith("the work, in the language it is held in")).envelope;
 const view = (outcome) => renderToStaticMarkup(h(DossierAnswerView, { outcome }));
 const text = (markup) => markup.replace(/<[^>]+>/g, " ").replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ");

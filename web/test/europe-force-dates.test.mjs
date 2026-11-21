@@ -16,7 +16,7 @@ import { dossierOutcome } from "../scripts/live-dossier.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const FD = "http://publications.europa.eu/resource/authority/fd_335/";
 const carrier = (code) => `{${code}|${FD}${encodeURIComponent(code)}}`;
 

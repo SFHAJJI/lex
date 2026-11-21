@@ -57,8 +57,8 @@ import { compareOutcome } from "../scripts/live-compare.mjs";
 import { radarOutcome } from "../scripts/live-radar.mjs";
 import { coverageOutcome } from "../scripts/live-coverage.mjs";
 
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 
 /** The Luxembourg date words: a state's applicability, its version, in English and in French. */
 const LUXEMBOURG_DATE_WORDS = /\b(?:appl(?:y|ies|ied|ying|icability)|versions?|states?)\b|s[’']appliqu|applicab/i;

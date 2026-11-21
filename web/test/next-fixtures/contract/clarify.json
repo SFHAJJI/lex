@@ -1,0 +1,82 @@
+{
+ "question": "Quel est le délai pour résilier ?",
+ "state": "clarify",
+ "date_used": "2026-11-22",
+ "date_said": false,
+ "blocks": [],
+ "clarify": {
+  "question": "De quel contrat parlez-vous ?",
+  "options": [
+   "un contrat d’assurance",
+   "un contrat de travail",
+   "un bail d’habitation"
+  ]
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2026-11-22",
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "un montant ou un délai",
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 8535,
+    "kept": 3,
+    "filters": [],
+    "acts": []
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "trois textes également possibles",
+    "state": "clarify"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   },
+   {
+    "step": "route",
+    "model": "gpt-6-luna",
+    "ms": 1340,
+    "tokens_in": 3880,
+    "tokens_out": 140
+   }
+  ],
+  "cost_usd": 0.0019,
+  "ms": 2100
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9jbGFyaWZ5"
+ }
+}

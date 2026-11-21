@@ -30,7 +30,7 @@ import { EUROPE_SAMPLE, europeBundle } from "../scripts/europe-bundle-sample.mjs
 import { escapeProvision } from "../scripts/search-answer.mjs";
 import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 
 function withDigests(node, counter = { n: 0 }) {
   if (Array.isArray(node)) return node.map((item) => withDigests(item, counter));

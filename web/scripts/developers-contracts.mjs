@@ -8,7 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 
 import { developersModel, publishedSchemaPath } from "./developers.mjs";
 
-const PLATFORM = new URL("../../schemas/v3-platform/", import.meta.url);
+const PLATFORM = new URL("../schemas/v3-platform/", import.meta.url);
 
 /** Every schema file of `schemas/v3-platform`, in name order, as `{ file, bytes, json, sha256 }`. */
 export async function readPlatformSchemas(directory = PLATFORM) {

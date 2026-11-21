@@ -1,0 +1,789 @@
+{
+ "question": "Que dit l'article 21 de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+ "row": {
+  "question": "Que dit l'article 21 de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [
+   {
+    "text": "21",
+    "number": "21"
+   }
+  ],
+  "named_acts": [
+   {
+    "text": "loi du 27 juillet 1997",
+    "kind": "loi",
+    "date_key": "1997/07/27"
+   }
+  ],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 5,
+   "de": 0,
+   "en": 0,
+   "lb": 1
+  },
+  "question_type": "rule",
+  "personal_case": false,
+  "french": "Que dit l'article 21 de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+  "legal_terms": [
+   "contrat d’assurance",
+   "loi du 27 juillet 1997"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_21",
+   "date": "2025-11-25",
+   "why": null,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 21",
+   "number": "21",
+   "heading": "Défaut de paiement de la prime",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96064,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "A défaut de paiement d'une prime, ou d'une fraction de prime, dans les dix jours de son échéance et indépendamment du droit pour l'assureur de poursuivre l'exécution du contrat en justice, la garantie peut être suspendue à l'expiration d'un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu.",
+     "label": null
+    }
+   ],
+   "text": [
+    "A défaut de paiement d'une prime, ou d'une fraction de prime, dans les dix jours de son échéance et indépendamment du droit pour l'assureur de poursuivre l'exécution du contrat en justice, la garantie peut être suspendue à l'expiration d'un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu."
+   ],
+   "label": "Article 21",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_24",
+   "date": "2025-11-25",
+   "why": "Article 24 écarte Article 21 (ne sont pas applicables)",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 24",
+   "number": "24",
+   "heading": "Assurances sur la vie",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96067,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "inbound": true,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les dispositions des articles 21 à 23 ne sont pas applicables aux assurances sur la vie.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Les dispositions des articles 21 à 23 ne sont pas applicables aux assurances sur la vie."
+   ],
+   "label": "Article 24",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_1er",
+   "date": "2025-11-25",
+   "why": "« Contrat d'assurance » est défini par ce texte",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 1er",
+   "number": "1",
+   "heading": "Définitions",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre Ier - Dispositions générales > Section Ière - Définitions et dispositions préliminaires",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "2016-01-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96042,
+   "lines": [
+    3
+   ],
+   "wording_since": "2016-01-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n2",
+    "effective": "2016-01-01",
+    "title": null
+   },
+   "quote": [
+    {
+     "n": 3,
+     "text": "Contrat d'assurance: un contrat en vertu duquel, moyennant le paiement d'une prime fixe ou variable, une partie, l'assureur, s'engage envers une autre partie, le preneur d'assurance, à fournir une prestation stipulée dans le contrat au cas où:",
+     "label": null
+    }
+   ],
+   "text": [
+    "Contrat d'assurance: un contrat en vertu duquel, moyennant le paiement d'une prime fixe ou variable, une partie, l'assureur, s'engage envers une autre partie, le preneur d'assurance, à fournir une prestation stipulée dans le contrat au cas où:"
+   ],
+   "label": "Article 1er",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 96064,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 21",
+   "heading": "Défaut de paiement de la prime",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "named_by_the_person",
+   "score": 1.0
+  },
+  {
+   "label": "A2",
+   "article_pk": 96067,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 24",
+   "heading": "Assurances sur la vie",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.6822
+  },
+  {
+   "label": "A3",
+   "article_pk": 96071,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 28",
+   "heading": "Sanctions",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "meaning+outline",
+   "score": 0.6679
+  },
+  {
+   "label": "A4",
+   "article_pk": 96065,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 22",
+   "heading": "Mise en demeure et faculté de résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "meaning+outline",
+   "score": 0.6622
+  },
+  {
+   "label": "A5",
+   "article_pk": 96051,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 10",
+   "heading": "Information du preneur d'assurance avant la conclusion du contrat",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section I - Conclusion du contrat",
+   "how": "meaning",
+   "score": 0.6831
+  },
+  {
+   "label": "A6",
+   "article_pk": 94033,
+   "act_title": "Loi du 12 avril 2015 portant modification de:\\n 1) l’article 15-1 de la loi modifiée du 27 juillet 1997 sur le contrat d’assurance\\n 2) la loi modifiée du 21 décembre 2007 portant\\n 1. transposition de la directive 2004/113/CE du Conseil du 13 décembre 2004 mettant en oeuvre le principe de l’égalité de traitement entre les femmes et les hommes dans l’accès à des biens et services et la fourniture de biens et services;\\n 2. modification du Code pénal;\\n 3. modification de la loi modifiée du 27 juillet 1997 sur le contrat d’assurance.",
+   "article": "Art. 1er.",
+   "heading": null,
+   "path": null,
+   "how": "keywords",
+   "score": 0.6056
+  },
+  {
+   "label": "A7",
+   "article_pk": 96081,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 38",
+   "heading": "Durée des obligations",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section VIII - Prise d'effet de la garantie et durée du contrat",
+   "how": "meaning",
+   "score": 0.6828
+  },
+  {
+   "label": "A8",
+   "article_pk": 96094,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 51",
+   "heading": "Cumul d'assurances à caractères différents",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre III - Dispositions propres aux assurances à caractère indemnitaire",
+   "how": "keywords",
+   "score": 0.6106
+  },
+  {
+   "label": "A9",
+   "article_pk": 96074,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 31",
+   "heading": "Communication des conditions de garantie",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section V - Attribution bénéficiaire",
+   "how": "meaning",
+   "score": 0.6698
+  },
+  {
+   "label": "A10",
+   "article_pk": 96091,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 48",
+   "heading": "Intérêt d'assurance",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre III - Dispositions propres aux assurances à caractère indemnitaire",
+   "how": "keywords",
+   "score": 0.6316
+  },
+  {
+   "label": "A11",
+   "article_pk": 96107,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 62-2",
+   "heading": "Informations précontractuelles",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre V Dispositions additionnelles applicables aux contrats d’assurances à distance",
+   "how": "meaning",
+   "score": 0.6691
+  },
+  {
+   "label": "A12",
+   "article_pk": 96070,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 27",
+   "heading": "Devoirs de l'assuré en cas de sinistre",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "outline",
+   "score": 0.6501
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "article": 41576,
+   "juillet": 21602,
+   "1997": 2366,
+   "contrat": 25421,
+   "assurance": 5364
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 27 juillet 1997 sur le contrat d'assurance."
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "named_by_the_person"
+ ],
+ "notes": [
+  "article_named_by_the_person"
+ ],
+ "outcome": "answer_with_exception",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [
+      "21"
+     ],
+     "named_acts": [
+      "loi du 27 juillet 1997"
+     ],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "rule",
+     "personal_case": false,
+     "french": "Que dit l'article 21 de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+     "legal_terms": [
+      "contrat d’assurance",
+      "loi du 27 juillet 1997"
+     ],
+     "in_scope": true
+    },
+    "ms": 2112,
+    "tokens_in": 267,
+    "tokens_out": 161,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 1,
+     "laws_named": 1
+    },
+    "ms": 50
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "article",
+      "juillet",
+      "1997",
+      "contrat",
+      "assurance"
+     ],
+     "terms_a_statute_would_use": [],
+     "articles_holding_each_word": {
+      "article": 41576,
+      "juillet": 21602,
+      "1997": 2366,
+      "contrat": 25421,
+      "assurance": 5364
+     },
+     "articles_kept": 10
+    },
+    "ms": 110
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 1,
+     "started_while_the_question_was_described": 1,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+       "title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+       "outline_rows": 53,
+       "parts_named": [
+        "Section IV - Exécution du contrat"
+       ],
+       "articles_in_parts": 12,
+       "ms": 1276,
+       "tokens_in": 2460,
+       "tokens_out": 70,
+       "reason": "L’article 21 se trouve dans la section sur l’exécution du contrat."
+      }
+     ],
+     "articles_from_the_parts": 6,
+     "whole_part_for_a_list": false
+    },
+    "ms": 1,
+    "tokens_in": 2460,
+    "tokens_out": 70,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 2
+    },
+    "ms": 315,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 12
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "A1",
+     "lines": [
+      1
+     ],
+     "answer_found": true,
+     "found_by": "named_by_the_person",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Preneurs d’assurance en défaut de paiement et leurs assureurs, hors assurance sur la vie",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "A1 contient l’intégralité de l’article demandé et A2 en précise l’exception."
+    },
+    "ms": 1347,
+    "tokens_in": 4159,
+    "tokens_out": 100,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 1,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [
+      "contrat d'assurance"
+     ],
+     "inbound_checked": 1,
+     "outbound_checked": 0,
+     "followed": 0,
+     "see_also": 0
+    },
+    "ms": 6
+   },
+   {
+    "step": "exception_decision",
+    "who": "model",
+    "detail": {
+     "applies": "unknown",
+     "pointed": "",
+     "lines": [],
+     "articles_read": 6,
+     "reason": "La question ne précise pas s’il s’agit d’une assurance sur la vie."
+    },
+    "ms": 769,
+    "tokens_in": 2853,
+    "tokens_out": 36,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer_with_exception",
+     "notes": [
+      "article_named_by_the_person"
+     ],
+     "found_by": "named_by_the_person"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 4520,
+  "tokens": {
+   "text-embedding-3-large": [
+    25,
+    0
+   ],
+   "gpt-6-luna": [
+    2727,
+    231
+   ],
+   "gpt-6.2-sol": [
+    7012,
+    136
+   ]
+  },
+  "cost_usd_list_price": 0.01753,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 4,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer_with_exception",
+    "state": "answer_with_exception"
+   }
+  ],
+  "cost_usd": 0.01753,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2112,
+    "tokens_in": 267,
+    "tokens_out": 161
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 1,
+    "tokens_in": 2460,
+    "tokens_out": 70
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1347,
+    "tokens_in": 4159,
+    "tokens_out": 100
+   },
+   {
+    "step": "exception_decision",
+    "model": "gpt-6.2-sol",
+    "ms": 769,
+    "tokens_in": 2853,
+    "tokens_out": 36
+   }
+  ]
+ },
+ "state": "answer_with_exception",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "rule",
+   "french": "Que dit l'article 21 de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+   "legal_terms": [
+    "contrat d’assurance",
+    "loi du 27 juillet 1997"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 96064,
+    "role": "candidate",
+    "found_by": {
+     "named_by_the_person": 1
+    }
+   },
+   {
+    "article_pk": 96067,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96071,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96065,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96051,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 94033,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 96081,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 96094,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 96074,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 96091,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 96107,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 96070,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96064
+   },
+   {
+    "article_pk": 96067
+   },
+   {
+    "article_pk": 96071
+   },
+   {
+    "article_pk": 96065
+   },
+   {
+    "article_pk": 96051
+   },
+   {
+    "article_pk": 94033
+   },
+   {
+    "article_pk": 96081
+   },
+   {
+    "article_pk": 96094
+   },
+   {
+    "article_pk": 96074
+   },
+   {
+    "article_pk": 96091
+   },
+   {
+    "article_pk": 96107
+   },
+   {
+    "article_pk": 96070
+   }
+  ],
+  "replay": "eNq1VEFu2zAQ_MqCl7SAXEiyHcW6FEFf0LNhCDS1ttnQlEJSdozAQL_RJwR9Qm_JT_qSLkXZcW0ZPfWk1Wi0u7M75DPbsDyJWM1y5qr6gUVMUKgqwRXF5UlcE5MtGq1RDTYJAY_0_rVBKKUDdcONk0IhpAmUCIqDqiSUDaQZfGukUuggmUwysI0BoolKO8MdlDfcEsS1QPjsKzaUNY3T20GSDNLYI5blC64sRowixrXdoim20q0KfBJYO1lpoplOQX6NMGf5dDq5jW9HRG4UsmiazCLGIt0oFYUKPpxFLSuL2MnfLfX-IHEEby-CBCPcv6v-oBEsqYKaW-B1raTgc4X245UKo5S04UJq2ZUYUonXn_ClZzKvvwAtQW8vnk8VDBDq8MnhZXZKo1cklp5rlrdfmVCH6BjgIag5y5-Z4nrZ8CX6JRs_dk65CV-Yan2-EledI0vDpSaw5Dv_nRo7ZF9VW8J1BT4hSA1uhfDYkBxSnYOr_C97clMHFW5X-ybCiqg8arH6H05TuOSqcGjWZKspO9J-f_9xJHpab3JGw63R0L4ph-AWO4-SkIcTnwmuS9lO8t1V51iW9PDGl9j4gjeKh8NL3l1PvklPL1kPNrn8N4n7eo7_wmgYhq6KTnXQGZQFLaH70G_oMPQUugh1Q6U2N6VTdNlMyZS4QeVthULa7hjv6F1Upd9N65F_HHvrWiNfuTf2_pDQ_kfjlCQ1llTEn-IkG9NgtbdFZ7ZC8zWWxXxXkH2LsHk22_8BrtSntA"
+ }
+}

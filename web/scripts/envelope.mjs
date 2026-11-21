@@ -17,7 +17,7 @@
 import { readFile } from "node:fs/promises";
 
 const SCHEMA_URL = new URL(
-  "../../schemas/v3-preview/preview-envelope.schema.json",
+  "../schemas/v3-preview/preview-envelope.schema.json",
   import.meta.url,
 );
 

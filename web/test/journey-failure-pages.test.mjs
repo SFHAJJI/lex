@@ -25,7 +25,7 @@ const ORIGIN = "http://127.0.0.1:5000";
 const TODAY = todayInLuxembourgAt(Date.now());
 
 /** A run of `step` that did what the page must do: its document, its script, and `asks` requests to the API. */
-function observedAt(step, { pageStatus = 404, asks = 1, answerState = "success", text = "", retried } = {}) {
+function observedAt(step, { pageStatus = 404, asks = 1, answerState = "success", text = "", retried, findRefusal } = {}) {
   return {
     answerState,
     text,
@@ -46,10 +46,12 @@ function observedAt(step, { pageStatus = 404, asks = 1, answerState = "success",
     csp: cspValue(),
     hydrated: "clean",
     location: `${ORIGIN}${endAddressesOf(step, [TODAY])[0]}`,
-    history: { atLoad: 2, atEnd: 2, state: "null" },
+    // A V4 field's search is the reader's navigation (`historyAdded`).
+    history: { atLoad: 2, atEnd: 2 + (step.historyAdded ?? 0), state: "null" },
     cookie: "",
     pageStatus,
     retried,
+    findRefusal,
   };
 }
 
@@ -62,8 +64,10 @@ test("R60's runs: the 404 page searched with the fixture mount and with none, an
   ]);
   assert.equal(NOT_FOUND_STEP.path, "/en/no-such-page");
   assert.equal(NOT_FOUND_STEP.notFound, true);
-  assert.deepEqual(NOT_FOUND_STEP.body, JOURNEY_STEPS.home.body, "the 404 page's search asks what the home page's asks");
-  assert.equal(NOT_FOUND_STEP.frontDoor, false, "the 404 page offers the home page's search, not its front door");
+  // The 404 page keeps the earlier home form (its date field at today), typed into its own form, never the V4 header's.
+  assert.deepEqual(NOT_FOUND_STEP.body.parameters, { query: JOURNEY_STEPS.home.body.parameters.query, language: "fra", mode: "strict", date: "{today in Luxembourg}" });
+  assert.equal(NOT_FOUND_STEP.form, "form[role=search]:not([data-header-find])");
+  assert.equal(NOT_FOUND_STEP.frontDoor, undefined, "the 404 page offers the home page's search, not its front door");
   assert.equal(NOT_FOUND_SAID, liveChrome("en").notFound.heading, "the 404 page's own heading");
   assert.equal(FAILURE_LINE, liveChrome("en").failure.line, "the failure panel's own line");
   assert.deepEqual(RETRIED_SEARCH_STEP.body, JOURNEY_STEPS.search.body);
@@ -87,9 +91,13 @@ test("the 404 page's run passes with status 404 and fails with any other", () =>
 
 test("a retried run passes only when the retry was pressed and asked the very same request once more", () => {
   const expected = { origin: ORIGIN, step: RETRIED_SEARCH_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: [FAILURE_LINE] };
-  const text = `${FAILURE_LINE} no_corpus_mounted`;
-  const passing = observedAt(RETRIED_SEARCH_STEP, { pageStatus: 200, asks: 2, answerState: "refusal", text, retried: "reached" });
+  // V4's search page: the failure panel in place of the texts, its own sentence, naming the code it was refused with.
+  const text = FAILURE_LINE;
+  const passing = observedAt(RETRIED_SEARCH_STEP, { pageStatus: 200, asks: 2, answerState: "refusal", text, retried: "reached", findRefusal: "no_corpus_mounted" });
   assert.deepEqual(journeyVerdict(passing, expected), []);
+  for (const findRefusal of [null, "a list of texts", "api_timeout"]) {
+    assert.ok(journeyVerdict({ ...passing, findRefusal }, expected).includes(`the search page's failure panel names ${findRefusal ?? "no refusal"}, not no_corpus_mounted`), `the panel naming ${findRefusal} fails`);
+  }
 
   const once = journeyVerdict({ ...passing, requests: passing.requests.slice(0, 3) }, expected);
   assert.ok(once.includes("the page made 1 requests to the API, not exactly two"), once.join(" | "));
@@ -99,5 +107,5 @@ test("a retried run passes only when the retry was pressed and asked the very sa
   }
   const another = { ...passing, requests: [...passing.requests.slice(0, 3), { ...passing.requests[3], postData: JSON.stringify({ operation_id: "search", parameters: { query: "x", language: "fra" } }) }] };
   assert.ok(journeyVerdict(another, expected).some((failure) => /body was .*"query":"x"/.test(failure)), "the retry asks the very same request");
-  assert.ok(journeyVerdict({ ...passing, text: "no_corpus_mounted" }, expected).includes(`the page does not show "${FAILURE_LINE}"`), "the failure line is said");
+  assert.ok(journeyVerdict({ ...passing, text: "" }, expected).includes(`the page does not show "${FAILURE_LINE}"`), "the failure line is said");
 });

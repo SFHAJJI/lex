@@ -1,0 +1,186 @@
+{
+ "question": "Quel est le capital de solvabilité requis d’un assureur selon Solvabilité II ?",
+ "state": "not_held",
+ "date_used": "2026-11-22",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "context",
+   "article_pk": 205147,
+   "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+   "label": "Art. 104",
+   "act_title": "Version consolidée applicable au 14/02/2025 : Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "version": {
+    "id": 6845,
+    "from": "2026-04-03",
+    "until": null,
+    "until_known": true
+   },
+   "lines": [
+    1,
+    2
+   ],
+   "text": [
+    "Les entreprises d’assurance et de réassurance doivent détenir des fonds propres éligibles couvrant le capital de solvabilité requis.",
+    "Le capital de solvabilité requis est calculé soit à l’aide de la formule standard conformément à la sous-section 2, soit à l’aide d’un modèle interne conformément à la sous-section 3."
+   ],
+   "why": "Transposition luxembourgeoise de Solvabilité II, lue à la place de la directive.",
+   "anchor": "art_104"
+  }
+ ],
+ "not_held": [
+  {
+   "name": "Solvabilité II (directive 2009/138/CE)",
+   "why": "nommée dans la question"
+  },
+  {
+   "name": "Règlement délégué (UE) 2015/35",
+   "why": "cité par l’article 104, paragraphe 1"
+  }
+ ],
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2026-11-22",
+     "by": "code"
+    },
+    {
+     "name": "acts",
+     "value": [
+      "Solvabilité II"
+     ],
+     "by": "code"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 8535,
+    "kept": 1,
+    "filters": [
+     {
+      "rule": "textes abrogés à la date demandée",
+      "removed": 912,
+      "by": "code"
+     },
+     {
+      "rule": "conventions de branche et règlements de circulation",
+      "removed": 1408,
+      "by": "code"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "title": "Version consolidée applicable au 14/02/2025 : Loi du 7 décembre 2015 sur le secteur des assurances.",
+      "reason": "la question porte sur la solvabilité d’un assureur",
+      "by": "model"
+     }
+    ]
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+    "by": "model",
+    "steps": [],
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "candidates": [
+     {
+      "article_pk": 205147,
+      "found_by": {
+       "exact": null,
+       "outline": 1,
+       "words": 1,
+       "meaning": 3
+      },
+      "meaning_only": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "aucun article nommé dans la question"
+     }
+    ]
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "candidates": [
+     {
+      "article_pk": 205147,
+      "role": "context",
+      "reason": "la transposition luxembourgeoise"
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 4,
+    "read_amount_set_by": "outline node",
+    "lines_quoted": 2
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "texte nommé non détenu",
+    "state": "not_held"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   },
+   {
+    "step": "route",
+    "model": "gpt-6-luna",
+    "ms": 1340,
+    "tokens_in": 3880,
+    "tokens_out": 140
+   },
+   {
+    "step": "outline",
+    "model": "gpt-6-luna",
+    "ms": 1110,
+    "tokens_in": 2420,
+    "tokens_out": 120
+   }
+  ],
+  "cost_usd": 0.0061,
+  "ms": 4400
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [
+   {
+    "article_pk": 205147,
+    "label": "Art. 104"
+   }
+  ],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9ub3RfaGVsZA"
+ }
+}

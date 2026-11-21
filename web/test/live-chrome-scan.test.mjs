@@ -32,6 +32,7 @@ import { build } from "esbuild";
 
 import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
 import { ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_ACKNOWLEDGEMENT } from "../scripts/legal-pages.mjs";
+import { HOME_TEXTS_RECORD } from "../scripts/home-texts-record.mjs";
 
 const require = createRequire(import.meta.url);
 const { createElement: h } = require("react");
@@ -72,6 +73,28 @@ function swapChrome(swap) {
   };
 }
 
+/**
+ * The docked assistant's copy (the owner's brief of 2026-11-15: the dock stands beside every main page, its words in the
+ * assistant panel's own tables, `assistant-panel.mjs`), swapped for the pseudo-locale in the language scanned, as
+ * the chrome's is, so that a page carrying the dock is scanned whole.
+ */
+const PANEL = fileURLToPath(new URL("scripts/assistant-panel.mjs", web));
+const PANEL_LINE = "export const ASSISTANT_PANEL_COPY = /* @__PURE__ */ Object.freeze({ en: PANEL_EN, fr: PANEL_FR });";
+function swapPanel(language) {
+  return {
+    name: "pseudo-panel",
+    setup(builder) {
+      builder.onLoad({ filter: /assistant-panel\.mjs$/ }, async (args) => {
+        if (args.path !== PANEL) return undefined;
+        const source = await readFile(args.path, "utf8");
+        assert.equal(source.split(PANEL_LINE).length, 2, "the panel module holds its tables on one line, as the swap expects");
+        const tables = language === "fr" ? "{ en: PANEL_EN, fr: __pseudo(PANEL_FR) }" : "{ en: __pseudo(PANEL_EN), fr: PANEL_FR }";
+        return { contents: source.replace(PANEL_LINE, `${PSEUDO_SOURCE}\nexport const ASSISTANT_PANEL_COPY = Object.freeze(${tables});`), loader: "js", resolveDir: dirname(args.path) };
+      });
+    },
+  };
+}
+
 async function pseudoBuild() {
   await build({
     entryPoints: [fileURLToPath(new URL("app/index.jsx", web))],
@@ -82,7 +105,7 @@ async function pseudoBuild() {
     jsx: "automatic",
     packages: "external",
     logLevel: "silent",
-    plugins: [swapChrome((source) => source.replace(TABLES_LINE, `${PSEUDO_SOURCE}\nexport const LIVE_CHROME = Object.freeze({ en: __pseudo(EN), fr: LIVE_CHROME_FR });`))],
+    plugins: [swapChrome((source) => source.replace(TABLES_LINE, `${PSEUDO_SOURCE}\nexport const LIVE_CHROME = Object.freeze({ en: __pseudo(EN), fr: LIVE_CHROME_FR });`)), swapPanel("en")],
   });
   return import(`${pathToFileURL(OUT).href}?${Date.now()}`);
 }
@@ -115,7 +138,7 @@ async function frenchPseudoBuild() {
     define: { __LEX_CHROME_LOCALE__: JSON.stringify("fr") },
     plugins: [swapChrome((source) => source
       .replace(TABLES_LINE, `${PSEUDO_SOURCE}\nexport const LIVE_CHROME = Object.freeze({ en: EN, fr: __pseudo(LIVE_CHROME_FR) });`)
-      .replace(TRANSLATIONS_LINE, "export const REFUSAL_TRANSLATIONS = Object.freeze({ fr: __pseudo(REFUSALS_FR) });"))],
+      .replace(TRANSLATIONS_LINE, "export const REFUSAL_TRANSLATIONS = Object.freeze({ fr: __pseudo(REFUSALS_FR) });")), swapPanel("fr")],
   });
   return import(`${pathToFileURL(OUT_FRENCH).href}?${Date.now()}`);
 }
@@ -132,7 +155,10 @@ const legalPages = (app) => ({
 const LEGAL_DATA = [CNPD_SITE.text, EURLEX_ACKNOWLEDGEMENT, ACCESSIBILITY_LAW];
 /** The refusal codes no operation sends, which the evaluation card's scope names from the refusal census (`not_produced`). */
 const UNSENT_CODES = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", web), "utf8")).not_produced;
+// The V4 Home's six starting texts (2026-11-15) are the release's record of the API's answers (`home-texts-record.mjs`): their
+// titles are the publisher's, data as an answer's are; an EU act's usual name is the table's.
 const dataOfPage = (name, app) => (name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD), UNSENT_CODES)
+  : name === "home" ? dataOf(HOME_TEXTS_RECORD.texts.map((text) => text.title ?? null))
   : Object.hasOwn(legalPages(app), name) ? dataOf(LEGAL_DATA) : []);
 
 /**

@@ -12,7 +12,7 @@ import test from "node:test";
 
 import { readDossier, readDossierAnswer, readEuropeDossier } from "../scripts/dossier-answer.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
 async function capturedAnswer(publisher = "lu-legilux") {

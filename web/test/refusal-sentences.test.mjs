@@ -55,7 +55,7 @@ test("the hints a card that cannot be shown still carries are in the list, as th
   const { readingOutcome } = await import("../scripts/live-reading.mjs");
   const { compareOutcome } = await import("../scripts/live-compare.mjs");
   const { historyOutcome } = await import("../scripts/live-history.mjs");
-  const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+  const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
   // An absence whose card cannot be shown: the census refusal without the absence evidence the card requires.
   const unshowable = (operation, scenarioStart) => {
     const envelope = structuredClone(census.envelopes.find((entry) => entry.operation === operation && entry.scenario.startsWith(scenarioStart)).envelope);

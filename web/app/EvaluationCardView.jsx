@@ -15,7 +15,7 @@ import { Say, inEnglish } from './LiveAnswer.jsx';
 import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { CARD_ROUTE } from '../scripts/evaluation-card.mjs';
 // The refusal codes no operation sends, as the refusal census records them (`not_produced`): the card tests none of them.
-import { not_produced as UNSENT_CODES } from '../../schemas/v3-platform/refusal-payload-samples.json';
+import { not_produced as UNSENT_CODES } from '../schemas/v3-platform/refusal-payload-samples.json';
 
 /** The card's words, from the interface copy table. */
 const CARD = liveChrome().card;

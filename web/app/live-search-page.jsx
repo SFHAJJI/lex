@@ -10,7 +10,7 @@
 
 import { Document } from './Document.jsx';
 import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
-import { LiveSearch } from './LiveSearch.jsx';
+import { FindResults, LiveSearch } from './LiveSearch.jsx';
 import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 import { LIVE_CONTRACT } from './live-coverage-page.jsx';
@@ -19,6 +19,8 @@ export const LIVE_SEARCH_ROOT = 'live-search-root';
 
 /** The tree the server renders and the browser hydrates: one and the same, in the form the root names. */
 export function liveSearchTree(variant = 'search', addressed = true) {
+  // The search page's results (V4, the owner's brief of 2026-11-15): the texts the words find, or the text a reference opens.
+  if (variant === 'search') return <FindResults contract={LIVE_CONTRACT} />;
   return <LiveSearch contract={LIVE_CONTRACT} variant={variant} addressed={addressed} />;
 }
 
@@ -27,7 +29,10 @@ export function LiveSearchRoot({ variant = 'search', addressed = true }) {
   return <div id={LIVE_SEARCH_ROOT} data-variant={variant} data-address={addressed ? 'kept' : 'none'}>{liveSearchTree(variant, addressed)}</div>;
 }
 
-/** The search page: the search form with the optional work identifier. */
+/**
+ * The search page (V4): the header's field brings the words after "#"; the page keeps that field only (no form of its own, no
+ * field for an identifier), and shows what the words find, or opens the text a reference names.
+ */
 export function renderLiveSearchPage() {
   const copy = liveChrome().search;
   return renderHydratableDocument(
@@ -37,10 +42,9 @@ export function renderLiveSearchPage() {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      layout="v4"
+      dock
     >
-      <p className="eyebrow">{copy.eyebrow}</p>
-      <h1>{copy.heading}</h1>
-      <p>{copy.intro}</p>
       <LiveSearchRoot variant="search" />
       <script src={livePath('client-live-search.js')} defer />
     </Document>,

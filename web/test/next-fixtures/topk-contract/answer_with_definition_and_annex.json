@@ -1,0 +1,1442 @@
+{
+ "question": "Quelles sont les branches d'assurance non vie ?",
+ "row": {
+  "question": "Quelles sont les branches d'assurance non vie ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 1,
+   "de": 0,
+   "en": 0,
+   "lb": 0
+  },
+  "question_type": "list",
+  "personal_case": false,
+  "french": "Quelles sont les branches d'assurance non vie ?",
+  "legal_terms": [
+   "assurance non-vie",
+   "branches d’assurance",
+   "entreprise d’assurance"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "annex",
+   "work": null,
+   "anchor": null,
+   "date": "2026-04-03",
+   "why": null,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+   "article": "ANNEXE I – A. Classification des risques par branches d’assurance",
+   "number": "",
+   "heading": "CLASSIFICATION PAR BRANCHE D’ASSURANCE NON VIE",
+   "path": "ANNEXE I CLASSIFICATION PAR BRANCHE D’ASSURANCE NON VIE > A. Classification des risques par branches d’assurance",
+   "version_from": "2026-04-03",
+   "version_to": null,
+   "article_since": null,
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2015/12/07/n1/jo",
+   "article_pk": 361714,
+   "lines": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85
+   ],
+   "wording_since": "2025-02-14",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "1.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Accidents (y compris les accidents de travail et les maladies professionnelles):",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "prestations forfaitaires;",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "prestations indemnitaires;",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "combinaisons;",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "personnes transportées.",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "2.",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "Maladie:",
+     "label": null
+    },
+    {
+     "n": 9,
+     "text": "prestations forfaitaires;",
+     "label": null
+    },
+    {
+     "n": 10,
+     "text": "prestations indemnitaires;",
+     "label": null
+    },
+    {
+     "n": 11,
+     "text": "combinaisons.",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "3.",
+     "label": null
+    },
+    {
+     "n": 13,
+     "text": "Corps de véhicules terrestres (autres que ferroviaires)",
+     "label": null
+    },
+    {
+     "n": 14,
+     "text": "Tout dommage subi par:",
+     "label": null
+    },
+    {
+     "n": 15,
+     "text": "véhicules terrestres automoteurs;",
+     "label": null
+    },
+    {
+     "n": 16,
+     "text": "véhicules terrestres non automoteurs.",
+     "label": null
+    },
+    {
+     "n": 17,
+     "text": "4.",
+     "label": null
+    },
+    {
+     "n": 18,
+     "text": "Corps de véhicules ferroviaires",
+     "label": null
+    },
+    {
+     "n": 19,
+     "text": "Tout dommage subi par les véhicules ferroviaires.",
+     "label": null
+    },
+    {
+     "n": 20,
+     "text": "5.",
+     "label": null
+    },
+    {
+     "n": 21,
+     "text": "Corps de véhicules aériens",
+     "label": null
+    },
+    {
+     "n": 22,
+     "text": "Tout dommage subi par les véhicules aériens.",
+     "label": null
+    },
+    {
+     "n": 23,
+     "text": "6.",
+     "label": null
+    },
+    {
+     "n": 24,
+     "text": "Corps de véhicules maritimes, lacustres et fluviaux",
+     "label": null
+    },
+    {
+     "n": 25,
+     "text": "Tout dommage subi par:",
+     "label": null
+    },
+    {
+     "n": 26,
+     "text": "véhicules fluviaux;",
+     "label": null
+    },
+    {
+     "n": 27,
+     "text": "véhicules lacustres;",
+     "label": null
+    },
+    {
+     "n": 28,
+     "text": "véhicules maritimes.",
+     "label": null
+    },
+    {
+     "n": 29,
+     "text": "7.",
+     "label": null
+    },
+    {
+     "n": 30,
+     "text": "Marchandises transportées (y compris les marchandises, bagages et tous autres biens)",
+     "label": null
+    },
+    {
+     "n": 31,
+     "text": "Tout dommage subi par les marchandises transportées ou bagages, quel que soit le moyen de transport.",
+     "label": null
+    },
+    {
+     "n": 32,
+     "text": "8.",
+     "label": null
+    },
+    {
+     "n": 33,
+     "text": "Incendie et éléments naturels",
+     "label": null
+    },
+    {
+     "n": 34,
+     "text": "Tout dommage subi par les biens (autres que les biens compris dans les branches 3, 4, 5, 6 et 7) lorsqu’il est causé par:",
+     "label": null
+    },
+    {
+     "n": 35,
+     "text": "incendie;",
+     "label": null
+    },
+    {
+     "n": 36,
+     "text": "explosion;",
+     "label": null
+    },
+    {
+     "n": 37,
+     "text": "tempête;",
+     "label": null
+    },
+    {
+     "n": 38,
+     "text": "éléments naturels autres que la tempête;",
+     "label": null
+    },
+    {
+     "n": 39,
+     "text": "énergie nucléaire;",
+     "label": null
+    },
+    {
+     "n": 40,
+     "text": "affaissement de terrain.",
+     "label": null
+    },
+    {
+     "n": 41,
+     "text": "9.",
+     "label": null
+    },
+    {
+     "n": 42,
+     "text": "Autres dommages aux biens",
+     "label": null
+    },
+    {
+     "n": 43,
+     "text": "Tout dommage subi par les biens (autres que les biens compris dans les branches 3, 4, 5, 6 et 7) lorsque ce dommage est causé par la grêle ou la gelée, ainsi que par tout événement, tel le vol, autre que ceux compris dans la branche 8.",
+     "label": null
+    },
+    {
+     "n": 44,
+     "text": "10.",
+     "label": null
+    },
+    {
+     "n": 45,
+     "text": "R.C. véhicules terrestres automoteurs",
+     "label": null
+    },
+    {
+     "n": 46,
+     "text": "Toute responsabilité résultant de l’emploi de véhicules terrestres automoteurs (y compris la responsabilité du transporteur).",
+     "label": null
+    },
+    {
+     "n": 47,
+     "text": "11.",
+     "label": null
+    },
+    {
+     "n": 48,
+     "text": "R.C. véhicules aériens",
+     "label": null
+    },
+    {
+     "n": 49,
+     "text": "Toute responsabilité résultant de l’emploi de véhicules aériens (y compris la responsabilité du transporteur).",
+     "label": null
+    },
+    {
+     "n": 50,
+     "text": "12.",
+     "label": null
+    },
+    {
+     "n": 51,
+     "text": "R.C. véhicules maritimes, lacustres et fluviaux",
+     "label": null
+    },
+    {
+     "n": 52,
+     "text": "Toute responsabilité résultant de l’emploi de véhicules fluviaux, lacustres et maritimes (y compris la responsabilité du transporteur).",
+     "label": null
+    },
+    {
+     "n": 53,
+     "text": "13.",
+     "label": null
+    },
+    {
+     "n": 54,
+     "text": "R.C. générale",
+     "label": null
+    },
+    {
+     "n": 55,
+     "text": "Toute responsabilité autre que celles mentionnées sous les branches 10, 11 et 12.",
+     "label": null
+    },
+    {
+     "n": 56,
+     "text": "14.",
+     "label": null
+    },
+    {
+     "n": 57,
+     "text": "Crédit:",
+     "label": null
+    },
+    {
+     "n": 58,
+     "text": "insolvabilité générale;",
+     "label": null
+    },
+    {
+     "n": 59,
+     "text": "crédit à l’exportation;",
+     "label": null
+    },
+    {
+     "n": 60,
+     "text": "vente à tempérament;",
+     "label": null
+    },
+    {
+     "n": 61,
+     "text": "crédit hypothécaire;",
+     "label": null
+    },
+    {
+     "n": 62,
+     "text": "crédit agricole.",
+     "label": null
+    },
+    {
+     "n": 63,
+     "text": "15.",
+     "label": null
+    },
+    {
+     "n": 64,
+     "text": "Caution:",
+     "label": null
+    },
+    {
+     "n": 65,
+     "text": "caution directe;",
+     "label": null
+    },
+    {
+     "n": 66,
+     "text": "caution indirecte.",
+     "label": null
+    },
+    {
+     "n": 67,
+     "text": "16.",
+     "label": null
+    },
+    {
+     "n": 68,
+     "text": "Pertes pécuniaires diverses:",
+     "label": null
+    },
+    {
+     "n": 69,
+     "text": "risques d’emploi;",
+     "label": null
+    },
+    {
+     "n": 70,
+     "text": "insuffisance de recettes (générale);",
+     "label": null
+    },
+    {
+     "n": 71,
+     "text": "mauvais temps;",
+     "label": null
+    },
+    {
+     "n": 72,
+     "text": "pertes de bénéfices;",
+     "label": null
+    },
+    {
+     "n": 73,
+     "text": "persistance de frais généraux;",
+     "label": null
+    },
+    {
+     "n": 74,
+     "text": "dépenses commerciales imprévues;",
+     "label": null
+    },
+    {
+     "n": 75,
+     "text": "perte de la valeur vénale;",
+     "label": null
+    },
+    {
+     "n": 76,
+     "text": "pertes de loyers ou de revenus;",
+     "label": null
+    },
+    {
+     "n": 77,
+     "text": "autres pertes commerciales indirectes;",
+     "label": null
+    },
+    {
+     "n": 78,
+     "text": "autres pertes pécuniaires non commerciales;",
+     "label": null
+    },
+    {
+     "n": 79,
+     "text": "autres pertes pécuniaires.",
+     "label": null
+    },
+    {
+     "n": 80,
+     "text": "17.",
+     "label": null
+    },
+    {
+     "n": 81,
+     "text": "Protection juridique",
+     "label": null
+    },
+    {
+     "n": 82,
+     "text": "Protection juridique.",
+     "label": null
+    },
+    {
+     "n": 83,
+     "text": "18.",
+     "label": null
+    },
+    {
+     "n": 84,
+     "text": "Assistance",
+     "label": null
+    },
+    {
+     "n": 85,
+     "text": "Assistance aux personnes en difficulté au cours de déplacements, d’absences de leur domicile ou de leur résidence habituelle.",
+     "label": null
+    }
+   ],
+   "text": [
+    "1.",
+    "Accidents (y compris les accidents de travail et les maladies professionnelles):",
+    "prestations forfaitaires;",
+    "prestations indemnitaires;",
+    "combinaisons;",
+    "personnes transportées.",
+    "2.",
+    "Maladie:",
+    "prestations forfaitaires;",
+    "prestations indemnitaires;",
+    "combinaisons.",
+    "3.",
+    "Corps de véhicules terrestres (autres que ferroviaires)",
+    "Tout dommage subi par:",
+    "véhicules terrestres automoteurs;",
+    "véhicules terrestres non automoteurs.",
+    "4.",
+    "Corps de véhicules ferroviaires",
+    "Tout dommage subi par les véhicules ferroviaires.",
+    "5.",
+    "Corps de véhicules aériens",
+    "Tout dommage subi par les véhicules aériens.",
+    "6.",
+    "Corps de véhicules maritimes, lacustres et fluviaux",
+    "Tout dommage subi par:",
+    "véhicules fluviaux;",
+    "véhicules lacustres;",
+    "véhicules maritimes.",
+    "7.",
+    "Marchandises transportées (y compris les marchandises, bagages et tous autres biens)",
+    "Tout dommage subi par les marchandises transportées ou bagages, quel que soit le moyen de transport.",
+    "8.",
+    "Incendie et éléments naturels",
+    "Tout dommage subi par les biens (autres que les biens compris dans les branches 3, 4, 5, 6 et 7) lorsqu’il est causé par:",
+    "incendie;",
+    "explosion;",
+    "tempête;",
+    "éléments naturels autres que la tempête;",
+    "énergie nucléaire;",
+    "affaissement de terrain.",
+    "9.",
+    "Autres dommages aux biens",
+    "Tout dommage subi par les biens (autres que les biens compris dans les branches 3, 4, 5, 6 et 7) lorsque ce dommage est causé par la grêle ou la gelée, ainsi que par tout événement, tel le vol, autre que ceux compris dans la branche 8.",
+    "10.",
+    "R.C. véhicules terrestres automoteurs",
+    "Toute responsabilité résultant de l’emploi de véhicules terrestres automoteurs (y compris la responsabilité du transporteur).",
+    "11.",
+    "R.C. véhicules aériens",
+    "Toute responsabilité résultant de l’emploi de véhicules aériens (y compris la responsabilité du transporteur).",
+    "12.",
+    "R.C. véhicules maritimes, lacustres et fluviaux",
+    "Toute responsabilité résultant de l’emploi de véhicules fluviaux, lacustres et maritimes (y compris la responsabilité du transporteur).",
+    "13.",
+    "R.C. générale",
+    "Toute responsabilité autre que celles mentionnées sous les branches 10, 11 et 12.",
+    "14.",
+    "Crédit:",
+    "insolvabilité générale;",
+    "crédit à l’exportation;",
+    "vente à tempérament;",
+    "crédit hypothécaire;",
+    "crédit agricole.",
+    "15.",
+    "Caution:",
+    "caution directe;",
+    "caution indirecte.",
+    "16.",
+    "Pertes pécuniaires diverses:",
+    "risques d’emploi;",
+    "insuffisance de recettes (générale);",
+    "mauvais temps;",
+    "pertes de bénéfices;",
+    "persistance de frais généraux;",
+    "dépenses commerciales imprévues;",
+    "perte de la valeur vénale;",
+    "pertes de loyers ou de revenus;",
+    "autres pertes commerciales indirectes;",
+    "autres pertes pécuniaires non commerciales;",
+    "autres pertes pécuniaires.",
+    "17.",
+    "Protection juridique",
+    "Protection juridique.",
+    "18.",
+    "Assistance",
+    "Assistance aux personnes en difficulté au cours de déplacements, d’absences de leur domicile ou de leur résidence habituelle."
+   ],
+   "label": "ANNEXE I – A. Classification des risques par branches d’assurance",
+   "version": {
+    "id": null,
+    "from": "2026-04-03",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 361714,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "ANNEXE I – A. Classification des risques par branches d’assurance",
+   "heading": "CLASSIFICATION PAR BRANCHE D’ASSURANCE NON VIE",
+   "path": "ANNEXE I CLASSIFICATION PAR BRANCHE D’ASSURANCE NON VIE > A. Classification des risques par branches d’assurance",
+   "how": "keywords+meaning+outline",
+   "score": 0.5985
+  },
+  {
+   "label": "A2",
+   "article_pk": 339515,
+   "act_title": "Loi du 6 décembre 1991 sur le secteur des assurances.",
+   "article": "A N N E X E",
+   "heading": null,
+   "path": "A N N E X E",
+   "how": "meaning+outline",
+   "score": 0.5705
+  },
+  {
+   "label": "A3",
+   "article_pk": 361715,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "ANNEXE I – B. Appellation d’agréments donnés simultanément pour plusieurs branches d’assurance",
+   "heading": "CLASSIFICATION PAR BRANCHE D’ASSURANCE NON VIE",
+   "path": "ANNEXE I CLASSIFICATION PAR BRANCHE D’ASSURANCE NON VIE > B. Appellation d’agréments donnés simultanément pour plusieurs branches d’assurance",
+   "how": "keywords+meaning",
+   "score": 0.5669
+  },
+  {
+   "label": "A4",
+   "article_pk": 205076,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 34",
+   "heading": "L’assurance non vie",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE I Champ d’application et définitions > Chapitre 2 Champ d’application",
+   "how": "keywords+meaning",
+   "score": 0.5438
+  },
+  {
+   "label": "A5",
+   "article_pk": 80022,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 82",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 8 Contenu de l'annexe",
+   "how": "outline",
+   "score": 0.3833
+  },
+  {
+   "label": "A6",
+   "article_pk": 205139,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 96",
+   "heading": "Exercice simultané des activités d’assurance vie et non vie",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre I Règles générales concernant l’accès à l’activité de l’assurance directe et de la réassurance et leur exercice > Chapitre 5 Exercice simultané des activités d’assurance de vie et non vie",
+   "how": "keywords",
+   "score": 0.4605
+  },
+  {
+   "label": "A7",
+   "article_pk": 80021,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 81",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 8 Contenu de l'annexe",
+   "how": "outline",
+   "score": 0.3705
+  },
+  {
+   "label": "A8",
+   "article_pk": 79982,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 45",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 5 Structure du compte de profits et pertes",
+   "how": "keywords",
+   "score": 0.4108
+  },
+  {
+   "label": "A9",
+   "article_pk": 80023,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 83",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 8 Contenu de l'annexe",
+   "how": "outline",
+   "score": 0.3692
+  },
+  {
+   "label": "A10",
+   "article_pk": 205304,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 253-4",
+   "heading": "Cessation des contrats d’assurance non vie",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre V Assainissement et liquidation des entreprises d’assurance > Chapitre 4 La liquidation judiciaire",
+   "how": "keywords",
+   "score": 0.4574
+  },
+  {
+   "label": "A11",
+   "article_pk": 361716,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "ANNEXE II",
+   "heading": "CLASSIFICATION PAR BRANCHE D’ASSURANCE VIE",
+   "path": "ANNEXE II CLASSIFICATION PAR BRANCHE D’ASSURANCE VIE",
+   "how": "meaning",
+   "score": 0.5629
+  },
+  {
+   "label": "A12",
+   "article_pk": 80020,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 80",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 8 Contenu de l'annexe",
+   "how": "outline",
+   "score": 0.3465
+  },
+  {
+   "label": "A13",
+   "article_pk": 80024,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 84",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 8 Contenu de l'annexe",
+   "how": "outline",
+   "score": 0.3179
+  },
+  {
+   "label": "A14",
+   "article_pk": 205303,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 253-3",
+   "heading": "Ségrégation des actifs d’assurance non vie",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre V Assainissement et liquidation des entreprises d’assurance > Chapitre 4 La liquidation judiciaire",
+   "how": "keywords",
+   "score": 0.4506
+  },
+  {
+   "label": "A15",
+   "article_pk": 80329,
+   "act_title": "Loi du 6 décembre 1991 sur le secteur des assurances.",
+   "article": "Art. 64.",
+   "heading": null,
+   "path": "PARTIE I LES ENTREPRISES D’ASSURANCES > Chapitre 7 Dispositions relatives à la libre prestation de services dans les branches d’assurance autres que l’assurance sur la vie > Section 1 Dispositions générales",
+   "how": "meaning",
+   "score": 0.5064
+  },
+  {
+   "label": "A16",
+   "article_pk": 205097,
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "article": "Art. 55",
+   "heading": "Extension d’agrément des entreprises d’assurance luxembourgeoises",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre I Règles générales concernant l’accès à l’activité de l’assurance directe et de la réassurance et leur exercice > Chapitre 2 Accès aux activités",
+   "how": "keywords",
+   "score": 0.3884
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general",
+   "sector_agreement"
+  ],
+  "passages_in_those_kinds": 73077,
+  "words": {
+   "branches": 1207,
+   "assurance": 5364,
+   "non-vie": 362,
+   "entreprise": 7974
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "Loi du 6 décembre 1991 sur le secteur des assurances.",
+   "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entrepris"
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "list",
+     "personal_case": false,
+     "french": "Quelles sont les branches d'assurance non vie ?",
+     "legal_terms": [
+      "assurance non-vie",
+      "branches d’assurance",
+      "entreprise d’assurance"
+     ],
+     "in_scope": true
+    },
+    "ms": 1578,
+    "tokens_in": 255,
+    "tokens_out": 55,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "branches",
+      "assurance"
+     ],
+     "terms_a_statute_would_use": [
+      "non-vie",
+      "entreprise"
+     ],
+     "articles_holding_each_word": {
+      "branches": 1207,
+      "assurance": 5364,
+      "non-vie": 362,
+      "entreprise": 7974
+     },
+     "articles_kept": 10
+    },
+    "ms": 98
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+       "title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+       "outline_rows": 170,
+       "parts_named": [
+        "A. Classification des risques par branches d’assurance"
+       ],
+       "articles_in_parts": 1,
+       "ms": 1482,
+       "tokens_in": 8380,
+       "tokens_out": 76,
+       "reason": "La section contient la classification complète des risques par branches d’assurance non vie."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1991/12/06/n2",
+       "title": "Loi du 6 décembre 1991 sur le secteur des assurances.",
+       "outline_rows": 25,
+       "parts_named": [
+        "A N N E X E"
+       ],
+       "articles_in_parts": 1,
+       "ms": 1595,
+       "tokens_in": 1365,
+       "tokens_out": 72,
+       "reason": "L’annexe énumère les branches d’assurance."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1994/12/08/n2",
+       "title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entrepris",
+       "outline_rows": 35,
+       "parts_named": [
+        "Chapitre 8 Contenu de l'annexe"
+       ],
+       "articles_in_parts": 5,
+       "ms": 6468,
+       "tokens_in": 1875,
+       "tokens_out": 434,
+       "reason": "Le contenu de l’annexe est la partie susceptible de détailler les branches d’assurance."
+      }
+     ],
+     "articles_from_the_parts": 7,
+     "whole_part_for_a_list": true
+    },
+    "ms": 6472,
+    "tokens_in": 11620,
+    "tokens_out": 582,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general",
+      "sector_agreement"
+     ],
+     "rows_in_scope": 73077,
+     "rows_kept": 40,
+     "articles_kept": 16,
+     "acts": 3
+    },
+    "ms": 7209,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 17
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 16,
+     "pointed": "A1",
+     "lines": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Les activités d’assurance non vie au Luxembourg",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "La partie A de l’annexe I de la loi de 2015 contient la classification complète demandée."
+    },
+    "ms": 1958,
+    "tokens_in": 9191,
+    "tokens_out": 251,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 85,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [],
+     "inbound_checked": 0,
+     "outbound_checked": 0,
+     "followed": 0,
+     "see_also": 0
+    },
+    "ms": 32
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer",
+     "notes": [
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 10194,
+  "tokens": {
+   "text-embedding-3-large": [
+    12,
+    0
+   ],
+   "gpt-6-luna": [
+    12641,
+    1010
+   ],
+   "gpt-6.2-sol": [
+    9191,
+    251
+   ]
+  },
+  "cost_usd_list_price": 0.02536,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer",
+    "state": "answer"
+   }
+  ],
+  "cost_usd": 0.02536,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 1578,
+    "tokens_in": 255,
+    "tokens_out": 55
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 6472,
+    "tokens_in": 11620,
+    "tokens_out": 582
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1958,
+    "tokens_in": 9191,
+    "tokens_out": 251
+   }
+  ]
+ },
+ "state": "answer",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "list",
+   "french": "Quelles sont les branches d'assurance non vie ?",
+   "legal_terms": [
+    "assurance non-vie",
+    "branches d’assurance",
+    "entreprise d’assurance"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 361714,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 339515,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 361715,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 205076,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 80022,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 205139,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 80021,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 79982,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 80023,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 205304,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 361716,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 80020,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 80024,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 205303,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 80329,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 205097,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 361714
+   },
+   {
+    "article_pk": 339515
+   },
+   {
+    "article_pk": 361715
+   },
+   {
+    "article_pk": 205076
+   },
+   {
+    "article_pk": 80022
+   },
+   {
+    "article_pk": 205139
+   },
+   {
+    "article_pk": 80021
+   },
+   {
+    "article_pk": 79982
+   },
+   {
+    "article_pk": 80023
+   },
+   {
+    "article_pk": 205304
+   },
+   {
+    "article_pk": 361716
+   },
+   {
+    "article_pk": 80020
+   },
+   {
+    "article_pk": 80024
+   },
+   {
+    "article_pk": 205303
+   },
+   {
+    "article_pk": 80329
+   },
+   {
+    "article_pk": 205097
+   }
+  ],
+  "replay": "eNqdVMtu2zAQ_BWBl17GBd-UdOk39GwYhiLTthCGcvRwagQB-hv9vX5Jl5ZsJLZPPWk1XC5nh8N9Z0dWCrADK9nQHp4ZWE1haOsqULz5FB8ok23HGH1YHAUBr_T_c_Qh-D7r2zhkKXjqqljvKdh8q_p-TH8-i23Mjo3PfqSSI22TXNqFEAvJE9KzcluF3oNRxKrYv_mO8G7mVF6RJ1Yul8oKJzQtj8EzLAUkFDQMLBxyFBAcQkBICAVKFAbCQjiIHKKA5JC0R0IqSA1pIC2kg8whCygOJaCopILSUAbKQjmoHKqA5tACWkLTiRraQFtoB51DFzAcRsBIGAVDhAyMhXEwOUwBy2EFrIRVsBqW-FpYB5vDFnAcTsBJOAWn4QwctePgcrgCOUcukEvkCrlGblZgDHEMAZNwKVwRGPekEH1fWHleZXW4RNfAX4JDxcp3Fqq4G6udT5ebNN5Ug0_4tmtfbm9qaG-RXVc1kcBNdUrr_tdwqb5v3wiPbZYKZk3Mhr3PXkffD00by2xo05YPctEMrYfTIZEITT9QqW3nyUf_5bDgd1VYD757ITst2ZekBSUlI11r_P3955pACz4OnT90Te9vlkjUg--IBJWuq97PlqUGnj-bsq7ipjlLuMJSqcKQ-27AlHkLSm44XfhXMOecbHqXKMiI94niBnNFkcsHeeq-oOL6EcdHdPgDTD-qqO4SlSweNF24LyCp3NHMucg5CzhLNos0yTILMbU-NTu1Nzc0tzCRnmjOxCYq0-F0XqCxtqRn4I8-JCP7uunJjskkJ_qv203yxXnY3I6jfji_lcvE-kgPjywnuChIlLGnTvh3Lg2NEBaTFbftGDfrp9O6CmG98YOvh7br2erjH26ekgg"
+ }
+}

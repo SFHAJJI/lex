@@ -23,7 +23,7 @@ import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const envelopeOf = (operation, refused) => census.envelopes.find(
   (entry) => entry.operation === operation && (refused ? entry.envelope.refusal !== null : entry.envelope.result !== null),

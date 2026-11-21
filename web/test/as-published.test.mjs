@@ -29,7 +29,7 @@ import { exportPdf, pdfRefusal } from "../scripts/export-pdf.mjs";
 import { LIVE_CHROME, entriesOf, fillText } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (operation) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === operation && candidate.envelope.result?.value?.publisher === "lu-legilux");
   assert.ok(entry, `the census holds a Luxembourg ${operation} answer`);

@@ -29,7 +29,7 @@ import { REFUSALS_FR } from "../scripts/live-chrome-fr.mjs";
 import { validateRefusal } from "../scripts/refusal-card.mjs";
 
 const PLACEHOLDER = "<varies-per-run>";
-const read = async (name) => JSON.parse(await readFile(new URL(`../../schemas/v3-platform/${name}`, import.meta.url), "utf8"));
+const read = async (name) => JSON.parse(await readFile(new URL(`../schemas/v3-platform/${name}`, import.meta.url), "utf8"));
 const answers = await read("answer-samples.json");
 const census = await read("envelope-samples.json");
 const refusals = await read("refusal-payload-samples.json");

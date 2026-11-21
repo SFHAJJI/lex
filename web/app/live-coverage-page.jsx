@@ -18,8 +18,10 @@ import { renderHydratableDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 import { EvaluationCardView } from './EvaluationCardView.jsx';
 import { readEvaluationCard } from '../scripts/evaluation-card.mjs';
-import { contract } from '../../schemas/v3-platform/envelope-samples.json';
-import censusCard from '../../schemas/v3-platform/evaluation-card.json';
+import { contract } from '../schemas/v3-platform/envelope-samples.json';
+import censusCard from '../schemas/v3-platform/evaluation-card.json';
+import { NEXT_CORPUS_ROOT, NEXT_SCRIPT, NextCorpus } from './NextPages.jsx';
+import { NEXT_COVERAGE_ROOT, NextCoverage } from './NextCoverage.jsx';
 
 /** The contract the page reads envelopes against, from the census the platform renders. */
 export const LIVE_CONTRACT = contract;
@@ -34,9 +36,12 @@ export function liveCoverageTree() {
 /** The card the page carries when the build is handed none: the one the platform renders. */
 export const CENSUS_EVALUATION_CARD = censusCard;
 
+// Release-a (21/11/2026): the page carries only the new engine's own counts and what it does not hold. The earlier platform's
+// coverage answer ("what this mount holds", a fixture's evaluation card in English) described another engine, so neither is
+// drawn any more; `liveCoverageTree` and the card stay exported for the code that still imports them.
 export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
   const copy = liveChrome().coverage;
-  const view = readEvaluationCard(card);
+  readEvaluationCard(card);
   return renderHydratableDocument(
     <Document
       state="live-coverage"
@@ -44,14 +49,19 @@ export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      layout="v4"
+      prose
       indexing="switch"
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>
       <p>{copy.intro}</p>
-      <div id={LIVE_COVERAGE_ROOT}>{liveCoverageTree()}</div>
-      <EvaluationCardView view={view} />
-      <script src={livePath('client-live.js')} defer />
+      {/* What Lex holds and does not, by type, by name and by date, from the data builder's file (`NextCoverage.jsx`): drawn once
+          the file is read, nothing while there is none. */}
+      <div id={NEXT_COVERAGE_ROOT}><NextCoverage /></div>
+      {/* The side build: what the new engine reads, from its own counts, asked once the page is drawn (`NextPages.jsx`). */}
+      <div id={NEXT_CORPUS_ROOT}><NextCorpus /></div>
+      <script src={livePath(NEXT_SCRIPT)} defer />
     </Document>,
   );
 }

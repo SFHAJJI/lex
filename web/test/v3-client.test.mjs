@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 
 import { askV3, SERVED_OPERATIONS } from "../scripts/v3-client.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const coverageEnvelope = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
 

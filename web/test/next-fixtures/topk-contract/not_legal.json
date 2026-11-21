@@ -1,0 +1,162 @@
+{
+ "question": "Bonjour",
+ "row": {
+  "question": "Bonjour",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 0,
+   "de": 0,
+   "en": 0,
+   "lb": 0
+  },
+  "question_type": "other",
+  "personal_case": false,
+  "french": "Bonjour",
+  "legal_terms": [],
+  "in_scope": false
+ },
+ "blocks": [],
+ "see_also": [],
+ "candidates": [],
+ "outcome": "not_a_legal_question",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "other",
+     "personal_case": false,
+     "french": "Bonjour",
+     "legal_terms": [],
+     "in_scope": false
+    },
+    "ms": 1009,
+    "tokens_in": 246,
+    "tokens_out": 31,
+    "model": "gpt-6-luna"
+   }
+  ],
+  "ms": 1011,
+  "tokens": {
+   "text-embedding-3-large": [
+    1,
+    0
+   ],
+   "gpt-6-luna": [
+    246,
+    31
+   ]
+  },
+  "cost_usd_list_price": 5e-05,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 1,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:not_a_legal_question",
+    "state": "out_of_scope"
+   }
+  ],
+  "cost_usd": 5e-05,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 1009,
+    "tokens_in": 246,
+    "tokens_out": 31
+   }
+  ]
+ },
+ "state": "out_of_scope",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "notes": [],
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "other",
+   "french": "Bonjour",
+   "legal_terms": [],
+   "personal_case": false
+  },
+  "candidates": [],
+  "read": [],
+  "replay": "eNqFUstug0AM_BXkM0gQKT3ssb8RVWizmEezsTf7oI2i_Hu9Aaoml552PDb2eMwNZlBNCQ4URHYnKMEItGy0Fdz9wU4qoU9EaKu5EeIi8TvTJyefS5OEu3r3VjVNtaszE0D12gYsQRBwii33bTDsULJ-naiIY6tbi4O27SVhiBOT5I-gDh8l0Li8Z1CUrBV5dkO_ADfgNKgbWE1D0gNmuQ9lOmLme8_nV42RX5nB64mE7PQ15_E7bt1H_hKeuMgNi4mKOGKxKVZF5PzJXXxZqTZeXRbBUpd19B7JjE-mLVtH9OewrOnQBybhjA642ictT0vWd8tr5RQHWRRntFkqmimsrl0lNtw9HE4W_zE5xIc3z7e5Z7tFT1M38mekIEP3WNV7OUYef_8B4Pewjw"
+ }
+}

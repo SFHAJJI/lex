@@ -3,13 +3,16 @@
 
 export const COVERAGE_RECORD = Object.freeze({
   "origin": "https://law.soufien.lu",
-  "servingCommit": "54c3d665ceeee4a588a9c2c0b34d2aa72c3016b4",
+  "servingCommit": "d0fb93f61bd08eb23468c68a102147b948ed1798",
   "builtOn": "2026-11-12",
   "works": 5416,
   "states": 7379,
   "articles": 268712,
   "versionsCatalogued": 28798,
   "versionsWithText": 7715,
+  "worksWithText": 6001,
   "files": 12453,
-  "filesWithheld": 3865
+  "filesWithheld": 3865,
+  "assistantActs": 2033,
+  "actsCatalogued": 24627
 });

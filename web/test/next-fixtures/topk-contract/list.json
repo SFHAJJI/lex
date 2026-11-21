@@ -1,0 +1,1056 @@
+{
+ "question": "Dans quels cas un salarié peut-il être licencié sans préavis ?",
+ "row": {
+  "question": "Dans quels cas un salarié peut-il être licencié sans préavis ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 3,
+   "de": 0,
+   "en": 0,
+   "lb": 0
+  },
+  "question_type": "list",
+  "personal_case": false,
+  "french": "Dans quels cas un salarié peut-il être licencié sans préavis ?",
+  "legal_terms": [
+   "licenciement avec effet immédiat",
+   "faute grave",
+   "salarié",
+   "préavis"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_124-10",
+   "date": "2026-07-01",
+   "why": null,
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 124-10.",
+   "number": "l124-10",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 2. Résiliation pour motif grave",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141885,
+   "lines": [
+    1,
+    3,
+    4,
+    9,
+    10,
+    12
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Chacune des parties peut résilier le contrat de travail sans préavis ou avant l’expiration du terme, pour un ou plusieurs motifs graves procédant du fait ou de la faute de l’autre partie, avec dommages et intérêts à charge de la partie dont la faute a occasionné la résiliation immédiate.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Est considéré comme constituant un motif grave pour l’application des dispositions du paragraphe qui précède, tout fait ou faute qui rend immédiatement et définitivement impossible le maintien des relations de travail.",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "Dans l’appréciation des faits ou fautes procédant de la conduite professionnelle du salarié, les juges tiennent compte du degré d’instruction, des antécédents professionnels, de sa situation sociale et de tous les éléments pouvant influer sur la responsabilité du salarié et des conséquences du licenciement.",
+     "label": null
+    },
+    {
+     "n": 9,
+     "text": "Le ou les faits ou fautes susceptibles de justifier une résiliation pour motif grave ne peuvent être invoqués au-delà d’un délai d’un mois à compter du jour où la partie qui l’invoque en a eu connaissance, à moins que ce fait n’ait donné lieu dans le mois à l’exercice de poursuites pénales.",
+     "label": null
+    },
+    {
+     "n": 10,
+     "text": "Le délai prévu à l’alinéa qui précède n’est pas applicable lorsqu’une partie invoque un fait ou une faute antérieure à l’appui d’un nouveau fait ou d’une nouvelle faute.",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "L’inaptitude du salarié, dûment constatée en vertu de l’article L. 326-9 ou, le cas échéant, en vertu de l’article L. 327-1, n’est pas constitutive d’un motif grave au sens du présent article.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Chacune des parties peut résilier le contrat de travail sans préavis ou avant l’expiration du terme, pour un ou plusieurs motifs graves procédant du fait ou de la faute de l’autre partie, avec dommages et intérêts à charge de la partie dont la faute a occasionné la résiliation immédiate.",
+    "Est considéré comme constituant un motif grave pour l’application des dispositions du paragraphe qui précède, tout fait ou faute qui rend immédiatement et définitivement impossible le maintien des relations de travail.",
+    "Dans l’appréciation des faits ou fautes procédant de la conduite professionnelle du salarié, les juges tiennent compte du degré d’instruction, des antécédents professionnels, de sa situation sociale et de tous les éléments pouvant influer sur la responsabilité du salarié et des conséquences du licenciement.",
+    "Le ou les faits ou fautes susceptibles de justifier une résiliation pour motif grave ne peuvent être invoqués au-delà d’un délai d’un mois à compter du jour où la partie qui l’invoque en a eu connaissance, à moins que ce fait n’ait donné lieu dans le mois à l’exercice de poursuites pénales.",
+    "Le délai prévu à l’alinéa qui précède n’est pas applicable lorsqu’une partie invoque un fait ou une faute antérieure à l’appui d’un nouveau fait ou d’une nouvelle faute.",
+    "L’inaptitude du salarié, dûment constatée en vertu de l’article L. 326-9 ou, le cas échéant, en vertu de l’article L. 327-1, n’est pas constitutive d’un motif grave au sens du présent article."
+   ],
+   "label": "Art. L. 124-10.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "related",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_337-1",
+   "date": "2026-07-01",
+   "why": "désigné par la lecture",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 337-1.",
+   "number": "l337-1",
+   "heading": null,
+   "path": "LIVRE III. PROTECTION, SECURITE ET SANTE DES SALARIES > Titre III Emploi de personnes enceintes, accouchées et allaitantes > Chapitre VII. Interdiction de licenciement",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142394,
+   "lines": [
+    1,
+    2,
+    3,
+    6,
+    7
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "II est interdit à l’employeur de notifier la rupture de la relation de travail ou, le cas échéant, la convocation à l’entretien préalable d’une femme salariée lorsqu’elle est en état de grossesse médicalement constaté et pendant une période de douze semaines suivant l’accouchement.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "En cas de notification de la rupture avant la constatation médicale de la grossesse, la femme salariée peut, dans un délai de huit jours à compter de la notification du congé, justifier de son état par la production d’un certificat par lettre recommandée.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Tout licenciement notifié en violation de l’interdiction de licenciement telle que visée dans les deux alinéas précédents, et, le cas échéant, la convocation à l’entretien préalable, sont nuls et sans effet.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "Toutefois, en cas de faute grave, l’employeur a la faculté de prononcer la mise à pied immédiate de la femme salariée en attendant la décision définitive de la juridiction du travail sur sa demande en résiliation du contrat de travail.",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "Lorsque la juridiction du travail refuse de faire droit à cette demande, la mise à pied est annulée et ses effets sont supprimés de plein droit.",
+     "label": null
+    }
+   ],
+   "text": [
+    "II est interdit à l’employeur de notifier la rupture de la relation de travail ou, le cas échéant, la convocation à l’entretien préalable d’une femme salariée lorsqu’elle est en état de grossesse médicalement constaté et pendant une période de douze semaines suivant l’accouchement.",
+    "En cas de notification de la rupture avant la constatation médicale de la grossesse, la femme salariée peut, dans un délai de huit jours à compter de la notification du congé, justifier de son état par la production d’un certificat par lettre recommandée.",
+    "Tout licenciement notifié en violation de l’interdiction de licenciement telle que visée dans les deux alinéas précédents, et, le cas échéant, la convocation à l’entretien préalable, sont nuls et sans effet.",
+    "Toutefois, en cas de faute grave, l’employeur a la faculté de prononcer la mise à pied immédiate de la femme salariée en attendant la décision définitive de la juridiction du travail sur sa demande en résiliation du contrat de travail.",
+    "Lorsque la juridiction du travail refuse de faire droit à cette demande, la mise à pied est annulée et ses effets sont supprimés de plein droit."
+   ],
+   "label": "Art. L. 337-1.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_121-5",
+   "date": "2026-07-01",
+   "why": "Art. L. 121-5. déroge à Art. L. 124-10. (sauf)",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 121-5.",
+   "number": "l121-5",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre Premier. Le contrat de travail en général > Section 3. Période d’essai",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141844,
+   "lines": [
+    10
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "inbound": true,
+   "quote": [
+    {
+     "n": 10,
+     "text": "II ne peut être mis fin unilatéralement au contrat à l’essai pendant la période d’essai minimale de deux semaines, sauf pour motif grave conformément à l’article L. 124-10.",
+     "label": null
+    }
+   ],
+   "text": [
+    "II ne peut être mis fin unilatéralement au contrat à l’essai pendant la période d’essai minimale de deux semaines, sauf pour motif grave conformément à l’article L. 124-10."
+   ],
+   "label": "Art. L. 121-5.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_122-13",
+   "date": "2026-07-01",
+   "why": "Art. L. 122-13. déroge à Art. L. 124-10. (hormis)",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 122-13.",
+   "number": "l122-13",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 9. Cessation du contrat à durée déterminée",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141865,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "inbound": true,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Hormis le cas visé à l’article L. 124-10, le contrat de travail à durée déterminée ne peut être résilié avant l’échéance du terme.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Hormis le cas visé à l’article L. 124-10, le contrat de travail à durée déterminée ne peut être résilié avant l’échéance du terme."
+   ],
+   "label": "Art. L. 122-13.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_291-1",
+   "date": "2026-07-01",
+   "why": "« salarié » est défini par ce texte",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 291-1.",
+   "number": "l291-1",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre IX Conditions d’hébergement du salarié éloigné de son lieu de travail habituel ( L. 15 décembre 2020 )",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-12-22",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142326,
+   "lines": [
+    2
+   ],
+   "wording_since": "2020-12-22",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 0,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 2,
+     "text": "1° « salarié » : tout salarié tel que défini à l’article L. 121-1, ainsi que le stagiaire, l’apprenti et l’élève et l’étudiant occupé pendant les vacances scolaires ;",
+     "label": "1°"
+    }
+   ],
+   "text": [
+    "1° « salarié » : tout salarié tel que défini à l’article L. 121-1, ainsi que le stagiaire, l’apprenti et l’élève et l’étudiant occupé pendant les vacances scolaires ;"
+   ],
+   "label": "Art. L. 291-1.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 141885,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-10.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 2. Résiliation pour motif grave",
+   "how": "keywords+meaning+outline",
+   "score": 0.6137
+  },
+  {
+   "label": "A2",
+   "article_pk": 134711,
+   "act_title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembourgeois.",
+   "article": "Art. 3.1.2-59.",
+   "heading": null,
+   "path": "LIVRE 3 DROIT DU TRAVAIL APPLICABLE AUX GENS DE MER > TITRE 1er Relations individuelles et collectives du travail > Chapitre 2 Contrat d’engagement maritime > Section 4 Résiliation du contrat > Sous-section 2 - Résiliation pour motif grave",
+   "how": "keywords+outline",
+   "score": 0.4911
+  },
+  {
+   "label": "A3",
+   "article_pk": 148284,
+   "act_title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "article": "Art. 11.",
+   "heading": null,
+   "path": "Chapitre 3 : Licenciements collectifs > Section 3 Procédure de licenciement collectif",
+   "how": "keywords+outline",
+   "score": 0.4824
+  },
+  {
+   "label": "A4",
+   "article_pk": 141878,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-3.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "keywords+meaning",
+   "score": 0.5901
+  },
+  {
+   "label": "A5",
+   "article_pk": 142038,
+   "act_title": "Code du travail",
+   "article": "Art. L. 166-6.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre VI Rapports collectifs du travail > Chapitre VI. Les licenciements collectifs > Section 3. Procédure de licenciement collectif",
+   "how": "keywords+meaning",
+   "score": 0.5186
+  },
+  {
+   "label": "A6",
+   "article_pk": 141881,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-6.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "keywords+meaning",
+   "score": 0.5633
+  },
+  {
+   "label": "A7",
+   "article_pk": 142394,
+   "act_title": "Code du travail",
+   "article": "Art. L. 337-1.",
+   "heading": null,
+   "path": "LIVRE III. PROTECTION, SECURITE ET SANTE DES SALARIES > Titre III Emploi de personnes enceintes, accouchées et allaitantes > Chapitre VII. Interdiction de licenciement",
+   "how": "keywords+meaning",
+   "score": 0.5269
+  },
+  {
+   "label": "A8",
+   "article_pk": 148286,
+   "act_title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "article": "Art. 13.",
+   "heading": null,
+   "path": "Chapitre 3 : Licenciements collectifs > Section 3 Procédure de licenciement collectif",
+   "how": "outline",
+   "score": 0.4797
+  },
+  {
+   "label": "A9",
+   "article_pk": 142693,
+   "act_title": "Code du travail",
+   "article": "Art. L. 521-4.",
+   "heading": null,
+   "path": "LIVRE V. EMPLOI ET CHOMAGE > Titre II Indemnités de chômage complet > Chapitre Premier. Régime général > Section 2. Conditions d’admission",
+   "how": "keywords",
+   "score": 0.4873
+  },
+  {
+   "label": "A10",
+   "article_pk": 141884,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-9.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "meaning",
+   "score": 0.5878
+  },
+  {
+   "label": "A11",
+   "article_pk": 148282,
+   "act_title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "article": "Art. 9.",
+   "heading": null,
+   "path": "Chapitre 3 : Licenciements collectifs > Section 3 Procédure de licenciement collectif",
+   "how": "outline",
+   "score": 0.4735
+  },
+  {
+   "label": "A12",
+   "article_pk": 141876,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-1.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "meaning",
+   "score": 0.5763
+  },
+  {
+   "label": "A13",
+   "article_pk": 148285,
+   "act_title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "article": "Art. 12.",
+   "heading": null,
+   "path": "Chapitre 3 : Licenciements collectifs > Section 3 Procédure de licenciement collectif",
+   "how": "outline",
+   "score": 0.4449
+  },
+  {
+   "label": "A14",
+   "article_pk": 142678,
+   "act_title": "Code du travail",
+   "article": "Art. L. 513-6",
+   "heading": null,
+   "path": "LIVRE V. EMPLOI ET CHOMAGE > Titre Premier Prévention des licenciements et maintien de l’emploi > Chapitre III. Etablissement d’un plan de maintien dans l’emploi ( L. 22 décembre 2006 )",
+   "how": "keywords",
+   "score": 0.4292
+  },
+  {
+   "label": "A15",
+   "article_pk": 141883,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-8.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "meaning",
+   "score": 0.5719
+  },
+  {
+   "label": "A16",
+   "article_pk": 148283,
+   "act_title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "article": "Art. 10.",
+   "heading": null,
+   "path": "Chapitre 3 : Licenciements collectifs > Section 3 Procédure de licenciement collectif",
+   "how": "outline",
+   "score": 0.4406
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "salarie": 3035,
+   "licencie": 1788,
+   "preavis": 311,
+   "licenciement": 320,
+   "effet": 6282,
+   "immediat": 2408,
+   "faute": 590,
+   "grave": 1884
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Code du travail",
+   "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou",
+   "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi."
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer_with_exception",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "list",
+     "personal_case": false,
+     "french": "Dans quels cas un salarié peut-il être licencié sans préavis ?",
+     "legal_terms": [
+      "licenciement avec effet immédiat",
+      "faute grave",
+      "salarié",
+      "préavis"
+     ],
+     "in_scope": true
+    },
+    "ms": 1819,
+    "tokens_in": 259,
+    "tokens_out": 126,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "salarie",
+      "licencie",
+      "preavis"
+     ],
+     "terms_a_statute_would_use": [
+      "licenciement",
+      "effet",
+      "immediat",
+      "faute",
+      "grave"
+     ],
+     "articles_holding_each_word": {
+      "salarie": 3035,
+      "licencie": 1788,
+      "preavis": 311,
+      "licenciement": 320,
+      "effet": 6282,
+      "immediat": 2408,
+      "faute": 590,
+      "grave": 1884
+     },
+     "articles_kept": 10
+    },
+    "ms": 77
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/code/travail",
+       "title": "Code du travail",
+       "outline_rows": 471,
+       "parts_named": [
+        "Section 2. Résiliation pour motif grave"
+       ],
+       "articles_in_parts": 1,
+       "ms": 2779,
+       "tokens_in": 17950,
+       "tokens_out": 124,
+       "reason": "La résiliation pour motif grave est traitée dans cette section."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1990/11/09/n1",
+       "title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou",
+       "outline_rows": 125,
+       "parts_named": [
+        "Sous-section 2 - Résiliation pour motif grave"
+       ],
+       "articles_in_parts": 1,
+       "ms": 2105,
+       "tokens_in": 7284,
+       "tokens_out": 101,
+       "reason": "Cette sous-section traite de la résiliation pour motif grave, susceptible d’intervenir sans préavis."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1993/07/23/n1",
+       "title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+       "outline_rows": 9,
+       "parts_named": [
+        "Section 3 Procédure de licenciement collectif"
+       ],
+       "articles_in_parts": 5,
+       "ms": 4369,
+       "tokens_in": 681,
+       "tokens_out": 326,
+       "reason": "La procédure de licenciement collectif, y compris les cas de licenciement sans préavis, relève de cette section."
+      }
+     ],
+     "articles_from_the_parts": 7,
+     "whole_part_for_a_list": true
+    },
+    "ms": 2677,
+    "tokens_in": 25915,
+    "tokens_out": 551,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 16,
+     "acts": 3
+    },
+    "ms": 2923,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 16
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 16,
+     "pointed": "A1",
+     "lines": [
+      1,
+      3,
+      4,
+      9,
+      10,
+      12
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Les salariés relevant du régime général du Code du travail",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "A1 fixe les conditions de fond du licenciement sans préavis, tandis qu’A7 précise le régime de protection lié à la grossesse et à l’accouchement."
+    },
+    "ms": 1531,
+    "tokens_in": 7301,
+    "tokens_out": 163,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 6,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [
+      "salarie"
+     ],
+     "inbound_checked": 12,
+     "outbound_checked": 6,
+     "followed": 2,
+     "see_also": 0
+    },
+    "ms": 4
+   },
+   {
+    "step": "exception_decision",
+    "who": "model",
+    "detail": {
+     "applies": "unknown",
+     "pointed": "",
+     "lines": [],
+     "articles_read": 6,
+     "reason": "La question ne précise ni si le salarié est dans les deux premières semaines de sa période d’essai ni s’il est en CDD avant son terme."
+    },
+    "ms": 1233,
+    "tokens_in": 2853,
+    "tokens_out": 51,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer_with_exception",
+     "notes": [
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 7420,
+  "tokens": {
+   "text-embedding-3-large": [
+    18,
+    0
+   ],
+   "gpt-6-luna": [
+    26174,
+    677
+   ],
+   "gpt-6.2-sol": [
+    10154,
+    214
+   ]
+  },
+  "cost_usd_list_price": 0.02846,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 4,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer_with_exception",
+    "state": "answer_with_exception"
+   }
+  ],
+  "cost_usd": 0.02846,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 1819,
+    "tokens_in": 259,
+    "tokens_out": 126
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 2677,
+    "tokens_in": 25915,
+    "tokens_out": 551
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1531,
+    "tokens_in": 7301,
+    "tokens_out": 163
+   },
+   {
+    "step": "exception_decision",
+    "model": "gpt-6.2-sol",
+    "ms": 1233,
+    "tokens_in": 2853,
+    "tokens_out": 51
+   }
+  ]
+ },
+ "state": "answer_with_exception",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "list",
+   "french": "Dans quels cas un salarié peut-il être licencié sans préavis ?",
+   "legal_terms": [
+    "licenciement avec effet immédiat",
+    "faute grave",
+    "salarié",
+    "préavis"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 141885,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 134711,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 148284,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 141878,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 142038,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141881,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 142394,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 148286,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 142693,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 141884,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 148282,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 141876,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 148285,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 142678,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 141883,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 148283,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 141885
+   },
+   {
+    "article_pk": 134711
+   },
+   {
+    "article_pk": 148284
+   },
+   {
+    "article_pk": 141878
+   },
+   {
+    "article_pk": 142038
+   },
+   {
+    "article_pk": 141881
+   },
+   {
+    "article_pk": 142394
+   },
+   {
+    "article_pk": 148286
+   },
+   {
+    "article_pk": 142693
+   },
+   {
+    "article_pk": 141884
+   },
+   {
+    "article_pk": 148282
+   },
+   {
+    "article_pk": 141876
+   },
+   {
+    "article_pk": 148285
+   },
+   {
+    "article_pk": 142678
+   },
+   {
+    "article_pk": 141883
+   },
+   {
+    "article_pk": 148283
+   }
+  ],
+  "replay": "eNqtVMFu2zAM_RVBpxWwA8t2HNeXYcCO-4OgMFSbToTKkivJaYOi_7Jrtk_YrfmxUamytomzXXYKQ5OPj08kn-iGViyiA62o08MdjWiDptQNl2i37-wBI2k3KgUy3jB03OP_r1xZcj-CtKThloyKWC65EfsdGWB0sZBk_8MZIFI0oBrvtz5lMPsd3whLPvsqIyKlSVrEjMVp4j2WVh2XFiKKFsWMBzD1g3DrGh4bGJzQCsNMYF1dCril1XLJclaWc4weJdBoyaIsyqPriCURS28iSiM1Shm9lvPmDcbkaXadYwpI7qA9ZKWYV0QLzGj3OytWyvfIDZGcSGjcaGAaiZU5Ir1jtWQJgnwxbka-zQhLWTyfEcQ0egVk_528fcljlszIJ8vH7uoSeDE_Af-AncYs-zv4Wpte2KtLKqQF9gudUCLge8lefr4988svAtb5Ej7ooEgDxMGjm9ADc9Ua3wR_e1odvtJGHq0_BhyNgdPqiUquViNfgZ8_46cD38T7O6P708lx-tSzMlwodLZ8678jsSP6Wj-gX2niAYlQxK3BD7P1rVbEaZ_yjIMeXLXbDp6EFNYhVGdwotf_awkkrLisHZgeJ35JQyj0oBzhG2gIdB04Ivp-v2sFPxDgI_LG_jYoNT3W9KsagCnqPICxWiE0UoOwVdjT3fvNaLhqxUFV_-pZvmDs1JmXaZmfOVm5KM-caZKVE5HlOebrkp0XKs4ji-tsCnMyPZ3iWUxFzicKLSbJZ1PpH50otsGDeVQ16BiUC1oFdYIeQYHQc-gy9BU6CdwD28AvMHrlgGUlnuYl7glsQPpJh0bYcAC3-L_RrR-Qw_37x8G07rBbFy7us99bHM8FdhHR0WK3ySzB9lBc5ae206Nq69ttzaWsW3B4F7XBMXz-De-yBGM"
+ }
+}

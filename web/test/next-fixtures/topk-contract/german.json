@@ -1,0 +1,820 @@
+{
+ "question": "Wie lange ist die Probezeit bei einem Arbeitsvertrag?",
+ "row": {
+  "question": "Wie lange ist die Probezeit bei einem Arbeitsvertrag?",
+  "language": "de",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 0,
+   "de": 3,
+   "en": 0,
+   "lb": 0
+  },
+  "question_type": "value",
+  "personal_case": false,
+  "french": "Quelle est la durée de la période d’essai dans un contrat de travail ?",
+  "legal_terms": [
+   "période d’essai",
+   "contrat de travail"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_121-5",
+   "date": "2026-07-01",
+   "why": null,
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 121-5.",
+   "number": "l121-5",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre Premier. Le contrat de travail en général > Section 3. Période d’essai",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141844,
+   "lines": [
+    1,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sans préjudice des dispositions de l’article L. 122-8, alinéa 2, le contrat de travail conclu pour une durée indéterminée peut prévoir une clause d’essai.",
+     "label": null
+    },
+    {
+     "n": 5,
+     "text": "La période d’essai convenue entre parties ne peut être inférieure à deux semaines, ni supérieure à six mois.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "Par dérogation aux dispositions de l’alinéa qui précède, la période maximale d’essai ne peut excéder: trois mois pour le salarié dont le niveau de formation professionnelle n’atteint pas celui du certificat d’aptitude technique et professionnelle de l’enseignement secondaire technique; douze mois pour le salarié dont le salaire mensuel brut de début atteint un niveau déterminé par voie de règlement grand-ducal.",
+     "label": null
+    },
+    {
+     "n": 7,
+     "text": "La période d’essai n’excédant pas un mois doit être exprimée en semaines entières; la période d’essai dépassant un mois doit être exprimée en mois entiers.",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "En cas de suspension de l’exécution du contrat pendant la période d’essai, cette période est prolongée d’une durée égale à celle de la suspension, sans que la prolongation de l’essai ne puisse excéder un mois.",
+     "label": null
+    },
+    {
+     "n": 9,
+     "text": "La clause d’essai ne peut être renouvelée.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Sans préjudice des dispositions de l’article L. 122-8, alinéa 2, le contrat de travail conclu pour une durée indéterminée peut prévoir une clause d’essai.",
+    "La période d’essai convenue entre parties ne peut être inférieure à deux semaines, ni supérieure à six mois.",
+    "Par dérogation aux dispositions de l’alinéa qui précède, la période maximale d’essai ne peut excéder: trois mois pour le salarié dont le niveau de formation professionnelle n’atteint pas celui du certificat d’aptitude technique et professionnelle de l’enseignement secondaire technique; douze mois pour le salarié dont le salaire mensuel brut de début atteint un niveau déterminé par voie de règlement grand-ducal.",
+    "La période d’essai n’excédant pas un mois doit être exprimée en semaines entières; la période d’essai dépassant un mois doit être exprimée en mois entiers.",
+    "En cas de suspension de l’exécution du contrat pendant la période d’essai, cette période est prolongée d’une durée égale à celle de la suspension, sans que la prolongation de l’essai ne puisse excéder un mois.",
+    "La clause d’essai ne peut être renouvelée."
+   ],
+   "label": "Art. L. 121-5.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "related",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_122-11",
+   "date": "2026-07-01",
+   "why": "désigné par la lecture",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 122-11.",
+   "number": "l122-11",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 8. Période d’essai",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2024-08-04",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141863,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": "2025-01-01",
+   "wording_until": null,
+   "wording_no": 4,
+   "wording_first_held": 0,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Le contrat de travail conclu pour une durée déterminée peut prévoir une clause d’essai conforme aux dispositions de l’article L. 121-5.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Lorsque le contrat ne comporte pas de terme précis, la période d’essai est calculée par rapport à la durée minimale du contrat.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Sans préjudice des dispositions de l’article L. 121-5, paragraphe 2, la période d’essai éventuellement convenue entre parties ne peut être, ni inférieure à deux semaines, ni supérieure à un quart de la durée fixée au contrat de travail à durée déterminée ou de la durée minimale pour laquelle le contrat à durée déterminée est conclu.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Le contrat de travail conclu pour une durée déterminée peut prévoir une clause d’essai conforme aux dispositions de l’article L. 121-5.",
+    "Lorsque le contrat ne comporte pas de terme précis, la période d’essai est calculée par rapport à la durée minimale du contrat.",
+    "Sans préjudice des dispositions de l’article L. 121-5, paragraphe 2, la période d’essai éventuellement convenue entre parties ne peut être, ni inférieure à deux semaines, ni supérieure à un quart de la durée fixée au contrat de travail à durée déterminée ou de la durée minimale pour laquelle le contrat à durée déterminée est conclu."
+   ],
+   "label": "Art. L. 122-11.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "preserved",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_122-8",
+   "date": "2026-07-01",
+   "why": "Art. L. 121-5. réserve Art. L. 122-8. (sans préjudice d)",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 122-8.",
+   "number": "l122-8",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 5. Succession de contrats",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141858,
+   "lines": [
+    2
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 2,
+     "text": "Le nouveau contrat ne peut dans ces cas prévoir une période d’essai.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Le nouveau contrat ne peut dans ces cas prévoir une période d’essai."
+   ],
+   "label": "Art. L. 122-8.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 141844,
+   "act_title": "Code du travail",
+   "article": "Art. L. 121-5.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre Premier. Le contrat de travail en général > Section 3. Période d’essai",
+   "how": "keywords+meaning+outline",
+   "score": 0.6656
+  },
+  {
+   "label": "A2",
+   "article_pk": 134658,
+   "act_title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembourgeois.",
+   "article": "Art. 3.1.2-6.",
+   "heading": null,
+   "path": "LIVRE 3 DROIT DU TRAVAIL APPLICABLE AUX GENS DE MER > TITRE 1er Relations individuelles et collectives du travail > Chapitre 2 Contrat d’engagement maritime > Section 1re Le contrat d’engagement maritime en général > Sous-section 3 Période d’essai",
+   "how": "keywords+meaning+outline",
+   "score": 0.5242
+  },
+  {
+   "label": "A3",
+   "article_pk": 134670,
+   "act_title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembourgeois.",
+   "article": "Art. 3.1.2-18.",
+   "heading": null,
+   "path": "LIVRE 3 DROIT DU TRAVAIL APPLICABLE AUX GENS DE MER > TITRE 1er Relations individuelles et collectives du travail > Chapitre 2 Contrat d’engagement maritime > Section 2 Le contrat d’engagement maritime à durée déterminée ou au voyage > Sous-section 7 Période d’essai",
+   "how": "keywords+meaning+outline",
+   "score": 0.5109
+  },
+  {
+   "label": "A4",
+   "article_pk": 141863,
+   "act_title": "Code du travail",
+   "article": "Art. L. 122-11.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 8. Période d’essai",
+   "how": "keywords+meaning",
+   "score": 0.6636
+  },
+  {
+   "label": "A5",
+   "article_pk": 141911,
+   "act_title": "Code du travail",
+   "article": "Art. L. 131-7.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre III Travail intérimaire > Chapitre Premier. Réglementation du travail intérimaire > Section 4. Rapports entre l’entreprise de travail intérimaire et le salarié intérimaire: Contrat de mission",
+   "how": "keywords+meaning",
+   "score": 0.6238
+  },
+  {
+   "label": "A6",
+   "article_pk": 142231,
+   "act_title": "Code du travail",
+   "article": "Art. L. 234-48.",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre IV. Congés spéciaux > Section 6. Congé parental",
+   "how": "keywords+meaning",
+   "score": 0.5044
+  },
+  {
+   "label": "A7",
+   "article_pk": 141874,
+   "act_title": "Code du travail",
+   "article": "Art. L. 123-8.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre III. Travail à temps partiel > Section 5. Droits du salarié à temps partiel",
+   "how": "meaning",
+   "score": 0.59
+  },
+  {
+   "label": "A8",
+   "article_pk": 141862,
+   "act_title": "Code du travail",
+   "article": "Art. L. 122-10 bis .",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 7. Egalité de traitement",
+   "how": "meaning",
+   "score": 0.5832
+  },
+  {
+   "label": "A9",
+   "article_pk": 141980,
+   "act_title": "Code du travail",
+   "article": "Art. L. 152-6.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre V ( L. 4 juin 2020 ) Emploi et stages des élèves et étudiants > Chapitre II. Stages des élèves et étudiants ( L. 4 juin 2020 ) > Section 2. Stages pratiques en vue de l’acquisition d’une expérience professionnelle",
+   "how": "meaning",
+   "score": 0.5514
+  },
+  {
+   "label": "A10",
+   "article_pk": 141914,
+   "act_title": "Code du travail",
+   "article": "Art. L. 131-10.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre III Travail intérimaire > Chapitre Premier. Réglementation du travail intérimaire > Section 4. Rapports entre l’entreprise de travail intérimaire et le salarié intérimaire: Contrat de mission",
+   "how": "keywords",
+   "score": 0.4525
+  },
+  {
+   "label": "A11",
+   "article_pk": 141854,
+   "act_title": "Code du travail",
+   "article": "Art. L. 122-4.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 3. Durée du contrat à durée déterminée",
+   "how": "meaning",
+   "score": 0.5438
+  },
+  {
+   "label": "A12",
+   "article_pk": 142806,
+   "act_title": "Code du travail",
+   "article": "Art. L. 543-18.",
+   "heading": null,
+   "path": "LIVRE V. EMPLOI ET CHOMAGE > Titre IV Placement des salariés > Chapitre III. Insertion des jeunes demandeurs d’emploi dans la vie active ( L. 29 mars 2013 ) > Section 2. Le contrat d’initiation à l’emploi",
+   "how": "meaning",
+   "score": 0.5358
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "duree": 6087,
+   "periode": 6102,
+   "essai": 720,
+   "contrat": 25421,
+   "travail": 13981
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Code du travail",
+   "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou"
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "de",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "value",
+     "personal_case": false,
+     "french": "Quelle est la durée de la période d’essai dans un contrat de travail ?",
+     "legal_terms": [
+      "période d’essai",
+      "contrat de travail"
+     ],
+     "in_scope": true
+    },
+    "ms": 1906,
+    "tokens_in": 256,
+    "tokens_out": 116,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "duree",
+      "periode",
+      "essai",
+      "contrat",
+      "travail"
+     ],
+     "terms_a_statute_would_use": [],
+     "articles_holding_each_word": {
+      "duree": 6087,
+      "periode": 6102,
+      "essai": 720,
+      "contrat": 25421,
+      "travail": 13981
+     },
+     "articles_kept": 10
+    },
+    "ms": 81
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 2,
+     "started_while_the_question_was_described": 0,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/code/travail",
+       "title": "Code du travail",
+       "outline_rows": 471,
+       "parts_named": [
+        "Section 3. Période d’essai"
+       ],
+       "articles_in_parts": 1,
+       "ms": 1311,
+       "tokens_in": 17952,
+       "tokens_out": 35,
+       "reason": "La section sur la période d’essai du contrat de travail en général contient la durée applicable."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1990/11/09/n1",
+       "title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou",
+       "outline_rows": 125,
+       "parts_named": [
+        "Sous-section 3 Période d’essai",
+        "Sous-section 7 Période d’essai"
+       ],
+       "articles_in_parts": 2,
+       "ms": 1034,
+       "tokens_in": 7286,
+       "tokens_out": 42,
+       "reason": "Ces sous-sections traitent de la période d’essai des contrats d’engagement maritime, selon leur durée."
+      }
+     ],
+     "articles_from_the_parts": 3,
+     "whole_part_for_a_list": false
+    },
+    "ms": 1325,
+    "tokens_in": 25238,
+    "tokens_out": 77,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 2
+    },
+    "ms": 1576,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 7
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "A1",
+     "lines": [
+      1,
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Salariés en CDI comportant une clause d’essai",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "A1 fixe les limites et les modalités de durée en CDI, tandis qu’A4 précise le plafond applicable en CDD."
+    },
+    "ms": 1882,
+    "tokens_in": 4903,
+    "tokens_out": 150,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 6,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [],
+     "inbound_checked": 7,
+     "outbound_checked": 12,
+     "followed": 1,
+     "see_also": 0
+    },
+    "ms": 1
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer",
+     "notes": [
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 5374,
+  "tokens": {
+   "gpt-6-luna": [
+    25494,
+    193
+   ],
+   "text-embedding-3-large": [
+    20,
+    0
+   ],
+   "gpt-6.2-sol": [
+    4903,
+    150
+   ]
+  },
+  "cost_usd_list_price": 0.01576,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer",
+    "state": "answer"
+   }
+  ],
+  "cost_usd": 0.01576,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 1906,
+    "tokens_in": 256,
+    "tokens_out": 116
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 1325,
+    "tokens_in": 25238,
+    "tokens_out": 77
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1882,
+    "tokens_in": 4903,
+    "tokens_out": 150
+   }
+  ]
+ },
+ "state": "answer",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "de",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Quelle est la durée de la période d’essai dans un contrat de travail ?",
+   "legal_terms": [
+    "période d’essai",
+    "contrat de travail"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 141844,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 134658,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 134670,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 141863,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141911,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 142231,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141874,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141862,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141980,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141914,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 141854,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 142806,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 141844
+   },
+   {
+    "article_pk": 134658
+   },
+   {
+    "article_pk": 134670
+   },
+   {
+    "article_pk": 141863
+   },
+   {
+    "article_pk": 141911
+   },
+   {
+    "article_pk": 142231
+   },
+   {
+    "article_pk": 141874
+   },
+   {
+    "article_pk": 141862
+   },
+   {
+    "article_pk": 141980
+   },
+   {
+    "article_pk": 141914
+   },
+   {
+    "article_pk": 141854
+   },
+   {
+    "article_pk": 142806
+   }
+  ],
+  "replay": "eNp1VEtu2zAQvQrBVQvQhiR_o02RfRftqgsjMGhp7LChSYUfpW4RoNfoEXKO3KQn6aNCp6ntrjR85DzOG77RD97zuhS84zUPtrvjgjcItW2kRty-iTuc5NtoDOlRXwK4x_qLIqal2RFTPrAWq0_Obug7qcA2pBgpQ3t27RAH35MLTu4-JOKI5Kqo5qOyHFVFQjyvt1J7EhwRl8Y_kAPucmX1K7Lh9WpVTsvldIrtqImLVSlmYi4WYimubgTnwkStxQtdCm_EkDCfIIG0DNQOOZWY4HT7_OTVzjw_sU46qGGamhAd_Y9ltkQzHHly_cBTgePahTH7OGZlVY5mY-ZAmbbZX7waLcfsnYcK1mH7a2xVQ6x9f34L6MwtNOK75_Wwyxt9jF4DOgad5PUPnl4hyh1Q3lLqJ1QmfOvs_rTXwZ4iOyeVSanykPbpWziy39oH4MayRMiUYeGW2H0kH5Q1NQs2pTzCDRlah0OXiuiljqmOrSPTQA7_HElrYjiVetxGNAH6k31Y9_zklEXc_v75i7yXCrehUdGwxhp4JqSD-PZSaZb8o2kn9TqQ28MsK35OkIx8lsrR0o6ctwbJjfSULYfy796aqpGmVUMD05NPpvP05GfgojgFs8VOwauyPAOralJeSF9ML3FWFziXxaWLLqXPzsFqWcz_AdEYh2E_diBrziqzrqwk156rzfXlinIN-daXe0Ct8etYwaLUkx782SgPq6RZPmDd2MGxwyifDrsPg4-P_4PHNBR48tkkdSp61FyMi3K2gByTnLC10bTrzWEttV63FDDK1nl-8_gHJDCEMA"
+ }
+}

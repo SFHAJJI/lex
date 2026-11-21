@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-text_withheld-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "official_identity": {
+      "type": "string"
+    },
+    "official_link": {
+      "type": "string"
+    },
+    "content_sha256": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "official_identity",
+    "official_link",
+    "content_sha256"
+  ]
+}

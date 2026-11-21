@@ -1,0 +1,757 @@
+{
+ "question": "Que dit le RGPD sur le délai pour notifier une violation de données ?",
+ "row": {
+  "question": "Que dit le RGPD sur le délai pour notifier une violation de données ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [
+   {
+    "text": "RGPD",
+    "kind": "code",
+    "act_id": null
+   }
+  ],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 6,
+   "de": 0,
+   "en": 0,
+   "lb": 1
+  },
+  "question_type": "value",
+  "personal_case": false,
+  "french": "Que dit le RGPD sur le délai pour notifier une violation de données ?",
+  "legal_terms": [
+   "RGPD",
+   "violation de données à caractère personnel",
+   "notification",
+   "autorité de contrôle"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "candidate",
+   "kind": "article",
+   "work": "tc-2011-08-10-n1",
+   "anchor": "art_3",
+   "date": "2020-12-25",
+   "why": null,
+   "act_title": "Loi modifiée du 30 mai 2005\\n - relative aux dispositions spécifiques de protection de la personne à l’égard du traitement des données à caractère personnel dans le secteur des communications électroniques et\\n - portant modification des articles 88-2 et 88-4 du Code d’instruction criminelle.",
+   "act_id": "/eli/etat/leg/tc/2011/08/10/n1",
+   "article": "Art. 3.",
+   "number": "3",
+   "heading": "Sécurité du traitement",
+   "path": null,
+   "version_from": "2020-12-25",
+   "version_to": null,
+   "article_since": "2020-12-25",
+   "official": "https://legilux.public.lu/eli/etat/leg/tc/2011/08/10/n1/jo",
+   "article_pk": 229527,
+   "lines": [
+    1,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "wording_since": null,
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Le fournisseur de services prend les mesures techniques et d’organisation appropriées afin de garantir la sécurité de ses services, le cas échéant conjointement avec l’opérateur en ce qui concerne la sécurité du réseau. En cas d’atteinte ou de risque d’atteinte grave à la sécurité du réseau ou des services, le fournisseur de services et le cas échéant l’opérateur prend les mesures appropriées pour y remédier, les frais étant à sa seule charge.",
+     "label": null
+    },
+    {
+     "n": 11,
+     "text": "Sans préjudice de l’obligation du fournisseur d’informer l’abonné et le particulier concerné, si le fournisseur n’a pas déjà averti l’abonné ou le particulier de la violation de données à caractère personnel, la Commission nationale pour la protection des données peut, après avoir examiné les effets éventuellement négatifs de cette violation, exiger du fournisseur qu’il s’exécute.",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "La notification faite à l’abonné ou au particulier décrit au minimum la nature de la violation de données à caractère personnel et les points de contact auprès desquels des informations supplémentaires peuvent être obtenues et recommande des mesures à prendre pour atténuer les conséquences négatives possibles de la violation de données à caractère personnel. La notification faite à la Commission nationale pour la protection des données décrit en outre les conséquences de la violation de données à caractère personnel, et les mesures proposées ou prises par le fournisseur pour y remédier.",
+     "label": null
+    },
+    {
+     "n": 13,
+     "text": "La Commission nationale pour la protection des données peut adopter des lignes directrices et, le cas échéant, édicter des instructions précisant les circonstances dans lesquelles le fournisseur est tenu de notifier la violation de données à caractère personnel, le format applicable à cette notification et sa procédure de transmission.",
+     "label": null
+    },
+    {
+     "n": 14,
+     "text": "Lors d’un premier manquement aux obligations de notification, le fournisseur est averti par la Commission nationale pour la protection des données. En cas de manquement répété la Commission nationale peut prononcer une amende d’ordre qui ne peut excéder 50.000 euros.",
+     "label": null
+    },
+    {
+     "n": 15,
+     "text": "Un recours en réformation est ouvert devant le tribunal administratif contre les décisions prises par la Commission nationale pour la protection des données dans le cadre du présent article.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Le fournisseur de services prend les mesures techniques et d’organisation appropriées afin de garantir la sécurité de ses services, le cas échéant conjointement avec l’opérateur en ce qui concerne la sécurité du réseau. En cas d’atteinte ou de risque d’atteinte grave à la sécurité du réseau ou des services, le fournisseur de services et le cas échéant l’opérateur prend les mesures appropriées pour y remédier, les frais étant à sa seule charge.",
+    "Sans préjudice de l’obligation du fournisseur d’informer l’abonné et le particulier concerné, si le fournisseur n’a pas déjà averti l’abonné ou le particulier de la violation de données à caractère personnel, la Commission nationale pour la protection des données peut, après avoir examiné les effets éventuellement négatifs de cette violation, exiger du fournisseur qu’il s’exécute.",
+    "La notification faite à l’abonné ou au particulier décrit au minimum la nature de la violation de données à caractère personnel et les points de contact auprès desquels des informations supplémentaires peuvent être obtenues et recommande des mesures à prendre pour atténuer les conséquences négatives possibles de la violation de données à caractère personnel. La notification faite à la Commission nationale pour la protection des données décrit en outre les conséquences de la violation de données à caractère personnel, et les mesures proposées ou prises par le fournisseur pour y remédier.",
+    "La Commission nationale pour la protection des données peut adopter des lignes directrices et, le cas échéant, édicter des instructions précisant les circonstances dans lesquelles le fournisseur est tenu de notifier la violation de données à caractère personnel, le format applicable à cette notification et sa procédure de transmission.",
+    "Lors d’un premier manquement aux obligations de notification, le fournisseur est averti par la Commission nationale pour la protection des données. En cas de manquement répété la Commission nationale peut prononcer une amende d’ordre qui ne peut excéder 50.000 euros.",
+    "Un recours en réformation est ouvert devant le tribunal administratif contre les décisions prises par la Commission nationale pour la protection des données dans le cadre du présent article."
+   ],
+   "label": "Art. 3.",
+   "version": {
+    "id": null,
+    "from": "2020-12-25",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "candidate",
+   "kind": "article",
+   "work": "loi-2026-05-05-a225",
+   "anchor": "art_24",
+   "date": "2026-05-05",
+   "why": null,
+   "act_title": "Loi du 5 mai 2026 concernant des mesures destinées à assurer un niveau élevé de cybersécurité et portant modification de :\\n1° la loi modifiée du 14 août 2000 relative au commerce électronique ;\\n2° la loi modifiée du 23 juillet 2016 portant création d’un Haut-Commissariat à la Protection nationale ;\\n3° la loi du 17 décembre 2021 sur les réseaux et les services de communications électroniques.\\n",
+   "act_id": "/eli/etat/leg/loi/2026/05/05/a225",
+   "article": "Art. 24.",
+   "number": "24",
+   "heading": null,
+   "path": "Chapitre 6 Supervision et exécution",
+   "version_from": "2026-05-05",
+   "version_to": null,
+   "article_since": null,
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2026/05/05/a225/jo",
+   "article_pk": 173732,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": null,
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Lorsque les autorités compétentes prennent connaissance, dans le cadre de la supervision ou de l’exécution, du fait que la violation commise par une entité essentielle ou importante à l’égard des obligations énoncées aux articles 12 et 14 peut donner lieu à une violation de données à caractère personnel au sens de l’article 4, point 12°, du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié, devant être notifiée en vertu de l’article 33 dudit règlement, elles en informent sans retard injustifié les autorités de contrôle visées à l’article 55 ou 56 dudit règlement.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Lorsque les autorités de contrôle visées à l’article 55 ou 56 du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié, imposent une amende administrative en vertu de l’article 58, paragraphe 2, point i), dudit règlement, les autorités compétentes n’imposent pas d’amende administrative au titre de l’article 26 pour une violation visée au paragraphe 1er et découlant du même comportement que celui qui a fait l’objet d’une amende administrative au titre de l’article 58, paragraphe 2, point i), du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié. Les autorités compétentes peuvent toutefois imposer les mesures d’exécution prévues à l’article 22, paragraphe 4, points 1° à 8°, à l’article 22, paragraphe 5, et à l’article 23, paragraphe 4, points 1° à 7°.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Lorsque l’autorité de contrôle compétente en vertu du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié, est établie dans un autre État membre de l’Union européenne que l’autorité compétente, l’autorité compétente informe l’autorité de contrôle luxembourgeoise de la violation potentielle de données à caractère personnel visée au paragraphe 1er.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Lorsque les autorités compétentes prennent connaissance, dans le cadre de la supervision ou de l’exécution, du fait que la violation commise par une entité essentielle ou importante à l’égard des obligations énoncées aux articles 12 et 14 peut donner lieu à une violation de données à caractère personnel au sens de l’article 4, point 12°, du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié, devant être notifiée en vertu de l’article 33 dudit règlement, elles en informent sans retard injustifié les autorités de contrôle visées à l’article 55 ou 56 dudit règlement.",
+    "Lorsque les autorités de contrôle visées à l’article 55 ou 56 du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié, imposent une amende administrative en vertu de l’article 58, paragraphe 2, point i), dudit règlement, les autorités compétentes n’imposent pas d’amende administrative au titre de l’article 26 pour une violation visée au paragraphe 1er et découlant du même comportement que celui qui a fait l’objet d’une amende administrative au titre de l’article 58, paragraphe 2, point i), du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié. Les autorités compétentes peuvent toutefois imposer les mesures d’exécution prévues à l’article 22, paragraphe 4, points 1° à 8°, à l’article 22, paragraphe 5, et à l’article 23, paragraphe 4, points 1° à 7°.",
+    "Lorsque l’autorité de contrôle compétente en vertu du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l’égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), tel que modifié, est établie dans un autre État membre de l’Union européenne que l’autorité compétente, l’autorité compétente informe l’autorité de contrôle luxembourgeoise de la violation potentielle de données à caractère personnel visée au paragraphe 1er."
+   ],
+   "label": "Art. 24.",
+   "version": {
+    "id": null,
+    "from": "2026-05-05",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 229527,
+   "act_title": "Loi modifiée du 30 mai 2005\\n - relative aux dispositions spécifiques de protection de la personne à l’égard du traitement des données à caractère personnel dans le secteur des communications électroniques et\\n - portant modification des articles 88-2 et 88-4 du Code d’instruction criminelle.",
+   "article": "Art. 3.",
+   "heading": "Sécurité du traitement",
+   "path": null,
+   "how": "keywords+meaning",
+   "score": 0.5778
+  },
+  {
+   "label": "A2",
+   "article_pk": 173732,
+   "act_title": "Loi du 5 mai 2026 concernant des mesures destinées à assurer un niveau élevé de cybersécurité et portant modification de :\\n1° la loi modifiée du 14 août 2000 relative au commerce électronique ;\\n2° la loi modifiée du 23 juillet 2016 portant création d’un Haut-Commissariat à la Protection nationale ;\\n3° la loi du 17 décembre 2021 sur les réseaux et les services de communications électroniques.\\n",
+   "article": "Art. 24.",
+   "heading": null,
+   "path": "Chapitre 6 Supervision et exécution",
+   "how": "keywords+meaning",
+   "score": 0.5033
+  },
+  {
+   "label": "A3",
+   "article_pk": 204453,
+   "act_title": "Loi du 1er août 2018 portant organisation de la Commission nationale pour la protection des données et mise en oeuvre du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l'égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), portant modification du Code du travail et de la loi modifiée du 25 mars 2015 fixant le régime des traitements et les conditions et modalités d'avancement des fonctionnaires de l'État.",
+   "article": "Art. 53.",
+   "heading": null,
+   "path": "Titre Ier Dispositions générales > Chapitre 2 Commission nationale pour la protection des données > Section XII Prescriptions",
+   "how": "meaning",
+   "score": 0.548
+  },
+  {
+   "label": "A4",
+   "article_pk": 240910,
+   "act_title": "Loi du 6 juin 2018 relative aux dépositaires centraux de titres et portant mise en œuvre du règlement (UE) n° 909/2014 du Parlement européen et du Conseil du 23 juillet 2014 concernant l’amélioration du règlement de titres dans l’Union européenne et les dépositaires centraux de titres, et modifiant les directives 98/26/CE et 2014/65/UE ainsi que le règlement (UE) n° 236/2012",
+   "article": "Art. 4.",
+   "heading": "Notification des violations à la CSSF",
+   "path": null,
+   "how": "keywords",
+   "score": 0.4024
+  },
+  {
+   "label": "A5",
+   "article_pk": 204441,
+   "act_title": "Loi du 1er août 2018 portant organisation de la Commission nationale pour la protection des données et mise en oeuvre du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l'égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), portant modification du Code du travail et de la loi modifiée du 25 mars 2015 fixant le régime des traitements et les conditions et modalités d'avancement des fonctionnaires de l'État.",
+   "article": "Art. 41.",
+   "heading": null,
+   "path": "Titre Ier Dispositions générales > Chapitre 2 Commission nationale pour la protection des données > Section VIII Enquête et décision sur l’issue de l’enquête",
+   "how": "meaning",
+   "score": 0.5296
+  },
+  {
+   "label": "A6",
+   "article_pk": 240909,
+   "act_title": "Loi du 6 juin 2018 relative aux dépositaires centraux de titres et portant mise en œuvre du règlement (UE) n° 909/2014 du Parlement européen et du Conseil du 23 juillet 2014 concernant l’amélioration du règlement de titres dans l’Union européenne et les dépositaires centraux de titres, et modifiant les directives 98/26/CE et 2014/65/UE ainsi que le règlement (UE) n° 236/2012",
+   "article": "Art. 3.",
+   "heading": "Notification des violations en interne",
+   "path": null,
+   "how": "keywords",
+   "score": 0.4253
+  },
+  {
+   "label": "A7",
+   "article_pk": 204454,
+   "act_title": "Loi du 1er août 2018 portant organisation de la Commission nationale pour la protection des données et mise en oeuvre du règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l'égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données), portant modification du Code du travail et de la loi modifiée du 25 mars 2015 fixant le régime des traitements et les conditions et modalités d'avancement des fonctionnaires de l'État.",
+   "article": "Art. 54.",
+   "heading": null,
+   "path": "Titre Ier Dispositions générales > Chapitre 2 Commission nationale pour la protection des données > Section XII Prescriptions",
+   "how": "meaning",
+   "score": 0.5276
+  },
+  {
+   "label": "A8",
+   "article_pk": 146787,
+   "act_title": "Loi du 11 juin 2026 portant :\\n1° mise en œuvre :\\na) du règlement (UE) 2024/1347 du Parlement européen et du Conseil du 14 mai 2024 concernant les normes relatives aux conditions que doivent remplir les ressortissants des pays tiers ou les apatrides pour pouvoir bénéficier d’une protection internationale, à un statut uniforme pour les réfugiés ou les personnes pouvant bénéficier de la protection subsidiaire et au contenu de cette protection, modifiant la directive 2003/109/CE du Conseil et abrogeant la directive 2011/95/UE du Parlement européen et du Conseil ;\\nb) du règlement (UE) 2024/1348 du Parlement européen et du Conseil du 14 mai 2024 instituant une procédure commune en matière de protection internationale dans l’Union et abrogeant la directive 2013/32/UE ;\\nc) du règlement (UE) 2024/1349 du Parlement européen et du Conseil du 14 mai 2024 instituant une procédure de retour à la frontière et modifiant le règlement (UE) 2021/1148 ;\\nd) du règlement (UE) 2024/1351 du Parlement européen et du Conseil du 14 mai 2024 relatif à la gestion de l’asile et de la migration, modifiant les règlements (UE) 2021/1147 et (UE) 2021/1060 et abrogeant le règlement (UE) n° 604/2013 ;\\ne) du règlement (UE) 2024/1356 du Parlement européen et du Conseil du 14 mai 2024 établissant le filtrage des ressortissants de pays tiers aux frontières extérieures et modifiant les règlements (CE) n° 767/2008, (UE) 2017/2226, (UE) 2018/1240 et (UE) 2019/817 ;\\nf) du règlement (UE) 2024/1358 du Parlement européen et du Conseil du 14 mai 2024 relatif à la création d’« Eurodac » pour la comparaison des données biométriques aux fins de l’application efficace des règlements (UE) 2024/1351 et (UE) 2024/1350 du Parlement européen et du Conseil et de la directive 2001/55/CE du Conseil et aux fins de l’identification des ressortissants de pays tiers et apatrides en séjour irrégulier, et relatif aux demandes de comparaison avec les données d’Eurodac présentées par les autorités répressives des États membres et par Europol à des fins répressives, modifiant les règlements (UE) 2018/1240 et (UE) 2019/818 du Parlement européen et du Conseil et abrogeant le règlement (UE) n° 603/2013 du Parlement européen et du Conseil ;\\n2° modification :\\na) de la loi modifiée du 29 août 2008 sur la libre circulation des personnes et l’immigration ;\\nb) de la loi modifiée du 28 mai 2009 concernant le Centre de rétention ;\\nc) de la loi modifiée du 18 décembre 2015 relative à la protection internationale et à la protection temporaire ;\\nd) de la loi du 7 août 2023 portant organisation de l’assistance judiciaire et portant abrogation de l’article 37-1 de la loi modifiée du 10 août 1991 sur la profession d’avocat.",
+   "article": "Art. 38.",
+   "heading": null,
+   "path": "Chapitre 7 Dispositions pénales",
+   "how": "meaning",
+   "score": 0.5187
+  },
+  {
+   "label": "A9",
+   "article_pk": 113805,
+   "act_title": "Loi du 14 juillet 2023 portant mise en place d’un mécanisme de filtrage national des investissements directs étrangers susceptibles de porter atteinte à la sécurité ou à l’ordre public aux fins de la mise en œuvre du règlement (UE) 2019/452 du Parlement européen et du Conseil du 19 mars 2019 établissant un cadre pour le filtrage des investissements directs étrangers dans l’Union, tel que modifié.",
+   "article": "Art. 15.",
+   "heading": "Communication à la personne concernée d’une violation de données à caractère personnel",
+   "path": "Chapitre 1 Mécanisme de filtrage national des investissements directs étrangers susceptibles de porter atteinte à la sécurité ou à l’ordre public > Section 6 Traitement des données",
+   "how": "meaning",
+   "score": 0.5087
+  },
+  {
+   "label": "A10",
+   "article_pk": 157808,
+   "act_title": "Règlement grand-ducal du 26 octobre 2023 définissant les métiers et les professions organisés sous forme de formation professionnelle en cours d’emploi, ainsi que les conditions d’admission et modalités de fonctionnement.",
+   "article": "Art. 9.",
+   "heading": "Données personnelles",
+   "path": "Annexe – CONVENTION DE PRATIQUE PROFESSIONNELLE DANS LE CADRE DE LA FORMATION EN COURS D’EMPLOI DE ……………………………",
+   "how": "keywords",
+   "score": 0.3159
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "rgpd": 1,
+   "delai": 7465,
+   "notifier": 4248,
+   "violation": 940,
+   "donnees": 7709,
+   "caractere": 3988,
+   "personnel": 20582,
+   "notification": 2764,
+   "autorite": 15139,
+   "controle": 25421
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 1er août 2018 portant organisation de la Commission nationale pour la protection de",
+   "Loi du 30 mai 2018 relative aux marchés d’instruments financiers et portant :\\n1. transpos",
+   "Loi du 11 juin 2026 portant :\\n1° mise en œuvre :\\na) du règlement (UE) 2024/1347 du Parle"
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ],
+  "closest": {
+   "article": "Art. 3.",
+   "heading": "Sécurité du traitement",
+   "act_title": "Loi modifiée du 30 mai 2005\\n - relative aux dispositions spécifiques de protection de la personne à l’égard du traitement des données à caractère personnel dans le secteur des communications électroniques et\\n - portant modification des articles 88-2 et 88-4 du Code d’instruction criminelle.",
+   "holds": [
+    "notifier",
+    "violation",
+    "donnees",
+    "caractere",
+    "personnel",
+    "notification",
+    "controle"
+   ],
+   "lacks": [
+    "rgpd",
+    "delai",
+    "autorite"
+   ]
+  }
+ },
+ "notes": [
+  "european_text_not_read"
+ ],
+ "outcome": "candidates",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [
+      "RGPD"
+     ],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "value",
+     "personal_case": false,
+     "french": "Que dit le RGPD sur le délai pour notifier une violation de données ?",
+     "legal_terms": [
+      "RGPD",
+      "violation de données à caractère personnel",
+      "notification",
+      "autorité de contrôle"
+     ],
+     "in_scope": true
+    },
+    "ms": 2427,
+    "tokens_in": 260,
+    "tokens_out": 121,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "european_text",
+    "who": "code",
+    "detail": {
+     "named_in_question": "RGPD",
+     "read_by_the_assistant": false
+    },
+    "ms": null
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "rgpd",
+      "delai",
+      "notifier",
+      "violation",
+      "donnees"
+     ],
+     "terms_a_statute_would_use": [
+      "caractere",
+      "personnel",
+      "notification",
+      "autorite",
+      "controle"
+     ],
+     "articles_holding_each_word": {
+      "rgpd": 1,
+      "delai": 7465,
+      "notifier": 4248,
+      "violation": 940,
+      "donnees": 7709,
+      "caractere": 3988,
+      "personnel": 20582,
+      "notification": 2764,
+      "autorite": 15139,
+      "controle": 25421
+     },
+     "articles_kept": 10
+    },
+    "ms": 78
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/2018/08/01/a686",
+       "title": "Loi du 1er août 2018 portant organisation de la Commission nationale pour la protection de",
+       "outline_rows": 30,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1292,
+       "tokens_in": 1565,
+       "tokens_out": 33,
+       "reason": "La loi fournie ne semble pas traiter du délai de notification des violations prévu par le RGPD."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2018/05/30/a446",
+       "title": "Loi du 30 mai 2018 relative aux marchés d’instruments financiers et portant :\\n1. transpos",
+       "outline_rows": 24,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1190,
+       "tokens_in": 1382,
+       "tokens_out": 37,
+       "reason": "Cette loi porte sur les marchés d’instruments financiers et ne traite pas du délai de notification prévu par le RGPD."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2026/06/11/a284",
+       "title": "Loi du 11 juin 2026 portant :\\n1° mise en œuvre :\\na) du règlement (UE) 2024/1347 du Parle",
+       "outline_rows": 17,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 3782,
+       "tokens_in": 1037,
+       "tokens_out": 242,
+       "reason": "Le texte porte sur des règles d’asile et ne traite pas du délai de notification d’une violation de données prévu par le RGPD."
+      }
+     ],
+     "articles_from_the_parts": 0,
+     "whole_part_for_a_list": false
+    },
+    "ms": 2522,
+    "tokens_in": 3984,
+    "tokens_out": 312,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 8
+    },
+    "ms": 3233,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 2,
+     "period_spans_several_versions": 0
+    },
+    "ms": 8
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 10,
+     "pointed": "",
+     "lines": [],
+     "answer_found": false,
+     "found_by": null,
+     "outline_walked": true,
+     "complete_answer_found": false,
+     "who_is_covered": "",
+     "text_reach": "none",
+     "question_is_about_that_group": false,
+     "reason": "L’article 33 du RGPD est cité par A2, mais son texte ne figure pas parmi les articles proposés."
+    },
+    "ms": 1662,
+    "tokens_in": 4695,
+    "tokens_out": 94,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 0,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   }
+  ],
+  "ms": 6725,
+  "tokens": {
+   "text-embedding-3-large": [
+    17,
+    0
+   ],
+   "gpt-6-luna": [
+    4572,
+    508
+   ],
+   "gpt-6.2-sol": [
+    4695,
+    94
+   ]
+  },
+  "cost_usd_list_price": 0.01231,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:candidates",
+    "state": "candidates"
+   }
+  ],
+  "cost_usd": 0.01231,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2427,
+    "tokens_in": 260,
+    "tokens_out": 121
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 2522,
+    "tokens_in": 3984,
+    "tokens_out": 312
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1662,
+    "tokens_in": 4695,
+    "tokens_out": 94
+   }
+  ]
+ },
+ "state": "candidates",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Que dit le RGPD sur le délai pour notifier une violation de données ?",
+   "legal_terms": [
+    "RGPD",
+    "violation de données à caractère personnel",
+    "notification",
+    "autorité de contrôle"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 229527,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 173732,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 204453,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 240910,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 204441,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 240909,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 204454,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 146787,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 113805,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 157808,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 229527
+   },
+   {
+    "article_pk": 173732
+   },
+   {
+    "article_pk": 204453
+   },
+   {
+    "article_pk": 240910
+   },
+   {
+    "article_pk": 204441
+   },
+   {
+    "article_pk": 240909
+   },
+   {
+    "article_pk": 204454
+   },
+   {
+    "article_pk": 146787
+   },
+   {
+    "article_pk": 113805
+   },
+   {
+    "article_pk": 157808
+   }
+  ],
+  "replay": "eNqtU82O2jAQfhXLZ1PFTiBsLr1U6rXtFSHkdQaI1thZ_9CiFe_SY7n3DfJiHYPZ7qY5VoqU8efxfPPzzQs90oYz2tOGBts_UUYVmtoqqdFu39g9etJtNAb07MgReMbz1wik7QLRQL59_vKJ-OiS3Q4XLTvSWzwaG7ptB45EA-TYWS1DZw1p0csaM1zAk4-JKmI4UYjFjPOZKBLiabOV2gOjaFElTdu1MoDHO5fzbd6hj7RZrYR4mIua_fWnbMUZx08wXjJeMT5fM0qZiVqzG0Ey1-hWl3Upxk8FKyf9ETR7ZMT_gTbXW6r03Xo14G70kjYvVEuzi3IHqZkuVZloEN86exh3INgxsnOyMwi28pTu4Ue4R9_b74gbS1JA0hkS9kCeI_jU7YYEm56ccWoZ2oRTn5I4Sh2xTuQHo_b_daQadlJvArgDzm9FUzREp_2Hn0RJJ1UYfjkgPThvk9LQ_0amrk_wKGOwrgvDJT1X1gQ3_NZAcQi3R8iopIcsHSz4aVoUk-NGUBRVNS_HYFU88GLCs-ITnsXDVMxqzF4t6uU_KfFyWczH4LxeFst3IJbrcDnvdeVKcu4525xfzijnkFkzzy0yBtO43CsUJxyx5ygvUJ2_9fvxlHbPtkkjLmqYXDwfrip-u6PntBY490UtsJ7oMdviQ8FFiR0zSQ4Qne1BohBRxRuc8saBbOn6_Ad65m2z"
+ }
+}

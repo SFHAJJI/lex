@@ -1,0 +1,101 @@
+{
+  "_note": "SYNTHETIC test input in the shape of GET /api/next/article-by (see lex-next/app/server.py, article): not an answer of the engine.",
+  "article_pk": 96064,
+  "work": "loi-1997-07-27-n10",
+  "anchor": "art_21",
+  "refers_to": [
+    {
+      "article_pk": 96065,
+      "article": "Article 22",
+      "heading": "Mise en demeure et faculté de résiliation",
+      "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+      "type": "pointer",
+      "trigger": "visé à",
+      "certainty": "sure",
+      "raw": "article 22",
+      "sub": null,
+      "work": "loi-1997-07-27-n10",
+      "anchor": "art_22",
+      "date": "2025-11-25"
+    },
+    {
+      "article_pk": null,
+      "article": null,
+      "heading": null,
+      "act_title": null,
+      "type": null,
+      "trigger": null,
+      "certainty": "unsure",
+      "raw": "article 5 de la loi du 8 décembre 1994",
+      "sub": null,
+      "work": null,
+      "anchor": null,
+      "date": null
+    }
+  ],
+  "cited_by": [
+    {
+      "article_pk": 96067,
+      "article": "Article 24",
+      "heading": "Assurances sur la vie",
+      "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+      "type": "not_applicable",
+      "trigger": "ne sont pas applicables",
+      "certainty": "sure",
+      "raw": "articles 21 à 23",
+      "sub": null,
+      "work": "loi-1997-07-27-n10",
+      "anchor": "art_24",
+      "date": "2025-11-25"
+    },
+    {
+      "article_pk": 205291,
+      "article": "Art. 244",
+      "heading": null,
+      "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+      "type": "exception",
+      "trigger": "par dérogation à",
+      "certainty": "likely",
+      "raw": "article 21 de la loi sur le contrat d'assurance",
+      "sub": "paragraphe 2",
+      "work": "loi-2015-12-07-n1",
+      "anchor": "art_244",
+      "date": "2026-01-01"
+    }
+  ],
+  "history": [],
+  "wording_since": "2013-03-01",
+  "wording_until": null,
+  "wording_no": 2,
+  "wording_first_held": 0,
+  "changed_by": [
+    {
+      "kind": "insertion",
+      "act_id": "/eli/etat/leg/loi/2005/01/01/n1",
+      "effective": "2005-06-01",
+      "title": null
+    },
+    {
+      "kind": "replacement",
+      "act_id": "/eli/etat/leg/loi/2012/12/21/n9",
+      "effective": "2013-03-01",
+      "title": "Loi du 21 décembre 2012 portant\nmodification de la loi sur le contrat d'assurance"
+    }
+  ],
+  "wordings": [
+    {
+      "valid_from": "1997-09-07",
+      "valid_to": "2013-03-01",
+      "article_pk": 1,
+      "wording_no": 1,
+      "first_version_held": 1
+    },
+    {
+      "valid_from": "2013-03-01",
+      "valid_to": null,
+      "article_pk": 96064,
+      "wording_no": 2,
+      "first_version_held": 0
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-no_version_for_date-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_date": {
+      "type": "string"
+    },
+    "history_begins": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nearest_earlier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nearest_later": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "requested_date",
+    "history_begins",
+    "nearest_earlier",
+    "nearest_later"
+  ]
+}

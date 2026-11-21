@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-format_not_available-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_format": {
+      "type": "string"
+    },
+    "available_formats": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "requested_format",
+    "available_formats"
+  ]
+}

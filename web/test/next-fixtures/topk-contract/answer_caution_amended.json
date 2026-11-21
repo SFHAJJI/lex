@@ -1,0 +1,775 @@
+{
+ "question": "Combien de mois de caution un propriétaire peut-il demander ?",
+ "row": {
+  "question": "Combien de mois de caution un propriétaire peut-il demander ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 2,
+   "de": 0,
+   "en": 0,
+   "lb": 2
+  },
+  "question_type": "value",
+  "personal_case": false,
+  "french": "Combien de mois de caution un propriétaire peut-il demander ?",
+  "legal_terms": [
+   "garantie locative",
+   "bailleur",
+   "contrat de bail"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-2006-09-21-n1",
+   "anchor": "art_5",
+   "date": "2026-10-02",
+   "why": null,
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+   "article": "Art. 5.",
+   "number": "5",
+   "heading": null,
+   "path": "Chapitre II. De la fixation du loyer et des charges",
+   "version_from": "2026-10-02",
+   "version_to": null,
+   "article_since": "2024-08-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2006/09/21/n1/jo",
+   "article_pk": 29081,
+   "lines": [
+    11
+   ],
+   "wording_since": "2024-08-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "insertion",
+    "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+    "effective": "2024-08-01",
+    "title": "Loi du 23 juillet 2024 portant modification : 1° de la loi modifiée du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines …"
+   },
+   "quote": [
+    {
+     "n": 11,
+     "text": "Il est toutefois permis aux parties de convenir d’une garantie locative, qui ne pourra dépasser deux mois de loyer, pour garantir le paiement du loyer ou des autres obligations découlant du contrat de bail.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Il est toutefois permis aux parties de convenir d’une garantie locative, qui ne pourra dépasser deux mois de loyer, pour garantir le paiement du loyer ou des autres obligations découlant du contrat de bail."
+   ],
+   "label": "Art. 5.",
+   "version": {
+    "id": null,
+    "from": "2026-10-02",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-2006-09-21-n1",
+   "anchor": "art_6_20240801",
+   "date": "2026-10-02",
+   "why": "Art. 6. écarte Art. 5. (ne s’appliquent pas)",
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+   "article": "Art. 6.",
+   "number": "6",
+   "heading": null,
+   "path": "Chapitre II. De la fixation du loyer et des charges",
+   "version_from": "2026-10-02",
+   "version_to": null,
+   "article_since": "2024-08-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2006/09/21/n1/jo",
+   "article_pk": 29082,
+   "lines": [],
+   "wording_since": "2024-08-01",
+   "wording_until": null,
+   "wording_no": 2,
+   "wording_first_held": 0,
+   "last_change": {
+    "kind": "substitution",
+    "act_id": "/eli/etat/leg/loi/2024/07/23/a311",
+    "effective": "2024-08-01",
+    "title": "Loi du 23 juillet 2024 portant modification : 1° de la loi modifiée du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines …"
+   },
+   "inbound": true,
+   "quote": [],
+   "text": [],
+   "label": "Art. 6.",
+   "version": {
+    "id": null,
+    "from": "2026-10-02",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [
+  {
+   "article": "Art. 1er.",
+   "heading": null,
+   "why": "écarte plusieurs articles (articles 3 à 11 et 15)"
+  }
+ ],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 29081,
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "article": "Art. 5.",
+   "heading": null,
+   "path": "Chapitre II. De la fixation du loyer et des charges",
+   "how": "keywords+meaning+outline",
+   "score": 0.4708
+  },
+  {
+   "label": "A2",
+   "article_pk": 104347,
+   "act_title": "Code civil",
+   "article": "Art. 1762-5.",
+   "heading": null,
+   "path": "Livre III. Des différentes manières dont on acquiert la propriété > TITRE VIII. Du contrat de louage (Décrété le 7 mars 1804. Promulgué le 17 du même mois.) > Chapitre II. Du louage des choses > Section III. Des règles particulières aux baux commerciaux",
+   "how": "keywords+meaning",
+   "score": 0.4862
+  },
+  {
+   "label": "A3",
+   "article_pk": 303464,
+   "act_title": "Loi du 7 août 2023 relative aux aides individuelles au logement.",
+   "article": "Art. 6.",
+   "heading": null,
+   "path": "Chapitre 2 Aides à la location d’un logement > Section 1re Aide au financement d’une garantie locative",
+   "how": "keywords+outline",
+   "score": 0.3928
+  },
+  {
+   "label": "A4",
+   "article_pk": 303461,
+   "act_title": "Loi du 7 août 2023 relative aux aides individuelles au logement.",
+   "article": "Art. 3.",
+   "heading": null,
+   "path": "Chapitre 2 Aides à la location d’un logement > Section 1re Aide au financement d’une garantie locative",
+   "how": "keywords+outline",
+   "score": 0.3781
+  },
+  {
+   "label": "A5",
+   "article_pk": 104352,
+   "act_title": "Code civil",
+   "article": "Art. 1762-10.",
+   "heading": null,
+   "path": "Livre III. Des différentes manières dont on acquiert la propriété > TITRE VIII. Du contrat de louage (Décrété le 7 mars 1804. Promulgué le 17 du même mois.) > Chapitre II. Du louage des choses > Section III. Des règles particulières aux baux commerciaux",
+   "how": "keywords+meaning",
+   "score": 0.4645
+  },
+  {
+   "label": "A6",
+   "article_pk": 29090,
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "article": "Art. 14.",
+   "heading": null,
+   "path": "Chapitre III. De la durée du contrat de bail",
+   "how": "meaning",
+   "score": 0.5008
+  },
+  {
+   "label": "A7",
+   "article_pk": 303463,
+   "act_title": "Loi du 7 août 2023 relative aux aides individuelles au logement.",
+   "article": "Art. 5.",
+   "heading": null,
+   "path": "Chapitre 2 Aides à la location d’un logement > Section 1re Aide au financement d’une garantie locative",
+   "how": "outline",
+   "score": 0.436
+  },
+  {
+   "label": "A8",
+   "article_pk": 29085,
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "article": "Art. 9.",
+   "heading": null,
+   "path": "Chapitre II. De la fixation du loyer et des charges",
+   "how": "outline",
+   "score": 0.4161
+  },
+  {
+   "label": "A9",
+   "article_pk": 303465,
+   "act_title": "Loi du 7 août 2023 relative aux aides individuelles au logement.",
+   "article": "Art. 7.",
+   "heading": null,
+   "path": "Chapitre 2 Aides à la location d’un logement > Section 1re Aide au financement d’une garantie locative",
+   "how": "outline",
+   "score": 0.3985
+  },
+  {
+   "label": "A10",
+   "article_pk": 104349,
+   "act_title": "Code civil",
+   "article": "Art. 1762-7.",
+   "heading": null,
+   "path": "Livre III. Des différentes manières dont on acquiert la propriété > TITRE VIII. Du contrat de louage (Décrété le 7 mars 1804. Promulgué le 17 du même mois.) > Chapitre II. Du louage des choses > Section III. Des règles particulières aux baux commerciaux",
+   "how": "meaning",
+   "score": 0.4833
+  },
+  {
+   "label": "A11",
+   "article_pk": 29086,
+   "act_title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "article": "Art. 10.",
+   "heading": null,
+   "path": "Chapitre II. De la fixation du loyer et des charges",
+   "how": "outline",
+   "score": 0.4156
+  },
+  {
+   "label": "A12",
+   "article_pk": 104351,
+   "act_title": "Code civil",
+   "article": "Art. 1762-9.",
+   "heading": null,
+   "path": "Livre III. Des différentes manières dont on acquiert la propriété > TITRE VIII. Du contrat de louage (Décrété le 7 mars 1804. Promulgué le 17 du même mois.) > Chapitre II. Du louage des choses > Section III. Des règles particulières aux baux commerciaux",
+   "how": "meaning",
+   "score": 0.4775
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "mois": 9089,
+   "caution": 307,
+   "proprietaire": 1723,
+   "demander": 12458,
+   "garantie": 4228,
+   "locative": 970,
+   "bailleur": 214,
+   "contrat": 25421,
+   "bail": 651
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositi",
+   "Code civil",
+   "Loi du 7 août 2023 relative aux aides individuelles au logement."
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer_with_exception",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "value",
+     "personal_case": false,
+     "french": "Combien de mois de caution un propriétaire peut-il demander ?",
+     "legal_terms": [
+      "garantie locative",
+      "bailleur",
+      "contrat de bail"
+     ],
+     "in_scope": true
+    },
+    "ms": 2089,
+    "tokens_in": 257,
+    "tokens_out": 110,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "mois",
+      "caution",
+      "proprietaire",
+      "demander"
+     ],
+     "terms_a_statute_would_use": [
+      "garantie",
+      "locative",
+      "bailleur",
+      "contrat",
+      "bail"
+     ],
+     "articles_holding_each_word": {
+      "mois": 9089,
+      "caution": 307,
+      "proprietaire": 1723,
+      "demander": 12458,
+      "garantie": 4228,
+      "locative": 970,
+      "bailleur": 214,
+      "contrat": 25421,
+      "bail": 651
+     },
+     "articles_kept": 10
+    },
+    "ms": 48
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/2006/09/21/n1",
+       "title": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositi",
+       "outline_rows": 9,
+       "parts_named": [
+        "Chapitre II. De la fixation du loyer et des charges"
+       ],
+       "articles_in_parts": 9,
+       "ms": 1359,
+       "tokens_in": 664,
+       "tokens_out": 65,
+       "reason": "La fixation du loyer et des charges comprend les règles relatives à la garantie locative."
+      },
+      {
+       "act_id": "/eli/etat/leg/code/civil",
+       "title": "Code civil",
+       "outline_rows": 388,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 3196,
+       "tokens_in": 17609,
+       "tokens_out": 170,
+       "reason": "Le plafond de la garantie locative relève de la législation sur les baux, absente de cette table."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2023/08/07/a554",
+       "title": "Loi du 7 août 2023 relative aux aides individuelles au logement.",
+       "outline_rows": 24,
+       "parts_named": [
+        "Section 1re Aide au financement d’une garantie locative"
+       ],
+       "articles_in_parts": 5,
+       "ms": 1458,
+       "tokens_in": 1311,
+       "tokens_out": 62,
+       "reason": "La garantie locative et le montant du dépôt sont traités dans cette section."
+      }
+     ],
+     "articles_from_the_parts": 11,
+     "whole_part_for_a_list": false
+    },
+    "ms": 2253,
+    "tokens_in": 19584,
+    "tokens_out": 297,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 3
+    },
+    "ms": 2943,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 14
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "A1",
+     "lines": [
+      11
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Les bailleurs et locataires de logements à usage d’habitation",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "La ligne désignée fixe directement le plafond de la garantie locative pour un bail d’habitation."
+    },
+    "ms": 3321,
+    "tokens_in": 5527,
+    "tokens_out": 109,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 1,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [],
+     "inbound_checked": 14,
+     "outbound_checked": 1,
+     "followed": 1,
+     "see_also": 1
+    },
+    "ms": 27
+   },
+   {
+    "step": "exception_decision",
+    "who": "model",
+    "detail": {
+     "applies": "unknown",
+     "pointed": "",
+     "lines": [],
+     "articles_read": 6,
+     "reason": "La question ne précise pas si le bail relève d’un cas visé par l’article 6."
+    },
+    "ms": 790,
+    "tokens_in": 2595,
+    "tokens_out": 40,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer_with_exception",
+     "notes": [
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 8633,
+  "tokens": {
+   "text-embedding-3-large": [
+    15,
+    0
+   ],
+   "gpt-6-luna": [
+    31566,
+    504
+   ],
+   "gpt-6.2-sol": [
+    8122,
+    149
+   ]
+  },
+  "cost_usd_list_price": 0.02375,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 4,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer_with_exception",
+    "state": "answer_with_exception"
+   }
+  ],
+  "cost_usd": 0.02375,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2089,
+    "tokens_in": 257,
+    "tokens_out": 110
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 2253,
+    "tokens_in": 19584,
+    "tokens_out": 297
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 3321,
+    "tokens_in": 5527,
+    "tokens_out": 109
+   },
+   {
+    "step": "exception_decision",
+    "model": "gpt-6.2-sol",
+    "ms": 790,
+    "tokens_in": 2595,
+    "tokens_out": 40
+   }
+  ]
+ },
+ "state": "answer_with_exception",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Combien de mois de caution un propriétaire peut-il demander ?",
+   "legal_terms": [
+    "garantie locative",
+    "bailleur",
+    "contrat de bail"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 29081,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 104347,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 303464,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 303461,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 104352,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 29090,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 303463,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 29085,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 303465,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 104349,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 29086,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 104351,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 29081
+   },
+   {
+    "article_pk": 104347
+   },
+   {
+    "article_pk": 303464
+   },
+   {
+    "article_pk": 303461
+   },
+   {
+    "article_pk": 104352
+   },
+   {
+    "article_pk": 29090
+   },
+   {
+    "article_pk": 303463
+   },
+   {
+    "article_pk": 29085
+   },
+   {
+    "article_pk": 303465
+   },
+   {
+    "article_pk": 104349
+   },
+   {
+    "article_pk": 29086
+   },
+   {
+    "article_pk": 104351
+   }
+  ],
+  "replay": "eNqtU0tu2zAQvQrBVQvIhj62Y2tTFD2GYAg0NbaJUCTDjx0jMNBr9Ag5R27Sk3Qo04XjKOimKw2fZua9-b3QA62LjBpaU6_NI80oR1NqziTa3Y1t0JNug1IgJ4cCgSd8_9D9RoAiHZBeCxe_nAUvtCJBEWO1seLt1TNhgRgIfiIk-vRMdWDJt8gQMEuZl4tJUUzKPCKO1lsmHWQULcqUO4Jtj8LvW3jmYGJydLNJcf2Zw4bWTVOu8iWWZ4MEmjVFsc4ozVSQMrtQRHOdDW5lRm_CG_T8bv2ULKbk7ZUz64EM7_mUfFFA3O-fv5gxUjwFUJ4Y5r5-TIw51B5l4Len9fCXcnm1_hpwNQyj9QuVTO0C20Fst40NYR4ivrW6v2-W1_fIzjKhEOzYKf6HZ3_NvtdHxJUmMSERivg9EJTvYsU18TqGnHGuCWr9yUQRByYDdg_5QfH9_xi6hB2TrQfb44QbumOWKS-AxFXz4hDJNkxICSHWz7XylvlIE1GK3TRgnVaYgzMHaV1Q-ePNyDnSiaF1ON8in1WzhzuwyqvZYjYGjoXPyzsQeVb5WHT10XE5H3Ocj6lcjUQvxvS8F4lNsXitqfpUb6ow1ZSquOhOSi_akprEf2G8cGBaiXff4FbCAWTcK-DCpQs74ZvrLs5ruLB_XKTzwyZ_ctLneCW4D8tFhR0MDqvJp3lZPWCbVFyTrQ6qazenlknZduCBe20dXZ__AGPyfyI"
+ }
+}

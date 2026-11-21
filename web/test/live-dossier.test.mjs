@@ -27,7 +27,7 @@ import { luxembourgPermalink, permalinkHref } from "../scripts/permalinks.mjs";
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const envelopeOf = (scenarioStart) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === "dossier" && candidate.scenario.startsWith(scenarioStart));

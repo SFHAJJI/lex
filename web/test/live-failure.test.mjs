@@ -38,7 +38,7 @@ import { compareOutcome, createCompareSession } from "../scripts/live-compare.mj
 import { createRadarSession, radarOutcome } from "../scripts/live-radar.mjs";
 import { coverageOutcome, startLiveCoverage } from "../scripts/live-coverage.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const copy = liveChrome("en").failure;
 

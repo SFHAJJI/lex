@@ -319,10 +319,20 @@ test("what the legal pages say of the site is what its code and its deployment d
   const client = await readFile(new URL("../scripts/v3-client.mjs", import.meta.url), "utf8");
   assert.match(client, /fetchImpl\(`\/api\/v3\/\$\{operation\}`, \{\s*method: "POST",[\s\S]*?body: JSON\.stringify\(\{ operation_id: operation, parameters \}\)/);
   assert.match(searchFragment({ query: "bail à loyer", language: "fra" }, { work: false }), /^#q=bail%20%C3%A0%20loyer&lang=fra$/);
-  // "No cookie, no browser storage": no live page's code sets a cookie or writes the browser's storage.
+  // "No cookie, no browser storage": no live page's code sets a cookie or writes the browser's storage, but one, pinned:
+  // the assistant dock keeps the reader's conversation in this tab's session storage, under one key, so it survives
+  // navigation (the owner's brief of 2026-11-15, section 5; the driver's binding instruction). That makes the two sentences
+  // above untrue while it ships: the privacy notice and the cookies page must say it before going live (an owner's decision,
+  // reported by the dock's agent). No other file, no other storage, no cookie.
   for (const name of await readdir(new URL("../app/", import.meta.url))) {
     if (!/\.(?:jsx|mjs)$/.test(name)) continue;
     const source = await readFile(new URL(`../app/${name}`, import.meta.url), "utf8");
+    if (name === "AssistantDock.jsx") {
+      assert.doesNotMatch(source, /document\.cookie\s*=|localStorage|indexedDB/, `app/${name}`);
+      assert.deepEqual(source.match(/(?<![A-Za-z])sessionStorage(?![A-Za-z])/g)?.length ?? 0, 2, "the dock reads and writes one key, each once");
+      assert.match(source, /export const MEMORY_KEY = 'lex-dock-conversation';/);
+      continue;
+    }
     assert.doesNotMatch(source, /document\.cookie\s*=|localStorage|sessionStorage|indexedDB/, `app/${name}`);
   }
   // The EU acknowledgement the legal notice quotes is the one the platform serves with EU text (Decision 95).
@@ -391,11 +401,11 @@ test("the legal notice promises a text at a date only for the texts and dates Le
     for (const [path, text] of entriesOf(LIVE_CHROME[language]).filter(([one]) => LEGAL_SECTIONS.test(one))) assert.doesNotMatch(text, unqualified, `${language} ${path}`);
   }
   assert.ok(said(app.renderLiveLegalPage("legalNotice")).includes(english), "the English page says it");
-  // The texts changed on 2026-10-26, again on 2026-10-27 (the privacy notice's per-client limit, below) and on 2026-10-28 (its
-  // sentence on an act that names private persons, below), and every page says the last ("Last updated"), in words and in the
-  // markup.
-  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-28");
-  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-28">28 October 2026</time>`), page.key);
+  // The texts changed on 2026-10-26, again on 2026-10-27 (the privacy notice's per-client limit, below), on 2026-10-28 (its
+  // sentence on an act that names private persons, below) and on 2026-11-19 (what the assistant sends to its processor and
+  // why, V4), and every page says the last ("Last updated"), in words and in the markup.
+  assert.equal(LEGAL_TEXTS_UPDATED, "2026-11-19");
+  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-11-19">19 November 2026</time>`), page.key);
   // The footer strip of a page that ships no script, as reviewed in the same addendum, byte for byte (shown on every legal
   // page and the maintenance page: `freshness.test.mjs`; the French page as built says both: the first test above).
   assert.equal(LIVE_CHROME.fr.freshness.noAnswer, "Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.");

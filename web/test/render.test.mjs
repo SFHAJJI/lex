@@ -111,9 +111,9 @@ import { loadCaptured } from "../scripts/captured-envelopes.mjs";
 import { decodeEnvelope, validateEnvelope } from "../scripts/envelope.mjs";
 
 const json = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
-const ENVELOPE_SCHEMA = json("../../schemas/v3-synthetic-preview/synthetic-resolve-envelope.schema.json");
+const ENVELOPE_SCHEMA = json("../schemas/v3-synthetic-preview/synthetic-resolve-envelope.schema.json");
 const REGISTRY = new Map([
-  ["lex-v3-preview-object-set/1", json("../../schemas/v3-preview/preview-object-set.schema.json")],
+  ["lex-v3-preview-object-set/1", json("../schemas/v3-preview/preview-object-set.schema.json")],
 ]);
 
 // The fixtures are the envelopes the merged C# production path actually produced. Tests

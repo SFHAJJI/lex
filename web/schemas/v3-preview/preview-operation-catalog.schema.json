@@ -1,0 +1,174 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
+      "const": "lex-v3-preview-operation-catalog/1"
+    },
+    "catalog_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "enum": [
+              "resolve",
+              "search",
+              "browse",
+              "concepts",
+              "dossier",
+              "manifestation",
+              "as_of",
+              "as_observed",
+              "knowable_on",
+              "timeline",
+              "article_history",
+              "diff",
+              "status_on",
+              "in_force_on",
+              "changes_in_period",
+              "relations",
+              "classification",
+              "cited_by",
+              "citation",
+              "transposition",
+              "provenance",
+              "verify",
+              "evidence_bundle",
+              "events",
+              "answer_drift",
+              "coverage",
+              "ask"
+            ],
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+          },
+          "request": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+              },
+              "sha256": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "schema",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "maxProperties": 128
+          },
+          "success": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+              },
+              "sha256": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "schema",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "maxProperties": 128
+          },
+          "allowed_refusals": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "identifier_unknown"
+              ]
+            },
+            "maxItems": 4096
+          },
+          "deterministic_order": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+          },
+          "capability_requirement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+          },
+          "rest_projection": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+          },
+          "mcp_projection": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+          },
+          "html_projection": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "operation_id",
+          "request",
+          "success",
+          "allowed_refusals",
+          "deterministic_order",
+          "capability_requirement",
+          "rest_projection",
+          "mcp_projection",
+          "html_projection"
+        ],
+        "additionalProperties": false,
+        "maxProperties": 128
+      },
+      "maxItems": 4096
+    }
+  },
+  "required": [
+    "schema",
+    "catalog_id",
+    "entries"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:9771ad74-c254-4b4d-9bb3-c8fbc71befba",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "operation identifiers are unique and entries use immutable operation-inventory order",
+    "allowed refusal codes are unique, defined, and use declared enum order",
+    "catalog collections reject null members"
+  ]
+}

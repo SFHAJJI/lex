@@ -21,7 +21,7 @@ import { PDF_SUBSTITUTION_NOTE, PDF_TEXT_WIDTH, exportPdf, pdfRefusal, pdfTextWi
 import { EUROPE_SAMPLE, datedBefore1July2013, europeBundle, sha256 } from "../scripts/europe-bundle-sample.mjs";
 import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const OBSERVED = "2026-09-18T07:00:00.0000000Z";
 
 function withDigests(node, counter = { n: 0 }) {

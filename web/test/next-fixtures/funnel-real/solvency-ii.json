@@ -1,0 +1,1608 @@
+{
+ "state": "answer",
+ "outcome": "answer",
+ "pipeline": "funnel",
+ "question": "Quel est le capital de solvabilité requis d'un assureur selon Solvabilité II ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-2015-12-07-n1",
+   "anchor": "art_105",
+   "date": "2026-04-03",
+   "why": "L’article 105 de la loi luxembourgeoise définit le capital de solvabilité requis et précise son calibrage.",
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+   "article": "Art. 105",
+   "number": "105",
+   "heading": "Calcul du capital de solvabilité requis",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre I Règles générales concernant l’accès à l’activité de l’assurance directe et de la réassurance et leur exercice > Chapitre 6 Règles relatives à la valorisation à des fins de surveillance prudentielle des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d’investissement > Section 5 Capital de solvabilité requis > Sous-section 1 Dispositions générales concernant le capital de solvabilité requis, calculé à l’aide de la formule standard ou d’un modèle interne",
+   "version_from": "2026-04-03",
+   "version_to": null,
+   "article_since": "2025-02-14",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2015/12/07/n1/jo",
+   "article_pk": 205148,
+   "lines": [
+    2,
+    3,
+    4
+   ],
+   "wording_since": "2025-02-14",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "label": "Art. 105",
+   "text": [
+    "Le calcul du capital de solvabilité requis se fonde sur l’hypothèse d’une continuité de l’exploitation de l’entreprise concernée.",
+    "Le capital de solvabilité requis doit être défini et calibré de manière à garantir que tous les risques quantifiables auxquels l’entreprise d’assurance ou de réassurance est exposée soient pris en considération. Il doit couvrir le portefeuille en cours, ainsi que le nouveau portefeuille dont la souscription est attendue dans les douze mois à venir. Pour ce qui concerne le portefeuille en cours, il couvre seulement les pertes non anticipées.",
+    "Le capital de solvabilité requis correspond à la valeur en risque (Value-at-Risk) des fonds propres de base de l’entreprise d’assurance ou de réassurance, avec un niveau de confiance de 99,5 % à l’horizon d’un an."
+   ],
+   "quote": [
+    {
+     "n": 2,
+     "text": "Le calcul du capital de solvabilité requis se fonde sur l’hypothèse d’une continuité de l’exploitation de l’entreprise concernée.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Le capital de solvabilité requis doit être défini et calibré de manière à garantir que tous les risques quantifiables auxquels l’entreprise d’assurance ou de réassurance est exposée soient pris en considération. Il doit couvrir le portefeuille en cours, ainsi que le nouveau portefeuille dont la souscription est attendue dans les douze mois à venir. Pour ce qui concerne le portefeuille en cours, il couvre seulement les pertes non anticipées.",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "Le capital de solvabilité requis correspond à la valeur en risque (Value-at-Risk) des fonds propres de base de l’entreprise d’assurance ou de réassurance, avec un niveau de confiance de 99,5 % à l’horizon d’un an.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 6845,
+    "from": "2026-04-03",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 31,
+    "words": 3,
+    "meaning": 3
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  },
+  {
+   "role": "context",
+   "kind": "article",
+   "work": "loi-2015-12-07-n1",
+   "anchor": "art_104",
+   "date": "2026-04-03",
+   "why": "Définit l'obligation de détenir le capital de solvabilité requis.",
+   "act_title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+   "article": "Art. 104",
+   "number": "104",
+   "heading": "Dispositions générales",
+   "path": "PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance > Sous-titre I Règles générales concernant l’accès à l’activité de l’assurance directe et de la réassurance et leur exercice > Chapitre 6 Règles relatives à la valorisation à des fins de surveillance prudentielle des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital requis et règles d’investissement > Section 5 Capital de solvabilité requis > Sous-section 1 Dispositions générales concernant le capital de solvabilité requis, calculé à l’aide de la formule standard ou d’un modèle interne",
+   "version_from": "2026-04-03",
+   "version_to": null,
+   "article_since": "2025-02-14",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/2015/12/07/n1/jo",
+   "article_pk": 205147,
+   "lines": [
+    1,
+    2
+   ],
+   "wording_since": "2025-02-14",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "label": "Art. 104",
+   "text": [
+    "Les entreprises d’assurance et de réassurance doivent détenir des fonds propres éligibles couvrant le capital de solvabilité requis.",
+    "Le capital de solvabilité requis est calculé soit à l’aide de la formule standard conformément à la sous-section 2, soit à l’aide d’un modèle interne conformément à la sous-section 3."
+   ],
+   "quote": [
+    {
+     "n": 1,
+     "text": "Les entreprises d’assurance et de réassurance doivent détenir des fonds propres éligibles couvrant le capital de solvabilité requis.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Le capital de solvabilité requis est calculé soit à l’aide de la formule standard conformément à la sous-section 2, soit à l’aide d’un modèle interne conformément à la sous-section 3.",
+     "label": null
+    }
+   ],
+   "version": {
+    "id": 6845,
+    "from": "2026-04-03",
+    "until": null,
+    "until_known": false
+   },
+   "found_by": {
+    "outline": 30,
+    "meaning": 1
+   },
+   "meaning_only": false,
+   "retrieved_via": "primary",
+   "referenced_from": null
+  }
+ ],
+ "missing": null,
+ "not_held": [
+  {
+   "name": "directive Solvabilité II (2009/138/CE)",
+   "act_id": "celex:32009L0138",
+   "why": "named in the question",
+   "by": "code"
+  }
+ ],
+ "clarify": null,
+ "evidence": null,
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": true,
+  "found_by_words": true,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [
+      {
+       "text": "Solvabilité II",
+       "kind": "eu",
+       "act_id": "celex:32009L0138",
+       "name": "directive Solvabilité II (2009/138/CE)",
+       "by": "name of a European act"
+      }
+     ],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [
+      "directive Solvabilité II (2009/138/CE)"
+     ],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "definition",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Quel est le capital de solvabilité requis d'un assureur selon Solvabilité II ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "capital de solvabilité requis",
+      "assureur",
+      "Solvabilité II"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "luxembourg_or_eu",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 13,
+    "considered_lines": 26,
+    "kept": 1,
+    "shown_to_model": 24,
+    "filters": [],
+    "sources": {
+     "named": 0,
+     "transposes": 5,
+     "lines_words": 1,
+     "lines_meaning": 12,
+     "articles_meaning": 8,
+     "articles_words": 7
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/loi/2015/04/12/n6",
+      "node_id": "",
+      "found_by": {
+       "transposes": 1
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_13",
+      "found_by": {
+       "lines_words": 1,
+       "lines_meaning": 10
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_12",
+      "found_by": {
+       "lines_meaning": 1
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_ii",
+      "found_by": {
+       "articles_meaning": 1,
+       "articles_words": 1
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "node_id": "",
+      "found_by": {
+       "transposes": 2
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_11",
+      "found_by": {
+       "lines_meaning": 2
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/loi/2005/07/13/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 2,
+       "articles_words": 4
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/rgd/2007/12/05/n3",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 6,
+       "articles_words": 2
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/loi/2007/12/21/n1",
+      "node_id": "",
+      "found_by": {
+       "transposes": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "book_1",
+      "found_by": {
+       "lines_meaning": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/loi/1991/12/06/n2",
+      "node_id": "",
+      "found_by": {
+       "transposes": 5,
+       "articles_meaning": 3,
+       "articles_words": 7
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/rgd/1994/12/14/n4",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 4,
+       "articles_words": 3
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "",
+      "found_by": {
+       "transposes": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_17",
+      "found_by": {
+       "lines_meaning": 4
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_10",
+      "found_by": {
+       "lines_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "celex:32013R0575",
+      "node_id": "sixieme_partie",
+      "found_by": {
+       "articles_meaning": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "book_2",
+      "found_by": {
+       "lines_meaning": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "celex:32013R0575",
+      "node_id": "troisieme_partie",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_14",
+      "found_by": {
+       "lines_meaning": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/loi/2015/12/18/n7",
+      "node_id": "part_1",
+      "found_by": {
+       "articles_meaning": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_18",
+      "found_by": {
+       "lines_meaning": 8
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "celex:32013L0036",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 8
+      },
+      "tally": 2,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_15",
+      "found_by": {
+       "lines_meaning": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+      "node_id": "partie_2.titre_ii",
+      "title": "Loi du 7 décembre 2015 sur le secteur des assurances. > PARTIE 2 L’ACTIVITE DANS LE SECTEUR DES ASSURANCES > TITRE II Les entreprises d’assurance et de réassurance [LOI; loi_de_fond; groupe particulie",
+      "reason": "La partie consacrée aux entreprises d’assurance et de réassurance de la loi sur le secteur des assurances peut contenir les exigences Solvabilité II applicables à leur capital de solvabilité requis.",
+      "by": "model"
+     }
+    ],
+    "missing_text": "",
+    "ms": 1523
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+    "node_start": "partie_2.titre_ii",
+    "outline_source": "outline table",
+    "by": "model",
+    "version_id": 6845,
+    "held_only_later": false,
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i",
+        "heading": "Sous-titre I Règles générales concernant l’accès à l’activité de l’assurance directe et de la réassurance et leur exercice",
+        "tally": 5,
+        "reason": "Contient tous les mots clés et couvre les règles générales sur le capital de solvabilité requis selon Solvabilité II.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_iii",
+        "heading": "Sous-titre III Contrôle des entreprises d’assurance et de réassurance faisant partie d’un groupe",
+        "tally": 5,
+        "reason": "Traite du contrôle des entreprises d’assurance, incluant probablement le capital de solvabilité requis.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_iv",
+        "heading": "Sous-titre IV Dispositions sur la surveillance complémentaire des entreprises d’assurance et de réassurance appartenant à un conglomérat financier",
+        "tally": 5,
+        "reason": "Aborde la surveillance complémentaire, ce qui peut inclure des exigences sur le capital de solvabilité.",
+        "whole": false,
+        "stop": null
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 2,
+      "shown": 21,
+      "picked": [
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6",
+        "heading": "Chapitre 6 Règles relatives à la valorisation à des fins de surveillance prudentielle des actifs et des passifs, provisions techniques, fonds propres, capital de solvabilité requis, minimum de capital",
+        "tally": 5,
+        "reason": "Contient explicitement le capital de solvabilité requis et les règles de valorisation, ce qui est central pour la question.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_4",
+        "heading": "Chapitre 4 Conditions régissant l’activité",
+        "tally": 5,
+        "reason": "Conditions régissant l’activité incluent probablement les exigences de capital de solvabilité selon Solvabilité II.",
+        "whole": false,
+        "stop": null
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_iii.chapitre_3",
+        "heading": "Chapitre 3 Mesures visant à faciliter le contrôle des groupes",
+        "tally": 5,
+        "reason": "Mesures visant à faciliter le contrôle des groupes peuvent inclure des règles sur le capital de solvabilité requis selon Solvabilité II.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 3,
+      "shown": 13,
+      "picked": [
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5",
+        "heading": "Section 5 Capital de solvabilité requis",
+        "tally": 4,
+        "reason": "Cette section porte explicitement sur le capital de solvabilité requis, contenant la majorité des mots-clés de la question.",
+        "whole": true,
+        "stop": null
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_6",
+        "heading": "Section 6 Minimum de capital requis",
+        "tally": 4,
+        "reason": "Cette section traite du minimum de capital requis, lié au capital de solvabilité requis et mentionne 'assureur'.",
+        "whole": false,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_4.section_2",
+        "heading": "Section 2 Système de gouvernance",
+        "tally": 4,
+        "reason": "Cette section aborde les règles relatives au capital de solvabilité requis selon la gouvernance, avec plusieurs mots-clés présents.",
+        "whole": false,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     },
+     {
+      "depth": 4,
+      "shown": 3,
+      "picked": [
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5.sous-section_2",
+        "heading": "Sous-section 2 Capital de solvabilité requis - formule standard",
+        "tally": 4,
+        "reason": "Cette sous-section traite spécifiquement du capital de solvabilité requis selon la formule standard, ce qui correspond précisément à la question.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5.sous-section_3",
+        "heading": "Sous-section 3 Capital de solvabilité requis - modèles internes intégraux ou partiels",
+        "tally": 4,
+        "reason": "Cette sous-section traite du capital de solvabilité requis selon les modèles internes, une autre méthode prévue par Solvabilité II.",
+        "whole": true,
+        "stop": "leaf"
+       },
+       {
+        "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5.sous-section_1",
+        "heading": "Sous-section 1 Dispositions générales concernant le capital de solvabilité requis, calculé à l’aide de la formule standard ou d’un modèle interne",
+        "tally": 3,
+        "reason": "Cette sous-section donne les dispositions générales sur le capital de solvabilité requis, utile pour comprendre le cadre général.",
+        "whole": true,
+        "stop": "leaf"
+       }
+      ],
+      "by": "model"
+     }
+    ],
+    "final": [
+     {
+      "node_id": "partie_2.titre_ii.sous-titre_iii.chapitre_3",
+      "heading": "Chapitre 3 Mesures visant à faciliter le contrôle des groupes",
+      "stopped": "leaf",
+      "articles": 11
+     },
+     {
+      "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_6",
+      "heading": "Section 6 Minimum de capital requis",
+      "stopped": "leaf",
+      "articles": 2
+     },
+     {
+      "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_4.section_2",
+      "heading": "Section 2 Système de gouvernance",
+      "stopped": "leaf",
+      "articles": 11
+     },
+     {
+      "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5.sous-section_2",
+      "heading": "Sous-section 2 Capital de solvabilité requis - formule standard",
+      "stopped": "leaf",
+      "articles": 3
+     },
+     {
+      "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5.sous-section_3",
+      "heading": "Sous-section 3 Capital de solvabilité requis - modèles internes intégraux ou partiels",
+      "stopped": "leaf",
+      "articles": 2
+     },
+     {
+      "node_id": "partie_2.titre_ii.sous-titre_i.chapitre_6.section_5.sous-section_1",
+      "heading": "Sous-section 1 Dispositions générales concernant le capital de solvabilité requis, calculé à l’aide de la formule standard ou d’un modèle interne",
+      "stopped": "leaf",
+      "articles": 3
+     }
+    ],
+    "articles": 32,
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [
+     {
+      "article_pk": 205239,
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205240,
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205241,
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205242,
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205243,
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205244,
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205245,
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205246,
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205247,
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205248,
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205249,
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205155,
+      "found_by": {
+       "outline": 12,
+       "meaning": 2
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205156,
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205113,
+      "found_by": {
+       "outline": 14
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205114,
+      "found_by": {
+       "outline": 15
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205115,
+      "found_by": {
+       "outline": 16
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205116,
+      "found_by": {
+       "outline": 17
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205117,
+      "found_by": {
+       "outline": 18
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205118,
+      "found_by": {
+       "outline": 19
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205119,
+      "found_by": {
+       "outline": 20
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205120,
+      "found_by": {
+       "outline": 21
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205121,
+      "found_by": {
+       "outline": 22
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205122,
+      "found_by": {
+       "outline": 23
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205123,
+      "found_by": {
+       "outline": 24
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205150,
+      "found_by": {
+       "outline": 25
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205151,
+      "found_by": {
+       "outline": 26
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205152,
+      "found_by": {
+       "outline": 27,
+       "words": 2
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205153,
+      "found_by": {
+       "outline": 28
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205154,
+      "found_by": {
+       "outline": 29,
+       "words": 1
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205147,
+      "found_by": {
+       "outline": 30,
+       "meaning": 1
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205148,
+      "found_by": {
+       "outline": 31,
+       "words": 3,
+       "meaning": 3
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205149,
+      "found_by": {
+       "outline": 32,
+       "words": 4,
+       "meaning": 6
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205206,
+      "found_by": {
+       "words": 5,
+       "meaning": 4
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205491,
+      "found_by": {
+       "words": 6
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 205326,
+      "found_by": {
+       "meaning": 5
+      },
+      "meaning_only": true
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     }
+    ],
+    "combo": false
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "ms": 2684,
+    "candidates": [
+     {
+      "article_pk": 205239,
+      "label": "Art. 192",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 1
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 205154,
+      "label": "Art. 111",
+      "role": "condition",
+      "reason": "Condition pour calcul hors formule standard.",
+      "found_by": {
+       "outline": 29,
+       "words": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon"
+      ]
+     },
+     {
+      "article_pk": 205147,
+      "label": "Art. 104",
+      "role": "rule",
+      "reason": "Définit l'obligation de détenir le capital de solvabilité requis.",
+      "found_by": {
+       "outline": 30,
+       "meaning": 1
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis"
+      ]
+     },
+     {
+      "article_pk": 205240,
+      "label": "Art. 193",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "solvabilite",
+       "assureur"
+      ]
+     },
+     {
+      "article_pk": 205155,
+      "label": "Art. 112",
+      "role": "reject",
+      "reason": "Traite du minimum de capital requis, pas du capital de solvabilité.",
+      "found_by": {
+       "outline": 12,
+       "meaning": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "requis"
+      ]
+     },
+     {
+      "article_pk": 205152,
+      "label": "Art. 109",
+      "role": "condition",
+      "reason": "Condition pour calcul hors formule standard.",
+      "found_by": {
+       "outline": 27,
+       "words": 2
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon"
+      ]
+     },
+     {
+      "article_pk": 205241,
+      "label": "Art. 194",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis",
+       "selon"
+      ]
+     },
+     {
+      "article_pk": 205148,
+      "label": "Art. 105",
+      "role": "rule",
+      "reason": "Explique le calcul et la définition du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 31,
+       "words": 3,
+       "meaning": 3
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis"
+      ]
+     },
+     {
+      "article_pk": 205242,
+      "label": "Art. 195",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 4
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis"
+      ]
+     },
+     {
+      "article_pk": 205149,
+      "label": "Art. 106",
+      "role": "condition",
+      "reason": "Fréquence et notification du calcul.",
+      "found_by": {
+       "outline": 32,
+       "words": 4,
+       "meaning": 6
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis"
+      ]
+     },
+     {
+      "article_pk": 205243,
+      "label": "Art. 196",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 5
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 205244,
+      "label": "Art. 197",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 6
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 205245,
+      "label": "Art. 198",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 7
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 205246,
+      "label": "Art. 199",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 8
+      },
+      "meaning_only": false,
+      "matched": []
+     },
+     {
+      "article_pk": 205247,
+      "label": "Art. 200",
+      "role": "context",
+      "reason": "Rapport sur la solvabilité, utile mais pas définition.",
+      "found_by": {
+       "outline": 9
+      },
+      "meaning_only": false,
+      "matched": [
+       "solvabilite"
+      ]
+     },
+     {
+      "article_pk": 205248,
+      "label": "Art. 201",
+      "role": "reject",
+      "reason": "Ne traite pas du capital de solvabilité requis.",
+      "found_by": {
+       "outline": 10
+      },
+      "meaning_only": false,
+      "matched": [
+       "requis"
+      ]
+     },
+     {
+      "article_pk": 205249,
+      "label": "Art. 202",
+      "role": "context",
+      "reason": "Mesures en cas de non-respect, contexte utile.",
+      "found_by": {
+       "outline": 11
+      },
+      "meaning_only": false,
+      "matched": [
+       "solvabilite",
+       "assureur"
+      ]
+     },
+     {
+      "article_pk": 205156,
+      "label": "Art. 113",
+      "role": "exception",
+      "reason": "Dérogation transitoire au capital requis.",
+      "found_by": {
+       "outline": 13
+      },
+      "meaning_only": false,
+      "matched": [
+       "capital",
+       "solvabilite",
+       "requis",
+       "assureur"
+      ]
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 6,
+    "read_amount_set_by": "outline node",
+    "rounds": [
+     {
+      "answer_found": true,
+      "complete_answer_found": true,
+      "article": "A2",
+      "lines": [
+       2,
+       3,
+       4
+      ],
+      "missing": "",
+      "conflicting_evidence": false,
+      "text_reach": "special_group",
+      "answer_outside_held_texts": "",
+      "items_are_headings": false,
+      "reason": "L’article 105 de la loi luxembourgeoise définit le capital de solvabilité requis et précise son calibrage.",
+      "pending_references": [],
+      "lines_refused": []
+     }
+    ],
+    "lines_quoted": 3,
+    "budget": {
+     "articles": 16,
+     "chars": 48000,
+     "list_articles": 30
+    }
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "none",
+    "budget": 1,
+    "targets_per_hop": 3,
+    "hops": [],
+    "resolver": "edge table (app/refs.py not delivered yet)"
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "answer_complete",
+    "state": "answer"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 321,
+    "tokens_in": 20,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1344,
+    "model_ms": 1344,
+    "queue_ms": 0,
+    "tokens_in": 532,
+    "tokens_out": 94,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 1431,
+    "model_ms": 1431,
+    "queue_ms": 0,
+    "tokens_in": 3902,
+    "tokens_out": 65,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1003,
+    "model_ms": 1003,
+    "queue_ms": 0,
+    "tokens_in": 598,
+    "tokens_out": 103,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 972,
+    "model_ms": 972,
+    "queue_ms": 0,
+    "tokens_in": 1345,
+    "tokens_out": 112,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1404,
+    "model_ms": 1404,
+    "queue_ms": 0,
+    "tokens_in": 824,
+    "tokens_out": 113,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "walk",
+    "model": "gpt-4.1-mini",
+    "ms": 1097,
+    "model_ms": 1097,
+    "queue_ms": 0,
+    "tokens_in": 439,
+    "tokens_out": 111,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-4.1-mini",
+    "ms": 2648,
+    "model_ms": 2648,
+    "queue_ms": 0,
+    "tokens_in": 3004,
+    "tokens_out": 412,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1264,
+    "model_ms": 1264,
+    "queue_ms": 0,
+    "tokens_in": 3123,
+    "tokens_out": 189,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.014,
+  "ms": 10938,
+  "model_calls": 8,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T15:01:03"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "definition",
+   "french": "Quel est le capital de solvabilité requis d'un assureur selon Solvabilité II ?",
+   "legal_terms": [
+    "capital de solvabilité requis",
+    "assureur",
+    "Solvabilité II"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "luxembourg_or_eu"
+  },
+  "candidates": [
+   {
+    "article_pk": 205239,
+    "role": "reject",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 205154,
+    "role": "condition",
+    "found_by": {
+     "outline": 29,
+     "words": 1
+    }
+   },
+   {
+    "article_pk": 205147,
+    "role": "rule",
+    "found_by": {
+     "outline": 30,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 205240,
+    "role": "reject",
+    "found_by": {
+     "outline": 2
+    }
+   },
+   {
+    "article_pk": 205155,
+    "role": "reject",
+    "found_by": {
+     "outline": 12,
+     "meaning": 2
+    }
+   },
+   {
+    "article_pk": 205152,
+    "role": "condition",
+    "found_by": {
+     "outline": 27,
+     "words": 2
+    }
+   },
+   {
+    "article_pk": 205241,
+    "role": "reject",
+    "found_by": {
+     "outline": 3
+    }
+   },
+   {
+    "article_pk": 205148,
+    "role": "rule",
+    "found_by": {
+     "outline": 31,
+     "words": 3,
+     "meaning": 3
+    }
+   },
+   {
+    "article_pk": 205242,
+    "role": "reject",
+    "found_by": {
+     "outline": 4
+    }
+   },
+   {
+    "article_pk": 205149,
+    "role": "condition",
+    "found_by": {
+     "outline": 32,
+     "words": 4,
+     "meaning": 6
+    }
+   },
+   {
+    "article_pk": 205243,
+    "role": "reject",
+    "found_by": {
+     "outline": 5
+    }
+   },
+   {
+    "article_pk": 205244,
+    "role": "reject",
+    "found_by": {
+     "outline": 6
+    }
+   },
+   {
+    "article_pk": 205245,
+    "role": "reject",
+    "found_by": {
+     "outline": 7
+    }
+   },
+   {
+    "article_pk": 205246,
+    "role": "reject",
+    "found_by": {
+     "outline": 8
+    }
+   },
+   {
+    "article_pk": 205247,
+    "role": "context",
+    "found_by": {
+     "outline": 9
+    }
+   },
+   {
+    "article_pk": 205248,
+    "role": "reject",
+    "found_by": {
+     "outline": 10
+    }
+   },
+   {
+    "article_pk": 205249,
+    "role": "context",
+    "found_by": {
+     "outline": 11
+    }
+   },
+   {
+    "article_pk": 205156,
+    "role": "exception",
+    "found_by": {
+     "outline": 13
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 205147
+   },
+   {
+    "article_pk": 205148
+   },
+   {
+    "article_pk": 205156
+   },
+   {
+    "article_pk": 205154
+   },
+   {
+    "article_pk": 205152
+   },
+   {
+    "article_pk": 205149
+   }
+  ],
+  "replay": "eNrdWt1u47gVfhVCN7OLOo4t25kkC2wRZFIgQHa2TbJ7EwQGLdE2Z6ifoShPgkGAvkbvejm57xv4Tfok_Q4pyfK_87dFe5NYFEUefuc73zkU9c2beMfthpd6x94wj2OhvIYX4EIlAaffYe13Oql67U3aaPiC67_lQjGRGaYEC3gqDVcsFCxL1IQPpJJm-si0-JLLjIXv8pjxLMu1yDXLhEpidlXvd37O_kxz5hjXb_kHe-32nk8ThZl3POQqEw0PvzweZ1-FRruuLvpBEqVKGIHWgXd8c-O3eu3uIbrkCm03fqPT6N42vIt___0fXBsZwNx2q0emKs5UIpnK70Q0SHI9EonMBAunj0MZy10WJgxL9fQxoMcyLApwyYHmI9Ek1LSMuL73Gm4Bca7UbcOZ9x5YJ7ERdwYWths-7PtQzfouGSg54kZiwNCaY0Qs9XZz1k2K0eMxoPnmxTwSQC6UWgRGTsSSF37wW62j_XbncP_07EcMxwPTl0SFQChxd9yh2xct3Me9r-N73KAhQyZjZsaCfclBCNhNvqCbQRIK7wHzR94xmYJlq_JX9UOUP1LuHX_zFI9HOSAkypGrQw7fon2ok2iRHiZZbBlpLmNaIr-n-4RwMfo4-UrmJowGXDT4mJmEHnkAt4umvrlPLVjC-sWtaqhFHIzfhv1KjLjqG6EjUP3G2zwq-aYYEj8XhvOAuLgLVJ7BahoM16nQYCgmCHgmqqD6lGuZhTKwy0PAV6HQT3Rf5ITH5yKo_M4Rgkp8AnO8gse9ruVx6NCpkdvGnrv2u62lx3pLLf7yQH63vditCuuyh7_U42jVQJ2Fbn63u9TSW2o5WGqphW3ZdLjU6WixU7t3YN0hUmcUnKERUiVYxcKKjgWsBShuSXhATWz8KjGBUFNc6TTP6lH2pwh_rIbD4zIUWmCKdqd-3VcyFmCDD3M-wxir_xnCAlRP-u75Yx_IDKUCCwveZGBDQI859cCo8KfREN80yagdwNmB-18TTXLdLq8jwWMZj9ACNxXSW2s9rDUWj75_sIqT2bVW0rMvlNwXhpt9RMg-FHvfb7V7-21_v_V-P6agj2G765vSkKLvN400Gm2SREAaRYF8Aa0Pc_aeFDUAzbVgNBBDFFEUZ3AiBWgoMhetPMa6m-xn9teTy-vzM-YzyiEnp9fnv59fn7EPJx-v2MUZuzo7vT777ZJ9OLtiJ1dXv12efDzFz5_Z9fn15RkF9wVGFDHsgTgDMhZSKipnoByCEEcWmTXdXPx6_hPlpj7WNQSdf2IjneSpYHZ9Qa4kpTsteGbD9oK7G5AieJsHGEwwnt89bdZZRtyICEtFbpiluMtKWNydHAl7b1HXeJoqGfAB9Zr-E50x3PYkZlntCGmTh8wyUKbv1NxDB1JIxEfnoTGLiTAJ8ggLrmetHamTGaC3hj1JbojOfRcH6FQ0MEOrmje24U0QN5Q7aPaDQxKVsVBhP4nVfV8h7-hZOWNE6ogeIhbHs2DEg1BrGXymWKOcvZ7cTRiV7RVXHs3FQxtbSAjlDXbOLqffR-SA0fQxnj5qTr_hv0DomMfIYESMIJh-dy6yVygOrE-IE3O8caVDyR_wZY5CwjgXizuhAxkQPPC0urcqUdH1FNyR8BRybp5ZAkWJgUlq-mhLqiDJJzCcbugVphfs3JJ1V-bZpi1bEpIDo3PrhSR1BQJRaVeo5XqwwXlanp7-SwkbOE8KwSGXGbmkiGbqj9rBxf5qLK9R78Ad0LVgt2kbKH1QGdhZdDIgElPU7FZdFthVFH4OeJO12P3OPkjKKjZ5F37m9G8ipFIWIFvsTx_JYg4mPh1hCBKsE5b4YDvQBW4jlUTELsNQ6qGbtHuMFWifDJCoxDarGiygylI6pbRwl6ZWQrmZxBuxvp0XyEalIH6lIH77WRLSDMZkD34ezDnptGhmB5WWaAE5ww7CaQZnE64SuMDtWtBEqwWYmV1ZHatU56Gg-FcFU0lshpnzFZILXIXLBpFzIm39yowIxrGkurzBKBtmdDPVdLmZsg0WoXSP8ojuF123SJK4o4SFkNotKJzizXQKvepIVEygnUJARMVIaeKIXW40XkmUZs7rrnZel5QpLIILQTFCWp3pf6H4a-HZ9qDjuViWlTrrw_V4btPrF2mOrKHTWY1Oh_0iaD-VsYnTYJB4yAMyRbhQndNXp8nZarieMxKJxYQQq-tFSavXSXlzEKJu4kNvvZh0KjGhXcTLxKRJlSSVRb157XetrMdOt-11C5C7dU4KY1yNSmOkiaaqZC56d0KtUZSyltCcRfwToteVPq4u2XN1iZP9N4vZGUYHKzE6YL8sSdkT4DFVmRCtG6bBlMSyeb6D5BG8GBZV8LvyLcS7LUR7npJVqPgrUfHZ1X1mpt8ju3sZoW60NW298FyPCS-SeS3OZlltOwwu2sCJ2rQNxiciYCm9eQEmcwSiF4UZcMueG5HdKiJfMSBdjzUo124B6s1ByvaQm3WU077R8DjkOtzohPrYBTuzlF6lDinT2_gNd_fB4tRV4g0SDSVOkb_KN7WuTivKli3x_BLurgW5sx7kznaQQYvpd-KqhGrp2P1ATta030_yYuugsqeCvzPYVhYXbGigkKY3DpRIUUmbMdCyeE9y-85ix33Ym8DdXg93e37DsW5_vEMK4SrIEeXVBlqG5fuURWaSj4p9XQFjieLMY53NHgut8tpyc535O6a-3Ej0sgUp7WG0iEO78caD9KMacbO_bpfe2NA2Sj1JnN6yQiNjUxGW9s7eO6K2af830vUGg_w_PlG-KTxvnWA2GN_5X9Xt16fH_4U4bnT17dylv9R77k2xMFhjoucPUEQ0EKEFAg9_lu5h-3rW9UY_cYft7uzkM2HlgfLqQ1AyCrI6SKpCL-4HWKikE0gys1e3iusBCdniG-XIntgc0klb7dGlE7mG91GUqTzl2fZ03lx9iNeY7fWLvGC9x8aAa8ldzaUzv1c6x14-OnzB-nq1Qa532QdtHr-5-tDyWcDVzzifv8LZ1w7eGW2AQUAHsjVA2H1t-VGDdUa-swP81zDvaB6nv6AuhInFC9o4MSj5Az6zjKxurji7fbYF9ePeFwzSe41BDl5jkPrnI94lT-nlR_W6vPZgWeBFXGZujhkLmiuOsF9g0lHdpLJOE_RFjH11EifxHu3DMEvxwuUOc1jrmquPya2S6KTQD3vgLE1C7_xrW_PKitu6kqJ2DhdltDpqtjePrRt42OdRksemnwnTt93Lwz1KsV55kP0lTwwlA1BxkIcjYegwvFYkYTBkWjow7x62Wi16LDP9WjpqPWA6TBQWJ9vuw6UhtZQFdfkVU3_VzWIoOoDwS6voA4Li06bZOfAf_I3TwwLsQ6Hte965z3_oawE5GtHRJ1KmzeQlim3a8cAkk_VTrHlMe4oOfamTFh8fgDKwyD4q8Ig7c2U_gPH7mC1rpvekH7BcyQl94sDuhflxIdcH9hRhwSQrl6s-IYNCm9kdd_xMPm4ddRAneUbfPzRbbQhKTCY-_AdlPPra"
+ }
+}

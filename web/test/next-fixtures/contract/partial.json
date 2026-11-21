@@ -1,0 +1,161 @@
+{
+ "question": "En 2012, quel délai pour résilier mon contrat d’assurance et sous quelle forme ?",
+ "state": "partial",
+ "date_used": "2012-01-01",
+ "date_said": true,
+ "blocks": [
+  {
+   "role": "rule",
+   "article_pk": 118836,
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "label": "Article 38",
+   "act_title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "version": {
+    "id": 3929,
+    "from": "2011-04-16",
+    "until": "2013-01-01",
+    "until_known": true
+   },
+   "lines": [
+    1
+   ],
+   "text": [
+    "La durée du contrat est fixée par les parties."
+   ],
+   "why": null,
+   "anchor": "art_38"
+  }
+ ],
+ "missing": "la forme de la lettre de résiliation (recommandé ou non) n’est pas dans les lignes lues",
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2012",
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "un montant ou un délai",
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 8535,
+    "kept": 1,
+    "filters": [
+     {
+      "rule": "textes abrogés à la date demandée",
+      "removed": 912,
+      "by": "code"
+     },
+     {
+      "rule": "conventions de branche et règlements de circulation",
+      "removed": 1408,
+      "by": "code"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+      "reason": "la question parle de prime et de garantie suspendue",
+      "by": "model"
+     }
+    ]
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "by": "model",
+    "steps": [],
+    "stopped": "leaf"
+   },
+   {
+    "level": "detectors",
+    "candidates": [
+     {
+      "article_pk": 118836,
+      "found_by": {
+       "exact": null,
+       "outline": 1,
+       "words": 1,
+       "meaning": 1
+      },
+      "meaning_only": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "aucun article nommé dans la question"
+     }
+    ]
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "candidates": [
+     {
+      "article_pk": 118836,
+      "role": "rule",
+      "reason": "le délai de résiliation"
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 1,
+    "read_amount_set_by": "question shape",
+    "lines_quoted": 1
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "une partie de la question sans ligne qui y réponde",
+    "state": "partial"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   },
+   {
+    "step": "route",
+    "model": "gpt-6-luna",
+    "ms": 1340,
+    "tokens_in": 3880,
+    "tokens_out": 140
+   }
+  ],
+  "cost_usd": 0.0042,
+  "ms": 3100
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9wYXJ0aWFs"
+ }
+}

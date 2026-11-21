@@ -279,19 +279,20 @@ test("the radar says a row whose state is an act dated by its entry into force a
   const outcome = radarOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "success", outcome.sentence);
   assert.equal(outcome.view.rows[0].state.dateRole, "entry_into_force");
+  // The Changes page (the owner's brief of 2026-11-15) writes its dates day first in both languages, and says the act's
+  // role on a line of its own under the row's title, its reason for not comparing on another.
+  const dayFirst = frDate(date);
   const english = decode(renderToStaticMarkup(h(RadarAnswerView, { outcome })));
-  assert.ok(english.replace(/<[^>]+>/g, "").includes(`the act as published, dated by its entry into force on ${date} (publisher)`), "the row's role");
-  assert.ok(!english.replace(/<[^>]+>/g, "").includes(`from ${date}:`), "never a bare from of it");
+  assert.ok(english.replace(/<[^>]+>/g, "").includes(`The act as published, dated by its entry into force on ${dayFirst} (publisher).`), "the row's role");
+  assert.ok(!/\bfrom\b/.test(english.replace(/<[^>]+>/g, "")), "never a bare from of it");
   const french = await frenchApp();
   const frenchText = decode(renderToStaticMarkup(h(french.RadarAnswerView, { outcome }))).replace(/<[^>]+>/g, "");
-  assert.ok(frenchText.includes(`l’acte tel que publié, daté de son entrée en vigueur le ${frDate(date)} (éditeur)`), "the row's role, in French");
-  assert.ok(!frenchText.includes(`à partir du ${frDate(date)}`) && !frenchText.includes(`à partir du ${date}`));
-  // A row not compared after the act agrees with it (`radar.notComparedAct`; the French review of #987's repair round).
-  if (outcome.view.rows[0].reason !== null) {
-    assert.ok(frenchText.includes("(éditeur)\u00a0: non comparé\u00a0:"), frenchText);
-    assert.ok(!frenchText.includes("(éditeur)\u00a0: non comparée"), "never feminine after the act");
-  }
-  assert.notEqual(outcome.view.rows[0].reason, null, "the census row is one not compared, so the agreement is said");
+  assert.ok(frenchText.includes(`L’acte tel que publié, daté de son entrée en vigueur le ${dayFirst} (éditeur).`), "the row's role, in French");
+  assert.ok(!frenchText.includes(`à partir du ${dayFirst}`) && !frenchText.includes(`à partir du ${date}`));
+  // The reason a row is not compared is its own sentence, about the version, so it agrees with "version", never with the act.
+  assert.notEqual(outcome.view.rows[0].reason, null, "the census row is one not compared");
+  assert.ok(frenchText.includes(FR.radar.reason[outcome.view.rows[0].reason]), frenchText);
+  assert.ok(!frenchText.includes("(éditeur) : non compar"), "the reason never follows the act in one sentence");
   // An older index names no role, and the row says what it said before.
   const older = legacy("changes_in_period");
   const plain = radarOutcome({ state: "success", envelope: older });

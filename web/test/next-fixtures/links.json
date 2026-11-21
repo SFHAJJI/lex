@@ -1,0 +1,36 @@
+{
+  "_note": "SYNTHETIC test input in the shape of GET /api/next/act-by (see lex-next/app/site_routes.py, act_by): not an answer of the engine.",
+  "work": "loi-1997-07-27-n10",
+  "links_out": [
+    {
+      "type": "modifies",
+      "title": "Loi du 6 décembre 1991 sur le secteur des assurances",
+      "work": "loi-1991-12-06-n1",
+      "held": true,
+      "address": "/eli/etat/leg/loi/1991/12/06/n1"
+    },
+    {
+      "type": "transposes",
+      "title": null,
+      "work": null,
+      "held": false,
+      "address": "/eli/dir/1992/49/oj"
+    }
+  ],
+  "links_in": [
+    {
+      "type": "modifies",
+      "title": "Loi du 21 décembre 2012 portant modification de la loi sur le contrat d'assurance",
+      "work": "loi-2012-12-21-n9",
+      "held": true,
+      "address": "/eli/etat/leg/loi/2012/12/21/n9"
+    },
+    {
+      "type": "a_link_of_tomorrow",
+      "title": "Un autre texte",
+      "work": null,
+      "held": false,
+      "address": "/eli/etat/leg/loi/2030/01/01/n1"
+    }
+  ]
+}

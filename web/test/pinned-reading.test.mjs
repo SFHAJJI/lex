@@ -19,7 +19,7 @@ import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { EUROPE_SAMPLE, europeBundle, europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
 import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
 const envelopeOf = (scenarioStart) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === "evidence_bundle" && candidate.scenario.startsWith(scenarioStart));

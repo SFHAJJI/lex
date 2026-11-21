@@ -48,7 +48,7 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 // Each test holds its own touches: one a failing test left is not the next test's.
 beforeEach(() => { takeTouches(); });
-const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
+const CARD = readFileSync(new URL("../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const PAGE = Buffer.from("<!doctype html><title>Lex V3</title><p>V3's own page</p>\n");
 const NOT_FOUND_PAGE = Buffer.from("<!doctype html><title>Page introuvable - Lex</title><p>V3's own 404 page</p>\n");
 const WEB = [["fr/index.html", PAGE], ["evaluation-card.json", CARD], ["not-found/fr.html", NOT_FOUND_PAGE]];
@@ -211,7 +211,8 @@ test("--no-browser probes the image over HTTP, every probe that needs no browser
     assert.equal(report.browserProbes, NO_BROWSER);
     assert.equal(report.browserProbes, "skipped: --no-browser");
     assert.deepEqual(report.stepsNotWalked, realMountSteps(mount.report).map(([name]) => `${name}, with the real mount`));
-    assert.equal(report.stepsNotWalked.length, 19, "the 13 screens, J1, J2, J5 and the three EU steps");
+    // V4's search page has no CELEX field: on a real mount the EU dossier and reading are walked, not an EU search.
+    assert.equal(report.stepsNotWalked.length, 18, "the 13 screens, J1, J2, J5 and the two EU steps");
     assert.ok(report.stepsNotWalked.includes("eu reading, with the real mount"));
 
     // The API's journeys, J6 to J8, through REST and MCP; the real mount's first permalinks of its log verified.

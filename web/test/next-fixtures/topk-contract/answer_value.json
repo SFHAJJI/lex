@@ -1,0 +1,820 @@
+{
+ "question": "Quel est le délai de préavis pour un salarié licencié après 6 ans d'ancienneté ?",
+ "row": {
+  "question": "Quel est le délai de préavis pour un salarié licencié après 6 ans d'ancienneté ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [
+   {
+    "text": "6 ans",
+    "value": 6.0,
+    "unit": "ans"
+   }
+  ],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 5,
+   "de": 0,
+   "en": 0,
+   "lb": 1
+  },
+  "question_type": "value",
+  "personal_case": false,
+  "french": "Quel est le délai de préavis pour un salarié licencié après 6 ans d'ancienneté ?",
+  "legal_terms": [
+   "délai de préavis",
+   "licenciement",
+   "salarié",
+   "ancienneté"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_124-3",
+   "date": "2026-07-01",
+   "why": null,
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 124-3.",
+   "number": "l124-3",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141878,
+   "lines": [
+    2,
+    4
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 2,
+     "text": "En cas de licenciement d’un salarié à l’initiative de l’employeur, le contrat de travail prend fin:",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "à l’expiration d’un délai de préavis de quatre mois pour le salarié qui justifie auprès du même employeur d’une ancienneté de services continus comprise entre cinq ans et moins de dix ans;",
+     "label": null
+    }
+   ],
+   "text": [
+    "En cas de licenciement d’un salarié à l’initiative de l’employeur, le contrat de travail prend fin:",
+    "à l’expiration d’un délai de préavis de quatre mois pour le salarié qui justifie auprès du même employeur d’une ancienneté de services continus comprise entre cinq ans et moins de dix ans;"
+   ],
+   "label": "Art. L. 124-3.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "related",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_124-7",
+   "date": "2026-07-01",
+   "why": "désigné par la lecture",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 124-7.",
+   "number": "l124-7",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-11-01",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 141882,
+   "lines": [
+    11,
+    12
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 11,
+     "text": "L’employeur occupant moins de vingt salariés peut opter dans la lettre de licenciement soit pour le versement des indemnités visées au paragraphe (1) qui précède, soit pour la prolongation des délais de préavis visés à l’article L. 124-3 qui, dans ce cas, sont portés:",
+     "label": null
+    },
+    {
+     "n": 12,
+     "text": "à cinq mois pour le salarié justifiant auprès du même employeur d’une ancienneté de service continus de cinq années au moins;",
+     "label": null
+    }
+   ],
+   "text": [
+    "L’employeur occupant moins de vingt salariés peut opter dans la lettre de licenciement soit pour le versement des indemnités visées au paragraphe (1) qui précède, soit pour la prolongation des délais de préavis visés à l’article L. 124-3 qui, dans ce cas, sont portés:",
+    "à cinq mois pour le salarié justifiant auprès du même employeur d’une ancienneté de service continus de cinq années au moins;"
+   ],
+   "label": "Art. L. 124-7.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "definition",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_291-1",
+   "date": "2026-07-01",
+   "why": "« salarié » est défini par ce texte",
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 291-1.",
+   "number": "l291-1",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre IX Conditions d’hébergement du salarié éloigné de son lieu de travail habituel ( L. 15 décembre 2020 )",
+   "version_from": "2026-07-01",
+   "version_to": null,
+   "article_since": "2020-12-22",
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 142326,
+   "lines": [
+    2
+   ],
+   "wording_since": "2020-12-22",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 0,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 2,
+     "text": "1° « salarié » : tout salarié tel que défini à l’article L. 121-1, ainsi que le stagiaire, l’apprenti et l’élève et l’étudiant occupé pendant les vacances scolaires ;",
+     "label": "1°"
+    }
+   ],
+   "text": [
+    "1° « salarié » : tout salarié tel que défini à l’article L. 121-1, ainsi que le stagiaire, l’apprenti et l’élève et l’étudiant occupé pendant les vacances scolaires ;"
+   ],
+   "label": "Art. L. 291-1.",
+   "version": {
+    "id": null,
+    "from": "2026-07-01",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 141878,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-3.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "keywords+meaning+outline",
+   "score": 0.6353
+  },
+  {
+   "label": "A2",
+   "article_pk": 141882,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-7.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "keywords+meaning+outline",
+   "score": 0.6017
+  },
+  {
+   "label": "A3",
+   "article_pk": 141880,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-5.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "keywords+meaning+outline",
+   "score": 0.5925
+  },
+  {
+   "label": "A4",
+   "article_pk": 141883,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-8.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "meaning+outline",
+   "score": 0.6621
+  },
+  {
+   "label": "A5",
+   "article_pk": 134709,
+   "act_title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembourgeois.",
+   "article": "Art. 3.1.2-57.",
+   "heading": null,
+   "path": "LIVRE 3 DROIT DU TRAVAIL APPLICABLE AUX GENS DE MER > TITRE 1er Relations individuelles et collectives du travail > Chapitre 2 Contrat d’engagement maritime > Section 4 Résiliation du contrat > Sous-section 1re Résiliation avec préavis",
+   "how": "keywords+outline",
+   "score": 0.5158
+  },
+  {
+   "label": "A6",
+   "article_pk": 142038,
+   "act_title": "Code du travail",
+   "article": "Art. L. 166-6.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre VI Rapports collectifs du travail > Chapitre VI. Les licenciements collectifs > Section 3. Procédure de licenciement collectif",
+   "how": "keywords+meaning",
+   "score": 0.5906
+  },
+  {
+   "label": "A7",
+   "article_pk": 141881,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-6.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "meaning+outline",
+   "score": 0.6006
+  },
+  {
+   "label": "A8",
+   "article_pk": 148284,
+   "act_title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "article": "Art. 11.",
+   "heading": null,
+   "path": "Chapitre 3 : Licenciements collectifs > Section 3 Procédure de licenciement collectif",
+   "how": "keywords+meaning",
+   "score": 0.545
+  },
+  {
+   "label": "A9",
+   "article_pk": 141877,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-2.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "meaning+outline",
+   "score": 0.5901
+  },
+  {
+   "label": "A10",
+   "article_pk": 142177,
+   "act_title": "Code du travail",
+   "article": "Art. L. 233-12.",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre III Repos, congés et jours fériés légaux > Chapitre III. Congé annuel payé des salariés",
+   "how": "keywords+meaning",
+   "score": 0.5378
+  },
+  {
+   "label": "A11",
+   "article_pk": 141884,
+   "act_title": "Code du travail",
+   "article": "Art. L. 124-9.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre IV. Résiliation du contrat de travail > Section 1. Résiliation avec préavis",
+   "how": "keywords+meaning",
+   "score": 0.5835
+  },
+  {
+   "label": "A12",
+   "article_pk": 134707,
+   "act_title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembourgeois.",
+   "article": "Art. 3.1.2-55.",
+   "heading": null,
+   "path": "LIVRE 3 DROIT DU TRAVAIL APPLICABLE AUX GENS DE MER > TITRE 1er Relations individuelles et collectives du travail > Chapitre 2 Contrat d’engagement maritime > Section 4 Résiliation du contrat > Sous-section 1re Résiliation avec préavis",
+   "how": "outline",
+   "score": 0.499
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "delai": 7465,
+   "preavis": 311,
+   "salarie": 3035,
+   "licencie": 1788,
+   "apres": 12308,
+   "anciennete": 907,
+   "licenciement": 320
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Code du travail",
+   "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+   "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou"
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [
+      "6 ans"
+     ],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "value",
+     "personal_case": false,
+     "french": "Quel est le délai de préavis pour un salarié licencié après 6 ans d'ancienneté ?",
+     "legal_terms": [
+      "délai de préavis",
+      "licenciement",
+      "salarié",
+      "ancienneté"
+     ],
+     "in_scope": true
+    },
+    "ms": 1502,
+    "tokens_in": 266,
+    "tokens_out": 117,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "delai",
+      "preavis",
+      "salarie",
+      "licencie",
+      "apres",
+      "anciennete"
+     ],
+     "terms_a_statute_would_use": [
+      "licenciement"
+     ],
+     "articles_holding_each_word": {
+      "delai": 7465,
+      "preavis": 311,
+      "salarie": 3035,
+      "licencie": 1788,
+      "apres": 12308,
+      "anciennete": 907,
+      "licenciement": 320
+     },
+     "articles_kept": 10
+    },
+    "ms": 79
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 3,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/code/travail",
+       "title": "Code du travail",
+       "outline_rows": 471,
+       "parts_named": [
+        "Section 1. Résiliation avec préavis"
+       ],
+       "articles_in_parts": 9,
+       "ms": 1107,
+       "tokens_in": 17957,
+       "tokens_out": 35,
+       "reason": "Le délai de préavis en cas de licenciement relève de la résiliation avec préavis."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1993/07/23/n1",
+       "title": "Loi du 23 juillet 1993 portant diverses mesures en faveur de l’emploi.",
+       "outline_rows": 9,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 6083,
+       "tokens_in": 688,
+       "tokens_out": 457,
+       "reason": "Le texte traite notamment des procédures de licenciement collectif, mais ne précise pas le préavis selon l’ancienneté."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1990/11/09/n1",
+       "title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou",
+       "outline_rows": 125,
+       "parts_named": [
+        "Sous-section 1re Résiliation avec préavis"
+       ],
+       "articles_in_parts": 6,
+       "ms": 1255,
+       "tokens_in": 7291,
+       "tokens_out": 64,
+       "reason": "Le préavis de licenciement est traité dans cette sous-section."
+      }
+     ],
+     "articles_from_the_parts": 12,
+     "whole_part_for_a_list": false
+    },
+    "ms": 4770,
+    "tokens_in": 25936,
+    "tokens_out": 556,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 3
+    },
+    "ms": 5020,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 7
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "A1",
+     "lines": [
+      2,
+      4
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Salariés licenciés avec préavis à l’initiative de l’employeur",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "A1 fixe la durée de droit commun pour la tranche d’ancienneté pertinente, et A2 prévoit une prolongation optionnelle pour les petits employeurs."
+    },
+    "ms": 1800,
+    "tokens_in": 5311,
+    "tokens_out": 144,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 2,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [
+      "salarie"
+     ],
+     "inbound_checked": 10,
+     "outbound_checked": 0,
+     "followed": 0,
+     "see_also": 0
+    },
+    "ms": 10
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer",
+     "notes": [
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 8203,
+  "tokens": {
+   "text-embedding-3-large": [
+    30,
+    0
+   ],
+   "gpt-6-luna": [
+    26202,
+    673
+   ],
+   "gpt-6.2-sol": [
+    5311,
+    144
+   ]
+  },
+  "cost_usd_list_price": 0.01696,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer",
+    "state": "answer"
+   }
+  ],
+  "cost_usd": 0.01696,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 1502,
+    "tokens_in": 266,
+    "tokens_out": 117
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 4770,
+    "tokens_in": 25936,
+    "tokens_out": 556
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1800,
+    "tokens_in": 5311,
+    "tokens_out": 144
+   }
+  ]
+ },
+ "state": "answer",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Quel est le délai de préavis pour un salarié licencié après 6 ans d'ancienneté ?",
+   "legal_terms": [
+    "délai de préavis",
+    "licenciement",
+    "salarié",
+    "ancienneté"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 141878,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 141882,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 141880,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 141883,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 134709,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 142038,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141881,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 148284,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141877,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 142177,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 141884,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 134707,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 141878
+   },
+   {
+    "article_pk": 141882
+   },
+   {
+    "article_pk": 141880
+   },
+   {
+    "article_pk": 141883
+   },
+   {
+    "article_pk": 134709
+   },
+   {
+    "article_pk": 142038
+   },
+   {
+    "article_pk": 141881
+   },
+   {
+    "article_pk": 148284
+   },
+   {
+    "article_pk": 141877
+   },
+   {
+    "article_pk": 142177
+   },
+   {
+    "article_pk": 141884
+   },
+   {
+    "article_pk": 134707
+   }
+  ],
+  "replay": "eNq1VMuS2jAQ_BWVLrmYlGUo8PqSb8iZoihhD-BaIXn1YENt8T-h8gm5LT-WllfeEPA1J49ao57u8Uhv_MgrkfGOV9yb7plnvEaoTC0V4uYm7pDJt0FrUpOjAPCC9fdAipHzTBFrrhclW9YQ6-z1Io-tY50JlgXNnFTSttcLU21Nuo6RRNJPx-ZMaseaLxIogdtj61usHMBe5MV8IsSkyCPieLWVylHGEXEceyUL3Cbp1Sey4dVyKWaiXJTYDop4tiyy2SrjPNNBqeyDJoarrE8sCySSkp4a5AqRiQLZMOTanYaiTlqmJEzWPlgaZymmxRxnaNvq1rdGx6Igef_11_37775X4I1JPWtNzNMPP8KJs3oPJ_geeNXv8loN0WdAQ9BJXr1xJfUuyB3FfxV70cBTxLfWHO476s09srOy1QAbeYr7EDaw780rcG1YJGStZn5P7CXADqxWzJt45IyhSNDan7oo4ihVgDnUx3_f_8-JUbSTau3JHjAeS_7IHXM-yOhA2mM5FEF4w8bR8Y6sMxp8tXSU5g7unm8nq5a6afv-3kzRI5iPgdN7cDpb5E8PmUU-HS0kHsCyKGcjmYvFI6cYAcE5G5P0byYaY_EkDB1InpPL5Cs5SdqT2qQvKUoaUtWPOqBWeGCWmGA6koozSHXr-nvENyesa9PEQerv8_2Nd74f8-FROMc7gykooSHjwUFz_jUX8ydcUB2HY2uCbtab01oqtW7I414b6_jq_Af8Bp4p"
+ }
+}

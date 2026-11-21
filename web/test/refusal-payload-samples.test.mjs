@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-const SAMPLES = new URL("../../schemas/v3-platform/refusal-payload-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/refusal-payload-samples.json", import.meta.url);
 
 /**
  * Codes whose sample the card refuses today, each for a reason that is a PRODUCER gap and not a

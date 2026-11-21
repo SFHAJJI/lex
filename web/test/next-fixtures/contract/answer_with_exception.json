@@ -1,0 +1,303 @@
+{
+ "question": "Mon assureur peut-il suspendre ma garantie si je ne paie pas ma prime ?",
+ "state": "answer_with_exception",
+ "date_used": "2026-11-22",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "article_pk": 96064,
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "label": "Article 21",
+   "act_title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true
+   },
+   "lines": [
+    1
+   ],
+   "text": [
+    "A défaut de paiement d'une prime, ou d'une fraction de prime, dans les dix jours de son échéance et indépendamment du droit pour l'assureur de poursuivre l'exécution du contrat en justice, la garantie peut être suspendue à l'expiration d'un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu."
+   ],
+   "why": null,
+   "anchor": "art_21"
+  },
+  {
+   "role": "exception",
+   "article_pk": 96067,
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "label": "Article 24",
+   "act_title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true
+   },
+   "lines": [
+    1
+   ],
+   "text": [
+    "Les dispositions des articles 21 à 23 ne sont pas applicables aux assurances sur la vie."
+   ],
+   "why": "Article 24 écarte Article 21 pour les assurances sur la vie (renvoi entrant).",
+   "anchor": "art_24"
+  }
+ ],
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2026-11-22",
+     "by": "code"
+    },
+    {
+     "name": "language",
+     "value": "français",
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "une règle",
+     "by": "model"
+    },
+    {
+     "name": "terms",
+     "value": [
+      "défaut de paiement",
+      "suspension de la garantie"
+     ],
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 8535,
+    "kept": 1,
+    "filters": [
+     {
+      "rule": "textes abrogés à la date demandée",
+      "removed": 912,
+      "by": "code"
+     },
+     {
+      "rule": "conventions de branche et règlements de circulation",
+      "removed": 1408,
+      "by": "code"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+      "reason": "la question parle de prime et de garantie suspendue",
+      "by": "model"
+     }
+    ]
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "by": "model",
+    "steps": [
+     {
+      "depth": 1,
+      "shown": 3,
+      "picked": [
+       {
+        "node_id": "section_1",
+        "heading": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+        "tally": 4,
+        "reason": "les règles communes à tous les contrats"
+       }
+      ]
+     },
+     {
+      "depth": 2,
+      "shown": 6,
+      "picked": [
+       {
+        "node_id": "section_1.section_2",
+        "heading": "Chapitre II - Dispositions communes à tous les contrats",
+        "tally": 4,
+        "reason": "le paiement de la prime y est réglé"
+       }
+      ]
+     },
+     {
+      "depth": 3,
+      "shown": 9,
+      "picked": [
+       {
+        "node_id": "section_1.section_2.section_4",
+        "heading": "Section IV - Exécution du contrat",
+        "tally": 3,
+        "reason": "défaut de paiement de la prime"
+       }
+      ]
+     }
+    ],
+    "stopped": "small_node"
+   },
+   {
+    "level": "detectors",
+    "candidates": [
+     {
+      "article_pk": 96064,
+      "found_by": {
+       "exact": null,
+       "outline": 1,
+       "words": 1,
+       "meaning": 2
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 96067,
+      "found_by": {
+       "exact": null,
+       "outline": 4,
+       "words": null,
+       "meaning": null
+      },
+      "meaning_only": false
+     },
+     {
+      "article_pk": 96042,
+      "found_by": {
+       "exact": null,
+       "outline": null,
+       "words": null,
+       "meaning": 1
+      },
+      "meaning_only": true
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "aucun article nommé dans la question"
+     }
+    ]
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "candidates": [
+     {
+      "article_pk": 96064,
+      "role": "rule",
+      "reason": "dit ce qui arrive à la garantie quand la prime n’est pas payée"
+     },
+     {
+      "article_pk": 96067,
+      "role": "exception",
+      "reason": "écarte les articles 21 à 23 pour l’assurance vie"
+     },
+     {
+      "article_pk": 96042,
+      "role": "reject",
+      "reason": "définitions générales, ne répond pas"
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 12,
+    "read_amount_set_by": "outline node",
+    "lines_quoted": 2
+   },
+   {
+    "level": "references",
+    "by": "code",
+    "trigger": "exception index",
+    "budget": 1,
+    "hops": [
+     {
+      "from": "Article 21",
+      "to": "Article 24",
+      "kind": "not_applicable",
+      "why": "cité par l’article 24, alinéa 1",
+      "held": true
+     }
+    ]
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "règle trouvée et exception d’un autre article qui la vise",
+    "state": "answer_with_exception"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   },
+   {
+    "step": "route",
+    "model": "gpt-6-luna",
+    "ms": 1340,
+    "tokens_in": 3880,
+    "tokens_out": 140
+   },
+   {
+    "step": "outline",
+    "model": "gpt-6-luna",
+    "ms": 1110,
+    "tokens_in": 2420,
+    "tokens_out": 120
+   },
+   {
+    "step": "arbiter",
+    "model": "gpt-6.2-sol",
+    "ms": 2650,
+    "tokens_in": 5210,
+    "tokens_out": 310
+   }
+  ],
+  "cost_usd": 0.01412,
+  "ms": 6230
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [
+   {
+    "article_pk": 96064,
+    "label": "Article 21"
+   },
+   {
+    "article_pk": 96067,
+    "label": "Article 24"
+   },
+   {
+    "article_pk": 96042,
+    "label": "Article 1er"
+   }
+  ],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9hbnN3ZXJfd2l0aF9leGNlcHRpb24"
+ }
+}

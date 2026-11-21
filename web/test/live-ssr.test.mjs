@@ -29,7 +29,7 @@ import { luxembourgDate } from "../scripts/temporal.mjs";
 import { homePageFailures } from "../scripts/deploy-probe.mjs";
 
 const TABLE = JSON.parse(await readFile(new URL("../../tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json", import.meta.url), "utf8"));
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (operation, scenarioStart) => census.envelopes.find((entry) => entry.operation === operation && entry.scenario.startsWith(scenarioStart)).envelope;
 const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const COVERAGE = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
@@ -346,23 +346,23 @@ test("the build writes a server renderer per language, which renders the page in
       const built = await readFile(join(destination, language, "developers.html"), "utf8");
       assert.ok(built.includes('data-live-examples="built"') && !built.includes('data-live-examples="live"'), `${language}: as built, none`);
 
-      // The home page, from the coverage answer, in this language: the one box with its placeholder, today in Luxembourg
-      // when the API answered, the coverage line from the answer's counts, and R50's sentence under the box and in the footer.
+      // The home page, from the coverage answer, in this language: the V4 Home (the owner's brief of 2026-11-15), its find
+      // field, its six starting texts drawn in an engine with no URLSearchParams, the coverage line from the answer's counts,
+      // and R50's sentence in the footer (the dock says the rest).
       const copy = LIVE_CHROME[language];
       const home = context.lexSsr.render("home", JSON.stringify(COVERAGE), `/${language}/`);
       assert.match(home, new RegExp(`^<!doctype html>\\n<html lang="${language}" data-product-line="lex-v3" data-preview-state="live-home"`), `${language}: the home page`);
-      assert.ok(home.includes(`placeholder="${copy.search.placeholder}"`), `${language}: R52's placeholder`);
-      const today = luxembourgDate(COVERAGE.context.freshness.observed_at);
-      assert.match(home, new RegExp(`data-search-date="" aria-describedby="search-today" value="${today}"`), `${language}: today in the date field`);
-      const { totals, history } = COVERAGE.result.value;
-      const line = fillText(copy.home.coverage, {
-        acts: fillCounted(copy.home.acts, totals.works, {}, language),
-        versions: fillCounted(copy.home.versions, totals.states, {}, language),
-        articles: fillCounted(copy.home.articles, totals.articles, {}, language),
-        date: displayDate(luxembourgDate(history.snapshots_with_text[0].built_at), language),
+      assert.ok(home.includes(`placeholder="${copy.home.findPlaceholder.replaceAll("'", "&#x27;")}"`), `${language}: the find field's placeholder`);
+      assert.equal((home.match(/data-start-text="/g) ?? []).length, 6, `${language}: the six starting texts`);
+      // Each a link to its text page, its query written by hand (textHref: no URLSearchParams in this engine).
+      assert.ok(home.includes(`href="/${language}/text.html?text=%2Flu-legilux%2Floi-1997-07-27-n10" data-start-text=`), `${language}: each a link to its text`);
+      const { totals } = COVERAGE.result.value;
+      const line = fillText(copy.home.holds, {
+        texts: fillCounted(copy.home.holdsTexts, totals.works, {}, language),
+        versions: fillCounted(copy.home.holdsVersions, totals.states, {}, language),
       });
-      assert.ok(home.includes(`data-coverage-line="counted" data-built-on="${luxembourgDate(history.snapshots_with_text[0].built_at)}">${line}</p>`), `${language}: ${line}`);
-      assert.equal(home.split(`data-not-advice="">${copy.site.notAdvice}</p>`).length - 1, 2, `${language}: R50's sentence under the box and in the footer`);
+      assert.ok(home.includes(`data-coverage-line="counted">${line}`), `${language}: ${line}`);
+      assert.equal(home.split(`data-not-advice="">${copy.site.notAdvice}</p>`).length - 1, 1, `${language}: R50's sentence in the footer`);
       // The reading says it in this language too, above the text.
       assert.ok(html.includes(`<p class="not-advice" data-not-advice="">${copy.site.notAdvice}</p>`), `${language}: Reading says R50's sentence`);
       // The deploy probe holds a revision's rendered home page to the release's own: the page this renderer renders from
@@ -374,19 +374,20 @@ test("the build writes a server renderer per language, which renders the page in
         assert.deepEqual(homePageFailures(built, built, { renderer, coverage: COVERAGE }), [], "the page as built");
         for (const [what, page] of [
           ["the footer's R50 line swapped for the old advice line", home.replace(/<p data-not-advice="">[^<]*<\/p><p>/, "<p>Documentation, et non consultation juridique.</p><p>")],
-          ["the heading and the whole root replaced, with empty facts", home.replace(/<h1>[\s\S]*<\/main>/, '<h1>Autre</h1><div id="live-home-root"><p>anything</p></div><script type="application/json" id="lex-home-facts">{}</script><script src="/fr/client-live-home.js" defer=""></script></main>')],
-          ["a count typed into the coverage line", home.replace(/(data-coverage-line="counted" data-built-on="[^"]*">)[^<]*/, "$1Ce site détient 1402 actes")],
-          ["another day in the date field", home.replace(`value="${today}"`, 'value="2001-01-01"')],
+          ["the heading and the whole root replaced, with empty facts", home.replace(/<div id="live-home-root">[\s\S]*<\/main>/, '<div id="live-home-root"><h1>Autre</h1><p>anything</p></div><script type="application/json" id="lex-home-facts">{}</script><script src="/fr/client-live-home.js" defer=""></script></main>')],
+          ["a count typed into the coverage line", home.replace(/(data-coverage-line="counted">)[^<]*/, "$1Lex détient 1402 textes ")],
+          ["another starting text", home.replace("Code civil", "Code pénal")],
         ]) {
           assert.notEqual(page, home, `${what}: the page was changed`);
           assert.ok(homePageFailures(Buffer.from(page), built, { renderer, coverage: COVERAGE }).length > 0, what);
         }
       }
-      // And the search page as built, and the home page as built, which asks for its facts once loaded.
+      // And the search page as built, and the home page as built, which asks for its facts once loaded: the V4 header's field
+      // on each, and R50's sentence in the footer.
       for (const page of ["search.html", "index.html"]) {
         const built = await readFile(join(destination, language, page), "utf8");
-        assert.ok(built.includes(`<p class="not-advice" data-not-advice="">${copy.site.notAdvice}</p>`), `${language}/${page}: R50's sentence`);
-        assert.ok(built.includes(`placeholder="${copy.search.placeholder}"`), `${language}/${page}: R52's placeholder`);
+        assert.ok(built.includes(`<p data-not-advice="">${copy.site.notAdvice}</p>`), `${language}/${page}: R50's sentence`);
+        assert.ok(built.includes(`placeholder="${copy.site.findPlaceholder}"`), `${language}/${page}: the header's find field`);
       }
     }
     assert.equal(LIVE_CHROME.fr.site.notAdvice, "Lex montre le texte de la loi. Il ne dit pas ce qui s’applique à votre situation, et ce n’est pas un conseil juridique.");

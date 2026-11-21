@@ -30,7 +30,7 @@ import {
 } from "../scripts/search-answer.mjs";
 import { foldText } from "../scripts/text-folding.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
 /** Whether a captured search answer is an exact reference's (it opens an act, or says why not) rather than a word search's. */
@@ -346,7 +346,7 @@ test("the four captured EU answers read: the act's one wording, pinned, both lan
 });
 
 test("an EU act's original wording and its consolidated version read: with no date both wordings, each text once; with a date the one it selects", async () => {
-  const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+  const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
   const valueOf = (start) => census.envelopes.find((entry) => entry.operation === "search" && entry.scenario.startsWith(start)).envelope.result.value;
   const all = readEuropeSearch(valueOf("an EU act's original wording and its consolidated version"));
   assert.equal(all.date, null);

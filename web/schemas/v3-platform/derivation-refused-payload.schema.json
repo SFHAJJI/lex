@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-derivation_refused-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "derivation": {
+      "type": "string",
+      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+    },
+    "reason": {
+      "type": "string",
+      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+    }
+  },
+  "required": [
+    "derivation",
+    "reason"
+  ]
+}

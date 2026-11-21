@@ -87,6 +87,15 @@ export function readClaimDate(text) {
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
+/**
+ * The date the law page was opened at, from the address's hash: `#on-2020-01-01` (an answer that read the law at a past date
+ * opens the act's page at that date: the owner's order of 2026-11-14, evening); null for any other.
+ */
+export function onDateOf(hash) {
+  const match = /^#on-(\d{4}-\d{2}-\d{2})$/u.exec(typeof hash === 'string' ? hash : '');
+  return match === null ? null : readClaimDate(match[1]);
+}
+
 /** The two versions compared when the page opens: the one before the latest, and the latest; null for one version. */
 export function defaultPair(versions) {
   return versions.length < 2 ? null : Object.freeze([versions.length - 2, versions.length - 1]);

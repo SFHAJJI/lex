@@ -1,0 +1,337 @@
+{
+ "article": {
+  "article_pk": 96058,
+  "article": "Article 16",
+  "heading": "Preuve et contenu du contrat",
+  "anchor": "art_16",
+  "work": "loi-1997-07-27-n10",
+  "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+  "version_from": "2025-11-25",
+  "version_to": null,
+  "lines": [
+   {
+    "n": 1,
+    "text": "Sous réserve de l'aveu et du serment, et quelle que soit la valeur des engagements, le contrat d'assurance ainsi que ses modifications se prouvent par écrit entre parties. Il n'est reçu aucune preuve par témoins ou par présomptions contre et outre le contenu de l'acte.",
+    "unit": "art_16/p1/a1",
+    "label": null
+   },
+   {
+    "n": 2,
+    "text": "Toutefois, lorsqu'il existe un commencement de preuve par écrit, la preuve par témoins ou par présomptions est admise.",
+    "unit": "art_16/p1/a2",
+    "label": null
+   },
+   {
+    "n": 3,
+    "text": "Les articles 1325 et 1328 du Code civil ne sont pas applicables au contrat d'assurance ou à ses modifications.",
+    "unit": "art_16/p1/a3",
+    "label": null
+   },
+   {
+    "n": 4,
+    "text": "Le contrat d'assurance est daté du jour où il est établi.",
+    "unit": "art_16/p2/a1",
+    "label": null
+   },
+   {
+    "n": 5,
+    "text": "Il indique:",
+    "unit": "art_16/p2/a2",
+    "label": null
+   },
+   {
+    "n": 6,
+    "text": "le nom de l'entreprise d'assurances et l'adresse de son siège social et, le cas échéant, celle de la succursale qui accorde la couverture;",
+    "unit": "art_16/p2/a2/pt1",
+    "label": null
+   },
+   {
+    "n": 7,
+    "text": "les nom et domicile du preneur d'assurance;",
+    "unit": "art_16/p2/a2/pt2",
+    "label": null
+   },
+   {
+    "n": 8,
+    "text": "la chose ou la personne assurée;",
+    "unit": "art_16/p2/a2/pt3",
+    "label": null
+   },
+   {
+    "n": 9,
+    "text": "la nature des risques garantis;",
+    "unit": "art_16/p2/a2/pt4",
+    "label": null
+   },
+   {
+    "n": 10,
+    "text": "le moment à partir duquel le risque est garanti et la durée de cette garantie;",
+    "unit": "art_16/p2/a2/pt5",
+    "label": null
+   },
+   {
+    "n": 11,
+    "text": "le montant de cette garantie;",
+    "unit": "art_16/p2/a2/pt6",
+    "label": null
+   },
+   {
+    "n": 12,
+    "text": "la prime ou la cotisation de l'assurance ou la manière de les déterminer;",
+    "unit": "art_16/p2/a2/pt7",
+    "label": null
+   },
+   {
+    "n": 13,
+    "text": "les cas et les modalités de la résiliation du contrat;",
+    "unit": "art_16/p2/a2/pt8",
+    "label": null
+   },
+   {
+    "n": 14,
+    "text": "la juridiction compétente pour connaître des litiges nés du contrat.",
+    "unit": "art_16/p2/a2/pt9",
+    "label": null
+   },
+   {
+    "n": 15,
+    "text": "Sans préjudice des dispositions du 2e alinéa, le contrat d’assurance relevant de la branche R.C. véhicules terrestres automoteurs et tout autre document accordant une couverture dans cette branche, conclus au Grand-Duché de Luxembourg en régime de libre prestation de services, doivent indiquer le nom et l’adresse du représentant désigné en vertu de l’article 145, paragraphe 1er, de la loi sur le secteur des assurances.",
+    "unit": "art_16/p2/a3",
+    "label": null
+   },
+   {
+    "n": 16,
+    "text": "Les contrats ne sont valables que s'ils sont rédigés dans l'une des langues officielles du Grand-Duché de Luxembourg ou dans une langue comprise par le preneur d'assurance.",
+    "unit": "art_16/p2/a4",
+    "label": null
+   },
+   {
+    "n": 17,
+    "text": "Ils doivent être rédigés en caractères lisibles et toute limitation ou exclusion de garantie doit être mise en évidence.",
+    "unit": "art_16/p2/a5",
+    "label": null
+   },
+   {
+    "n": 18,
+    "text": "Les indications visées au premier tiret du deuxième l'alinéa doivent également figurer sur tout autre document accordant la couverture ainsi que sur les propositions d'assurance dans les cas où elles lient le preneur d'assurance.",
+    "unit": "art_16/p2/a6",
+    "label": null
+   },
+   {
+    "n": 19,
+    "text": "L'assureur est tenu de délivrer au preneur d'assurance, au plus tard au moment de la conclusion du contrat, une copie certifiée par lui des renseignements que le preneur a communiqués par écrit au sujet du risque à couvrir.",
+    "unit": "art_16/p3/a1",
+    "label": null
+   }
+  ]
+ },
+ "section": {
+  "node_id": "section_1.section_2.section_3",
+  "label": "Section III - Preuve et contenu du contrat",
+  "articles_total": 3,
+  "articles": [
+   {
+    "article_pk": 96058,
+    "article": "Article 16",
+    "heading": "Preuve et contenu du contrat",
+    "anchor": "art_16",
+    "lines": [
+     {
+      "n": 1,
+      "text": "Sous réserve de l'aveu et du serment, et quelle que soit la valeur des engagements, le contrat d'assurance ainsi que ses modifications se prouvent par écrit entre parties. Il n'est reçu aucune preuve par témoins ou par présomptions contre et outre le contenu de l'acte.",
+      "unit": "art_16/p1/a1",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "Toutefois, lorsqu'il existe un commencement de preuve par écrit, la preuve par témoins ou par présomptions est admise.",
+      "unit": "art_16/p1/a2",
+      "label": null
+     },
+     {
+      "n": 3,
+      "text": "Les articles 1325 et 1328 du Code civil ne sont pas applicables au contrat d'assurance ou à ses modifications.",
+      "unit": "art_16/p1/a3",
+      "label": null
+     },
+     {
+      "n": 4,
+      "text": "Le contrat d'assurance est daté du jour où il est établi.",
+      "unit": "art_16/p2/a1",
+      "label": null
+     },
+     {
+      "n": 5,
+      "text": "Il indique:",
+      "unit": "art_16/p2/a2",
+      "label": null
+     },
+     {
+      "n": 6,
+      "text": "le nom de l'entreprise d'assurances et l'adresse de son siège social et, le cas échéant, celle de la succursale qui accorde la couverture;",
+      "unit": "art_16/p2/a2/pt1",
+      "label": null
+     },
+     {
+      "n": 7,
+      "text": "les nom et domicile du preneur d'assurance;",
+      "unit": "art_16/p2/a2/pt2",
+      "label": null
+     },
+     {
+      "n": 8,
+      "text": "la chose ou la personne assurée;",
+      "unit": "art_16/p2/a2/pt3",
+      "label": null
+     },
+     {
+      "n": 9,
+      "text": "la nature des risques garantis;",
+      "unit": "art_16/p2/a2/pt4",
+      "label": null
+     },
+     {
+      "n": 10,
+      "text": "le moment à partir duquel le risque est garanti et la durée de cette garantie;",
+      "unit": "art_16/p2/a2/pt5",
+      "label": null
+     },
+     {
+      "n": 11,
+      "text": "le montant de cette garantie;",
+      "unit": "art_16/p2/a2/pt6",
+      "label": null
+     },
+     {
+      "n": 12,
+      "text": "la prime ou la cotisation de l'assurance ou la manière de les déterminer;",
+      "unit": "art_16/p2/a2/pt7",
+      "label": null
+     },
+     {
+      "n": 13,
+      "text": "les cas et les modalités de la résiliation du contrat;",
+      "unit": "art_16/p2/a2/pt8",
+      "label": null
+     },
+     {
+      "n": 14,
+      "text": "la juridiction compétente pour connaître des litiges nés du contrat.",
+      "unit": "art_16/p2/a2/pt9",
+      "label": null
+     },
+     {
+      "n": 15,
+      "text": "Sans préjudice des dispositions du 2e alinéa, le contrat d’assurance relevant de la branche R.C. véhicules terrestres automoteurs et tout autre document accordant une couverture dans cette branche, conclus au Grand-Duché de Luxembourg en régime de libre prestation de services, doivent indiquer le nom et l’adresse du représentant désigné en vertu de l’article 145, paragraphe 1er, de la loi sur le secteur des assurances.",
+      "unit": "art_16/p2/a3",
+      "label": null
+     },
+     {
+      "n": 16,
+      "text": "Les contrats ne sont valables que s'ils sont rédigés dans l'une des langues officielles du Grand-Duché de Luxembourg ou dans une langue comprise par le preneur d'assurance.",
+      "unit": "art_16/p2/a4",
+      "label": null
+     },
+     {
+      "n": 17,
+      "text": "Ils doivent être rédigés en caractères lisibles et toute limitation ou exclusion de garantie doit être mise en évidence.",
+      "unit": "art_16/p2/a5",
+      "label": null
+     },
+     {
+      "n": 18,
+      "text": "Les indications visées au premier tiret du deuxième l'alinéa doivent également figurer sur tout autre document accordant la couverture ainsi que sur les propositions d'assurance dans les cas où elles lient le preneur d'assurance.",
+      "unit": "art_16/p2/a6",
+      "label": null
+     },
+     {
+      "n": 19,
+      "text": "L'assureur est tenu de délivrer au preneur d'assurance, au plus tard au moment de la conclusion du contrat, une copie certifiée par lui des renseignements que le preneur a communiqués par écrit au sujet du risque à couvrir.",
+      "unit": "art_16/p3/a1",
+      "label": null
+     }
+    ],
+    "lines_total": 19
+   },
+   {
+    "article_pk": 96059,
+    "article": "Article 17",
+    "heading": "Information du preneur d'assurance en cours du contrat",
+    "anchor": "art_17",
+    "lines": [
+     {
+      "n": 1,
+      "text": "Outre les conditions générales et spéciales qui doivent être communiquées au preneur d'assurance, ce dernier doit recevoir les informations suivantes pendant toute la durée du contrat:",
+      "unit": "art_17/p1/a1",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "tout changement dans la dénomination ou raison sociale, la forme juridique ou l'adresse du siège social et, le cas échéant, de l'agence ou de la succursale avec lequel le contrat a été conclu,",
+      "unit": "art_17/p1/a1/pt1",
+      "label": null
+     },
+     {
+      "n": 3,
+      "text": "toutes informations relatives aux litteras f) à l) du point 1 de l'article 10 en cas d'avenant au contrat ou de modification de la législation y applicable,",
+      "unit": "art_17/p1/a1/pt2",
+      "label": null
+     },
+     {
+      "n": 4,
+      "text": "et en outre pour l'assurance sur la vie:",
+      "unit": "art_17/p1/a2",
+      "label": null
+     },
+     {
+      "n": 5,
+      "text": "toutes informations relatives aux litteras t) à w) du point 1 de l’article 10 en cas d’avenant au contrat ou de modification de la législation y applicable,",
+      "unit": "art_17/p1/a2/pt1",
+      "label": null
+     },
+     {
+      "n": 6,
+      "text": "chaque année, des informations concernant la situation des droits du preneur avec indication séparée du capital garanti à l’origine, des participations aux bénéfices de l’exercice et des participations aux bénéfices cumulées depuis le début du contrat. En outre, lorsque l’entreprise d’assurance a indiqué des chiffres sur la possible évolution future de la participation aux bénéfices, l’assureur informe le preneur des différences entre l’évolution constatée et les données initiales.",
+      "unit": "art_17/p1/a2/pt2",
+      "label": null
+     },
+     {
+      "n": 7,
+      "text": "Les informations visées au présent article doivent être formulées de manière claire et précise, par écrit, et être fournies dans une des langues officielles du Grand-Duché de Luxembourg.",
+      "unit": "art_17/p2/a1",
+      "label": null
+     },
+     {
+      "n": 8,
+      "text": "Toutefois, ces informations peuvent être rédigées dans une autre langue comprise par le preneur d'assurance, si celui-ci le demande ou s'il a la liberté de choisir la loi applicable.",
+      "unit": "art_17/p2/a2",
+      "label": null
+     }
+    ],
+    "lines_total": 8
+   },
+   {
+    "article_pk": 96060,
+    "article": "Article 17-1",
+    "heading": "Langue de communication",
+    "anchor": "art_17-1",
+    "lines": [
+     {
+      "n": 1,
+      "text": "Les communications entre le preneur d’assurance et l’assureur durant l’exécution du contrat doivent être faites dans la langue de rédaction du contrat d’assurance.",
+      "unit": "art_17-1/a1",
+      "label": null
+     },
+     {
+      "n": 2,
+      "text": "Toutefois, les parties peuvent convenir que ces communications peuvent être rédigées dans une autre langue comprise par le preneur d’assurance, si le preneur le demande ou s’il a la liberté de choisir la loi applicable.",
+      "unit": "art_17-1/a2",
+      "label": null
+     }
+    ],
+    "lines_total": 2
+   }
+  ],
+  "cut": false
+ }
+}

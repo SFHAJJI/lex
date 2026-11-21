@@ -30,7 +30,7 @@ import { answerHandedWith } from "../scripts/v3-client.mjs";
 import { LIVE_CONTRACT } from "../.react-build/app.mjs";
 import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (operation, scenarioStart) => census.envelopes.find((entry) => entry.operation === operation && entry.scenario.startsWith(scenarioStart)).envelope;
 const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const PINNED = envelopeOf("evidence_bundle", "a state's permalink at its own date");

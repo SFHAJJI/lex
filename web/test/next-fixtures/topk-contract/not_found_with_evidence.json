@@ -1,0 +1,741 @@
+{
+ "question": "Quelle est la couleur réglementaire des boîtes aux lettres au Luxembourg ?",
+ "row": {
+  "question": "Quelle est la couleur réglementaire des boîtes aux lettres au Luxembourg ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 6,
+   "de": 0,
+   "en": 0,
+   "lb": 0
+  },
+  "question_type": "rule",
+  "personal_case": false,
+  "french": "Quelle est la couleur réglementaire des boîtes aux lettres au Luxembourg ?",
+  "legal_terms": [
+   "boîte aux lettres",
+   "couleur réglementaire"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "candidate",
+   "kind": "article",
+   "work": "loi-1864-12-23-n1",
+   "anchor": "art_5",
+   "date": "1865-01-01",
+   "why": null,
+   "act_title": "Loi du 23 décembre 1864 concernant le tarif de la poste aux lettres.",
+   "act_id": "/eli/etat/leg/loi/1864/12/23/n1",
+   "article": "Art. 5.",
+   "number": "5",
+   "heading": null,
+   "path": null,
+   "version_from": "1865-01-01",
+   "version_to": null,
+   "article_since": null,
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1864/12/23/n1/jo",
+   "article_pk": 102004,
+   "lines": [
+    1,
+    2,
+    3
+   ],
+   "wording_since": null,
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "L'affranchissement préalable est obligatoire pour les lettres, paquets, envois de finances ou de valeurs en papier, originaires et en destination du Grand-Duché.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Les lettres et envois trouvés dans les boîtes sans être affranchis, sont considérés et traités comme rebuts, s'ils ne sont retirés dans les trois mois après due justification.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Pour toute lettre affranchie au moyen de timbres-poste ne représentant pas la taxe à laquelle elle est sujette à raison de son poids, la partie manquante du port dû est à, payer par le destinataire.",
+     "label": null
+    }
+   ],
+   "text": [
+    "L'affranchissement préalable est obligatoire pour les lettres, paquets, envois de finances ou de valeurs en papier, originaires et en destination du Grand-Duché.",
+    "Les lettres et envois trouvés dans les boîtes sans être affranchis, sont considérés et traités comme rebuts, s'ils ne sont retirés dans les trois mois après due justification.",
+    "Pour toute lettre affranchie au moyen de timbres-poste ne représentant pas la taxe à laquelle elle est sujette à raison de son poids, la partie manquante du port dû est à, payer par le destinataire."
+   ],
+   "label": "Art. 5.",
+   "version": {
+    "id": null,
+    "from": "1865-01-01",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "candidate",
+   "kind": "article",
+   "work": "rgd-2019-12-20-a883",
+   "anchor": "art_20",
+   "date": "2020-01-01",
+   "why": null,
+   "act_title": "Règlement grand-ducal du 20 décembre 2019 déterminant les critères minimaux de salubrité, d’hygiène, de sécurité et d’habitabilité auxquels doivent répondre les logements et chambres donnés en location ou mis à disposition à des fins d’habitation.",
+   "act_id": "/eli/etat/leg/rgd/2019/12/20/a883",
+   "article": "Art. 20.",
+   "number": "20",
+   "heading": null,
+   "path": "Chapitre 5 Gestion des chambres et des locaux collectifs",
+   "version_from": "2020-01-01",
+   "version_to": null,
+   "article_since": null,
+   "official": "https://legilux.public.lu/eli/etat/leg/rgd/2019/12/20/a883/jo",
+   "article_pk": 40648,
+   "lines": [
+    1
+   ],
+   "wording_since": "2020-01-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Pour la distribution du courrier, une boîte à lettres est à installer pour chaque chambre ou logement. Dans les cas où une telle installation n’est pas possible, la réception et la distribution du courrier sous pli fermé aux occupants est à assurer par le propriétaire respectivement par l’exploitant dans un délai de vingt-quatre heures.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Pour la distribution du courrier, une boîte à lettres est à installer pour chaque chambre ou logement. Dans les cas où une telle installation n’est pas possible, la réception et la distribution du courrier sous pli fermé aux occupants est à assurer par le propriétaire respectivement par l’exploitant dans un délai de vingt-quatre heures."
+   ],
+   "label": "Art. 20.",
+   "version": {
+    "id": null,
+    "from": "2020-01-01",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 102004,
+   "act_title": "Loi du 23 décembre 1864 concernant le tarif de la poste aux lettres.",
+   "article": "Art. 5.",
+   "heading": null,
+   "path": null,
+   "how": "keywords+meaning",
+   "score": 0.4675
+  },
+  {
+   "label": "A2",
+   "article_pk": 40648,
+   "act_title": "Règlement grand-ducal du 20 décembre 2019 déterminant les critères minimaux de salubrité, d’hygiène, de sécurité et d’habitabilité auxquels doivent répondre les logements et chambres donnés en location ou mis à disposition à des fins d’habitation.",
+   "article": "Art. 20.",
+   "heading": null,
+   "path": "Chapitre 5 Gestion des chambres et des locaux collectifs",
+   "how": "keywords+meaning",
+   "score": 0.4491
+  },
+  {
+   "label": "A3",
+   "article_pk": 355356,
+   "act_title": "Loi du 10 août 1992 portant création de l’entreprise des postes et télécommunications.",
+   "article": "ANNEXE A (1/4)",
+   "heading": "L’ARTICLE 34 DE LA LOI DU 10 AOÛT 1992 PORTANT CREATION D’UNE ENTREPRISE DES POSTES ET TELECOMMUNICATIONS",
+   "path": "ANNEXE A L’ARTICLE 34 DE LA LOI DU 10 AOÛT 1992 PORTANT CREATION D’UNE ENTREPRISE DES POSTES ET TELECOMMUNICATIONS",
+   "how": "meaning",
+   "score": 0.4952
+  },
+  {
+   "label": "A4",
+   "article_pk": 56432,
+   "act_title": "Règlement grand-ducal du 8 février 2023 relatif à l’accessibilité à tous des bâtiments d’habitation collectifs portant exécution de l’article 4 de la loi du 7 janvier 2022 portant sur l’accessibilité à tous des lieux ouverts au public, des voies publiques et des bâtiments d’habitation collectifs.",
+   "article": "Art. 12.",
+   "heading": "Équipements et dispositifs de commande et de service des parties communes",
+   "path": null,
+   "how": "keywords",
+   "score": 0.3934
+  },
+  {
+   "label": "A5",
+   "article_pk": 355357,
+   "act_title": "Loi du 10 août 1992 portant création de l’entreprise des postes et télécommunications.",
+   "article": "ANNEXE A (2/4)",
+   "heading": "L’ARTICLE 34 DE LA LOI DU 10 AOÛT 1992 PORTANT CREATION D’UNE ENTREPRISE DES POSTES ET TELECOMMUNICATIONS",
+   "path": "ANNEXE A L’ARTICLE 34 DE LA LOI DU 10 AOÛT 1992 PORTANT CREATION D’UNE ENTREPRISE DES POSTES ET TELECOMMUNICATIONS",
+   "how": "meaning",
+   "score": 0.4862
+  },
+  {
+   "label": "A6",
+   "article_pk": 381742,
+   "act_title": "Règlement grand-ducal du 26 décembre 2012 fixant le tarif des préparations galéniques et les honoraires des pharmaciens.",
+   "article": "Annexe III",
+   "heading": "Liste des récipients (avec prix HT)",
+   "path": "Annexe III Liste des récipients (avec prix HT)",
+   "how": "keywords",
+   "score": 0.3216
+  },
+  {
+   "label": "A7",
+   "article_pk": 377849,
+   "act_title": "TEXTE COORDONNE de la loi du 10 août 1992 portant création de l’entreprise des postes et télécommunications.",
+   "article": "Annexe (1/4)",
+   "heading": "ANNEXE A L’ARTICLE 47 DE LA LOI MODIFIEE DU 10 AOÛT 1992 PORTANTCREATION DE L’ENTREPRISE DES POSTES ET TELECOMMUNICATIONS",
+   "path": "ANNEXE A L’ARTICLE 47 DE LA LOI MODIFIEE DU 10 AOÛT 1992 PORTANTCREATION DE L’ENTREPRISE DES POSTES ET TELECOMMUNICATIONS",
+   "how": "meaning",
+   "score": 0.4793
+  },
+  {
+   "label": "A8",
+   "article_pk": 211073,
+   "act_title": "Règlement grand-ducal du 13 janvier 1993 réglementant les licences et qualifications du personnel de conduite des aéronefs.",
+   "article": "Art. 137.",
+   "heading": "Couleur des licences et qualifications",
+   "path": "Chapitre VII Présentation et contenu des licences et qualifications",
+   "how": "meaning",
+   "score": 0.4724
+  },
+  {
+   "label": "A9",
+   "article_pk": 208191,
+   "act_title": "Règlement grand-ducal du 12 février 1979 pris en exécution des articles 6 et 12 de la loi du 20 avril 1977 relative à l’exploitation des jeux de hasard et des paris relatifs aux épreuves sportives.",
+   "article": "Art. 15.",
+   "heading": "Interruption des séances.",
+   "path": "Titre Ier. Nature des jeux autorisés et leur fonctionnement > Chapitre II : Règles applicables aux jeux de contrepartie (boule, vingt-trois, appareils à sous, roulette, trente-et-quarante, black-jack, roulette américaine, craps) > Section I. Règles spéciales à la boule et au vingt-trois",
+   "how": "keywords",
+   "score": 0.2477
+  },
+  {
+   "label": "A10",
+   "article_pk": 292972,
+   "act_title": "Loi du 28 avril 1886, concernant la concession de trois lignes de chemins de fer secondaires.",
+   "article": "Art. 25. —",
+   "heading": null,
+   "path": "CAHIER DES CHARGES. > TITRE V. — Dispositions relatives à divers services publics.",
+   "how": "keywords",
+   "score": 0.301
+  },
+  {
+   "label": "A11",
+   "article_pk": 26904,
+   "act_title": "Règlement grand-ducal du 15 octobre 1992 concernant le mode d'élection des représentants des agents tombant sous le statut de la Fonction Publique au conseil d'administration de l'Entreprise des Postes et Télécommunications et l'exercice de leurs fonctions.",
+   "article": "Art 16.",
+   "heading": null,
+   "path": null,
+   "how": "meaning",
+   "score": 0.4665
+  },
+  {
+   "label": "A12",
+   "article_pk": 213845,
+   "act_title": "Règlement grand-ducal du 25 février 2022 relatif aux spécifications techniques pour le marquage des armes à feu et de leurs parties essentielles.",
+   "article": "Art. 2.",
+   "heading": "Spécifications techniques pour le marquage des armes à feu et de leurs parties essentielles",
+   "path": null,
+   "how": "keywords",
+   "score": 0.3061
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "couleur": 452,
+   "reglementaire": 9363,
+   "boites": 119,
+   "lettres": 3535,
+   "luxembourg": 20793,
+   "boite": 119
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 10 août 1992 portant création de l’entreprise des postes et télécommunications.",
+   "Règlement grand-ducal du 26 décembre 2012 fixant le tarif des préparations galéniques et l",
+   "TEXTE COORDONNE de la loi du 10 août 1992 portant création de l’entreprise des postes et t"
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ],
+  "closest": {
+   "article": "Art. 5.",
+   "heading": null,
+   "act_title": "Loi du 23 décembre 1864 concernant le tarif de la poste aux lettres.",
+   "holds": [
+    "boites",
+    "lettres",
+    "boite"
+   ],
+   "lacks": [
+    "couleur",
+    "reglementaire",
+    "luxembourg"
+   ]
+  }
+ },
+ "notes": [
+  "no_answer_in_the_articles_read"
+ ],
+ "not_found": {
+  "searched_rows": 97578,
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ],
+  "reason": "the reading found no answer in the articles proposed by the three searches"
+ },
+ "outcome": "not_found",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "rule",
+     "personal_case": false,
+     "french": "Quelle est la couleur réglementaire des boîtes aux lettres au Luxembourg ?",
+     "legal_terms": [
+      "boîte aux lettres",
+      "couleur réglementaire"
+     ],
+     "in_scope": true
+    },
+    "ms": 2061,
+    "tokens_in": 259,
+    "tokens_out": 106,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "couleur",
+      "reglementaire",
+      "boites",
+      "lettres",
+      "luxembourg"
+     ],
+     "terms_a_statute_would_use": [
+      "boite"
+     ],
+     "articles_holding_each_word": {
+      "couleur": 452,
+      "reglementaire": 9363,
+      "boites": 119,
+      "lettres": 3535,
+      "luxembourg": 20793,
+      "boite": 119
+     },
+     "articles_kept": 10
+    },
+    "ms": 29
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/1992/08/10/n1",
+       "title": "Loi du 10 août 1992 portant création de l’entreprise des postes et télécommunications.",
+       "outline_rows": 14,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1728,
+       "tokens_in": 888,
+       "tokens_out": 97,
+       "reason": "Cette loi sur l’entreprise des postes et télécommunications ne semble pas traiter de la couleur réglementaire des boîtes aux lettres."
+      },
+      {
+       "act_id": "/eli/etat/leg/rgd/2012/12/26/n14",
+       "title": "Règlement grand-ducal du 26 décembre 2012 fixant le tarif des préparations galéniques et l",
+       "outline_rows": 4,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1227,
+       "tokens_in": 430,
+       "tokens_out": 62,
+       "reason": "Le texte porte sur les tarifs des préparations galéniques et les honoraires des pharmaciens, pas sur les boîtes aux lettres."
+      },
+      {
+       "act_id": "/eli/etat/leg/tc/2011/07/18/n1",
+       "title": "TEXTE COORDONNE de la loi du 10 août 1992 portant création de l’entreprise des postes et t",
+       "outline_rows": 12,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1543,
+       "tokens_in": 790,
+       "tokens_out": 97,
+       "reason": "Cette loi porte sur la création et l’organisation de l’entreprise, pas sur la couleur des boîtes aux lettres."
+      }
+     ],
+     "articles_from_the_parts": 0,
+     "whole_part_for_a_list": false
+    },
+    "ms": 1227,
+    "tokens_in": 2108,
+    "tokens_out": 256,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 11
+    },
+    "ms": 2017,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 16
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "",
+     "lines": [],
+     "answer_found": false,
+     "found_by": null,
+     "outline_walked": true,
+     "complete_answer_found": false,
+     "who_is_covered": "",
+     "text_reach": "none",
+     "question_is_about_that_group": false,
+     "reason": "Aucun article proposé ne fixe la couleur des boîtes aux lettres."
+    },
+    "ms": 1010,
+    "tokens_in": 6899,
+    "tokens_out": 62,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 0,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "absence",
+    "who": "code",
+    "detail": {
+     "answer_seen_in_the_articles_read": false,
+     "articles_read": 12,
+     "texts_read": 11
+    },
+    "ms": null
+   }
+  ],
+  "ms": 4368,
+  "tokens": {
+   "text-embedding-3-large": [
+    18,
+    0
+   ],
+   "gpt-6-luna": [
+    2952,
+    405
+   ],
+   "gpt-6.2-sol": [
+    6899,
+    62
+   ]
+  },
+  "cost_usd_list_price": 0.01652,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:not_found",
+    "state": "not_found"
+   }
+  ],
+  "cost_usd": 0.01652,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2061,
+    "tokens_in": 259,
+    "tokens_out": 106
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 1227,
+    "tokens_in": 2108,
+    "tokens_out": 256
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1010,
+    "tokens_in": 6899,
+    "tokens_out": 62
+   }
+  ]
+ },
+ "state": "not_found",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "rule",
+   "french": "Quelle est la couleur réglementaire des boîtes aux lettres au Luxembourg ?",
+   "legal_terms": [
+    "boîte aux lettres",
+    "couleur réglementaire"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 102004,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 40648,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 355356,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 56432,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 355357,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 381742,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 377849,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 211073,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 208191,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 292972,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 26904,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 213845,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 102004
+   },
+   {
+    "article_pk": 40648
+   },
+   {
+    "article_pk": 355356
+   },
+   {
+    "article_pk": 56432
+   },
+   {
+    "article_pk": 355357
+   },
+   {
+    "article_pk": 381742
+   },
+   {
+    "article_pk": 377849
+   },
+   {
+    "article_pk": 211073
+   },
+   {
+    "article_pk": 208191
+   },
+   {
+    "article_pk": 292972
+   },
+   {
+    "article_pk": 26904
+   },
+   {
+    "article_pk": 213845
+   }
+  ],
+  "replay": "eNqtU0uO2zAMvYrAtVNY_ibe9ALddG0EhsZmHGMUyaNPJsEgB-qml5iLlYqdIvV42ZXpJ4rk03v8gDNUPIIRKnB6fIUIWgqlboWkuHuKR8qEg1cK5ebMCXij_58epUSG1jEpWKu9RG-Y-fzVSzyhcmIwyDq07EV__nb0Ff7CJDpn7jH74S94etHe9Ox76OepZhInxYbzTRIHxEJ1ENJiBBSB0q45aK86OjLzzNUz-AJVXfM4ieOMqAjVDZ1wCFHNoyRK9xFApLyU0VQzhPuozuIi2y7SV1MJVEfqQN8TVPdTaOUj-hvgIxgFVB8gheq96DG8nwmcQgvCD0aflnydXiK9EYMisBPXcI4X96h-1O_3J2GhIBsUc0dkb57EGLSqmNPhyo2EmqHGXccwhCGVqNTBoGqP_19Eib2QjUNzIsVqmC493wkmW20C9K4jGqsVFWiFxVl74vC6ruuaeISleZ7mxQLMiyxN1hLLJbjlZfYlsyy32W4BJpzHZboE4y3f8SW4S3blsmZS7L7QSXi6zfJ_QHoVQ5v4oD8RnilOpGYa8-DzqPNw8zjzAFPLqQnVlbTUNTkUzyiDx7AdLDklLNKV_lvdBafcDbOybNbdnfy0lbewGSR7lhakibc0dvwt5kVO1FVwg9KNUPYdTTOQH4_YCOOGVqJtDIoO9rc_NO9t0w"
+ }
+}

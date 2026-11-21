@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-not_transposable-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "instrument_type": {
+      "type": "string",
+      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+    },
+    "explanation": {
+      "type": "string",
+      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+    }
+  },
+  "required": [
+    "instrument_type",
+    "explanation"
+  ]
+}

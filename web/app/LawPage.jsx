@@ -31,7 +31,7 @@ import { createHistorySession } from '../scripts/live-history.mjs';
 import { HistoryAnswerView } from './LiveHistory.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
-import { actTitle, afterClick, articleNumberOf, defaultPair, lawStatus, readClaimDate, versionOn, versionsOf } from '../scripts/law-page.mjs';
+import { actTitle, afterClick, articleNumberOf, defaultPair, lawStatus, onDateOf, readClaimDate, versionOn, versionsOf } from '../scripts/law-page.mjs';
 
 const COPY = liveChrome().dossier;
 const HISTORY = liveChrome().history;
@@ -199,6 +199,16 @@ export function LawTimeline({ view, today = null, contract, fetchImpl, foot = nu
   const [claimText, setClaimText] = useState('');
   const [claimDone, setClaimDone] = useState(false);
   const claimDate = claimText.trim() === '' ? '' : readClaimDate(claimText);
+  // The page opened at a date (`#on-…`, an answer that read the law at a past date): that date in the field, as a reader
+  // would type it, and the version that applied then, read; once the page is in the browser, so hydration changes nothing.
+  useEffect(() => {
+    const on = onDateOf(globalThis.location?.hash);
+    if (on === null) return;
+    const index = versionOn(versions, on);
+    setClaimText(CHROME_LOCALE === 'fr' ? `${on.slice(8, 10)}/${on.slice(5, 7)}/${on.slice(0, 4)}` : on);
+    setClaimDone(true);
+    if (index >= 0) setSelection({ read: index, other: null });
+  }, []);
   const [outcome, setOutcome] = useState(null);
   const session = useRef(null);
   if (session.current === null && contract !== undefined) {

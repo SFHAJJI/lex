@@ -60,7 +60,11 @@ export async function resetWork() {
  * the source in app/, not the bytes.
  */
 export async function bundleClient(entry, outfile, options = {}) {
-  return bundle(entry, outfile, { ...options, platform: 'browser' });
+  // An IIFE, each bundle in its own scope: a page loads several classic scripts (its own, the V4 header's, the dock's, the
+  // owner's brief of 2026-11-15), and a module-format bundle loaded as a classic script declares its minified top-level names
+  // on the window, where the next script overwrote the first's (CI journeys, 2026-11-15: "(0, Dp.useEffect) is not a
+  // function"); an entry's `export` was a syntax error there too.
+  return bundle(entry, outfile, { ...options, platform: 'browser', format: 'iife' });
 }
 
 /**

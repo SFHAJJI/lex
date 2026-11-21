@@ -93,6 +93,14 @@ test('the answer says the sentence that answers, one line that cites it, three w
   const untitled = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: answer(), phase: 'complete', question }));
   assert.ok(!untitled.includes('class="assistant-act"'), 'no act line without a title');
   assert.ok(untitled.includes('Les versions de l’acte'), 'the versions, uncounted');
+  // An answer that read the law at a past date leads to the act's page at that date (the owner's order of 2026-11-14,
+  // evening: one example opens a law page at a past date); today's reading, to the article's history.
+  const dated = answer();
+  dated.parts[0].blocks[0] = { ...dated.parts[0].blocks[0], facts: [{ kind: 'calendar_date', name: 'date', value: '2020-01-01' }] };
+  dated.trace = { ...dated.trace, today: '2026-11-14' };
+  const past = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: dated, phase: 'complete', titles, question }));
+  assert.ok(past.includes(`href="/fr${WORK}#on-2020-01-01" data-action="versions"`), 'the law page at 1 January 2020');
+  assert.ok(past.includes('au 01/01/2020'), 'the date it was read at');
   // In English, a French quotation says it is the original French text.
   const english = renderToStaticMarkup(h(AssistantPanel, { locale: 'en', dossier: { ...answer(), answer_locale: 'en' }, phase: 'complete', question }));
   assert.ok(english.includes('The quote is the original French text.'));
@@ -118,6 +126,22 @@ test('the work, closed: four boxes, the model said once, the time, the cost and 
   assert.ok(markup.includes('Temps : 1,6 s'));
   assert.ok(/Coût : environ 0,\d{3} € par question/.test(markup));
   assert.ok(markup.includes('Plan brut') && markup.includes('assistant-trace'), 'the raw plan');
+  // A question that names its article: the search opened it by its reference, and the box says so, not "0 matched".
+  const named = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier, phase: 'complete', work: { ...work, search: { matched: 0, more: false, named: true } } }));
+  assert.ok(named.includes('La question nomme son article\u00a0: pas de recherche, lu par son numéro\u00a0; gardés\u00a0: 1'));
+  assert.ok(!named.includes('Articles trouvés'));
+  // One line under the answer, the notices folded behind it.
+  assert.match(markup, /<details class="assistant-notices" data-assistant-notices=""><summary>Phase d’essai, non examinée par un avocat\. Pas un conseil juridique\.<\/summary><p class="assistant-notice">/);
+  // The registry's version is named only for the very build and planner that answered (the review of #1060).
+  const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
+  const champion = REGISTRY_RECORD.versions.find((version) => version.aliases.includes('champion'));
+  const ranOn = { ...dossier, trace: { ...dossier.trace, planner_id: champion.tags.planner_id } };
+  const registered = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: ranOn, phase: 'complete', work, servingCommit: champion.tags.serving_commit }));
+  assert.ok(registered.includes(`data-registry-version="${champion.version}">Registre MLflow : ${REGISTRY_RECORD.model}, version ${champion.version}</a>`));
+  for (const servingCommit of [null, 'f'.repeat(40)]) {
+    const unregistered = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: ranOn, phase: 'complete', work, servingCommit }));
+    assert.ok(unregistered.includes(`data-registry-version="">Registre MLflow : ${REGISTRY_RECORD.model} (ce déploiement est enregistré à sa mise en service)</a>`), `no version for ${servingCommit}`);
+  }
 });
 
 test('the verdict word, the act a quotation is from and the law page at one article', () => {

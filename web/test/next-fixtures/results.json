@@ -1,0 +1,1182 @@
+{
+ "run": "bench-09-final",
+ "label": "Banc du 20/11/2026, 284 questions",
+ "kind": "bench",
+ "models": "Lecture : gpt-6.2-sol. Question et tables des matières : gpt-6-luna. Recherche par le sens : text-embedding-3-large.",
+ "made": "2026-11-20T22:49:44+00:00",
+ "all": {
+  "n": 284,
+  "read": 275,
+  "quoted": 265,
+  "asserted": 237,
+  "asserted_with_expected": 232,
+  "asserted_without_expected": 5,
+  "asserted_without_expected_interval": [
+   0.8,
+   4.1
+  ],
+  "asserted_without_expected_among_asserted_interval": [
+   0.9,
+   4.8
+  ],
+  "partial": 34,
+  "candidates": 2,
+  "not_found": 11,
+  "read_interval": [
+   94.1,
+   98.3
+  ],
+  "asserted_interval": [
+   78.7,
+   87.3
+  ],
+  "median_ms": 6297,
+  "p90_ms": 34090,
+  "usd_per_answer": 0.01558,
+  "with_exception_block": 40
+ },
+ "groups": [
+  {
+   "name": "G1 / other",
+   "n": 46,
+   "read": 46,
+   "quoted": 46,
+   "asserted": 46,
+   "asserted_with_expected": 46,
+   "asserted_without_expected": 0,
+   "asserted_without_expected_interval": [
+    -0.0,
+    7.7
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    -0.0,
+    7.7
+   ],
+   "partial": 0,
+   "candidates": 0,
+   "not_found": 0,
+   "read_interval": [
+    92.3,
+    100.0
+   ],
+   "asserted_interval": [
+    92.3,
+    100.0
+   ],
+   "median_ms": 5877,
+   "p90_ms": 35091,
+   "usd_per_answer": 0.01536
+  },
+  {
+   "name": "G1-en / other",
+   "n": 6,
+   "read": 6,
+   "quoted": 6,
+   "asserted": 6,
+   "asserted_with_expected": 6,
+   "asserted_without_expected": 0,
+   "asserted_without_expected_interval": [
+    0.0,
+    39.0
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    0.0,
+    39.0
+   ],
+   "partial": 0,
+   "candidates": 0,
+   "not_found": 0,
+   "read_interval": [
+    61.0,
+    100.0
+   ],
+   "asserted_interval": [
+    61.0,
+    100.0
+   ],
+   "median_ms": 7405,
+   "p90_ms": 37867,
+   "usd_per_answer": 0.02474
+  },
+  {
+   "name": "G1 / insurance",
+   "n": 70,
+   "read": 70,
+   "quoted": 69,
+   "asserted": 64,
+   "asserted_with_expected": 64,
+   "asserted_without_expected": 0,
+   "asserted_without_expected_interval": [
+    0.0,
+    5.2
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    0.0,
+    5.7
+   ],
+   "partial": 6,
+   "candidates": 0,
+   "not_found": 0,
+   "read_interval": [
+    94.8,
+    100.0
+   ],
+   "asserted_interval": [
+    82.5,
+    96.0
+   ],
+   "median_ms": 6017,
+   "p90_ms": 35539,
+   "usd_per_answer": 0.01412
+  },
+  {
+   "name": "G1-en / insurance",
+   "n": 14,
+   "read": 14,
+   "quoted": 14,
+   "asserted": 13,
+   "asserted_with_expected": 13,
+   "asserted_without_expected": 0,
+   "asserted_without_expected_interval": [
+    0.0,
+    21.5
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    0.0,
+    22.8
+   ],
+   "partial": 1,
+   "candidates": 0,
+   "not_found": 0,
+   "read_interval": [
+    78.5,
+    100.0
+   ],
+   "asserted_interval": [
+    68.5,
+    98.7
+   ],
+   "median_ms": 8508,
+   "p90_ms": 12322,
+   "usd_per_answer": 0.01601
+  },
+  {
+   "name": "G2 / dev",
+   "n": 45,
+   "read": 44,
+   "quoted": 43,
+   "asserted": 37,
+   "asserted_with_expected": 37,
+   "asserted_without_expected": 0,
+   "asserted_without_expected_interval": [
+    0.0,
+    7.9
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    0.0,
+    9.4
+   ],
+   "partial": 7,
+   "candidates": 0,
+   "not_found": 1,
+   "read_interval": [
+    88.4,
+    99.6
+   ],
+   "asserted_interval": [
+    68.7,
+    90.7
+   ],
+   "median_ms": 7189,
+   "p90_ms": 35807,
+   "usd_per_answer": 0.01621
+  },
+  {
+   "name": "G3 / insurance",
+   "n": 49,
+   "read": 47,
+   "quoted": 44,
+   "asserted": 35,
+   "asserted_with_expected": 34,
+   "asserted_without_expected": 1,
+   "asserted_without_expected_interval": [
+    0.4,
+    10.7
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    0.5,
+    14.5
+   ],
+   "partial": 8,
+   "candidates": 1,
+   "not_found": 5,
+   "read_interval": [
+    86.3,
+    98.9
+   ],
+   "asserted_interval": [
+    57.6,
+    82.2
+   ],
+   "median_ms": 6077,
+   "p90_ms": 34018,
+   "usd_per_answer": 0.01593
+  },
+  {
+   "name": "G3 / other",
+   "n": 26,
+   "read": 22,
+   "quoted": 20,
+   "asserted": 14,
+   "asserted_with_expected": 13,
+   "asserted_without_expected": 1,
+   "asserted_without_expected_interval": [
+    0.7,
+    18.9
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    1.3,
+    31.5
+   ],
+   "partial": 8,
+   "candidates": 1,
+   "not_found": 3,
+   "read_interval": [
+    66.5,
+    93.9
+   ],
+   "asserted_interval": [
+    35.5,
+    71.2
+   ],
+   "median_ms": 6725,
+   "p90_ms": 11435,
+   "usd_per_answer": 0.0161
+  },
+  {
+   "name": "G3 / little",
+   "n": 28,
+   "read": 26,
+   "quoted": 23,
+   "asserted": 22,
+   "asserted_with_expected": 19,
+   "asserted_without_expected": 3,
+   "asserted_without_expected_interval": [
+    3.7,
+    27.2
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    4.7,
+    33.3
+   ],
+   "partial": 4,
+   "candidates": 0,
+   "not_found": 2,
+   "read_interval": [
+    77.4,
+    98.0
+   ],
+   "asserted_interval": [
+    60.5,
+    89.8
+   ],
+   "median_ms": 6595,
+   "p90_ms": 8788,
+   "usd_per_answer": 0.01525
+  }
+ ],
+ "outcomes": {
+  "answer": 197,
+  "answer_with_exception": 40,
+  "partial": 34,
+  "not_found": 10,
+  "candidates": 2,
+  "not_a_legal_question": 1
+ },
+ "lost_by_step": {
+  "read_found_no_answer": 8,
+  "find_article": 6,
+  "other": 5,
+  "find_law": 3,
+  "gate_declined_right_article": 1,
+  "read_pointed_another_article": 2
+ },
+ "doubtful": [
+  {
+   "id": "G3-023",
+   "question": "Est-ce que mon assurance peut me protéger si quelqu’un me demande de payer pour un dommage que j’aurais causé ?",
+   "expected": [
+    "art_80"
+   ],
+   "gave": [
+    "art_82"
+   ],
+   "step": "find_article"
+  },
+  {
+   "id": "G3-062",
+   "question": "Qu’est-ce qu’on appelle une publicité, et est-ce que tout ce qui parle d’une entreprise est forcément de la publicité ?",
+   "expected": [
+    "art_l_222-12"
+   ],
+   "gave": [
+    "art_3"
+   ],
+   "step": "find_law"
+  },
+  {
+   "id": "G3-100",
+   "question": "À quoi ressemble et que contient le document officiel qu’on appelle laissez-passer pour voyager au Luxembourg ?",
+   "expected": [
+    "art_2"
+   ],
+   "gave": [
+    "art_2"
+   ],
+   "step": "read_pointed_another_article"
+  },
+  {
+   "id": "G3-104",
+   "question": "Est-ce que je peux avoir une aide pour installer un système solaire qui chauffe l’eau chez moi, et combien je pourrais recevoir au maximum ?",
+   "expected": [
+    "art_7"
+   ],
+   "gave": [
+    "art_5"
+   ],
+   "step": "read_pointed_another_article"
+  },
+  {
+   "id": "G3-117",
+   "question": "Est-ce que je dois fournir toutes les informations possibles quand je demande l’autorisation pour un projet avec des OGM, ou seulement celles qui correspondent à mon cas ?",
+   "expected": [
+    "art_3"
+   ],
+   "gave": [
+    "annexe_1__part_1"
+   ],
+   "step": "find_article"
+  }
+ ],
+ "switched_off": [
+  {
+   "what": "kinds",
+   "run": "bench-05-off-kinds",
+   "n": 284,
+   "read": 265,
+   "quoted": 257,
+   "asserted": 230,
+   "asserted_with_expected": 223,
+   "asserted_without_expected": 7,
+   "asserted_without_expected_interval": [
+    1.2,
+    5.0
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    1.5,
+    6.1
+   ],
+   "partial": 32,
+   "candidates": 21,
+   "not_found": 1,
+   "read_interval": [
+    89.8,
+    95.7
+   ],
+   "asserted_interval": [
+    76.0,
+    85.1
+   ],
+   "median_ms": 3987,
+   "p90_ms": 6651,
+   "usd_per_answer": 0.00928,
+   "with_exception_block": 33
+  },
+  {
+   "what": "gates",
+   "run": "bench-05-off-gates",
+   "n": 284,
+   "read": 265,
+   "quoted": 260,
+   "asserted": 262,
+   "asserted_with_expected": 249,
+   "asserted_without_expected": 13,
+   "asserted_without_expected_interval": [
+    2.7,
+    7.7
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    2.9,
+    8.3
+   ],
+   "partial": 0,
+   "candidates": 21,
+   "not_found": 1,
+   "read_interval": [
+    89.8,
+    95.7
+   ],
+   "asserted_interval": [
+    88.6,
+    94.8
+   ],
+   "median_ms": 3879,
+   "p90_ms": 6919,
+   "usd_per_answer": 0.00944,
+   "with_exception_block": 40
+  },
+  {
+   "what": "references",
+   "run": "bench-05-off-references",
+   "n": 284,
+   "read": 265,
+   "quoted": 257,
+   "asserted": 226,
+   "asserted_with_expected": 220,
+   "asserted_without_expected": 6,
+   "asserted_without_expected_interval": [
+    1.0,
+    4.5
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    1.2,
+    5.7
+   ],
+   "partial": 35,
+   "candidates": 22,
+   "not_found": 1,
+   "read_interval": [
+    89.8,
+    95.7
+   ],
+   "asserted_interval": [
+    74.5,
+    83.9
+   ],
+   "median_ms": 3815,
+   "p90_ms": 8031,
+   "usd_per_answer": 0.00854,
+   "with_exception_block": 0
+  }
+ ],
+ "by_agreement": [
+  {
+   "detectors": "3",
+   "asserted": 167,
+   "without_expected": 1
+  },
+  {
+   "detectors": "2",
+   "asserted": 60,
+   "without_expected": 3
+  },
+  {
+   "detectors": "1",
+   "asserted": 10,
+   "without_expected": 1
+  }
+ ],
+ "fresh": {
+  "run": "fresh-02",
+  "label": "130 questions écrites par une session indépendante à partir de la loi, posées une seule fois le 20/11/2026",
+  "note": "La session qui a écrit ces questions n’a jamais vu le code, les consignes ni les résultats de Lex ; elle a évité les mots du texte de loi. Une réponse est juste quand l’article attendu est cité et que les lignes citées contiennent le fait attendu ; pour une question datée, la version lue doit être celle applicable à cette date.",
+  "n": 130,
+  "n_answer": 120,
+  "n_no_answer": 10,
+  "right": 99,
+  "right_interval": [
+   74.7,
+   88.3
+  ],
+  "wrong": 4,
+  "wrong_interval": [
+   1.3,
+   8.3
+  ],
+  "wrong_article": 3,
+  "wrong_version": 0,
+  "wrong_lines": 1,
+  "shown_not_asserted": 8,
+  "not_found": 9,
+  "asserted": 103,
+  "read_expected": 109,
+  "no_answer_right": 10,
+  "exceptions": {
+   "n": 13,
+   "right": 11,
+   "right_and_other_article_shown": 9
+  },
+  "dated": {
+   "n": 8,
+   "right": 7,
+   "wrong_version": 0
+  },
+  "by_style": [
+   {
+    "style": "lay-personal",
+    "n": 9,
+    "right": 6,
+    "wrong": 2
+   },
+   {
+    "style": "english",
+    "n": 8,
+    "right": 8,
+    "wrong": 0
+   },
+   {
+    "style": "amount",
+    "n": 14,
+    "right": 13,
+    "wrong": 0
+   },
+   {
+    "style": "list",
+    "n": 8,
+    "right": 6,
+    "wrong": 0
+   },
+   {
+    "style": "lay",
+    "n": 18,
+    "right": 15,
+    "wrong": 1
+   },
+   {
+    "style": "citation",
+    "n": 6,
+    "right": 6,
+    "wrong": 0
+   },
+   {
+    "style": "german",
+    "n": 4,
+    "right": 4,
+    "wrong": 0
+   },
+   {
+    "style": "eu",
+    "n": 10,
+    "right": 7,
+    "wrong": 0
+   },
+   {
+    "style": "definition",
+    "n": 8,
+    "right": 5,
+    "wrong": 1
+   },
+   {
+    "style": "exception",
+    "n": 13,
+    "right": 11,
+    "wrong": 0
+   },
+   {
+    "style": "history",
+    "n": 8,
+    "right": 7,
+    "wrong": 0
+   },
+   {
+    "style": "annex",
+    "n": 8,
+    "right": 5,
+    "wrong": 0
+   },
+   {
+    "style": "luxembourgish",
+    "n": 2,
+    "right": 2,
+    "wrong": 0
+   },
+   {
+    "style": "formal",
+    "n": 4,
+    "right": 4,
+    "wrong": 0
+   }
+  ],
+  "by_law": [
+   {
+    "law": "bail",
+    "n": 8,
+    "right": 7,
+    "wrong": 0
+   },
+   {
+    "law": "travail",
+    "n": 10,
+    "right": 8,
+    "wrong": 0
+   },
+   {
+    "law": "contrat-assurance",
+    "n": 35,
+    "right": 31,
+    "wrong": 0
+   },
+   {
+    "law": "peu-connus",
+    "n": 17,
+    "right": 13,
+    "wrong": 3
+   },
+   {
+    "law": "rgpd",
+    "n": 3,
+    "right": 3,
+    "wrong": 0
+   },
+   {
+    "law": "consommation",
+    "n": 5,
+    "right": 5,
+    "wrong": 0
+   },
+   {
+    "law": "desherence",
+    "n": 4,
+    "right": 2,
+    "wrong": 0
+   },
+   {
+    "law": "bruxelles-ibis",
+    "n": 2,
+    "right": 2,
+    "wrong": 0
+   },
+   {
+    "law": "societes",
+    "n": 5,
+    "right": 5,
+    "wrong": 0
+   },
+   {
+    "law": "secteur-assurances",
+    "n": 11,
+    "right": 7,
+    "wrong": 1
+   },
+   {
+    "law": "civil",
+    "n": 6,
+    "right": 5,
+    "wrong": 0
+   },
+   {
+    "law": "rome-i",
+    "n": 1,
+    "right": 1,
+    "wrong": 0
+   },
+   {
+    "law": "dora",
+    "n": 2,
+    "right": 0,
+    "wrong": 0
+   },
+   {
+    "law": "ai-act",
+    "n": 2,
+    "right": 1,
+    "wrong": 0
+   },
+   {
+    "law": "auto",
+    "n": 9,
+    "right": 9,
+    "wrong": 0
+   }
+  ],
+  "by_confidence": [
+   {
+    "confidence": "firm",
+    "asserted": 50,
+    "not_right": 1
+   },
+   {
+    "confidence": "supported",
+    "asserted": 36,
+    "not_right": 1
+   },
+   {
+    "confidence": "single",
+    "asserted": 17,
+    "not_right": 2
+   }
+  ],
+  "median_ms": 6184,
+  "p90_ms": 33854,
+  "usd_per_answer": 0.0156
+ },
+ "independent": {
+  "run": "indep-02",
+  "n": 61,
+  "right": 57,
+  "wrong": 1,
+  "shown_not_asserted": 2,
+  "not_found": 1,
+  "live": {
+   "right": 14,
+   "shown_not_asserted": 31,
+   "wrong": 3,
+   "not_found": 13
+  },
+  "live_outcomes": {
+   "right article, not asserted": 31,
+   "right": 14,
+   "not found": 12,
+   "wrong (asserted)": 1,
+   "wrong version (asserted)": 2,
+   "wrong act shown (not asserted)": 1
+  },
+  "by_law": [
+   {
+    "law": "contrat-assurance",
+    "n": 27,
+    "right": 25
+   },
+   {
+    "law": "auto",
+    "n": 3,
+    "right": 3
+   },
+   {
+    "law": "secteur-assurances",
+    "n": 3,
+    "right": 3
+   },
+   {
+    "law": "travail",
+    "n": 9,
+    "right": 9
+   },
+   {
+    "law": "civil",
+    "n": 4,
+    "right": 4
+   },
+   {
+    "law": "bail",
+    "n": 6,
+    "right": 6
+   },
+   {
+    "law": "rgpd",
+    "n": 5,
+    "right": 5
+   },
+   {
+    "law": "ai-act",
+    "n": 3,
+    "right": 2
+   },
+   {
+    "law": "dora",
+    "n": 1,
+    "right": 0
+   }
+  ],
+  "label": "Questions du testeur indépendant du 19/11/2026, posées au Lex en ligne puis à cette version",
+  "note": "Ces questions avaient déjà servi le 20/11/2026 ; elles comparent cette version au Lex en ligne sur les mêmes questions. Le test qui compte est celui des questions neuves, ci-dessus."
+ },
+ "compared_with": {
+  "run": "bench-01-mini",
+  "all": {
+   "n": 284,
+   "read": 264,
+   "quoted": 251,
+   "asserted": 278,
+   "asserted_with_expected": 248,
+   "asserted_without_expected": 30,
+   "asserted_without_expected_interval": [
+    7.5,
+    14.7
+   ],
+   "asserted_without_expected_among_asserted_interval": [
+    7.7,
+    15.0
+   ],
+   "partial": 0,
+   "candidates": 6,
+   "not_found": 0,
+   "read_interval": [
+    89.4,
+    95.4
+   ],
+   "asserted_interval": [
+    95.5,
+    99.0
+   ],
+   "median_ms": 2742,
+   "p90_ms": 3711,
+   "usd_per_answer": 0.00181
+  },
+  "changed": 70,
+  "better": 30,
+  "worse": 40,
+  "flips": [
+   {
+    "id": "R3-003",
+    "question": "Quel est le maximum de caution qu’un propriétaire peut demander pour louer un appartement ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R3-008",
+    "question": "Un Français qui vient vivre au Luxembourg pour plus de trois mois doit-il demander un papier de séjour, et à qui ?",
+    "before": "candidates",
+    "after": "right"
+   },
+   {
+    "id": "R3-013",
+    "question": "Combien de personnes faut-il au minimum pour créer une asbl ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R3-015",
+    "question": "Après un cambriolage, combien de temps ai-je pour prévenir mon assurance ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R3-018",
+    "question": "Que risque quelqu’un qui a menti exprès à son assureur en remplissant le questionnaire au départ ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R3-024",
+    "question": "vente maison assurance fin du contrat acheteur",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R3-032",
+    "question": "Que devient l’argent d’une assurance-vie que personne ne vient réclamer pendant des années ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R4-030",
+    "question": "What is the penalty for driving a car that has no liability insurance ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R4-032",
+    "question": "Comment récupérer l’argent d’une vieille assurance-vie oubliée qui a été versé à la Caisse de consignation ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R4-034",
+    "question": "Un courtier en assurances doit-il lui-même être assuré pour ses erreurs professionnelles, et pour quel montant minimum ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R5-019",
+    "question": "rouler sans assurance voiture sanctions",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "R5-020",
+    "question": "Au bout de combien de temps d’inactivité un contrat d’assurance est-il considéré comme en déshérence ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R5-022",
+    "question": "Mon assureur et ses employés ont-ils le droit de divulguer à d’autres les informations que je leur ai confiées ?",
+    "before": "candidates",
+    "after": "right"
+   },
+   {
+    "id": "R5-028",
+    "question": "Quel capital minimum faut-il pour créer une S.à r.l. ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R6-008",
+    "question": "Quand plusieurs assureurs se partagent un même contrat, chacun est-il tenu de payer la part des autres ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R6-029",
+    "question": "As an EU citizen moving to Luxembourg for more than three months, by when must I register with the commune ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "R6-033",
+    "question": "Comment met-on fin à un partenariat enregistré quand un seul des deux partenaires veut arrêter ?",
+    "before": "candidates",
+    "after": "right"
+   },
+   {
+    "id": "D003",
+    "question": "Une période d’essai, ça peut durer combien de temps au maximum ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D014",
+    "question": "Je veux quitter mon appartement en location, je dois prévenir le propriétaire combien de temps à l’avance ?",
+    "before": "right",
+    "after": "not_found"
+   },
+   {
+    "id": "D017",
+    "question": "Dans un logement loué, qui doit payer les réparations : le propriétaire ou le locataire ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D021",
+    "question": "Mon mari refuse de divorcer, est-ce que je peux quand même demander le divorce toute seule ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "D022",
+    "question": "Mon père peut-il me déshériter complètement si je suis son seul enfant ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "D023",
+    "question": "J’ai acheté une voiture d’occasion à un particulier et elle a un gros défaut qu’il m’avait caché : que dit le Code civil ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D026",
+    "question": "Mon ancien propriétaire me réclame des loyers d’il y a sept ans, il peut encore ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D029",
+    "question": "Nous sommes séparés, qui décide pour notre enfant : le père ou la mère ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D036",
+    "question": "Qu’est-ce que je risque si je me fais prendre à voler dans un magasin ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D041",
+    "question": "Combien d’argent faut-il mettre au minimum pour créer une SARL ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "D045",
+    "question": "J’habite au Luxembourg depuis six ans, qu’est-ce qu’il faut pour devenir luxembourgeois ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "D046",
+    "question": "Mon grand-père était luxembourgeois, est-ce que je peux avoir le passeport luxembourgeois moi aussi ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "D048",
+    "question": "Que dit la Constitution sur le droit de la police d’entrer chez les gens ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-002",
+    "question": "Si je fais une réclamation à mon assurance, est-ce qu’elle va payer non seulement le montant principal, mais aussi les frais liés aux avocats ou experts, et dans quelles conditions ?",
+    "before": "right",
+    "after": "not_found"
+   },
+   {
+    "id": "G3-013",
+    "question": "Est-ce que je peux utiliser mon contrat d’assurance comme garantie pour un prêt, et est-ce que mon conjoint peut le faire à ma place ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-018",
+    "question": "Est-ce que je peux changer d’avis et annuler mon contrat d’assurance dans les deux semaines qui suivent sa signature, sans avoir à me justifier ni à payer de pénalité ?",
+    "before": "right",
+    "after": "not_found"
+   },
+   {
+    "id": "G3-026",
+    "question": "Si j’ai un problème avec mon assurance et qu’on n’arrive pas à se mettre d’accord, est-ce que mon assureur doit m’expliquer mes options pour régler le conflit ?",
+    "before": "doubtful",
+    "after": "not_found"
+   },
+   {
+    "id": "G3-029",
+    "question": "Comment on vérifie que les compagnies d’assurance au Luxembourg sont bien surveillées quand elles font partie d’un groupe avec des entreprises à l’étranger ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-031",
+    "question": "Si une compagnie d’assurance fait faillite, est-ce que les personnes qui ont des créances auprès d’elle sont prioritaires pour récupérer de l’argent sur certains biens ou produits liés à l’assurance ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-033",
+    "question": "Est-ce que les entreprises d’assurance appartenant à un même groupe peuvent partager des infos entre elles pour faciliter les contrôles ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-034",
+    "question": "Si une compagnie d’assurance luxembourgeoise est en liquidation, comment ça se passe pour un procès en cours concernant ses biens ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-035",
+    "question": "Si une compagnie d’assurance luxembourgeoise fait faillite, est-ce que les garanties ou droits que j’ai sur ses biens dans un autre pays sont toujours valables ?",
+    "before": "doubtful",
+    "after": "partial"
+   },
+   {
+    "id": "G3-037",
+    "question": "Si une compagnie d’assurance étrangère veut ouvrir une succursale ici, est-ce qu’elle doit suivre les mêmes règles que les compagnies luxembourgeoises ?",
+    "before": "doubtful",
+    "after": "candidates"
+   },
+   {
+    "id": "G3-039",
+    "question": "Que se passe-t-il si une compagnie d’assurance perd son autorisation dans un autre pays de l’Union européenne et veut continuer à opérer au Luxembourg ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-040",
+    "question": "Est-ce que les règles sur la faillite et les accords préventifs s’appliquent aux compagnies d’assurance ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-042",
+    "question": "Comment les fonds de pension s’assurent-ils que les personnes chargées de surveiller les risques et les finances travaillent de manière indépendante et rapportent les problèmes importants ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-045",
+    "question": "Est-ce que l’État peut utiliser l’argent laissé par des comptes oubliés dans des cas particuliers, par exemple si la personne a commis des actes graves ou si cet argent a une valeur historique ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-047",
+    "question": "Si j’ai eu un accident et que je demande à être remboursé, combien de temps l’assurance a-t-elle pour me répondre ?",
+    "before": "right",
+    "after": "not_found"
+   },
+   {
+    "id": "G3-048",
+    "question": "Est-ce que quelqu’un qui vend des assurances doit avoir une assurance spéciale en cas d’erreur, et jusqu’à combien ça doit couvrir ?",
+    "before": "right",
+    "after": "not_found"
+   },
+   {
+    "id": "G3-049",
+    "question": "Je vends des assurances à mon compte : si je change d’adresse personnelle ou de bureau, est-ce que je dois prévenir une autorité ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-056",
+    "question": "Comment puis-je savoir si j’ai des avoirs ou des contrats d’assurance inactifs consignés quelque part au Luxembourg ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-058",
+    "question": "Est-ce que je peux rester au Luxembourg plus de trois mois sans perdre mon droit de séjour, même si j’ai besoin d’aide sociale ?",
+    "before": "doubtful",
+    "after": "not_found"
+   },
+   {
+    "id": "G3-060",
+    "question": "Est-ce que je peux mettre une affiche ou une publicité sur un bâtiment qui est protégé pour son importance historique ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-061",
+    "question": "Comment le service d’incendie et de secours au Luxembourg finance-t-il ses activités ?",
+    "before": "doubtful",
+    "after": "partial"
+   },
+   {
+    "id": "G3-064",
+    "question": "Quelles informations doit-on fournir quand on enregistre une société en commandite spéciale au registre de commerce ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-066",
+    "question": "Si un bateau est vendu et que plusieurs personnes doivent être payées, qui est payé en premier et comment ça se passe si l’argent ne suffit pas pour tout le monde ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-067",
+    "question": "Est-ce que je peux choisir mes heures de travail dans une administration de l’État ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-068",
+    "question": "Que se passe-t-il si mon avocat ne fait pas les démarches nécessaires à temps dans une procédure judiciaire ?",
+    "before": "doubtful",
+    "after": "partial"
+   },
+   {
+    "id": "G3-070",
+    "question": "Est-ce que la commune peut obliger les propriétaires à vendre leur bien pour un projet d’aménagement, et que se passe-t-il s’ils veulent réaliser eux-mêmes les travaux ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-071",
+    "question": "Est-ce que l’auteur peut toujours dire que c’est lui qui a créé son travail, même s’il a vendu ses droits, et peut-il s’opposer à ce qu’on modifie son travail d’une manière qui pourrait lui nuire ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-073",
+    "question": "Est-ce que l’autorité luxembourgeoise qui gère les communications doit suivre les conseils de l’Union européenne, et que se passe-t-il si elle décide de ne pas les suivre ?",
+    "before": "doubtful",
+    "after": "right"
+   },
+   {
+    "id": "G3-074",
+    "question": "Comment faire pour renouveler ma licence de pilote de planeur si elle est bientôt périmée ?",
+    "before": "right",
+    "after": "partial"
+   },
+   {
+    "id": "G3-080",
+    "question": "Si une entreprise change de propriétaire, est-ce que l’ancien propriétaire reste responsable des dettes qui existaient avant ce changement ?",
+    "before": "right",
+    "after": "not_found"
+   }
+  ]
+ }
+}

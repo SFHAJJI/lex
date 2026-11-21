@@ -1,0 +1,269 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "lex-v3-vocabulary-drift/1"
+    },
+    "vocabulary": {
+      "enum": [
+        "relation_assertion_kind",
+        "identifier_family",
+        "ecli_state",
+        "target_body_scope",
+        "date_semantic_role",
+        "transposition_evidence",
+        "date_precision",
+        "date_open_sentinel"
+      ]
+    },
+    "observed_term": {
+      "type": "string"
+    },
+    "admitted_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "source_observation_id": {
+      "type": "string",
+      "pattern": "^[!-~]([ -~]*[!-~])?(?![\\s\\S])",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "required": [
+    "schema",
+    "vocabulary",
+    "observed_term",
+    "admitted_terms",
+    "source_observation_id"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:71c48395-b0a2-4e8f-e3d6-81f592d4b5b7",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "relation_assertion_kind"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "publisher_asserted",
+              "ontology_authorized_inverse",
+              "local_inbound_view"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "identifier_family"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "eli",
+              "celex",
+              "ecli",
+              "cellar_work_uri",
+              "cellar_resource_uri",
+              "cellar_psi_uri",
+              "memorial",
+              "historical_legal_id"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "ecli_state"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "ecli_present",
+              "ecli_not_in_this_set",
+              "ecli_not_applicable"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "target_body_scope"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "body_in_scope_held",
+              "body_in_scope_not_held",
+              "body_outside_scope"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "date_semantic_role"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "document_date",
+              "publication_date",
+              "signature_date",
+              "entry_into_force",
+              "application_date",
+              "end_of_validity",
+              "publisher_deadline",
+              "transposition_deadline",
+              "notification_date",
+              "role_not_stated_by_publisher"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "transposition_evidence"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "none",
+              "directive_qualifier",
+              "nim_record"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "date_precision"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "year",
+              "year_month",
+              "year_month_day"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "vocabulary": {
+            "const": "date_open_sentinel"
+          }
+        },
+        "required": [
+          "vocabulary"
+        ]
+      },
+      "then": {
+        "properties": {
+          "admitted_terms": {
+            "const": [
+              "not_open",
+              "open_ended"
+            ]
+          }
+        },
+        "required": [
+          "admitted_terms"
+        ]
+      }
+    }
+  ]
+}

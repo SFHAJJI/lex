@@ -24,6 +24,9 @@ import { CANONICAL_HOST } from '../scripts/routes.mjs';
 import { LEGAL_PAGES } from '../scripts/legal-pages.mjs';
 import { REFERENCE_PAGES, referencePage } from '../scripts/reference-pages.mjs';
 import { FreshnessStripSlot, StalenessBannerSlot } from './Freshness.jsx';
+// The side build: the dock over the new answer engine (`NextDock.jsx`); the current dock (`AssistantDock.jsx`) stays in place, unwired.
+import { LIVE_DOCK_ROOT, liveDockTree } from './NextDock.jsx';
+import { nextCopy } from '../scripts/next-copy.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -58,16 +61,84 @@ export const LIVE_MARKER = 'lex-v3-live-mount';
  * the footer.
  */
 const MAIN_MENU = Object.freeze([
-  Object.freeze({ key: 'menuDecisions', page: referencePage('decisions').file, states: Object.freeze([referencePage('decisions').state]) }),
+  // The owner's order of 2026-11-15: ask, then the user's two tools (the texts, the changes) up from the footer, then the
+  // decisions and how Lex works.
+  Object.freeze({ key: 'menuAsk', page: 'index.html', states: Object.freeze(['live-home', 'live-assistant']) }),
+  Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
+  Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
+  // Release-a (21/11/2026): "Decisions" described an earlier engine (no vectors, a dictionary, 1.4 s); it left the menu, and its
+  // address now shows How it works (`ReferencePages.jsx`).
   Object.freeze({ key: 'menuEvidence', page: referencePage('evidence').file, states: Object.freeze([referencePage('evidence').state]) }),
 ]);
 
-/** The footer's way to the site's screens: the texts (the search, and a law's reading and dossier) and the changes. */
-const FOOTER_MENU = Object.freeze([
-  Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
-  // The changes, opened on the last twelve months (`LAST_TWELVE_MONTHS_HASH`).
-  Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
+/**
+ * The V4 menu (the owner's brief of 2026-11-15, section 3): the wordmark leads home, a field finds a text, then Changes,
+ * Decisions and How it works; the language switch last. The text page is reached from Home, the field, the assistant and
+ * Changes, so it has no entry of its own.
+ */
+const V4_MENU = Object.freeze([
+  Object.freeze({ key: 'radar', page: 'radar.html', states: Object.freeze(['live-radar']) }),
+  Object.freeze({ key: 'menuEvidence', page: referencePage('evidence').file, states: Object.freeze([referencePage('evidence').state]) }),
+  // The side build's Results page (`live-results-page.jsx`): its words are the side build's own table's (`next`).
+  Object.freeze({ key: 'results', next: true, page: 'results.html', states: Object.freeze(['live-results']) }),
 ]);
+
+/** The magnifier the V4 fields carry, drawn, decorative. */
+export function FindIcon() {
+  return (
+    <svg className="lx-find-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10.6 10.6 14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/**
+ * The V4 header (V1Home to V5How): the wordmark, the field that finds a text (the header's script takes the words to the
+ * search page after "#", which opens the text itself when the words name one), the menu with the current page marked, the
+ * languages.
+ */
+export function V4Header({ state, locale, localePage = null, script = true }) {
+  const site = liveChrome().site;
+  return (
+    <header className="site-header lx-header" data-live={LIVE_MARKER}>
+      <a className="skip-link" href="#main">{site.skip}</a>
+      <a className="site-brand lx-wordmark" href={localeHome(CHROME_LOCALE)}>
+        <span className="site-name">{site.brand}</span>
+      </a>
+      {/* No action and no name (R109): the header's script takes the words to the search page after "#". A page that ships no
+          script (the legal pages, the maintenance page) leads to the home page's field instead. */}
+      {script ? (
+        <form className="lx-find" role="search" data-header-find="">
+          <FindIcon />
+          <label className="lx-visually-hidden" htmlFor="lx-find-q">{site.findLabel}</label>
+          <input id="lx-find-q" type="search" placeholder={site.findPlaceholder} autoComplete="off" />
+          <button className="lx-visually-hidden" type="submit">{site.findSubmit}</button>
+        </form>
+      ) : (
+        <a className="lx-find lx-find-link" href={localeHome(CHROME_LOCALE)}>
+          <FindIcon />
+          <span>{site.findPlaceholder}</span>
+        </a>
+      )}
+      <nav aria-label={site.menu} className="site-nav lx-nav">
+        <ul>
+          {V4_MENU.map((entry) => (
+            <li key={entry.key}>
+              <a href={`${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+                {entry.next ? nextCopy(CHROME_LOCALE).menu[entry.key] : site[entry.key]}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <LocaleNav current={locale} page={localePage} />
+    </header>
+  );
+}
+
+/** The footer's way to the site's screens: the texts and the changes went up to the menu on 2026-11-15; the others stay. */
+const FOOTER_MENU = Object.freeze([]);
 
 const MENU = Object.freeze([
   Object.freeze({ key: 'search', page: 'index.html', states: Object.freeze(['live-home']) }),
@@ -156,7 +227,7 @@ export function SiteHeader({ state, locale, localePage = null }) {
         <ul>
           {MAIN_MENU.map((entry) => (
             <li key={entry.key}>
-              <a href={livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : `${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>
                 {site[entry.key]}
               </a>
             </li>
@@ -193,7 +264,7 @@ const SENT_BY_STATE = Object.freeze({
   'live-export': 'export',
 });
 
-export function SiteFooter({ state = null, freshness = null, answers = true }) {
+export function SiteFooter({ state = null, freshness = null, answers = true, v4 = false }) {
   const copy = liveChrome();
   const site = copy.site;
   const sent = SENT_BY_STATE[state] === undefined ? null : copy[SENT_BY_STATE[state]]?.sent ?? null;
@@ -211,7 +282,8 @@ export function SiteFooter({ state = null, freshness = null, answers = true }) {
             </li>
           ))}
           <li><a href={livePath('coverage.html')}>{site.coverage}</a></li>
-          {MENU.filter((entry) => !['search', 'radar', 'coverage'].includes(entry.key)).map((entry) => (
+          {/* The V4 pages replace the forms (reading, dossier, history, compare, export) by the text page: none is linked. */}
+          {(v4 ? [] : MENU.filter((entry) => !['search', 'radar', 'coverage'].includes(entry.key))).map((entry) => (
             <li key={entry.key}>
               <a href={livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>{site[entry.key]}</a>
             </li>
@@ -220,7 +292,7 @@ export function SiteFooter({ state = null, freshness = null, answers = true }) {
       </nav>
       <nav aria-label={copy.reference.menu} className="reference-nav" data-reference-nav="">
         <ul>
-          {REFERENCE_PAGES.map((page) => (
+          {REFERENCE_PAGES.filter((page) => page.key !== 'decisions').map((page) => (
             <li key={page.key}>
               <a href={livePath(page.file)} aria-current={page.state === state ? 'page' : undefined}>{copy[page.key].title}</a>
             </li>
@@ -284,6 +356,14 @@ export function Document({
   // Whether the page can receive an answer from the server: false for a page that ships no script and asks nothing (the
   // legal pages, the maintenance page), whose footer's strip then says it carries no answer rather than promising one.
   answers = true,
+  // The V4 layout (the owner's brief of 2026-11-15): 'v4' gives the page the V4 header, the frame and, with `dock`, the
+  // assistant docked beside it; null keeps the page as it was.
+  layout = null,
+  // Whether the page carries the assistant dock beside its content (V4 only): Home, the text page, Changes.
+  dock = false,
+  // Whether the page's content is the earlier pages' (Trust and Coverage, the legal pages, the 404 and maintenance pages):
+  // the V4 frame gives it a plain reading measure and type (`.lx-prose`).
+  prose = false,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -324,7 +404,7 @@ export function Document({
     shell === null ? {} : { 'data-shell': shell, 'data-density': density ?? '' };
 
   return (
-    <html lang={locale} data-product-line="lex-v3" data-preview-state={state} {...shellAttributes}>
+    <html lang={locale} data-product-line="lex-v3" data-preview-state={state} data-layout={layout ?? undefined} {...shellAttributes}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -353,6 +433,25 @@ export function Document({
           ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonInScript(structuredData) }} />
           : null}
       </head>
+      {banner === 'live' && layout === 'v4' ? (
+        <body className="lx-body">
+          <V4Header state={state} locale={locale} localePage={localePage} script={answers} />
+          {answers ? <script src={livePath('client-live-header.js')} defer /> : null}
+          <StalenessBannerSlot facts={freshness} />
+          <div className={dock ? 'lx-frame lx-frame-docked' : 'lx-frame'}>
+            <div className="lx-scroll" data-lx-scroll="">
+              <main id="main" className={prose ? 'lx-main lx-prose' : 'lx-main'}>{children}</main>
+              <SiteFooter state={state} freshness={freshness} answers={answers} v4 />
+            </div>
+            {dock ? (
+              <aside className="lx-dock" aria-label={liveChrome().site.dock} data-dock="">
+                <div id={LIVE_DOCK_ROOT} className="lx-dock-root" data-dock-page={state}>{liveDockTree(state)}</div>
+                <script src={livePath('client-live-dock.js')} defer />
+              </aside>
+            ) : null}
+          </div>
+        </body>
+      ) : (
       <body>
         {/* A live page sits in the site (its header, with the interface languages, an unreviewed one answering
             localization_unavailable, and its footer); a preview page under the synthetic banner. */}
@@ -361,6 +460,7 @@ export function Document({
         <main id="main">{children}</main>
         {banner === 'live' ? <SiteFooter state={state} freshness={freshness} answers={answers} /> : null}
       </body>
+      )}
     </html>
   );
 }

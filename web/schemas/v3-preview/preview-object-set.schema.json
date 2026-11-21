@@ -1,0 +1,209 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])",
+      "const": "lex-v3-preview-object-set/1"
+    },
+    "object_set_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "object_type"
+        ],
+        "anyOf": [
+          {
+            "properties": {
+              "object_type": {
+                "const": "preview_coordinate"
+              },
+              "synthetic": {
+                "type": "boolean",
+                "const": true
+              },
+              "work_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
+              },
+              "version_key": {
+                "type": "string",
+                "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
+              },
+              "anchor": {
+                "type": "string",
+                "pattern": "^preview:[ -~]{1,248}(?![\\s\\S])"
+              },
+              "body_holding_state": {
+                "enum": [
+                  "held_public",
+                  "held_withheld",
+                  "not_held"
+                ]
+              },
+              "body_holding_disposition": {
+                "enum": [
+                  "synthetic_fixture",
+                  "synthetic_fixture_withheld",
+                  "unknown_pending_evidence"
+                ]
+              },
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+              },
+              "object_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^(?=[\\s\\S]*[^ ])[ -~]{1,256}(?![\\s\\S])"
+              }
+            },
+            "required": [
+              "synthetic",
+              "work_id",
+              "version_key",
+              "anchor",
+              "body_holding_state",
+              "body_holding_disposition",
+              "body",
+              "body_sha256",
+              "object_id"
+            ],
+            "additionalProperties": false,
+            "x_runtime_invariants": [
+              "body_sha256 is SHA-256 over the exact strict UTF-8 body bytes",
+              "body_holding_state and body_holding_disposition use the closed preview matrix",
+              "held-public body is a valid Unicode scalar sequence with visible non-whitespace content",
+              "held-public body is at most the runtime UTF-8 byte bound"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "body_holding_state": {
+                      "const": "held_public"
+                    }
+                  },
+                  "required": [
+                    "body_holding_state"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "body": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "body_sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                    },
+                    "body_holding_disposition": {
+                      "const": "synthetic_fixture"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "body_holding_state": {
+                      "const": "held_withheld"
+                    }
+                  },
+                  "required": [
+                    "body_holding_state"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "body": {
+                      "const": null
+                    },
+                    "body_sha256": {
+                      "type": "string",
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                    },
+                    "body_holding_disposition": {
+                      "const": "synthetic_fixture_withheld"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "body_holding_state": {
+                      "const": "not_held"
+                    }
+                  },
+                  "required": [
+                    "body_holding_state"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "body": {
+                      "const": null
+                    },
+                    "body_sha256": {
+                      "const": null,
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+                    },
+                    "body_holding_disposition": {
+                      "const": "unknown_pending_evidence"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "maxProperties": 128
+      },
+      "maxItems": 256
+    }
+  },
+  "required": [
+    "schema",
+    "object_set_id",
+    "objects"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:uuid:87e642f4-501b-4a0f-a124-2906f8b4b831",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxProperties": 128,
+  "x_runtime_invariants": [
+    "object identifiers are unique and objects use object-id ordinal order",
+    "object collections reject null members"
+  ]
+}

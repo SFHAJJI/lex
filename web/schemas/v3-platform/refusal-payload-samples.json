@@ -1,0 +1,870 @@
+{
+  "not_produced": [
+    "advice_boundary",
+    "derivation_refused",
+    "not_transposable",
+    "upstream_unreachable"
+  ],
+  "produced": [
+    {
+      "code": "ambiguous_identifier",
+      "more_payloads": [
+        {
+          "candidates": [
+            "fixture-work-identifier",
+            "fixture-work-identifier-two"
+          ],
+          "match_reason": "prefix",
+          "requested_identifier": "Reglement sur l\u0027epreuve"
+        }
+      ],
+      "optional_payload_keys": [
+        "candidate_held",
+        "candidate_title_languages",
+        "candidate_titles",
+        "match_reason",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
+      "payload": {
+        "candidate_held": [
+          true,
+          false
+        ],
+        "candidate_title_languages": [
+          null,
+          "fra"
+        ],
+        "candidate_titles": [
+          null,
+          "R\u00E8glement grand-ducal du 9 ao\u00FBt 1991 relatif aux examens"
+        ],
+        "candidates": [
+          "/lu-legilux/loi-1991-08-10-n3",
+          "http://data.legilux.public.lu/eli/etat/leg/rgd/1991/08/09/n1"
+        ],
+        "recognised_act": "M\u00E9m. A n\u00B0 58 de 1991",
+        "recognised_article": null,
+        "recognised_date": null,
+        "recognised_date_source": null,
+        "recognised_held_act": null,
+        "recognised_held_version": null,
+        "recognised_kind": "memorial",
+        "recognised_title": null,
+        "requested_identifier": "M\u00E9m. A n\u00B0 58 de 1991"
+      },
+      "produced_by": [
+        "evidence_bundle",
+        "resolve",
+        "search",
+        "verify"
+      ]
+    },
+    {
+      "code": "ambiguous_version",
+      "more_payloads": [
+        {
+          "bound": "from",
+          "candidate_applicability_dates": [
+            "2026-04-11",
+            "2026-04-11"
+          ],
+          "candidate_applicable_to_sources": [
+            null,
+            null
+          ],
+          "candidate_applicable_tos": [
+            null,
+            null
+          ],
+          "candidate_boundaries": [
+            "derived",
+            "derived"
+          ],
+          "candidate_date_roles": [
+            "applicability_in_file",
+            "applicability_in_file"
+          ],
+          "candidate_state_kinds": [
+            "as_published",
+            "as_published"
+          ],
+          "candidate_state_sha256s": [
+            "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
+            "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1"
+          ],
+          "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidates and of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; a candidate the catalogue names no expression of is given by its stable coordinate, since it has no permalink; they are not one wording held, so none is chosen",
+          "candidate_text_statuses": [
+            "held",
+            "held"
+          ],
+          "candidates": [
+            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
+            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra"
+          ],
+          "requested_date": "2026-04-11"
+        }
+      ],
+      "optional_payload_keys": [
+        "bound",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
+      "payload": {
+        "candidate_applicability_dates": [
+          "2026-04-11",
+          "2026-04-11"
+        ],
+        "candidate_applicable_to_sources": [
+          null,
+          null
+        ],
+        "candidate_applicable_tos": [
+          null,
+          null
+        ],
+        "candidate_boundaries": [
+          "derived",
+          "derived"
+        ],
+        "candidate_date_roles": [
+          "applicability_in_file",
+          "applicability_in_file"
+        ],
+        "candidate_state_kinds": [
+          "as_published",
+          "as_published"
+        ],
+        "candidate_state_sha256s": [
+          "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
+          "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1"
+        ],
+        "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidates and of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; a candidate the catalogue names no expression of is given by its stable coordinate, since it has no permalink; they are not one wording held, so none is chosen",
+        "candidate_text_statuses": [
+          "held",
+          "held"
+        ],
+        "candidates": [
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra"
+        ],
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "5",
+        "recognised_date": "2026-04-11",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
+        "requested_date": "2026-04-11"
+      },
+      "produced_by": [
+        "as_of",
+        "citation",
+        "diff",
+        "evidence_bundle",
+        "in_force_on",
+        "provenance",
+        "search",
+        "status_on"
+      ]
+    },
+    {
+      "code": "anchor_not_in_version",
+      "more_payloads": [
+        {
+          "asserts_absence_of_law": false,
+          "do_not_fall_back_to_full_text_search": true,
+          "language": "fra",
+          "nearest_anchors": [
+            "page=1"
+          ],
+          "pages": 1,
+          "requested_anchor": "page=2",
+          "requested_page": 2,
+          "what_would_answer": [
+            "corrected_identifier",
+            "new_official_observation"
+          ]
+        }
+      ],
+      "optional_payload_keys": [
+        "language",
+        "pages",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title",
+        "requested_page"
+      ],
+      "payload": {
+        "asserts_absence_of_law": false,
+        "do_not_fall_back_to_full_text_search": true,
+        "nearest_anchors": [
+          "art_9"
+        ],
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "99",
+        "recognised_date": "2024-03-15",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
+        "requested_anchor": "99",
+        "what_would_answer": [
+          "corrected_identifier",
+          "new_official_observation"
+        ]
+      },
+      "produced_by": [
+        "article_history",
+        "citation",
+        "evidence_bundle",
+        "search",
+        "verify"
+      ]
+    },
+    {
+      "code": "format_not_available",
+      "optional_payload_keys": [],
+      "payload": {
+        "available_formats": [
+          "xml"
+        ],
+        "expressions": [
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/later",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-a",
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-b"
+        ],
+        "requested_format": "docx",
+        "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
+        "requested_language": "fra",
+        "rule": "a format is the last segment of the publisher\u0027s userFormat IRI, matched exactly; the formats listed are every one the selected expressions\u0027 manifestations carry"
+      },
+      "produced_by": [
+        "manifestation"
+      ]
+    },
+    {
+      "code": "identifier_unknown",
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
+      "payload": {
+        "asserts_absence_of_law": false,
+        "official_search_actions": [
+          "search"
+        ],
+        "population_disclosure": "This build\u0027s Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2026-04-11.",
+        "recognised_act": "/lu-legilux/no-such-work",
+        "recognised_article": null,
+        "recognised_date": null,
+        "recognised_date_source": null,
+        "recognised_held_act": null,
+        "recognised_held_version": null,
+        "recognised_kind": "permalink",
+        "recognised_title": null,
+        "requested_identifier": "/lu-legilux/no-such-work",
+        "what_would_answer": [
+          "corrected_identifier",
+          "expanded_official_scope"
+        ],
+        "what_would_answer_detail": "an address of this site for a Luxembourg act this index holds: its act, its readable address or a permalink of one of its versions; the reference was read, and what it names is not held here, so no word was searched"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "diff",
+        "dossier",
+        "evidence_bundle",
+        "in_force_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "resolve",
+        "search",
+        "status_on",
+        "timeline",
+        "verify"
+      ]
+    },
+    {
+      "code": "language_not_available",
+      "optional_payload_keys": [
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
+      "payload": {
+        "available_languages": [
+          "deu",
+          "fra"
+        ],
+        "recognised_act": "loi du 10 ao\u00FBt 1991",
+        "recognised_article": "5",
+        "recognised_date": "2024-03-15",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
+        "requested_language": "eng"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "browse",
+        "changes_in_period",
+        "citation",
+        "classification",
+        "coverage",
+        "diff",
+        "dossier",
+        "evidence_bundle",
+        "in_force_on",
+        "manifestation",
+        "provenance",
+        "search",
+        "status_on",
+        "timeline",
+        "verify"
+      ]
+    },
+    {
+      "code": "no_corpus_mounted",
+      "optional_payload_keys": [],
+      "payload": {
+        "required_corpus": "lu"
+      },
+      "produced_by": [
+        "answer_drift",
+        "article_history",
+        "as_of",
+        "ask",
+        "browse",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "coverage",
+        "diff",
+        "dossier",
+        "events",
+        "evidence_bundle",
+        "in_force_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "search",
+        "status_on",
+        "timeline",
+        "verify"
+      ]
+    },
+    {
+      "code": "no_version_for_date",
+      "more_payloads": [
+        {
+          "asserts_absence_of_law": false,
+          "bound": "from",
+          "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+          "history_begins": "2024-02-01",
+          "hole_from": null,
+          "hole_to": null,
+          "language": "fra",
+          "named_state_sha256s": [],
+          "named_states": [],
+          "nearest_earlier": null,
+          "nearest_later": "2024-02-01",
+          "reason": "before_history",
+          "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); named_states (with named_state_sha256s) names the states the reason is about, by permalink, or by stable coordinate for a state the catalogue names no expression of; hole_from and hole_to are a hole\u0027s span; after a closed end, closed_on is the last state\u0027s end, and base_act_rule says what the base act\u0027s facts beside it are",
+          "requested_date": "1900-01-01",
+          "what_would_answer": [
+            "new_official_observation"
+          ]
+        }
+      ],
+      "optional_payload_keys": [
+        "bound",
+        "covering_state_sha256s",
+        "covering_states",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
+      "payload": {
+        "asserts_absence_of_law": false,
+        "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+        "covering_state_sha256s": [
+          "76aa2f70e86f1fbd39a721c5c488d48dbbb4f5511afee9f8cd8893e78a7af78e"
+        ],
+        "covering_states": [
+          "/lu-legilux/loi-1991-08-10-n3/2025-01-01--76aa2f70e86f1fbd39a721c5c488d48dbbb4f5511afee9f8cd8893e78a7af78e/fra"
+        ],
+        "history_begins": "2024-02-01",
+        "hole_from": null,
+        "hole_to": null,
+        "language": "fra",
+        "named_state_sha256s": [
+          "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+        ],
+        "named_states": [
+          "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+        ],
+        "nearest_earlier": "2025-01-01",
+        "nearest_later": null,
+        "reason": "outside_named_version",
+        "reason_rule": "outside_named_version: the identifier names a version (named_states) whose interval does not hold the date, and the publisher\u0027s catalogue gives the date to another state (covering_states), which the identifier does not name; nothing is opened in its place; history_begins, nearest_earlier and nearest_later are the work\u0027s, over its catalogue\u0027s states in the language, as for every other reason",
+        "recognised_act": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "recognised_article": null,
+        "recognised_date": "2025-06-01",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": null,
+        "requested_date": "2025-06-01",
+        "what_would_answer": [
+          "new_official_observation"
+        ]
+      },
+      "produced_by": [
+        "as_of",
+        "citation",
+        "diff",
+        "evidence_bundle",
+        "in_force_on",
+        "provenance",
+        "relations",
+        "search",
+        "status_on"
+      ]
+    },
+    {
+      "code": "out_of_corpus_scope",
+      "optional_payload_keys": [],
+      "payload": {
+        "asserts_absence_of_law": false,
+        "instrument": "a decision or opinion of the Commission nationale pour la protection des donn\u00E9es (CNPD)",
+        "official_source": "https://cnpd.public.lu/",
+        "out_of_scope_class": "cnpd_decision",
+        "reason": "Decisions and opinions of the CNPD are issued and published by the CNPD, not by Legilux or EUR-Lex, and Lex does not collect them.",
+        "requested_identifier": "D\u00E9lib\u00E9ration CNPD n\u00B0 12/2023",
+        "scope_list": "lex-v3-out-of-scope/1",
+        "scope_list_sha256": "d473256c14a1c973b441567d9bf9802532347643b5b3f384704f9027b07a06b7",
+        "what_would_answer": [
+          "expanded_official_scope"
+        ],
+        "what_would_answer_detail": "Lex collecting this class of instrument, which it does not: the official place and who_to_ask name where it is published",
+        "who_to_ask": {
+          "link": "https://cnpd.public.lu/",
+          "name": "Commission nationale pour la protection des donn\u00E9es (CNPD)",
+          "role": "information"
+        }
+      },
+      "produced_by": [
+        "as_of",
+        "dossier",
+        "resolve",
+        "timeline"
+      ]
+    },
+    {
+      "code": "pinned_digest_mismatch",
+      "optional_payload_keys": [],
+      "payload": {
+        "current_digest": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+        "current_hash_pinned_url": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+        "requested_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+        "rule_profile_sha256s": [
+          "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+          "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+        ],
+        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01"
+      },
+      "produced_by": [
+        "as_of",
+        "evidence_bundle",
+        "resolve",
+        "verify"
+      ]
+    },
+    {
+      "code": "profiles_differ",
+      "optional_payload_keys": [],
+      "payload": {
+        "language": "fra",
+        "left": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+        "left_profile": [
+          "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+          "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+        ],
+        "right": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--58acae944818d90391286984cb8230f6e558428c2eac5b8526fef1eb1e7e7e64/fra",
+        "right_profile": [
+          "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
+        ]
+      },
+      "produced_by": [
+        "diff"
+      ]
+    },
+    {
+      "code": "rate_limited",
+      "optional_payload_keys": [],
+      "payload": {
+        "retry_after": 1,
+        "retryable": true
+      },
+      "produced_by": [
+        "answer_drift",
+        "article_history",
+        "as_observed",
+        "as_of",
+        "ask",
+        "browse",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "concepts",
+        "coverage",
+        "diff",
+        "dossier",
+        "events",
+        "evidence_bundle",
+        "in_force_on",
+        "knowable_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "resolve",
+        "search",
+        "status_on",
+        "timeline",
+        "transposition",
+        "verify"
+      ]
+    },
+    {
+      "code": "retrieval_mode_unavailable",
+      "more_payloads": [
+        {
+          "available_modes": [
+            "r5_browse"
+          ],
+          "data_needed": "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office records them; the EU index holds none of them",
+          "requested_mode": "r5_concepts"
+        }
+      ],
+      "optional_payload_keys": [
+        "data_needed",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title"
+      ],
+      "payload": {
+        "available_modes": [
+          "r0_exact_coordinate"
+        ],
+        "recognised_act": "32026R0002",
+        "recognised_article": null,
+        "recognised_date": "2026-03-15",
+        "recognised_date_source": "citation",
+        "recognised_held_act": "/eu-eurlex/32026R0002",
+        "recognised_held_version": null,
+        "recognised_kind": "citation",
+        "recognised_title": null,
+        "requested_mode": "r6_as_of"
+      },
+      "produced_by": [
+        "article_history",
+        "as_of",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "concepts",
+        "diff",
+        "evidence_bundle",
+        "in_force_on",
+        "knowable_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "resolve",
+        "search",
+        "status_on",
+        "timeline",
+        "transposition",
+        "verify"
+      ]
+    },
+    {
+      "code": "snapshot_unknown",
+      "optional_payload_keys": [],
+      "payload": {
+        "snapshot_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "what_would_answer": "a cursor from this log (its log_id is the mounted index digest) or from an ancestor it carries forward (log.ancestors), or no cursor to read this log from its first event"
+      },
+      "produced_by": [
+        "answer_drift",
+        "events"
+      ]
+    },
+    {
+      "code": "text_not_available",
+      "more_payloads": [
+        {
+          "articles_held": 49,
+          "asserts_absence_of_law": false,
+          "language": "fra",
+          "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+          "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+          "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
+          "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+          "what_would_answer": [
+            "new_official_observation"
+          ]
+        },
+        {
+          "asserts_absence_of_law": false,
+          "language": "eng",
+          "official_identity": "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b",
+          "official_source": "http://publications.europa.eu/resource/cellar/bbbbbbbb-0000-0000-0000-00000000000b",
+          "recognised_act": "Regulation (EU) 2016/679 (CELEX 32016R0679)",
+          "recognised_article": null,
+          "recognised_date": "2025-03-01",
+          "recognised_date_source": "citation",
+          "recognised_held_act": "/eu-eurlex/32016R0679",
+          "recognised_held_version": null,
+          "recognised_kind": "citation",
+          "recognised_title": null,
+          "retained_transport_evidence": "none",
+          "what_would_answer": [
+            "new_official_observation"
+          ]
+        }
+      ],
+      "optional_payload_keys": [
+        "act_iri",
+        "articles_held",
+        "catalogue_read_no_later_than",
+        "date_document",
+        "disposition",
+        "document_type",
+        "document_type_codes",
+        "entry_into_force",
+        "historical_legal_id",
+        "in_force_status",
+        "in_force_status_codes",
+        "language",
+        "memorial_issue",
+        "no_longer_in_force",
+        "official_pdf",
+        "permalink",
+        "publication_date",
+        "reason",
+        "reason_rule",
+        "recognised_act",
+        "recognised_article",
+        "recognised_date",
+        "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
+        "recognised_kind",
+        "recognised_title",
+        "record_address",
+        "record_evidence_sha256s",
+        "record_kind",
+        "rule",
+        "stable_coordinate",
+        "title",
+        "title_language",
+        "version_dispositions",
+        "version_kinds",
+        "version_reasons",
+        "versions",
+        "work_iri",
+        "work_key"
+      ],
+      "payload": {
+        "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+        "asserts_absence_of_law": false,
+        "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+        "date_document": [
+          "1991-08-10"
+        ],
+        "disposition": null,
+        "document_type": [
+          "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+        ],
+        "document_type_codes": [
+          "LOI"
+        ],
+        "entry_into_force": [
+          "1991-08-27"
+        ],
+        "historical_legal_id": [
+          "1991A10580"
+        ],
+        "in_force_status": [
+          "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+        ],
+        "in_force_status_codes": [
+          "no-longer-in-force"
+        ],
+        "memorial_issue": [
+          "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+        ],
+        "no_longer_in_force": [
+          "2010-01-01"
+        ],
+        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+        "official_pdf": [
+          "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+        ],
+        "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+        "publication_date": [
+          "1991-08-23"
+        ],
+        "reason": "catalogue_licence_scl",
+        "reason_rule": "each reason is the one Coverage counts the version under, by one rule (V3TextYield): for a version whose file the corpus holds, file_articles_no_state, the index holds the file\u0027s articles and no state of the version, so none is served (Coverage counts it with text), file_withheld, its rights withhold its text (its disposition: the rights disposition by its wire name), file_pdf_only, the file was admitted and is a PDF from which no text is served, or file_no_article_served, the file was admitted and no article of it is served (its dispositions: its legal-content dispositions, joined with \u002B); for a version of which the corpus holds no file, what the publisher\u0027s catalogue states of it, never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason and disposition are the act as published\u0027s, else the work\u0027s first version\u0027s",
+        "record_address": "/lu-legilux/loi-1991-08-10-n5",
+        "record_evidence_sha256s": [
+          "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        ],
+        "record_kind": "catalogue_only",
+        "retained_transport_evidence": "none",
+        "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index and the files the corpus holds, as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else the work\u0027s first version; official_source is the publisher\u0027s PDF file of that version\u0027s French text where the catalogue names one, else the same identity; retained_transport_evidence is the receipt of that version\u0027s file\u0027s body where the corpus holds one, else none; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act as published\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; each is a list, empty when the catalogue states none and for a work the catalogue names no act as published of (a code, whose versions\u0027 own facts are not the act\u0027s); in_force_status is never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the French title the catalogue states of the act, else of the work\u0027s first version, or null; versions lists the work\u0027s versions in the catalogue and in the corpus (as published, consolidated, a code\u0027s), each with its kind, the reason no text of it is served here (reason_rule) and that reason\u0027s disposition or dispositions, or null; record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+        "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+        "title_language": "fra",
+        "version_dispositions": [
+          null
+        ],
+        "version_kinds": [
+          "as_published"
+        ],
+        "version_reasons": [
+          "catalogue_licence_scl"
+        ],
+        "versions": [
+          "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+        ],
+        "what_would_answer": [
+          "new_official_observation"
+        ],
+        "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+        "work_key": "loi-1991-08-10-n5"
+      },
+      "produced_by": [
+        "dossier",
+        "evidence_bundle",
+        "search"
+      ]
+    },
+    {
+      "code": "text_withheld",
+      "more_payloads": [
+        {
+          "content_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+          "language": "fra",
+          "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+          "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+          "rights_disposition": "non_admitting_licence_scl",
+          "rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+          "source_outcome": "acquired",
+          "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+          "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+        }
+      ],
+      "optional_payload_keys": [
+        "celex",
+        "class",
+        "evidence",
+        "language",
+        "permalink",
+        "publisher",
+        "reason",
+        "rights_disposition",
+        "source_outcome",
+        "stable_coordinate",
+        "state_sha256",
+        "state_sha256s",
+        "work_key"
+      ],
+      "payload": {
+        "celex": null,
+        "class": "lu_text_names_person",
+        "content_sha256": "4bd80dcb9a65b2583379514a891ad9ba543ae5df5f307c507be19521ec0c3d8b",
+        "evidence": [
+          "birth_date",
+          "birth_place",
+          "domicile",
+          "person_named"
+        ],
+        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+        "publisher": "lu-legilux",
+        "reason": "names_private_individuals",
+        "rule": "R92: this work names private individuals, by its class or by what R92\u0027s measurement found in its served text or titles; Lex points to the publisher: its text and titles are not served, searched, quoted or exported, it is kept out of search engines, and its identity, hashes and official link stay",
+        "state_sha256s": [
+          "4bd80dcb9a65b2583379514a891ad9ba543ae5df5f307c507be19521ec0c3d8b"
+        ],
+        "work_key": "loi-1991-08-10-n3"
+      },
+      "produced_by": [
+        "evidence_bundle"
+      ]
+    }
+  ],
+  "publisher": "lu-legilux",
+  "schema": "lex-v3-refusal-payload-samples/1"
+}

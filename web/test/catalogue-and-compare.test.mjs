@@ -26,9 +26,9 @@ import { MAX_EDITS, sidesOf, wordDiff, wordTokens } from "../scripts/word-diff.m
 import { compareOfQuery, compareQueryOf, sitePageFor } from "../scripts/permalinks.mjs";
 import { INITIAL_ANSWER_ID } from "../scripts/initial-answer.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
-const payloads = JSON.parse(await readFile(new URL("../../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const payloads = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (operation, scenarioStart) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === operation && candidate.scenario.startsWith(scenarioStart));
   assert.ok(entry, `the census holds the ${operation} envelope "${scenarioStart}..."`);

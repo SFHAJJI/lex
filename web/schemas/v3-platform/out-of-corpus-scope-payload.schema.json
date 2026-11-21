@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-out_of_corpus_scope-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_identifier": {
+      "type": "string"
+    },
+    "official_source": {
+      "type": "string",
+      "pattern": "^https://\\S{1,2048}$"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "who_to_ask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string",
+          "pattern": "^https://\\S{1,2048}$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "information"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "link",
+        "role"
+      ]
+    }
+  },
+  "required": [
+    "requested_identifier",
+    "official_source",
+    "reason",
+    "who_to_ask"
+  ]
+}

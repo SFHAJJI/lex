@@ -1,0 +1,24 @@
+{
+ "made": "2026-11-22",
+ "by_type": [
+  {"type": "LOI", "listed": 9120, "held": 3254, "not_held": 5866, "in_force_listed": 6010, "in_force_held": 2702},
+  {"type": "RGD", "listed": 15524, "held": 5140, "not_held": 10384, "in_force_listed": 11820, "in_force_held": 4609},
+  {"type": "CODE", "listed": 8, "held": 8, "not_held": 0},
+  {"type": "a_type_of_tomorrow", "listed": 3, "held": 1}
+ ],
+ "in_force": {"held": 7311, "listed": 17830},
+ "not_held_named": [
+  {"name": "Solvabilité II (directive 2009/138/CE)", "why": "texte de l’Union, transposé par la loi du 7 décembre 2015"},
+  {"name": "Règlement délégué (UE) 2015/35"},
+  "Code de la sécurité sociale (publié seulement en PDF)"
+ ],
+ "date_floor": [
+  {"title": "Code du travail", "first_held": "2020-11-01", "versions_held": 29, "versions_listed": 31},
+  {"title": "Code civil", "first_held": "2016-09-01", "versions_held": 18}
+ ],
+ "annexes_pdf_only": {"count": 41, "items": ["Annexe I du règlement grand-ducal du 11 novembre 2016"]},
+ "sources": [
+  {"line": "Legilux (data.legilux.public.lu): textes consolidés et Journal officiel, licence indiquée par l’éditeur pour chaque fichier."},
+  "Office des publications de l’Union européenne (publications.europa.eu)."
+ ]
+}

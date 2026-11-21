@@ -32,6 +32,7 @@ import {
 import { OUT_OF_SCOPE_HOSTS } from "../scripts/routes.mjs";
 import { sitePageFor } from "../scripts/permalinks.mjs";
 import { readDevelopersContracts, readPlatformSchemas } from "../scripts/developers-contracts.mjs";
+import { OPENAPI_FILE, openApiDocument } from "../scripts/openapi.mjs";
 import { SHOWN_NOWHERE, shownOnPage } from "../scripts/legal-pages.mjs";
 import { LIVE_CHROME, entriesOf, fillCounted, liveChrome } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
@@ -54,7 +55,8 @@ const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"
 /** What a page says, its tags taken out and its entities read. */
 const said = (html) => html.slice(html.indexOf("<body")).replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, "")
   .replaceAll("&#x27;", "'").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
-const mainOf = (html) => html.slice(html.indexOf('<main id="main">'), html.indexOf("</main>"));
+// A V4 page's main carries its class (`<main id="main" class="lx-main">`, How it works and Decisions); the others none.
+const mainOf = (html) => html.slice(html.search(/<main id="main"[ >]/), html.indexOf("</main>"));
 const footerOf = (html) => html.slice(html.indexOf('<footer class="site-footer">'), html.indexOf("</footer>") + "</footer>".length);
 const referenceLinks = (html) => [...footerOf(html).matchAll(/<nav aria-label="([^"]+)" class="reference-nav" data-reference-nav=""><ul>([\s\S]*?)<\/ul><\/nav>/g)]
   .map((match) => ({ label: match[1], links: [...match[2].matchAll(/<a href="([^"]+)"( aria-current="page")?>([^<]+)<\/a>/g)].map((link) => [link[1], link[3], link[2] !== undefined]) }));
@@ -118,8 +120,13 @@ test("the three reference pages are built under each interface language, with th
         } else {
           assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`) && html.includes(`<h1>${escaped(entry.heading)}</h1>`) && html.includes(`<p>${escaped(entry.intro)}</p>`), `${label}: its eyebrow, heading and introduction`);
         }
-        // Readable without scripts: it ships none and asks nothing; never indexed, whatever the release's switch says (R67).
-        assert.ok(!html.includes("<script") && !html.includes("<form"), `${label}: no script, no form`);
+        // Readable without scripts: it ships none and asks nothing; never indexed, whatever the release's switch says (R67). A V4
+        // page (How it works, Decisions) asks nothing either: its header's find field, on a page that ships no script, leads to
+        // the home page's field (a link, no form; R109).
+        const v4 = ["decisions", "evidence"].includes(page.key);
+        assert.equal(html.includes('data-layout="v4"'), v4, `${label}: ${v4 ? "the V4 layout" : "its own look"}`);
+        const forms = [...html.matchAll(/<form[^>]*>/g)].map(([tag]) => tag);
+        assert.ok(!html.includes("<script") && forms.length === 0, `${label}: no script, no form`);
         assert.deepEqual(html.match(/<meta name="robots"[^>]*\/>/g), [NEVER_INDEXED_META], `${label}: never indexed`);
         assert.ok(!html.includes('rel="canonical"'), `${label}: names no canonical address`);
         assert.deepEqual([...html.matchAll(/<link rel="alternate" hrefLang="([^"]+)" href="([^"]+)"\/>/g)].map((match) => [match[1], match[2]]), [
@@ -145,7 +152,7 @@ test("the three reference pages are built under each interface language, with th
         // Each part under its heading, in the table's order.
         const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS]
           : page.key === "decisions" ? app.DECISION_GROUPS.map((group) => group.key)
-          : page.key === "evidence" ? ["quality", "question", "release", "coverage", "cost"]
+          : page.key === "evidence" ? [...app.HOW_IT_WORKS_PARTS]
           : Object.keys(entry.sections);
         assert.deepEqual([...mainOf(html).matchAll(/data-reference-section="([a-z]+)"/gi)].map((match) => match[1]), page.key === "guide" ? [...parts, "glossary"] : parts, `${label}: its parts`);
         // No page of the site gives a contact: no e-mail address, no mail or telephone link, no postcode, in any bytes.
@@ -189,6 +196,10 @@ test("the three reference pages are built under each interface language, with th
           const bytes = Buffer.from(await answer.arrayBuffer());
           const schema = schemas.find((one) => publishedSchemaPath(one.file) === path);
           assert.ok(schema !== undefined && bytes.equals(schema.bytes), `${href}: the schema's bytes`);
+        } else if (path === `/${OPENAPI_FILE}`) {
+          // The API's OpenAPI description (How it works links it): JSON, the document the generator writes.
+          assert.equal(answer.headers.get("content-type"), "application/json; charset=utf-8", `${href}: JSON`);
+          assert.deepEqual(await answer.json(), openApiDocument(await readDevelopersContracts()), `${href}: the generated description`);
         } else {
           assert.equal(answer.headers.get("content-type"), "text/html; charset=utf-8", `${href}: a page`);
           if (REFERENCE_PAGE_PATHS.includes(path)) assert.equal(answer.headers.get("x-robots-tag"), "noindex", `${href}: kept out of search engines`);
@@ -219,13 +230,11 @@ test("every live page's footer links the three reference pages, none of them cur
   for (const [name, html] of Object.entries(pages)) {
     assert.deepEqual(referenceLinks(html), [{ label: copy.reference.menu, links: REFERENCE_PAGES.map((page) => [`/en/${page.file}`, escaped(copy[page.key].title), false]) }], name);
   }
-  const links = /<nav aria-label="[^"]*" class="home-links" data-home-links="">([\s\S]*?)<\/nav>/.exec(pages.home);
-  assert.deepEqual([...links[1].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]), [
-    ["/en/radar.html", copy.site.radar],
-    ["/en/coverage.html", copy.coverage.title],
-    ["/en/developers.html", copy.developers.title],
-    ["/en/help.html", copy.help.title],
-  ], "the specification's list: Changes, Coverage and trust, Developers and Get help");
+  // The V4 Home (2026-11-15): Changes in the menu and under "Changed recently", the coverage page under its line, Developers
+  // and Get help in the footer: the specification's list, each still one click from Home.
+  for (const href of ["/en/radar.html", "/en/coverage.html", "/en/developers.html", "/en/help.html"]) {
+    assert.ok(pages.home.includes(`href="${href}"`), `the home page links ${href}`);
+  }
 });
 
 test("the Developers page is the registry's: every operation, refusal code, verdict and envelope member, in order, each with its words in both languages", () => {
@@ -643,4 +652,73 @@ test("the home page and How to read Lex claim no more than each publisher's page
   for (const language of ["en", "fr"]) {
     assert.ok(LIVE_CHROME[language].home.intro.length > 0 && LIVE_CHROME[language].guide.sections.textless.text.length > 0, language);
   }
+});
+
+test("How it works' first screen follows the recorded answer through its own stages, every value the answer's or a run's (V5How, the owner's brief of 2026-11-15)", async () => {
+  const { HOW_ANSWER_RECORD } = await import("../scripts/how-answer-record.mjs");
+  const { howAnswerStages, compactJson } = await import("../scripts/how-answer.mjs");
+  const { stageRows } = await import("../scripts/assistant-panel.mjs");
+  const { EVALUATION_RECORD } = await import("../scripts/evaluation-record.mjs");
+  const { textHref } = await import("../scripts/text-address.mjs");
+  const copy = liveChrome("en").evidence;
+  const value = HOW_ANSWER_RECORD.envelope.result.value;
+  const html = render("evidence");
+  const main = mainOf(html);
+  // The record is a real answer to the question it names, as served (ask/1's request: the question alone).
+  assert.deepEqual(HOW_ANSWER_RECORD.request, { operation_id: "ask", parameters: { question: value.trace.question } });
+  assert.equal(HOW_ANSWER_RECORD.envelope.verdict, "answer");
+  assert.match(HOW_ANSWER_RECORD.recordedAt, /^2026-11-(?:19|2\d|30)T/);
+  assert.equal(value.trace.plan.schema, "lex-v3-assistant-plan/2", "an answer of the bricks");
+  // The stages are the answer's own, in order: the rows the assistant's panel reads from the same trace. A stage is the AI
+  // model's only when the trace records a call for it; the others are code.
+  const rows = stageRows(value, "en");
+  assert.ok(rows.length >= 5 && rows[0].key === "masking", "the stages of an answer, masking first");
+  assert.deepEqual([...main.matchAll(/data-stage="([a-z]+)"/g)].map((match) => match[1]), rows.map((row) => row.key));
+  assert.equal((main.match(/class="lx-how-tag lx-how-tag-model"/g) ?? []).length, rows.filter((row) => row.model).length, "the model's stages are the calls the trace records");
+  assert.equal((main.match(/class="lx-how-tag">/g) ?? []).length, rows.filter((row) => !row.model).length, "the others are code");
+  assert.deepEqual(rows.filter((row) => row.model).map((row) => row.key), value.trace.plan.bricks.model_calls.map((call) => call.step));
+  for (const row of rows.slice(1)) {
+    // The last stage shows the gates' own counts (below) in place of its one line.
+    if (row.key !== "checks" && row.key !== "composer") assert.ok(main.includes(escaped(row.line)), `${row.key}: its own line`);
+    assert.ok(main.includes(escaped(copy.stageTexts[row.key])), `${row.key}: what the stage is`);
+  }
+  assert.ok(!main.slice(0, main.indexOf('class="lx-how-more"')).includes("Planner"), "no planner stage: no model plans");
+  const stages = howAnswerStages(HOW_ANSWER_RECORD, "en");
+  assert.deepEqual(stages.rows, rows);
+  assert.ok(main.includes(`quotes: ${value.gates.quotes}, identical`) && main.includes(`sentences outside templates: ${value.gates.non_template_strings}`) && main.includes(`notes shown with the quote: ${value.gates.disclosures}`));
+  // The answer: the rule in the law's own sentence and its cases, the act by its title, never its address; it opens on the
+  // text page at the article, the address the text page's contract gives.
+  const quotes = value.parts.flatMap((part) => part.blocks).filter((block) => block.kind === "quote");
+  assert.equal(stages.answer.kind, "rule");
+  assert.equal(stages.answer.lines, quotes.length);
+  assert.equal(stages.answer.cases, quotes.length - 1, "one line is the rule, the others its cases");
+  assert.ok(main.includes(`(article 39 of « <span lang="fr">Loi du 27 juillet 1997 sur le contrat d&#x27;assurance</span> »), then ${quotes.length - 1} cases the text provides`), "the answer, said from the record");
+  const href = textHref({ identifier: "/lu-legilux/loi-1997-07-27-n10", article: "art_39" }, "en");
+  assert.ok(main.includes(`<a href="${href.replaceAll("&", "&amp;")}" data-open-answer="">${copy.answerOpen}</a>`), "Open this answer");
+  // Never in the main flow (the brief's section 9): no address, no id, no digest on the first screen's words.
+  const words = main.slice(0, main.indexOf('class="lx-how-more"')).replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(words, /\/lu-legilux\/|art_39|[0-9a-f]{40}/, "no address, id or digest said");
+  // The panel: the bar and its legend are the run's counts; the held-out result, the time and the cost the runs'.
+  const dev = EVALUATION_RECORD.dev;
+  const bar = [...main.matchAll(/<rect class="lx-how-bar-part" data-outcome="([a-zA-Z]+)" x="[0-9.]+" y="0" width="([0-9.]+)"/g)];
+  const counts = { right: dev.rightArticle, wrong: dev.wrongArticle, notFound: dev.notFound, wronglyRefused: dev.wronglyRefused, rightBehaviour: dev.rightBehaviour };
+  assert.deepEqual(bar.map((match) => match[1]), Object.keys(counts).filter((key) => counts[key] > 0), "a segment per outcome counted");
+  for (const [, key, width] of bar) assert.ok(Math.abs(Number(width) - (324 * counts[key]) / dev.cases) < 0.1, `${key}: in proportion`);
+  for (const [key, number] of Object.entries(counts)) assert.match(main, new RegExp(`<li data-count="${key}"><strong>${number}</strong>`), key);
+  assert.ok(main.includes(`<h2 id="how-measured">Measured on ${dev.cases} test questions</h2>`));
+  assert.ok(main.includes(`About ${dev.p50.toFixed(1)} s and ${dev.costEur.toFixed(3)} € per answer`), "the median time and the average cost");
+  assert.equal((main.match(/data-decision-link="/g) ?? []).length, 7, "every decision, with what it costs, linked to its row");
+  for (const key of app.DECISION_GROUPS.flatMap((group) => group.cards)) assert.ok(render("decisions").includes(`id="decision-${key}"`), key);
+  // Another answer gives other lines: a masked question, a date read, advice words found.
+  const other = structuredClone(HOW_ANSWER_RECORD);
+  other.envelope.result.value.trace.question = "Mon adresse est ••••, que dit l'article 1er ?";
+  other.envelope.result.value.plan.rendered = [{ template_id: "plan.date_given", facts: [{ kind: "calendar_date", value: "2012-06-01" }] }];
+  other.envelope.result.value.parts[0].cues = [{ function: "advice" }];
+  const read = howAnswerStages(other, "en");
+  assert.equal(read.masked, "Mon adresse est ••••, que dit l'article 1er ?");
+  assert.deepEqual({ ...read.date }, { today: false, date: "2012-06-01" });
+  assert.equal(read.cues, 1);
+  // The printer keeps every member and only chooses the white space.
+  const sample = { a: [1, 2, { b: "c".repeat(90) }], d: { e: true, f: null } };
+  assert.deepEqual(JSON.parse(compactJson(sample, 20)), sample);
 });

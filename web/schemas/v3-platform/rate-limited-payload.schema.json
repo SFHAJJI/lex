@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-rate_limited-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "retry_after": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "retryable": {
+      "const": true
+    }
+  },
+  "required": [
+    "retry_after",
+    "retryable"
+  ]
+}

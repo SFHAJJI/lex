@@ -26,7 +26,7 @@ import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
 import { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } from "../scripts/release-assets.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
+const CARD = readFileSync(new URL("../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const PAGE = Buffer.from("<!doctype html><title>Lex V3</title><p>V3's own page</p>\n");
 const NOT_FOUND_PAGE = Buffer.from("<!doctype html><title>Page introuvable - Lex</title><p>V3's own 404 page</p>\n");
 const CORPUS = "c".repeat(64);

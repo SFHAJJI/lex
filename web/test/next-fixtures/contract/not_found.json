@@ -1,0 +1,180 @@
+{
+ "question": "Combien de boîtes aux lettres une commune doit-elle installer ?",
+ "state": "not_found",
+ "date_used": "2026-11-22",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "context",
+   "article_pk": 96042,
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "label": "Article 1er",
+   "act_title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true
+   },
+   "lines": [
+    1
+   ],
+   "text": [
+    "Au sens de la présente loi, on entend par:"
+   ],
+   "why": null,
+   "anchor": "art_1er"
+  }
+ ],
+ "evidence": {
+  "coverage": "8 535 textes en vigueur détenus, dont 77 textes européens; les règlements communaux ne sont pas détenus.",
+  "terms": [
+   {
+    "term": "boîte aux lettres",
+    "variants": [
+     "boîtes aux lettres",
+     "boite aux lettres"
+    ],
+    "hits": 0
+   },
+   {
+    "term": "commune",
+    "variants": [
+     "communes",
+     "communal"
+    ],
+    "hits": 2140
+   }
+  ],
+  "sweep": {
+   "acts": 31,
+   "articles": 412
+  },
+  "closest": {
+   "article_pk": 96042,
+   "why_not": "parle de contrats d’assurance, pas de boîtes aux lettres"
+  }
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2026-11-22",
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "un montant ou un délai",
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 8535,
+    "kept": 0,
+    "filters": [
+     {
+      "rule": "textes abrogés à la date demandée",
+      "removed": 912,
+      "by": "code"
+     },
+     {
+      "rule": "conventions de branche et règlements de circulation",
+      "removed": 1408,
+      "by": "code"
+     }
+    ],
+    "acts": []
+   },
+   {
+    "level": "detectors",
+    "candidates": [
+     {
+      "article_pk": 96042,
+      "found_by": {
+       "exact": null,
+       "outline": null,
+       "words": null,
+       "meaning": 1
+      },
+      "meaning_only": true
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "aucun article nommé dans la question"
+     }
+    ]
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "candidates": [
+     {
+      "article_pk": 96042,
+      "role": "reject",
+      "reason": "ne parle pas de boîtes aux lettres"
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 6,
+    "read_amount_set_by": "question shape",
+    "lines_quoted": 0
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "aucun mot rare de la question dans les textes détenus",
+    "state": "not_found"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   },
+   {
+    "step": "route",
+    "model": "gpt-6-luna",
+    "ms": 1340,
+    "tokens_in": 3880,
+    "tokens_out": 140
+   }
+  ],
+  "cost_usd": 0.0031,
+  "ms": 2900
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [
+   {
+    "article_pk": 96042,
+    "label": "Article 1er"
+   }
+  ],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9ub3RfZm91bmQ"
+ }
+}

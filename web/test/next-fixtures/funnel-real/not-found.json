@@ -1,0 +1,556 @@
+{
+ "state": "not_found",
+ "outcome": "not_found",
+ "pipeline": "funnel",
+ "question": "Combien de boîtes aux lettres une commune doit-elle installer ?",
+ "date_used": "2026-11-21",
+ "date_said": false,
+ "blocks": [],
+ "missing": null,
+ "not_held": [],
+ "clarify": null,
+ "evidence": {
+  "coverage": "Lex tient 8535 textes: 3254 lois, 5140 règlements grand-ducaux, 8 codes, 77 textes européens. Le catalogue de l'éditeur compte 9048 lois et règlements grand-ducaux; ceux qui ne sont pas tenus ne sont pas cherchés.",
+  "coverage_source": "counts from the store (data/coverage.json not written yet)",
+  "terms": [
+   {
+    "term": "boites",
+    "variants": [
+     "boite*"
+    ],
+    "hits": 137
+   },
+   {
+    "term": "lettres",
+    "variants": [
+     "lettr*"
+    ],
+    "hits": 3564
+   },
+   {
+    "term": "commune",
+    "variants": [
+     "commu*"
+    ],
+    "hits": 23840
+   },
+   {
+    "term": "installer",
+    "variants": [
+     "instal*"
+    ],
+    "hits": 3495
+   },
+   {
+    "term": "boite",
+    "variants": [
+     "boite*"
+    ],
+    "hits": 137
+   }
+  ],
+  "sweep": {
+   "acts": 7,
+   "articles": 7,
+   "articles_in_the_texts_picked": null,
+   "grade": "weak: the terms appear together in some articles"
+  },
+  "closest": null
+ },
+ "list": null,
+ "see_also": [],
+ "notes": [],
+ "checks": {
+  "exact_path": false,
+  "found_by_outline": false,
+  "found_by_words": false,
+  "meaning_only": false,
+  "list_complete_by_structure": null,
+  "references_followed": 0,
+  "conflicting_evidence": false
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "language",
+     "value": "fr",
+     "by": "code"
+    },
+    {
+     "name": "date",
+     "value": {
+      "from": "2026-11-21",
+      "to": "2026-11-21",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "by": "code"
+    },
+    {
+     "name": "named_articles",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "named_acts",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "quantities",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "unplaced",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_resolved",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "acts_named_not_held",
+     "value": [],
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "value",
+     "by": "model"
+    },
+    {
+     "name": "french",
+     "value": "Combien de boîtes aux lettres une commune doit-elle installer ?",
+     "by": "model"
+    },
+    {
+     "name": "legal_terms",
+     "value": [
+      "commune",
+      "boîte aux lettres"
+     ],
+     "by": "model"
+    },
+    {
+     "name": "in_scope",
+     "value": true,
+     "by": "model"
+    },
+    {
+     "name": "jurisdiction",
+     "value": "luxembourg_or_eu",
+     "by": "model"
+    },
+    {
+     "name": "exclusions",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "parts",
+     "value": [],
+     "by": "model"
+    },
+    {
+     "name": "vague",
+     "value": false,
+     "by": "model"
+    },
+    {
+     "name": "personal_case",
+     "value": false,
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 34,
+    "considered_lines": 45,
+    "kept": 0,
+    "shown_to_model": 24,
+    "filters": [
+     {
+      "rule": "ended_before_the_date_asked",
+      "removed": 5,
+      "by": "code"
+     }
+    ],
+    "sources": {
+     "named": 0,
+     "transposes": 0,
+     "lines_words": 0,
+     "lines_meaning": 12,
+     "articles_meaning": 20,
+     "articles_words": 15
+    },
+    "lines": [
+     {
+      "id": "T1",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "book_2",
+      "found_by": {
+       "lines_meaning": 1
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T2",
+      "act_id": "/eli/etat/leg/rgd/2019/12/20/a883",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 2,
+       "articles_words": 1
+      },
+      "tally": 0,
+      "line_source": "title only (no routing line yet)"
+     },
+     {
+      "id": "T3",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "book_1",
+      "found_by": {
+       "lines_meaning": 2
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T4",
+      "act_id": "/eli/etat/leg/rgd/2023/02/08/a87",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 2
+      },
+      "tally": 0,
+      "line_source": "title only (no routing line yet)"
+     },
+     {
+      "id": "T5",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_13",
+      "found_by": {
+       "lines_meaning": 3
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T6",
+      "act_id": "/eli/etat/leg/loi/1864/12/23/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 3
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T7",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_15",
+      "found_by": {
+       "lines_meaning": 4
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T8",
+      "act_id": "/eli/etat/leg/loi/1963/07/10/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 4
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T9",
+      "act_id": "/eli/etat/leg/loi/1886/04/28/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 4
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T10",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_11",
+      "found_by": {
+       "lines_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T11",
+      "act_id": "/eli/etat/leg/rgd/1998/05/26/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 5
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T12",
+      "act_id": "/eli/etat/leg/rgd/1990/10/08/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 13,
+       "articles_words": 5
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T13",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_16",
+      "found_by": {
+       "lines_meaning": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T14",
+      "act_id": "/eli/etat/leg/loi/2012/12/26/n6",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T15",
+      "act_id": "/eli/etat/leg/rgd/1979/02/12/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 6
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T16",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_18",
+      "found_by": {
+       "lines_meaning": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T17",
+      "act_id": "/eli/etat/leg/tc/2011/07/18/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 7
+      },
+      "tally": 0,
+      "line_source": "title only (no routing line yet)"
+     },
+     {
+      "id": "T18",
+      "act_id": "/eli/etat/leg/rgd/2012/12/26/n14",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 7
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T19",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_14",
+      "found_by": {
+       "lines_meaning": 8
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T20",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "title_12",
+      "found_by": {
+       "lines_meaning": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T21",
+      "act_id": "/eli/etat/leg/loi/1992/08/10/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_meaning": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T22",
+      "act_id": "/eli/etat/leg/rgd/1974/02/19/n1",
+      "node_id": "",
+      "found_by": {
+       "articles_words": 9
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T23",
+      "act_id": "/eli/etat/leg/code/civil",
+      "node_id": "book_3",
+      "found_by": {
+       "lines_meaning": 10
+      },
+      "tally": 0,
+      "line_source": "model:gpt-4.1-mini, draft"
+     },
+     {
+      "id": "T24",
+      "act_id": "/eli/etat/leg/tc/2011/02/17/n1",
+      "node_id": "titre_2",
+      "found_by": {
+       "articles_meaning": 10
+      },
+      "tally": 1,
+      "line_source": "model:gpt-4.1-mini, draft"
+     }
+    ],
+    "acts": [],
+    "missing_text": "Loi du 26 décembre 2012 sur les services postaux",
+    "ms": 1205
+   },
+   {
+    "level": "detectors",
+    "by": "code+embedding",
+    "candidates": [],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "no article named in the question"
+     },
+     {
+      "detector": "outline",
+      "why": "no node read whole: "
+     }
+    ],
+    "combo": false
+   },
+   {
+    "level": "read",
+    "by": "code",
+    "articles_read": 0,
+    "read_amount_set_by": "question shape (detectors, budget)",
+    "lines_quoted": 0
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "nothing_to_read",
+    "state": "not_found"
+   }
+  ],
+  "calls": [
+   {
+    "step": "embed_question",
+    "model": "text-embedding-3-large",
+    "ms": 572,
+    "tokens_in": 16,
+    "tokens_out": 0,
+    "tries": 1
+   },
+   {
+    "step": "understand",
+    "model": "gpt-6-luna",
+    "ms": 1442,
+    "model_ms": 1442,
+    "queue_ms": 0,
+    "tokens_in": 527,
+    "tokens_out": 82,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   },
+   {
+    "step": "corpus",
+    "model": "gpt-6-luna",
+    "ms": 989,
+    "model_ms": 989,
+    "queue_ms": 0,
+    "tokens_in": 3582,
+    "tokens_out": 29,
+    "tries": 1,
+    "fallback": false,
+    "prompt_version": "funnel-v1"
+   }
+  ],
+  "cost_usd": 0.00056,
+  "ms": 2648,
+  "model_calls": 2,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "queue_ms": 0
+ },
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "routing": "2026-11-21T15:01:41"
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "corpus": "gpt-6-luna",
+   "walk": "gpt-4.1-mini",
+   "arbiter": "gpt-4.1-mini",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol"
+  },
+  "effort": {
+   "gpt-6-luna": "low",
+   "gpt-6.2-sol": "low"
+  },
+  "prompts": {
+   "version": "funnel-v1"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-21",
+    "to": "2026-11-21",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "value",
+   "french": "Combien de boîtes aux lettres une commune doit-elle installer ?",
+   "legal_terms": [
+    "commune",
+    "boîte aux lettres"
+   ],
+   "exclusions": [],
+   "personal_case": false,
+   "jurisdiction": "luxembourg_or_eu"
+  },
+  "candidates": [],
+  "read": [],
+  "replay": "eNqtVUty4zYQvQoKm_xkh6Ik26MsssjWN5hKsSCiJWIMAjQ-klxTc594k0voYnkNSipaqanKIhsJaLJ_771ufpV7uZ7P5CDXcpudIytnssXF-lbxWU_Ow_761t1-DsMr7n_4fmPICU1i409_J4pC5aOwlFLAOTsSre97_tfepDuyloRxMSkcgvidc2TEqav64W4-v6s5sI5yvVU20kziJJ1PzdZnp_EojPfOuF2TfBNIsXUj15__nEnXjf-9XLtsLVqxl9P1QHL9VbZ-T0HtcJbPdBQJHSTxtFqsRKIjeliLRb1aCutNnInVfFmJcPprZ6nHe1HsgnL6TucWnc7EExrUhPceH8_egnLww-mdXLwXzwBAoVu_y8Qo2R9O79okvMLADInEp2r5VFIJSt_N85toCbi-ZiMAZfSod1ARCV2OHyxtR6HtTu_xnqk899lEn0PL7bbAEaG3wfcidfBLPpD4UaPEXy9v339BNAGUxSGYhBTijdJPCJco9CDk89dyQrQNKKWIJ3sVjEJgPByNP0vw0Bm2zBeP32ZXl7MybnyKdeKzWD0sJ05nCd04FevEqV48LauJ11VmN36jfZpt-Wk18SsN_IemcIkHooEVpVq2Ps6kCsm0lj5eGuMaoN2wPmIzmPaF9EWQYFkzMwdSL-vCSYFZqGEgFUTyO4IxYGhAck_imuAb69tHimkMhfuguBar3C6P6t5y7yC3qJ5Jvx215G8tqMc4GLV6K5Qf06XSzh_K9AkOyPVwsa8ZBRjvULpnF1RxMTXpbeAi9spmxnMbyLXd_7M0LO2UbS6CnAhkDDiNx6TRsbU5oqY4boiBAjSOCK2KdF02X3IwUZuWi2ep5iP1G0zOrvGhocy9vYz-QY__dl_GwdIeq5N1GobM2t68lZumX3r8lK2K3EZTYOIXy-m9scaxXpYrhKcBcFcQFsB2vOFG_3UNl62xaHgcwJAtQ0tOI8CGtpjiojCmplGR9YUqqcdII-FqUpEsui37ILIqnOr5FeRM2DdxYEWVaymrOfigp_eelMPyxQTUE31frXU1sZ595xiu84CU7WxiLOu7SEs-eyN0FvWD0Kf3FoBjH9XVvBYRKxJRRKSwNyhWoLQEXtEYkz6vqzK0F-w1JWqxzT7Cj3ikNZeGpl8MZkoX_C5vM4ZH1IbHh-5tlPe5flGQudW55JwTb58TAzP1d0gs-MskDp23tBYFckh0469Sc1Ce04bpYnSnjVy-aVfCJoiWZ0wGHxrV8zZvIqWmvH2pUcRODbzVL5DMxCbr3bjERxpfs09n2gN_Wgs3H-FsDQ_MTSVn3f37EwxqEn34WHPTTFT9sHyayRw5231VVasHtF_S_QOOldzO"
+ }
+}

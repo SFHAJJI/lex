@@ -20,8 +20,8 @@ import * as app from "../.react-build/app.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 import { compareOutcome } from "../scripts/live-compare.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
-const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const answers = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'", "&#39;": "'" };
 const decode = (text) => text.replace(/&(?:amp|lt|gt|quot|#x27|#39);/g, (entity) => ENTITIES[entity]);
@@ -78,6 +78,10 @@ const TODAY_WITH_ITS_DATE = /\b(?:Today in Luxembourg: |today in Luxembourg is |
 const withoutTodayAndItsDate = (text) => text.replace(TODAY_WITH_ITS_DATE, "");
 const NUMERIC_NOT_ISO = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b/;
 const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+// The owner's brief of 2026-11-15 (section 9: "Dates are dd/mm/yyyy"): the V4 pages write a date day first in both
+// languages. That one form is explicit (two-digit day and month, four-digit year) and is held below to a calendar date;
+// every other local numeric form (3/8/26, 03.08.2026) is still refused.
+const DAY_FIRST = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
 
 /**
  * A render without the publisher's own words: its quotations (an article quoted whole, and a search result's extract, the
@@ -89,8 +93,13 @@ const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
 const withoutQuotations = (markup) => markup
   .replace(/<blockquote[\s\S]*?<\/blockquote>/g, "")
   .replace(/<q(?:\s[^>]*)?>[\s\S]*?<\/q>/g, "")
-  .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "")
-  .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "");
+  // Text marked in its own language, wherever the attribute stands (the dock's example questions, 2026-11-15).
+  .replace(/<span(?:\s[^>]*)?\slang="[^"]*"[^>]*>[\s\S]*?<\/span>/g, "")
+  .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "")
+  // The assistant's scope sentence (2026-11-19), in the words it was ordered in: "Today Lex answers on Luxembourg insurance
+  // law…" / "Lex répond aujourd’hui sur…". Its "today" says what this release covers; it states no date (this pattern leaves
+  // the sentence out only while it holds no digit). Reworded without the word, this line goes.
+  .replace(/<p class="lx-dock-scope" data-dock-scope="">[^<\d]*<\/p>/g, "");
 
 test("every date a live screen shows is an explicit calendar date, never relative and never a local format", async () => {
   const texts = [...(await renders()).map((one) => [`${one.name}: ${one.scenario}`, textOf(withoutQuotations(one.markup))]),
@@ -101,9 +110,13 @@ test("every date a live screen shows is an explicit calendar date, never relativ
   for (const [label, text] of texts) {
     assert.doesNotMatch(withoutTodayAndItsDate(text), RELATIVE, `${label} says a date relative to now`);
     assert.doesNotMatch(text, MONTHS, `${label} names a month rather than writing the date`);
-    assert.doesNotMatch(text, NUMERIC_NOT_ISO, `${label} writes a date in a local numeric format`);
+    assert.doesNotMatch(text.replace(DAY_FIRST, ""), NUMERIC_NOT_ISO, `${label} writes a date in a local numeric format`);
     for (const [date, year, month, day] of text.matchAll(ISO)) {
       const parsed = new Date(`${date}T00:00:00Z`);
+      assert.ok(!Number.isNaN(parsed.valueOf()) && parsed.getUTCFullYear() === Number(year) && parsed.getUTCMonth() + 1 === Number(month) && parsed.getUTCDate() === Number(day), `${label}: ${date} is not a calendar date`);
+    }
+    for (const [date, day, month, year] of text.matchAll(DAY_FIRST)) {
+      const parsed = new Date(`${year}-${month}-${day}T00:00:00Z`);
       assert.ok(!Number.isNaN(parsed.valueOf()) && parsed.getUTCFullYear() === Number(year) && parsed.getUTCMonth() + 1 === Number(month) && parsed.getUTCDate() === Number(day), `${label}: ${date} is not a calendar date`);
     }
   }
@@ -147,12 +160,34 @@ test("every quotation is the publisher's whole article text: bracket tables and 
 
 test("no form on a live page takes a personal fact: only the declared fields, each labelled from the table", () => {
   const form = liveChrome().form;
-  const declared = new Set([form.workIdentifier, form.workIdentifierOptional, form.phrase, form.date, form.from, form.to, form.articleId, form.language]);
+  // The Changes page's period is two dates too (the owner's brief of 2026-11-15, V4Changes), labelled "from" and "to".
+  const declared = new Set([form.workIdentifier, form.workIdentifierOptional, form.phrase, form.date, form.from, form.to, form.articleId, form.language, liveChrome().radar.from, liveChrome().radar.to]);
   for (const [name, render] of Object.entries(PAGES)) {
     const markup = render().replaceAll("<!-- -->", "");
-    const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]);
+    // The V4 header's "Find a text" (the driver's shell, every V4 page): one search field, a plain form to the search page.
+    const header = [...markup.matchAll(/<form [^>]*data-header-find=""[\s\S]*?<\/form>/g)].map((match) => match[0]);
+    for (const find of header) assert.deepEqual(find.match(/<(input|select|textarea)\b[^>]*>/g).map((control) => /type="search"/.test(control)), [true], `${name}: the header's find is one search field`);
+    // The dock's question box (the owner's brief of 2026-11-15) is the assistant's, held by its own tests (`assistant-dock`).
+    const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]).filter((one) => !one.includes('data-header-find=""') && !one.includes('class="lx-dock-ask"'));
     if (name === "coverage") {
       assert.equal(forms.length, 0, "Trust and Coverage asks nothing of the reader");
+      continue;
+    }
+    // A V4 page (the owner's brief of 2026-11-15) carries the header's find field, and Home its own: each a field labelled
+    // by its `for`, from the table (the site's or Home's "Find a text"), text only.
+    // Changes keeps the one form of the generic rule below (its period, its title filter and its switch).
+    if (markup.includes('data-layout="v4"') && name !== "radar") {
+      const v4Declared = new Set([liveChrome().site.findLabel, liveChrome().home.findLabel]);
+      assert.ok(header.length === 1 || markup.includes('class="lx-find lx-find-link"'), `${name}: the header's field`);
+      for (const one of forms) {
+        const controls = [...one.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]*)<\/label><input id="([^"]+)"([^>]*)>/g)];
+        assert.equal(controls.length, (one.match(/<(input|select|textarea)\b/g) ?? []).length, `${name}: every control has its label`);
+        for (const [, target, label, id, attributes] of controls) {
+          assert.equal(target, id, `${name}: "${label}" labels its own field`);
+          assert.ok(v4Declared.has(decode(label).trim()), `${name}: "${label}" is a declared field`);
+          assert.match(attributes, /type="(text|search)"/, `${name}: "${label}" is text`);
+        }
+      }
       continue;
     }
     assert.equal(forms.length, 1, `${name}: one form`);

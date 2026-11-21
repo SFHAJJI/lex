@@ -17,7 +17,7 @@ import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
 import { ASSETS, RELEASE_MANIFEST, RELEASE_SIGNATURE, SIGNED_RELEASE_SCHEMA, imageSignatureAsset, publishRelease, releaseFailures, releaseVersion } from "../scripts/release-assets.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const CARD = readFileSync(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url));
+const CARD = readFileSync(new URL("../schemas/v3-platform/evaluation-card.json", import.meta.url));
 const SOURCE = { epoch: 1790799760, from: "commit", commit: "23af798d9c78602726280978edcedf07f9408e98", clean: true };
 
 /** A small image layout archive and its manifest digest: the API and, unless `servedCard` is null, the card at its route. */

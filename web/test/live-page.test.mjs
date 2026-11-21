@@ -18,7 +18,7 @@ import { Document, DossierTitles, LIVE_CONTRACT, LIVE_MARKER, SYNTHETIC_MARKER, 
 import { MAXIMUM_REQUEST_BYTES, createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 
 test("the live page is the loading state under the live banner, with its own script and the platform's contract", () => {
   const html = renderLiveCoveragePage();
@@ -26,18 +26,21 @@ test("the live page is the loading state under the live banner, with its own scr
   assert.match(html, /data-preview-state="live-coverage"/);
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`));
   assert.ok(!html.includes(`data-synthetic="${SYNTHETIC_MARKER}"`), "the synthetic banner would misdescribe a live answer");
-  assert.match(html, /id="live-coverage-root"><div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="loading">/,
-    "the answer is written into a live region the server already rendered, so a screen reader hears it arrive");
-  assert.match(html, /<script src="\/en\/client-live.js" defer=""><\/script>/);
+  // Release-a (21/11/2026): the page is the new engine's counts and what it does not hold, drawn by the side build's script;
+  // the earlier platform's coverage answer and its script are gone.
+  assert.match(html, /<div id="lx-next-corpus"><section aria-labelledby="next-corpus-heading" data-next-section="corpus" data-next-state="loading">/,
+    "the counts are drawn into a root the server already rendered in its loading state");
+  assert.match(html, /<script src="\/en\/client-live-next.js" defer=""><\/script>/);
+  assert.ok(!html.includes("client-live.js\""), "the earlier coverage answer's script is not loaded");
   assert.ok(!html.includes('src="/client.js"'), "the preview pages' bundle is not this page's");
   assert.deepEqual(LIVE_CONTRACT, census.contract, "the contract is the census's, as the platform rendered it");
   assert.match(html, /<title>Trust and Coverage - Lex<\/title>/, "the title does not call a live page a preview");
 });
 
-test("the tree the browser hydrates is the tree the server rendered (review of #765)", () => {
+test("the coverage page has no earlier coverage answer left to hydrate (release-a, 21/11/2026)", () => {
   const html = renderLiveCoveragePage();
-  const root = html.slice(html.indexOf('<div id="live-coverage-root">') + '<div id="live-coverage-root">'.length);
-  assert.ok(root.startsWith(`${renderToString(liveCoverageTree())}</div>`), "a hydration that changed the markup would re-render silently");
+  assert.ok(!html.includes('<div id="live-coverage-root">'), "the earlier platform's coverage answer is not drawn");
+  assert.ok(renderToString(liveCoverageTree()).length > 0, "its tree still renders for the code that imports it");
 });
 
 test("the search page's server render is the tree the browser hydrates", () => {
@@ -115,7 +118,7 @@ test("the live build writes its own directory, embeds the contract and nothing e
     assert.match(index, new RegExp(`data-live="${LIVE_MARKER}"`));
     for (const asset of ["styles.css", "favicon.svg"]) await readFile(join(destination, asset));
     assert.ok(bundle.includes(census.contract.registry_sha256), "the contract is embedded");
-    assert.ok(index.includes("data-evaluation-card") && index.includes("THE MOUNT IS A FIXTURE"), "the page carries the evaluation card (ruling 2)");
+    assert.ok(!index.includes("data-evaluation-card") && !index.includes("THE MOUNT IS A FIXTURE"), "the page carries no fixture's evaluation card (release-a, 21/11/2026)");
     assert.ok(!bundle.includes("THE MOUNT IS A FIXTURE"), "the card is the server's render alone: no script carries it");
     for (const entry of census.envelopes) {
       assert.ok(!bundle.includes(entry.scenario), `the census envelope "${entry.scenario}" is not shipped to the browser`);
@@ -457,7 +460,10 @@ test("no live page says synthetic in its text, since a live page may stand over 
     const html = render();
     const text = html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " ");
     assert.doesNotMatch(text, /synthetic/i, `${name}: the visible text never calls the page synthetic`);
-    assert.match(html, /<div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="(idle|loading)">/,
+    // The V4 search results (2026-11-15): a polite live region the server renders, saying their idle sentence.
+    if (name === "search") assert.match(html, /<div class="lx-find-results" aria-live="polite" data-find-state="idle"><h1 class="lx-find-heading">[^<]+<\/h1><p class="lx-find-status">/, `${name}: the idle state, rendered by the server`);
+    else if (name === "coverage") assert.match(html, /data-next-section="corpus" data-next-state="loading"/, `${name}: the counts' loading state, rendered by the server`);
+    else assert.match(html, /<div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="(idle|loading)">/,
       `${name}: the answer's live region is rendered by the server, before any answer arrives`);
     assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), `${name}: under the live banner`);
   }

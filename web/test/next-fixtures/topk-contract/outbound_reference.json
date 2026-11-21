@@ -1,0 +1,766 @@
+{
+ "question": "L'assureur incendie peut-il m'obliger à assurer chez lui l'augmentation des montants assurés ?",
+ "row": {
+  "question": "L'assureur incendie peut-il m'obliger à assurer chez lui l'augmentation des montants assurés ?",
+  "language": "fr",
+  "date": {
+   "from": "2026-11-20",
+   "to": "2026-11-20",
+   "grain": "day",
+   "text": null,
+   "how": "no date in the question: today"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 1,
+   "de": 0,
+   "en": 0,
+   "lb": 0
+  },
+  "question_type": "rule",
+  "personal_case": true,
+  "french": "L'assureur incendie peut-il m'obliger à assurer chez lui l'augmentation des montants assurés ?",
+  "legal_terms": [
+   "assurance incendie",
+   "montants assurés",
+   "obligation d'assurance"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_77",
+   "date": "2025-11-25",
+   "why": null,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 77",
+   "number": "77",
+   "heading": "Clauses d'exclusivité",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section I - L'assurance contre l'incendie et les risques accessoires",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96131,
+   "lines": [
+    1,
+    2,
+    4
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "L'assureur ne peut obliger le preneur d'assurance à faire assurer par lui:",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "l'augmentation des montants assurés;",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "L'alinéa 1er ne porte pas atteinte à l'application de l'article 66, alinéa 2.",
+     "label": null
+    }
+   ],
+   "text": [
+    "L'assureur ne peut obliger le preneur d'assurance à faire assurer par lui:",
+    "l'augmentation des montants assurés;",
+    "L'alinéa 1er ne porte pas atteinte à l'application de l'article 66, alinéa 2."
+   ],
+   "label": "Article 77",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  },
+  {
+   "role": "related",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_66",
+   "date": "2025-11-25",
+   "why": "désigné par la lecture",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 66",
+   "number": "66",
+   "heading": "Fixation du montant assuré",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section I - Dispositions communes à toutes les assurances de choses > Sous-section I - Valeur assurable",
+   "version_from": "2025-11-25",
+   "version_to": null,
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 96120,
+   "lines": [
+    2
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 2,
+     "text": "Les parties peuvent convenir que ce montant sera adapté de plein droit selon les critères qu'elles déterminent.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Les parties peuvent convenir que ce montant sera adapté de plein droit selon les critères qu'elles déterminent."
+   ],
+   "label": "Article 66",
+   "version": {
+    "id": null,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 96131,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 77",
+   "heading": "Clauses d'exclusivité",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section I - L'assurance contre l'incendie et les risques accessoires",
+   "how": "keywords+meaning+outline",
+   "score": 0.6261
+  },
+  {
+   "label": "A2",
+   "article_pk": 96085,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 42",
+   "heading": "Augmentation tarifaire",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "how": "keywords+meaning",
+   "score": 0.5783
+  },
+  {
+   "label": "A3",
+   "article_pk": 96132,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 78",
+   "heading": "Clauses de remploi",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section I - L'assurance contre l'incendie et les risques accessoires",
+   "how": "meaning+outline",
+   "score": 0.5652
+  },
+  {
+   "label": "A4",
+   "article_pk": 96128,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Art. 74.",
+   "heading": "Garanties accessoires",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section I - L'assurance contre l'incendie et les risques accessoires",
+   "how": "meaning+outline",
+   "score": 0.4942
+  },
+  {
+   "label": "A5",
+   "article_pk": 41607,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 32-1",
+   "heading": null,
+   "path": "Partie VI Dispositions diverses",
+   "how": "outline",
+   "score": 0.4348
+  },
+  {
+   "label": "A6",
+   "article_pk": 41605,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 31.",
+   "heading": null,
+   "path": "Partie VI Dispositions diverses",
+   "how": "outline",
+   "score": 0.3804
+  },
+  {
+   "label": "A7",
+   "article_pk": 80022,
+   "act_title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entreprises d'assurances et de réassurances de droit luxembourgeois - aux obligations en matière d'établissement et de publicité des documents comptables des succursales d'entreprises d'assurances de droit étranger.",
+   "article": "ARTICLE 82",
+   "heading": null,
+   "path": "PARTIE II. COMPTES ANNUELS > Chapitre 8 Contenu de l'annexe",
+   "how": "keywords",
+   "score": 0.366
+  },
+  {
+   "label": "A8",
+   "article_pk": 96120,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 66",
+   "heading": "Fixation du montant assuré",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section I - Dispositions communes à toutes les assurances de choses > Sous-section I - Valeur assurable",
+   "how": "meaning",
+   "score": 0.5706
+  },
+  {
+   "label": "A9",
+   "article_pk": 41609,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 32-3",
+   "heading": null,
+   "path": "Partie VI Dispositions diverses",
+   "how": "outline",
+   "score": 0.3618
+  },
+  {
+   "label": "A10",
+   "article_pk": 96127,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 73",
+   "heading": "Garantie normale",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section I - L'assurance contre l'incendie et les risques accessoires",
+   "how": "outline",
+   "score": 0.4826
+  },
+  {
+   "label": "A11",
+   "article_pk": 41608,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 32-2",
+   "heading": null,
+   "path": "Partie VI Dispositions diverses",
+   "how": "outline",
+   "score": 0.3582
+  },
+  {
+   "label": "A12",
+   "article_pk": 96098,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 55",
+   "heading": "Répartition de la charge du sinistre en cas de pluralité de contrats",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre III - Dispositions propres aux assurances à caractère indemnitaire",
+   "how": "keywords",
+   "score": 0.4786
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general"
+  ],
+  "passages_in_those_kinds": 71717,
+  "words": {
+   "assureur": 9723,
+   "incendie": 747,
+   "obliger": 10485,
+   "assurer": 9723,
+   "chez": 440,
+   "augmentation": 533,
+   "montants": 5042,
+   "assures": 9723,
+   "assurance": 5364,
+   "obligation": 9965
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entrepris",
+   "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en mat"
+  ],
+  "period": [
+   "2026-11-20",
+   "2026-11-20"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "personal_case",
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2026-11-20",
+      "to": "2026-11-20",
+      "grain": "day",
+      "text": null,
+      "how": "no date in the question: today"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "rule",
+     "personal_case": true,
+     "french": "L'assureur incendie peut-il m'obliger à assurer chez lui l'augmentation des montants assurés ?",
+     "legal_terms": [
+      "assurance incendie",
+      "montants assurés",
+      "obligation d'assurance"
+     ],
+     "in_scope": true
+    },
+    "ms": 2845,
+    "tokens_in": 270,
+    "tokens_out": 168,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "assureur",
+      "incendie",
+      "obliger",
+      "assurer",
+      "chez",
+      "augmentation",
+      "montants",
+      "assures"
+     ],
+     "terms_a_statute_would_use": [
+      "assurance",
+      "obligation"
+     ],
+     "articles_holding_each_word": {
+      "assureur": 9723,
+      "incendie": 747,
+      "obliger": 10485,
+      "assurer": 9723,
+      "chez": 440,
+      "augmentation": 533,
+      "montants": 5042,
+      "assures": 9723,
+      "assurance": 5364,
+      "obligation": 9965
+     },
+     "articles_kept": 10
+    },
+    "ms": 86
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 2,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+       "title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+       "outline_rows": 53,
+       "parts_named": [
+        "Sous-section I - L'assurance contre l'incendie et les risques accessoires"
+       ],
+       "articles_in_parts": 6,
+       "ms": 3363,
+       "tokens_in": 2463,
+       "tokens_out": 204,
+       "reason": "La question porte sur l’assurance incendie et l’augmentation des montants assurés."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1994/12/08/n2",
+       "title": "Loi du 8 décembre 1994 relative: - aux comptes annuels et comptes consolidés des entrepris",
+       "outline_rows": 35,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1554,
+       "tokens_in": 1890,
+       "tokens_out": 67,
+       "reason": "Ce texte porte sur les comptes et les obligations comptables des entreprises d’assurances, pas sur les contrats d’assurance incendie."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+       "title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en mat",
+       "outline_rows": 14,
+       "parts_named": [
+        "Partie VI Dispositions diverses"
+       ],
+       "articles_in_parts": 5,
+       "ms": 5158,
+       "tokens_in": 862,
+       "tokens_out": 275,
+       "reason": "Les dispositions diverses comprennent la règle relative au contrat d’assurance et à la demande de l’assureur."
+      }
+     ],
+     "articles_from_the_parts": 11,
+     "whole_part_for_a_list": false
+    },
+    "ms": 5160,
+    "tokens_in": 5215,
+    "tokens_out": 546,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general"
+     ],
+     "rows_in_scope": 71717,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 3
+    },
+    "ms": 5422,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2026-11-20",
+      "2026-11-20"
+     ],
+     "grain": "day",
+     "how": "no date in the question: today",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 0,
+     "period_spans_several_versions": 0
+    },
+    "ms": 15
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 12,
+     "pointed": "A1",
+     "lines": [
+      1,
+      2,
+      4
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Les preneurs d’une assurance contre l’incendie",
+     "text_reach": "special_group",
+     "question_is_about_that_group": true,
+     "reason": "L’article 77 vise l’augmentation des montants assurés et renvoie à l’article 66, alinéa 2, pour l’adaptation convenue."
+    },
+    "ms": 1286,
+    "tokens_in": 4196,
+    "tokens_out": 115,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 3,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [],
+     "inbound_checked": 0,
+     "outbound_checked": 1,
+     "followed": 0,
+     "see_also": 0
+    },
+    "ms": 2
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer",
+     "notes": [
+      "personal_case",
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 9436,
+  "tokens": {
+   "text-embedding-3-large": [
+    30,
+    0
+   ],
+   "gpt-6-luna": [
+    6234,
+    789
+   ],
+   "gpt-6.2-sol": [
+    4196,
+    115
+   ]
+  },
+  "cost_usd_list_price": 0.01184,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer",
+    "state": "answer"
+   }
+  ],
+  "cost_usd": 0.01184,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2845,
+    "tokens_in": 270,
+    "tokens_out": 168
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 5160,
+    "tokens_in": 5215,
+    "tokens_out": 546
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1286,
+    "tokens_in": 4196,
+    "tokens_out": 115
+   }
+  ]
+ },
+ "state": "answer",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2026-11-20",
+ "date_said": false,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2026-11-20",
+    "to": "2026-11-20",
+    "grain": "day",
+    "text": null,
+    "how": "no date in the question: today"
+   },
+   "question_type": "rule",
+   "french": "L'assureur incendie peut-il m'obliger à assurer chez lui l'augmentation des montants assurés ?",
+   "legal_terms": [
+    "assurance incendie",
+    "montants assurés",
+    "obligation d'assurance"
+   ],
+   "personal_case": true
+  },
+  "candidates": [
+   {
+    "article_pk": 96131,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96085,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 96132,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96128,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 41607,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 41605,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 80022,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 96120,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 41609,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96127,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 41608,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 96098,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 96131
+   },
+   {
+    "article_pk": 96085
+   },
+   {
+    "article_pk": 96132
+   },
+   {
+    "article_pk": 96128
+   },
+   {
+    "article_pk": 41607
+   },
+   {
+    "article_pk": 41605
+   },
+   {
+    "article_pk": 80022
+   },
+   {
+    "article_pk": 96120
+   },
+   {
+    "article_pk": 41609
+   },
+   {
+    "article_pk": 96127
+   },
+   {
+    "article_pk": 41608
+   },
+   {
+    "article_pk": 96098
+   }
+  ],
+  "replay": "eNq9VEuS2jAQvYqqN2xMyjaEgDe5QG5AUZSwG-MaIXn0YUKmuEu2cw4ulicLqBlgnZVbT63X_frjdzpQVWTUU0Xe9C-UUQ1TmVoq2M0nu4cnbYPWrMaHAsArzr9G0rlgOVjR6Zp107HoOfhxp8R-ZDaqa9mK81-R3Kyod_xHqNAJNZKh3bP20ndGi4ad2BuctHfJ-fzhxM-YQ0CcMi9n46IYl3lEHFVbqRxnBIukdm9sgduLiOqGbKhaLhezYgKJNiimbFlkZTZdZUSZDkpliSeaqyx6ljk8WUnPDZxLODZIpGv1-UP00golheLaQ8sjAZz1DhHx3VM13FKtrtbN4KvRS6reSUndBtlyrG7MuUHsiG-t2d8r9-Yeaa3sNMBGHuM9__ZX9p15A66NiITojvA7Fq-BXax3JbyJT05o4wVa-2Mfk0h1QnjW9e7_tFhxK9Xas92jn0sa7iRi3QLC5-ElsCH4hXx0e0Wof8_WGQ3SWjqI8jYwpL58Godagnio9dD4fP79ASsm5SNWzu-waTHLfzzB7vnmeV4-48ufvF088XsWY_6oY_EVQy0stviiOulMypKWlH3KN2WYckpZpLgp0sANOoX_wBJjywdWcfC47hw6ELftiHNtmtiuYYru19H5YbavG3uKi4KOL6aTWUbBIc_8W14U8ykWKQ7C1y5iJk3QzXpzXEul1g17LKKxjlanf-q0hDE"
+ }
+}

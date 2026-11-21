@@ -1,0 +1,54 @@
+{
+ "question": "Quel cadeau de départ offrir à un collègue ?",
+ "state": "out_of_scope",
+ "date_used": "2026-11-22",
+ "date_said": false,
+ "blocks": [],
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2026-11-22",
+     "by": "code"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "pas une question de droit",
+    "state": "out_of_scope"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   }
+  ],
+  "cost_usd": 0.0003,
+  "ms": 900
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9vdXRfb2Zfc2NvcGU"
+ }
+}

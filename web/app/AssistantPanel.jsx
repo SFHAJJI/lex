@@ -38,7 +38,8 @@ import {
   validateDossier,
 } from '../scripts/assistant-panel.mjs';
 import { articleHeadingOf, articleNumberOf } from '../scripts/law-page.mjs';
-import { answerSentence, dateFor, quoteVerifies, searchCount, searchStepOf, stepsRun } from '../scripts/answer-view.mjs';
+import { answerSentence, dateFor, plannerName, quoteVerifies, registryVersionFor, searchCount, searchStepOf, stepsRun } from '../scripts/answer-view.mjs';
+import { REGISTRY_RECORD } from '../scripts/registry-record.mjs';
 import { searchFragment } from '../scripts/search-address.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 
@@ -111,7 +112,16 @@ function AnswerSentence({ quote, question }) {
  * the full article one action away: the quotation in its paragraphs, the version it is from, its other claims and the claims
  * for checking it. Every block of the group is drawn.
  */
-function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = false }) {
+/**
+ * Where "N versions since YYYY" leads: a Luxembourg act's law page at the date the answer read the law, when that date is
+ * before today (`#on-…`: the page opens on the version that applied then); else at the article's history.
+ */
+function versionsHref(where, anchor, at, today, locale) {
+  if (where.publisher === 'lu-legilux' && typeof at === 'string' && typeof today === 'string' && at < today) return `/${locale}${where.address}#on-${at}`;
+  return lawPageHref(where, anchor, 'article', locale);
+}
+
+function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = false, today = null }) {
   const [open, setOpen] = useState(false);
   const checks = group.blocks.filter(isCheck);
   const quote = group.blocks.find((block) => block.kind === 'quote') ?? null;
@@ -138,7 +148,7 @@ function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = 
             {copy.fullArticle}
           </button>
           {where === null ? null : (
-            <a href={lawPageHref(where, quote.anchor, 'article', locale)} data-action="versions">
+            <a href={versionsHref(where, quote.anchor, at, today, locale)} data-action="versions">
               {act?.versions > 0 ? fill(act.versions === 1 ? copy.versionsOne : copy.versionsSince, { count: act.versions, year: act.since }) : copy.lawPage}
             </a>
           )}
@@ -172,13 +182,13 @@ function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = 
  * others, the same article in the other held language, one action away). Every block of the part is drawn; a part that
  * quotes nothing has its sentences under the work (`NoQuote`).
  */
-function Part({ part, locale, copy, titles, question, first }) {
+function Part({ part, locale, copy, titles, question, first, today = null }) {
   const { lead, groups } = quoteGroups(part.blocks);
   const { shown, other } = groupsForLocale(groups, locale);
   return (
     <section className="assistant-part" data-verdict={part.verdict}>
       {lead.map((block, at) => <Block block={block} key={at} />)}
-      {shown.map((group, at) => <QuoteGroup group={group} copy={copy} locale={locale} titles={titles} question={question} lead={first && at === 0} key={at} />)}
+      {shown.map((group, at) => <QuoteGroup group={group} copy={copy} locale={locale} titles={titles} question={question} lead={first && at === 0} today={today} key={at} />)}
       {other.length === 0 ? null : (
         <details className="assistant-other-languages">
           <summary>{copy.otherLanguages}</summary>
@@ -208,7 +218,8 @@ function planWords(trace, copy, locale) {
  * happened for this question and one grey line saying whether the model or code did it; under them, the time it took, the
  * estimated cost of a question (the latest test run's), and the raw plan: the plan's sentences and the trace (R45(c), R32).
  */
-function TheWork({ view, copy, locale, work, children = null }) {
+function TheWork({ view, copy, locale, work, servingCommit = null, children = null }) {
+  const registry = registryVersionFor(REGISTRY_RECORD, view.trace.planner_id, servingCommit);
   const quotes = view.parts.flatMap((part) => part.blocks.filter((block) => block.kind === 'quote'));
   const first = quotes[0] ?? null;
   const document = first === null ? copy.documentNone : fill(copy.documentLine, { date: dateFor(first.from ?? '', locale) });
@@ -219,7 +230,9 @@ function TheWork({ view, copy, locale, work, children = null }) {
   const retrieval = searchStepOf(view.trace) !== null
     ? search === null
       ? copy.retrievalPending
-      : fill(search.more ? copy.retrievalMore : copy.retrievalLine, { matched: search.matched, kept })
+      : search.named
+        ? fill(copy.retrievalNamed, { kept })
+        : fill(search.more ? copy.retrievalMore : copy.retrievalLine, { matched: search.matched, kept })
     : stepsRun(view.trace).length === 0
       ? copy.retrievalNone
       : fill(copy.retrievalDirect, { kept });
@@ -250,6 +263,22 @@ function TheWork({ view, copy, locale, work, children = null }) {
         {work?.seconds === undefined || work?.seconds === null ? null : <span data-work-time="">{fill(copy.workTime, { seconds: decimal(work.seconds, locale, 1) })}</span>}
         <span data-work-cost="">{fill(copy.workCost, { cost: decimal(EVALUATION_RECORD.dev.costEur, locale, 3) })}</span>
       </p>
+      {/* The planner this answer ran on, and the MLflow model registry's version of the build that answered (the owner's order
+          of 2026-11-15): named only when the registry holds that very build and planner (the review of #1060). */}
+      {typeof view.trace.planner_id === 'string' ? (
+        <p className="work-foot" data-work-planner={view.trace.planner_id}>
+          <span>{fill(copy.workPlanner, { planner: plannerName(view.trace.planner_id) })}</span>
+          {registry === null ? (
+            <a href={`/${locale}/evidence.html#registry`} data-registry-version="">
+              {fill(copy.workRegistryNone, { model: REGISTRY_RECORD.model })}
+            </a>
+          ) : (
+            <a href={`/${locale}/evidence.html#registry`} data-registry-version={registry.version}>
+              {fill(copy.workRegistry, { model: REGISTRY_RECORD.model, version: registry.version })}
+            </a>
+          )}
+        </p>
+      ) : null}
       <details className="assistant-how">
         <summary>{copy.rawPlan}</summary>
         <ol className="assistant-plan">
@@ -284,9 +313,9 @@ function searchHref(view, question, locale) {
  * notice, with the preview line while the people's reviews are not done, and the processor sentence (the owner's order of
  * 2026-10-28; shown only where the panel is, which is only when the assistant is switched on). `phase` is 'idle', 'verdict'
  * or 'complete', and says which announcement the polite region holds. Nothing here asks the server; the page sends
- * `askRequest(question)` and hands back what it learnt (`question`, `work`).
+ * `askRequest(question)` and hands back what it learnt (`question`, `work`, `servingCommit`: the build that answered).
  */
-export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, message = null, prefill = null, titles = {}, question = null, work = null, onSubmit = () => {}, onRemoveChip = () => {} }) {
+export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, message = null, prefill = null, titles = {}, question = null, work = null, servingCommit = null, onSubmit = () => {}, onRemoveChip = () => {} }) {
   const copy = panelCopy(locale);
   const field = useRef(null);
   // A question the page's address asks (`#q=…`) is shown in the field it is asked from.
@@ -345,11 +374,11 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
           {/* No article found (the owner's order of 2026-11-14, evening): one sentence and the search on the question's words;
               the server's own sentences for it (what was searched, the official site) are drawn in the work. */}
           {pointed ? null : view.parts.map((part, at) => (
-            <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={at === 0} key={part.partId} />
+            <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={at === 0} today={view.trace.today ?? null} key={part.partId} />
           ))}
           {search === null ? null : <p className="answer-links"><a href={search} data-action="keyword-search">{copy.keywordSearch}</a></p>}
           <hr className="answer-rule" />
-          <TheWork view={view} copy={copy} locale={locale} work={work}>
+          <TheWork view={view} copy={copy} locale={locale} work={work} servingCommit={servingCommit}>
             {pointed ? view.parts.map((part) => <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={false} key={part.partId} />) : null}
             {/* The answer's notices (R33, R50), in one line in the work: the model's part is what the work shows; the preview
                 notice, word for word the panel's preview line, is said once, by the panel, when it shows that line. */}
@@ -365,9 +394,14 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
       )}
       {/* R44's notice and the preview line under the answer, the question box first (the owner's order of 2026-11-14); what
           the assistant sends and to whom at the foot of the assistant's page (the owner's order of 2026-11-13, section C). */}
-      <p className="assistant-notice">{copy.notice}</p>
-      {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
-      <p className="assistant-processor">{copy.processor}</p>
+      {/* One line under the answer, the notices folded behind it (the owner's order of 2026-11-14, last release): R44's
+          notice, the preview line and what the assistant sends and to whom, each word for word. */}
+      <details className="assistant-notices" data-assistant-notices="">
+        <summary>{copy.noticeLine}</summary>
+        <p className="assistant-notice">{copy.notice}</p>
+        {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
+        <p className="assistant-processor">{copy.processor}</p>
+      </details>
     </section>
   );
 }
@@ -418,6 +452,7 @@ export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetc
   const [message, setMessage] = useState(null);
   const [asked, setAsked] = useState(null);
   const [work, setWork] = useState(null);
+  const [servingCommit, setServingCommit] = useState(null);
   const submit = async (question) => {
     if (typeof question !== 'string' || question.trim().length === 0) return;
     setPhase('idle');
@@ -441,6 +476,7 @@ export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetc
 
     setAsked(question);
     setDossier(outcome.dossier);
+    setServingCommit(outcome.servingCommit ?? null);
     setTitles({});
     setPhase('verdict');
     setTimeout(() => setPhase('complete'), 0);
@@ -457,5 +493,5 @@ export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetc
     setPrefill(fragment);
     submit(fragment);
   }, []);
-  return <AssistantPanel locale={locale} dossier={dossier} phase={phase} message={message} prefill={prefill} titles={titles} question={asked} work={work} onSubmit={submit} />;
+  return <AssistantPanel locale={locale} dossier={dossier} phase={phase} message={message} prefill={prefill} titles={titles} question={asked} work={work} servingCommit={servingCommit} onSubmit={submit} />;
 }

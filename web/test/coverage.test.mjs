@@ -50,7 +50,7 @@ import { LIVE_EU_COVERAGE, LIVE_LU_COVERAGE } from "../scripts/live-coverage-rec
 import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { Coverage } from "../.react-build/app.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
 /**

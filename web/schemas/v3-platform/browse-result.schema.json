@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-browse-result/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {
+      "const": "browse"
+    },
+    "object_type": {
+      "type": "string",
+      "enum": [
+        "classification",
+        "work_record"
+      ]
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation_id",
+    "object_type",
+    "value"
+  ]
+}

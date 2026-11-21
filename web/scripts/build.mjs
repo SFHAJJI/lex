@@ -95,12 +95,12 @@ const pages = [
 const json = async (url) => JSON.parse(await readFile(url, "utf8"));
 
 const envelopeSchema = await json(
-  new URL("../../schemas/v3-synthetic-preview/synthetic-resolve-envelope.schema.json", import.meta.url),
+  new URL("../schemas/v3-synthetic-preview/synthetic-resolve-envelope.schema.json", import.meta.url),
 );
 const registry = new Map([
   [
     "lex-v3-preview-object-set/1",
-    await json(new URL("../../schemas/v3-preview/preview-object-set.schema.json", import.meta.url)),
+    await json(new URL("../schemas/v3-preview/preview-object-set.schema.json", import.meta.url)),
   ],
 ]);
 

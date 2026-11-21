@@ -1,0 +1,372 @@
+{
+  "schema": "lex-v3-evaluation-card/1",
+  "target": "the test fixture\u0027s Luxembourg mount, and for the EU temporal arms an EU fixture mount (the GDPR\u0027s original wording and consolidated versions on two later dates), asked through the real handler (THE MOUNT IS A FIXTURE): the machine gates prove the served path, not a corpus. The cases are purpose-built evidence for the harness (Decision 92), and no release, image or snapshot identity exists yet (STATUS item 7), so this card is not a release card.",
+  "machine_gates": [
+    {
+      "set": "temporal",
+      "arm": "as_of in fra",
+      "cases": 8,
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "temporal",
+      "arm": "as_of with no language",
+      "cases": 8,
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "temporal",
+      "arm": "in_force_on in fra",
+      "cases": 8,
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "temporal",
+      "arm": "in_force_on with no language",
+      "cases": 8,
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "temporal",
+      "arm": "EU as_of in eng",
+      "cases": 8,
+      "cases_sha256": "ddccdefd49abc7fc3157d3010dd1c0adb065e04da298e388d692cc42afb9d246",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "temporal",
+      "arm": "EU as_of in fra",
+      "cases": 8,
+      "cases_sha256": "2595050bb6763b9405747b062d62c2b71ce586b5c56d54c4f6139c4dacbda035",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "temporal",
+      "arm": "EU as_of with no language",
+      "cases": 8,
+      "cases_sha256": "e44e720851f64e1d2d4f55e6e6a181f8fc678e0254be33a515c3a2457dc7522e",
+      "gates": [
+        {
+          "gate": "temporal_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 8,
+          "wilson_95": [
+            0.6756,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.375
+        }
+      ]
+    },
+    {
+      "set": "refusal",
+      "arm": "the served operations",
+      "cases": 22,
+      "cases_sha256": "81e9ba04b256566225fe68bedc9faebc1c476976cc8e5c7a315eaed75b38e7ef",
+      "gates": [
+        {
+          "gate": "verdict_exact_match",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 22,
+          "wilson_95": [
+            0.8513,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.1364
+        }
+      ]
+    },
+    {
+      "set": "retrieval",
+      "arm": "search and verify",
+      "cases": 13,
+      "cases_sha256": "c2a3574dbfec83ed6f5cb58bf1f9f28dc84b66189960831559026c1012698bc0",
+      "gates": [
+        {
+          "gate": "anchor_ndcg_at_10",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 9,
+          "rule_of_three_failure_upper_95": 0.3333
+        },
+        {
+          "gate": "no_hit_accuracy",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 4,
+          "wilson_95": [
+            0.5101,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 0.75
+        },
+        {
+          "gate": "resolver_exactness",
+          "verdict": "pass",
+          "value": 1,
+          "threshold": 1,
+          "n": 3,
+          "wilson_95": [
+            0.4385,
+            1
+          ],
+          "rule_of_three_failure_upper_95": 1
+        }
+      ]
+    }
+  ],
+  "shuffled_controls": [
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "as_of in fra",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
+    },
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "as_of with no language",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
+    },
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "in_force_on in fra",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
+    },
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "in_force_on with no language",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
+      "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
+    },
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "EU as_of in eng",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "d336ab44a29714c1db07184835fae5db20a2cbefa89f345b8cc1967a073a6149",
+      "note": "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"
+    },
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "EU as_of in fra",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "2b17e6631da31abe31249e6d1c9aa6c5c3ef0ab33e8224234b29e336823dbd16",
+      "note": "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"
+    },
+    {
+      "control": "date_shuffle",
+      "set": "temporal",
+      "arm": "EU as_of with no language",
+      "verdict": "caught_the_shuffle",
+      "reason": "every expectation broke after the shift",
+      "seed": 20260930,
+      "cases": 6,
+      "cases_sha256": "2a5a33a3102359696607403c810af3f51ae5ebf3b795c64e6ac24eb7f04b0c67",
+      "note": "the cases at or after the latest held wording are outside the control by its design: a forward shift leaves the same wording answering, so they cannot break"
+    },
+    {
+      "control": "verdict_shuffle",
+      "set": "refusal",
+      "arm": "the served operations",
+      "verdict": "caught_the_shuffle",
+      "reason": "exact match fell to 0, within the base-rate ceiling 0.1364",
+      "seed": 20260930,
+      "cases": 22,
+      "cases_sha256": "81e9ba04b256566225fe68bedc9faebc1c476976cc8e5c7a315eaed75b38e7ef"
+    },
+    {
+      "control": "qrels_shuffle",
+      "set": "retrieval",
+      "arm": "search and verify",
+      "verdict": "caught_the_shuffle",
+      "reason": "anchor nDCG@10 fell to 0 and both invariant gates stopped passing",
+      "seed": 20260930,
+      "cases": 13,
+      "cases_sha256": "c2a3574dbfec83ed6f5cb58bf1f9f28dc84b66189960831559026c1012698bc0"
+    }
+  ],
+  "statistical_rows": [
+    {
+      "dataset": "D1",
+      "name": "retrieval qrels v3",
+      "gates": "retrieval (section 1.4): anchor nDCG@10 against the baseline minus its MDE, by paired permutation test",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D2",
+      "name": "derivation audit set",
+      "gates": "derivation fidelity (section 1.2)",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D3",
+      "name": "hard-negative and refusal set",
+      "gates": "typed absence and refusal correctness (section 4)",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D4",
+      "name": "assistant verdict set",
+      "gates": "assistant contract (section 1.6): verdict exact match, with self-agreement",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D5",
+      "name": "span-support set",
+      "gates": "span-level support scoring (section 3)",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D6",
+      "name": "crosswalk gold",
+      "gates": "the gated hybrid and crosswalk lane\u0027s activation against keyword",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D7",
+      "name": "temporal correctness set",
+      "gates": "as_of, timeline, diff and knowable_on correctness beyond the golden cases",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    },
+    {
+      "dataset": "D8",
+      "name": "grader audit set",
+      "gates": "grader-versus-human agreement; the grader never gates",
+      "status": "not_yet_labelled",
+      "governed_by": "Decision 92: the human-labelled datasets gate Stage 8 (S8-A03, S8-A11), after launch"
+    }
+  ],
+  "negative_results": [
+    {
+      "hypothesis": "hybrid retrieval serves the lay population it claims to serve better than the keyword lanes",
+      "dataset": "D6 crosswalk gold, not yet labelled",
+      "result": "not measured",
+      "decision": "not shipped: hybrid retrieval is not activated; search serves only the keyword lanes and refuses a ranked mode with retrieval_mode_unavailable",
+      "what_would_reverse_it": "passing the activation gate as 36-ideal-evaluation.md states it: on D6, recall@10 of the governing anchor at least 0.7 in English and German and at least 0.5 in Luxembourgish, with the keyword baseline printed beside it and the interpretation banner correct 100 percent of the time (section 2), and the published benchmark\u0027s conceptual nDCG \u002B10 percent uplift condition (section 1.4, repair 6)"
+    }
+  ]
+}

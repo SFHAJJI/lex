@@ -13,7 +13,7 @@ import test from "node:test";
 
 import { ARTICLE_STATUSES, readDiff } from "../scripts/compare-answer.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
 async function capturedAnswers() {

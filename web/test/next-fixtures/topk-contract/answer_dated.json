@@ -1,0 +1,812 @@
+{
+ "question": "En 2012, mon assureur pouvait-il résilier le contrat après un sinistre ?",
+ "row": {
+  "question": "En 2012, mon assureur pouvait-il résilier le contrat après un sinistre ?",
+  "language": "fr",
+  "date": {
+   "from": "2012-01-01",
+   "to": "2012-12-31",
+   "grain": "year",
+   "text": "2012",
+   "how": "a year alone is the whole year"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 4,
+   "de": 0,
+   "en": 0,
+   "lb": 1
+  },
+  "question_type": "rule",
+  "personal_case": true,
+  "french": "En 2012, mon assureur pouvait-il résilier le contrat après un sinistre ?",
+  "legal_terms": [
+   "assureur",
+   "résiliation",
+   "contrat d’assurance",
+   "sinistre"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "rule",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_41",
+   "date": "2011-04-16",
+   "why": null,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 41",
+   "number": "41",
+   "heading": "Résiliation après sinistre",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "version_from": "2011-04-16",
+   "version_to": "2013-01-01",
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 118839,
+   "lines": [
+    1,
+    3
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Sauf en assurance sur la vie et en assurance-maladie, le contrat peut réserver à l'assureur le droit de résilier le contrat après la survenance d'un sinistre donnant lieu à indemnisation. Cette résiliation est notifiée au preneur d'assurance dans le mois du premier paiement de la prestation de l'assureur.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "L'assureur peut prononcer la résiliation du contrat et, par dérogation à l'article 39 point 3, donner à cette résiliation effet dès sa notification lorsque le preneur d'assurance, l'assuré ou le bénéficiaire ont manqué à l'une des obligations nées de la survenance du sinistre dans l'intention de tromper l'assureur. Ce droit peut être exercé par l'assureur nonobstant le non paiement de toute prestation et il doit être exercé dans le mois de la découverte de la fraude.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Sauf en assurance sur la vie et en assurance-maladie, le contrat peut réserver à l'assureur le droit de résilier le contrat après la survenance d'un sinistre donnant lieu à indemnisation. Cette résiliation est notifiée au preneur d'assurance dans le mois du premier paiement de la prestation de l'assureur.",
+    "L'assureur peut prononcer la résiliation du contrat et, par dérogation à l'article 39 point 3, donner à cette résiliation effet dès sa notification lorsque le preneur d'assurance, l'assuré ou le bénéficiaire ont manqué à l'une des obligations nées de la survenance du sinistre dans l'intention de tromper l'assureur. Ce droit peut être exercé par l'assureur nonobstant le non paiement de toute prestation et il doit être exercé dans le mois de la découverte de la fraude."
+   ],
+   "label": "Article 41",
+   "version": {
+    "id": null,
+    "from": "2011-04-16",
+    "until": "2013-01-01",
+    "until_known": true
+   }
+  },
+  {
+   "role": "related",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_39",
+   "date": "2011-04-16",
+   "why": "désigné par la lecture",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 39",
+   "number": "39",
+   "heading": "Cas, formes et effets de la résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "version_from": "2011-04-16",
+   "version_to": "2013-01-01",
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 118837,
+   "lines": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 1,
+     "text": "La résiliation du contrat se fait soit par lettre recommandée à la poste, soit par exploit d'huissier ou par remise de la lettre de résiliation contre récépissé.",
+     "label": null
+    },
+    {
+     "n": 2,
+     "text": "Sauf si la loi en dispose autrement, la résiliation n'a d'effet qu'à l'expiration d'un délai d'un mois minimum à compter du lendemain de la signification ou de la date du récépissé ou, dans le cas d'une lettre recommandée, à compter du lendemain de son dépôt à la poste.",
+     "label": null
+    },
+    {
+     "n": 3,
+     "text": "Le délai visé à l'alinéa 1er doit être indiqué dans le contrat et rappelé dans l'acte de résiliation.",
+     "label": null
+    },
+    {
+     "n": 4,
+     "text": "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat.",
+     "label": null
+    }
+   ],
+   "text": [
+    "La résiliation du contrat se fait soit par lettre recommandée à la poste, soit par exploit d'huissier ou par remise de la lettre de résiliation contre récépissé.",
+    "Sauf si la loi en dispose autrement, la résiliation n'a d'effet qu'à l'expiration d'un délai d'un mois minimum à compter du lendemain de la signification ou de la date du récépissé ou, dans le cas d'une lettre recommandée, à compter du lendemain de son dépôt à la poste.",
+    "Le délai visé à l'alinéa 1er doit être indiqué dans le contrat et rappelé dans l'acte de résiliation.",
+    "Hormis les cas prévus par la loi, l'assureur ne peut résilier le contrat."
+   ],
+   "label": "Article 39",
+   "version": {
+    "id": null,
+    "from": "2011-04-16",
+    "until": "2013-01-01",
+    "until_known": true
+   }
+  },
+  {
+   "role": "exception",
+   "kind": "article",
+   "work": "loi-1997-07-27-n10",
+   "anchor": "art_79",
+   "date": "2011-04-16",
+   "why": "Article 79 déroge à Article 41 (par dérogation à)",
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "article": "Article 79",
+   "number": "79",
+   "heading": "Résiliation après sinistre",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section II - L'assurance des récoltes",
+   "version_from": "2011-04-16",
+   "version_to": "2013-01-01",
+   "article_since": "1997-09-07",
+   "official": "https://legilux.public.lu/eli/etat/leg/loi/1997/07/27/n10/jo",
+   "article_pk": 118888,
+   "lines": [
+    1
+   ],
+   "wording_since": "1997-09-07",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "inbound": true,
+   "quote": [
+    {
+     "n": 1,
+     "text": "Par dérogation à l'article 41, lorsque en matière d'assurance des récoltes, l'assureur s'est réservé le droit de résilier le contrat après la survenance d'un sinistre, cette résiliation ne peut avoir d'effet qu'à l'expiration de la période normale des récoltes.",
+     "label": null
+    }
+   ],
+   "text": [
+    "Par dérogation à l'article 41, lorsque en matière d'assurance des récoltes, l'assureur s'est réservé le droit de résilier le contrat après la survenance d'un sinistre, cette résiliation ne peut avoir d'effet qu'à l'expiration de la période normale des récoltes."
+   ],
+   "label": "Article 79",
+   "version": {
+    "id": null,
+    "from": "2011-04-16",
+    "until": "2013-01-01",
+    "until_known": true
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 118839,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 41",
+   "heading": "Résiliation après sinistre",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.678
+  },
+  {
+   "label": "A2",
+   "article_pk": 118837,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 39",
+   "heading": "Cas, formes et effets de la résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "how": "keywords+meaning+outline",
+   "score": 0.5823
+  },
+  {
+   "label": "A3",
+   "article_pk": 118888,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 79",
+   "heading": "Résiliation après sinistre",
+   "path": "TITRE II DES ASSURANCES DE DOMMAGES > Chapitre II - Des contrats d'assurance de choses > Section II - Dispositions propres à certaines assurances de choses > Sous-section II - L'assurance des récoltes",
+   "how": "keywords+meaning",
+   "score": 0.6071
+  },
+  {
+   "label": "A4",
+   "article_pk": 173667,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 12.-",
+   "heading": null,
+   "path": "Partie II De l'assurance obligatoire de la responsabilité civile enmatière de véhicules automoteurs > Chapitre 4 De la cessation de la garantie",
+   "how": "meaning+outline",
+   "score": 0.5267
+  },
+  {
+   "label": "A5",
+   "article_pk": 118840,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 42",
+   "heading": "Augmentation tarifaire",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "how": "meaning+outline",
+   "score": 0.5443
+  },
+  {
+   "label": "A6",
+   "article_pk": 118820,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 22",
+   "heading": "Mise en demeure et faculté de résiliation",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IV - Exécution du contrat",
+   "how": "keywords+meaning",
+   "score": 0.5579
+  },
+  {
+   "label": "A7",
+   "article_pk": 118836,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 38",
+   "heading": "Durée des obligations",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section VIII - Prise d'effet de la garantie et durée du contrat",
+   "how": "keywords+meaning",
+   "score": 0.5436
+  },
+  {
+   "label": "A8",
+   "article_pk": 173668,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 13.-",
+   "heading": null,
+   "path": "Partie II De l'assurance obligatoire de la responsabilité civile enmatière de véhicules automoteurs > Chapitre 4 De la cessation de la garantie",
+   "how": "outline",
+   "score": 0.5054
+  },
+  {
+   "label": "A9",
+   "article_pk": 173669,
+   "act_title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "article": "Art. 14.-",
+   "heading": null,
+   "path": "Partie II De l'assurance obligatoire de la responsabilité civile enmatière de véhicules automoteurs > Chapitre 4 De la cessation de la garantie",
+   "how": "outline",
+   "score": 0.4756
+  },
+  {
+   "label": "A10",
+   "article_pk": 118838,
+   "act_title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "article": "Article 40",
+   "heading": "Crédit de prime",
+   "path": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL > Chapitre II - Dispositions communes à tous les contrats > Section IX - Fin du contrat",
+   "how": "outline",
+   "score": 0.5229
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general",
+   "repealed"
+  ],
+  "passages_in_those_kinds": 81637,
+  "words": {
+   "2012": 4368,
+   "assureur": 9723,
+   "pouvait": 1791,
+   "resilier": 748,
+   "contrat": 25421,
+   "apres": 12308,
+   "sinistre": 153,
+   "resiliation": 517,
+   "assurance": 5364
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en mat"
+  ],
+  "period": [
+   "2012-01-01",
+   "2012-12-31"
+  ]
+ },
+ "confidence": "firm",
+ "found_by": [
+  "keywords",
+  "meaning",
+  "outline"
+ ],
+ "notes": [
+  "personal_case",
+  "found_by_all_detectors"
+ ],
+ "outcome": "answer_with_exception",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2012-01-01",
+      "to": "2012-12-31",
+      "grain": "year",
+      "text": "2012",
+      "how": "a year alone is the whole year"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "rule",
+     "personal_case": true,
+     "french": "En 2012, mon assureur pouvait-il résilier le contrat après un sinistre ?",
+     "legal_terms": [
+      "assureur",
+      "résiliation",
+      "contrat d’assurance",
+      "sinistre"
+     ],
+     "in_scope": true
+    },
+    "ms": 2208,
+    "tokens_in": 264,
+    "tokens_out": 108,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "2012",
+      "assureur",
+      "pouvait",
+      "resilier",
+      "contrat",
+      "apres",
+      "sinistre"
+     ],
+     "terms_a_statute_would_use": [
+      "resiliation",
+      "assurance"
+     ],
+     "articles_holding_each_word": {
+      "2012": 4368,
+      "assureur": 9723,
+      "pouvait": 1791,
+      "resilier": 748,
+      "contrat": 25421,
+      "apres": 12308,
+      "sinistre": 153,
+      "resiliation": 517,
+      "assurance": 5364
+     },
+     "articles_kept": 10
+    },
+    "ms": 31
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 3,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+       "title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+       "outline_rows": 53,
+       "parts_named": [
+        "Section IX - Fin du contrat"
+       ],
+       "articles_in_parts": 5,
+       "ms": 3100,
+       "tokens_in": 2457,
+       "tokens_out": 208,
+       "reason": "La résiliation du contrat relève de la section sur la fin du contrat."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2015/12/07/n1",
+       "title": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+       "outline_rows": 170,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1581,
+       "tokens_in": 8389,
+       "tokens_out": 45,
+       "reason": "La table ne fait pas état de règles de résiliation d’un contrat par l’assureur après sinistre, ni du droit applicable en 2012."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2003/04/16/n2",
+       "title": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en mat",
+       "outline_rows": 14,
+       "parts_named": [
+        "Chapitre 4 De la cessation de la garantie"
+       ],
+       "articles_in_parts": 3,
+       "ms": 1983,
+       "tokens_in": 856,
+       "tokens_out": 90,
+       "reason": "Cette partie traite de la cessation de la garantie et des stipulations du contrat."
+      }
+     ],
+     "articles_from_the_parts": 8,
+     "whole_part_for_a_list": false
+    },
+    "ms": 2064,
+    "tokens_in": 11702,
+    "tokens_out": 343,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general",
+      "repealed"
+     ],
+     "rows_in_scope": 81637,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 3
+    },
+    "ms": 2741,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2012-01-01",
+      "2012-12-31"
+     ],
+     "grain": "year",
+     "how": "a year alone is the whole year",
+     "candidates_moved_to_another_version": 10,
+     "not_applicable_then": 2,
+     "period_spans_several_versions": 0
+    },
+    "ms": 25
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 10,
+     "pointed": "A1",
+     "lines": [
+      1,
+      3
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Assureurs et preneurs d’assurance après un sinistre",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "L’article 41 régit directement la résiliation après sinistre, complétée par les règles générales de résiliation et la dérogation propre à l’assurance des récoltes."
+    },
+    "ms": 1527,
+    "tokens_in": 2812,
+    "tokens_out": 168,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 2,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   },
+   {
+    "step": "reference_step",
+    "who": "code",
+    "detail": {
+     "terms_defined_by_the_text_and_used_in_the_question": [],
+     "inbound_checked": 1,
+     "outbound_checked": 1,
+     "followed": 0,
+     "see_also": 0
+    },
+    "ms": 6
+   },
+   {
+    "step": "exception_decision",
+    "who": "model",
+    "detail": {
+     "applies": "unknown",
+     "pointed": "",
+     "lines": [],
+     "articles_read": 6,
+     "reason": "La question ne précise pas si le contrat est une assurance des récoltes."
+    },
+    "ms": 712,
+    "tokens_in": 1668,
+    "tokens_out": 35,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "outcome",
+    "who": "code",
+    "detail": {
+     "outcome": "answer_with_exception",
+     "notes": [
+      "personal_case",
+      "found_by_all_detectors"
+     ],
+     "found_by": "keywords+meaning+outline"
+    },
+    "ms": null
+   }
+  ],
+  "ms": 6646,
+  "tokens": {
+   "text-embedding-3-large": [
+    23,
+    0
+   ],
+   "gpt-6-luna": [
+    11966,
+    451
+   ],
+   "gpt-6.2-sol": [
+    4480,
+    203
+   ]
+  },
+  "cost_usd_list_price": 0.014,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 4,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:answer_with_exception",
+    "state": "answer_with_exception"
+   }
+  ],
+  "cost_usd": 0.014,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2208,
+    "tokens_in": 264,
+    "tokens_out": 108
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 2064,
+    "tokens_in": 11702,
+    "tokens_out": 343
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 1527,
+    "tokens_in": 2812,
+    "tokens_out": 168
+   },
+   {
+    "step": "exception_decision",
+    "model": "gpt-6.2-sol",
+    "ms": 712,
+    "tokens_in": 1668,
+    "tokens_out": 35
+   }
+  ]
+ },
+ "state": "answer_with_exception",
+ "pipeline": "topk",
+ "not_held": [],
+ "date_used": "2012-01-01",
+ "date_said": true,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2012-01-01",
+    "to": "2012-12-31",
+    "grain": "year",
+    "text": "2012",
+    "how": "a year alone is the whole year"
+   },
+   "question_type": "rule",
+   "french": "En 2012, mon assureur pouvait-il résilier le contrat après un sinistre ?",
+   "legal_terms": [
+    "assureur",
+    "résiliation",
+    "contrat d’assurance",
+    "sinistre"
+   ],
+   "personal_case": true
+  },
+  "candidates": [
+   {
+    "article_pk": 118839,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 118837,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 118888,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 173667,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 118840,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 118820,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 118836,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 173668,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 173669,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 118838,
+    "role": "candidate",
+    "found_by": {
+     "outline": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 118839
+   },
+   {
+    "article_pk": 118837
+   },
+   {
+    "article_pk": 118888
+   },
+   {
+    "article_pk": 173667
+   },
+   {
+    "article_pk": 118840
+   },
+   {
+    "article_pk": 118820
+   },
+   {
+    "article_pk": 118836
+   },
+   {
+    "article_pk": 173668
+   },
+   {
+    "article_pk": 173669
+   },
+   {
+    "article_pk": 118838
+   }
+  ],
+  "replay": "eNqtVM2K2zAQfhWhUwtKieOQZH0pPfQpTDBaeWKLVSRXP8mGJdDX6K3H7nPkTfokHdnyknQdeikYPBp9_jTf6Bu_0AMtMkY7WlBvuifKqMBQGcEVxvVV3CGS7oLWoGaHDBPfcP1Vk8U8WzCyN5pw54KFYElnwoFLP5OK2Murk0qCJQqIMNpb7gnv7OWXI0ETJ7V03gL5HE8LyBjpZvMMn5hxtPA2AKMYUK7dEWx1lL6t4FlA56XRiLKp-OIe4JEWZZllm03-gOiggLIyY_mWUcp0UIrtuHLQh1s2ANcIBMU91D12wXK2RHwd5TT68ko6jpI4qhIeRd_j2WwYvaqkzJDji_VSYDfWDwTprGmAXH6SMbvMyIfIPWzx-B1uf3x_ADLpFoXhe0-LfpcKNUZvAYxBx2nxQhXXTeANxLu0scMoMeZ31uz_7r43YwafPGYay6XG5Al4_NjDs08QXLXmGC-JxE3CldFApCO-BXJsDSrrPzqjbwK4KKvypy7WMVwIVgBatP_bUwoarioPdo8OKulIF10zsPDkkZGn_v39R4_iWsSyRjaKfe7AOqORT3AHgzNRz9O1uwTXteybeuWkd8loi9vkOl-tppDL-URyMZXMV1OckwdN1nmLRLUWp3_UlZSk2lO1qb5UUaohnZrOGZiRTOHfo0T7wQHQmrQGIV0azhOuhaljs3sr_GOYne8te-dvcI7jgFe9Wi2xH8GhhvmnebbEYYn3f3uDaDoTdF09niquVFWDx2k21tHt-Q9eaqJA"
+ }
+}

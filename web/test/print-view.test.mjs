@@ -18,7 +18,7 @@ import { readingOutcome } from "../scripts/live-reading.mjs";
 import { answerHandedWith } from "../scripts/v3-client.mjs";
 
 const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const PINNED = census.envelopes.find((entry) => entry.operation === "evidence_bundle" && entry.scenario.startsWith("a state's permalink at its own date")).envelope;
 
 /** The body of the stylesheet's one `@media print` block, its braces matched. */

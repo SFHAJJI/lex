@@ -38,7 +38,7 @@ export async function indexingRecordOf(mount) {
 
 /** The contract the API's envelopes are read against: the census's, as the pages read them. */
 async function censusContract() {
-  return JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8")).contract;
+  return JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8")).contract;
 }
 
 /**

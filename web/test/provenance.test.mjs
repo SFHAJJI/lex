@@ -36,7 +36,7 @@ import {
 import { PREVIEW_ANSWERS, provenancePreviewPages } from "../scripts/provenance-preview.mjs";
 import { Provenance } from "../.react-build/app.mjs";
 
-const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
+const SAMPLES = new URL("../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
 
 /**

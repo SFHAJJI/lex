@@ -1,0 +1,206 @@
+{
+ "question": "Quelles mentions la police d’assurance doit-elle contenir ?",
+ "state": "answer",
+ "date_used": "2026-11-22",
+ "date_said": false,
+ "blocks": [
+  {
+   "role": "rule",
+   "article_pk": 96058,
+   "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+   "label": "Article 16",
+   "act_title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "version": {
+    "id": 3149,
+    "from": "2025-11-25",
+    "until": null,
+    "until_known": true
+   },
+   "lines": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "text": [
+    "Il indique:",
+    "le nom de l'entreprise d'assurances et l'adresse de son siège social et, le cas échéant, celle de la succursale qui accorde la couverture;",
+    "les nom et domicile du preneur d'assurance;",
+    "la chose ou la personne assurée;",
+    "la nature des risques garantis;",
+    "le moment à partir duquel le risque est garanti et la durée de cette garantie;",
+    "le montant de cette garantie;",
+    "la prime ou la cotisation de l'assurance ou la manière de les déterminer;"
+   ],
+   "why": "Article 16, paragraphe 2, deuxième alinéa: la liste entière.",
+   "anchor": "art_16"
+  }
+ ],
+ "list": {
+  "heading": "Il indique:",
+  "items_total": 7,
+  "items_shown": 7,
+  "count_stated_by_text": 7,
+  "complete": true
+ },
+ "trace": {
+  "question": {
+   "fields": [
+    {
+     "name": "date",
+     "value": "2026-11-22",
+     "by": "code"
+    },
+    {
+     "name": "question_type",
+     "value": "une liste",
+     "by": "model"
+    }
+   ]
+  },
+  "levels": [
+   {
+    "level": "corpus",
+    "by": "code+model",
+    "considered": 8535,
+    "kept": 1,
+    "filters": [
+     {
+      "rule": "textes abrogés à la date demandée",
+      "removed": 912,
+      "by": "code"
+     },
+     {
+      "rule": "conventions de branche et règlements de circulation",
+      "removed": 1408,
+      "by": "code"
+     }
+    ],
+    "acts": [
+     {
+      "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+      "title": "Version consolidée applicable au 21/12/2007 : Loi du 27 juillet 1997 sur le contrat d'assurance.",
+      "reason": "la question parle de prime et de garantie suspendue",
+      "by": "model"
+     }
+    ]
+   },
+   {
+    "level": "document",
+    "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+    "by": "model",
+    "steps": [
+     {
+      "depth": 3,
+      "shown": 4,
+      "picked": [
+       {
+        "node_id": "section_1.section_2.section_3",
+        "heading": "Section III - Preuve et contenu du contrat",
+        "tally": 2,
+        "reason": "le contenu de la police"
+       }
+      ]
+     }
+    ],
+    "stopped": "list_node"
+   },
+   {
+    "level": "detectors",
+    "candidates": [
+     {
+      "article_pk": 96058,
+      "found_by": {
+       "exact": null,
+       "outline": 1,
+       "words": 2,
+       "meaning": 1
+      },
+      "meaning_only": false
+     }
+    ],
+    "skipped": [
+     {
+      "detector": "exact",
+      "why": "aucun article nommé dans la question"
+     }
+    ]
+   },
+   {
+    "level": "arbiter",
+    "by": "model",
+    "candidates": [
+     {
+      "article_pk": 96058,
+      "role": "rule",
+      "reason": "la liste des mentions de la police"
+     }
+    ]
+   },
+   {
+    "level": "read",
+    "by": "model",
+    "articles_read": 3,
+    "read_amount_set_by": "list",
+    "lines_quoted": 8
+   },
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "liste lue sous son titre",
+    "state": "answer"
+   }
+  ],
+  "calls": [
+   {
+    "step": "question",
+    "model": "gpt-6-luna",
+    "ms": 820,
+    "tokens_in": 1210,
+    "tokens_out": 96
+   },
+   {
+    "step": "route",
+    "model": "gpt-6-luna",
+    "ms": 1340,
+    "tokens_in": 3880,
+    "tokens_out": 140
+   },
+   {
+    "step": "outline",
+    "model": "gpt-6-luna",
+    "ms": 1110,
+    "tokens_in": 2420,
+    "tokens_out": 120
+   }
+  ],
+  "cost_usd": 0.00611,
+  "ms": 4120
+ },
+ "meta": {
+  "build": {
+   "code": "f1",
+   "data": "20261122a"
+  },
+  "models": {
+   "question": "gpt-6-luna",
+   "read": "gpt-6.2-sol"
+  },
+  "prompts": {
+   "arbiter": "p3"
+  },
+  "parse": {},
+  "candidates": [
+   {
+    "article_pk": 96058,
+    "label": "Article 16"
+   }
+  ],
+  "read": [],
+  "replay": "rJ1vZXhfZml4dHVyZV9saXN0"
+ }
+}

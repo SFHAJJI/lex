@@ -1,0 +1,674 @@
+{
+ "question": "En 2014, combien de temps durait au maximum la période d'essai d'un salarié ?",
+ "row": {
+  "question": "En 2014, combien de temps durait au maximum la période d'essai d'un salarié ?",
+  "language": "fr",
+  "date": {
+   "from": "2014-01-01",
+   "to": "2014-12-31",
+   "grain": "year",
+   "text": "2014",
+   "how": "a year alone is the whole year"
+  },
+  "named_articles": [],
+  "named_acts": [],
+  "quantities": [],
+  "unplaced": [],
+  "notes": [],
+  "language_scores": {
+   "fr": 4,
+   "de": 0,
+   "en": 0,
+   "lb": 2
+  },
+  "question_type": "value",
+  "personal_case": false,
+  "french": "En 2014, combien de temps durait au maximum la période d'essai d'un salarié ?",
+  "legal_terms": [
+   "période d’essai",
+   "salarié",
+   "durée maximale",
+   "contrat de travail"
+  ],
+  "in_scope": true
+ },
+ "blocks": [
+  {
+   "role": "candidate",
+   "kind": "article",
+   "work": "code-travail",
+   "anchor": "art_l_121-5",
+   "date": "2020-11-01",
+   "why": null,
+   "act_title": "Code du travail",
+   "act_id": "/eli/etat/leg/code/travail",
+   "article": "Art. L. 121-5.",
+   "number": "l121-5",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre Premier. Le contrat de travail en général > Section 3. Période d’essai",
+   "version_from": "2020-11-01",
+   "version_to": null,
+   "article_since": null,
+   "official": "https://legilux.public.lu/eli/etat/leg/code/travail/jo",
+   "article_pk": 17926,
+   "lines": [
+    5,
+    6,
+    8
+   ],
+   "wording_since": "2020-11-01",
+   "wording_until": null,
+   "wording_no": 1,
+   "wording_first_held": 1,
+   "last_change": null,
+   "quote": [
+    {
+     "n": 5,
+     "text": "La période d’essai convenue entre parties ne peut être inférieure à deux semaines, ni supérieure à six mois.",
+     "label": null
+    },
+    {
+     "n": 6,
+     "text": "Par dérogation aux dispositions de l’alinéa qui précède, la période maximale d’essai ne peut excéder: trois mois pour le salarié dont le niveau de formation professionnelle n’atteint pas celui du certificat d’aptitude technique et professionnelle de l’enseignement secondaire technique; douze mois pour le salarié dont le salaire mensuel brut de début atteint un niveau déterminé par voie de règlement grand-ducal.",
+     "label": null
+    },
+    {
+     "n": 8,
+     "text": "En cas de suspension de l’exécution du contrat pendant la période d’essai, cette période est prolongée d’une durée égale à celle de la suspension, sans que la prolongation de l’essai ne puisse excéder un mois.",
+     "label": null
+    }
+   ],
+   "text": [
+    "La période d’essai convenue entre parties ne peut être inférieure à deux semaines, ni supérieure à six mois.",
+    "Par dérogation aux dispositions de l’alinéa qui précède, la période maximale d’essai ne peut excéder: trois mois pour le salarié dont le niveau de formation professionnelle n’atteint pas celui du certificat d’aptitude technique et professionnelle de l’enseignement secondaire technique; douze mois pour le salarié dont le salaire mensuel brut de début atteint un niveau déterminé par voie de règlement grand-ducal.",
+    "En cas de suspension de l’exécution du contrat pendant la période d’essai, cette période est prolongée d’une durée égale à celle de la suspension, sans que la prolongation de l’essai ne puisse excéder un mois."
+   ],
+   "label": "Art. L. 121-5.",
+   "version": {
+    "id": null,
+    "from": "2020-11-01",
+    "until": null,
+    "until_known": false
+   }
+  }
+ ],
+ "see_also": [],
+ "candidates": [
+  {
+   "label": "A1",
+   "article_pk": 17926,
+   "act_title": "Code du travail",
+   "article": "Art. L. 121-5.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre Premier. Le contrat de travail en général > Section 3. Période d’essai",
+   "how": "keywords+meaning+outline",
+   "score": 0.5973
+  },
+  {
+   "label": "A2",
+   "article_pk": 17941,
+   "act_title": "Code du travail",
+   "article": "Art. L. 122-11.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 8. Période d’essai",
+   "how": "keywords+meaning",
+   "score": 0.6098
+  },
+  {
+   "label": "A3",
+   "article_pk": 17951,
+   "act_title": "Code du travail",
+   "article": "Art. L. 123-8.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre III. Travail à temps partiel > Section 5. Droits du salarié à temps partiel",
+   "how": "keywords+meaning",
+   "score": 0.5524
+  },
+  {
+   "label": "A4",
+   "article_pk": 18476,
+   "act_title": "Code du travail",
+   "article": "Art. L. 344-9.",
+   "heading": null,
+   "path": "LIVRE III. PROTECTION, SECURITE ET SANTE DES SALARIES > Titre IV Emploi de jeunes salariés > Chapitre IV. Travail des adolescents > Section 2. Durée de travail",
+   "how": "keywords",
+   "score": 0.4467
+  },
+  {
+   "label": "A5",
+   "article_pk": 17987,
+   "act_title": "Code du travail",
+   "article": "Art. L. 131-7.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre III Travail intérimaire > Chapitre Premier. Réglementation du travail intérimaire > Section 4. Rapports entre l’entreprise de travail intérimaire et le salarié intérimaire: Contrat de mission",
+   "how": "meaning",
+   "score": 0.5894
+  },
+  {
+   "label": "A6",
+   "article_pk": 17934,
+   "act_title": "Code du travail",
+   "article": "Art. L. 122-4.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > Titre II Contrat de travail > Chapitre II. Contrat de travail à durée déterminée > Section 3. Durée du contrat à durée déterminée",
+   "how": "meaning",
+   "score": 0.5883
+  },
+  {
+   "label": "A7",
+   "article_pk": 18158,
+   "act_title": "Code du travail",
+   "article": "Art. L. 214-3.",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre Premier Durée de travail > Chapitre IV. Durée du travail des salariés exécutant des activités mobiles de transport routier > Section 2. Durée du travail",
+   "how": "keywords",
+   "score": 0.4224
+  },
+  {
+   "label": "A8",
+   "article_pk": 18180,
+   "act_title": "Code du travail",
+   "article": "Art. L. 216-3.",
+   "heading": null,
+   "path": "LIVRE II. REGLEMENTATION ET CONDITIONS DE TRAVAIL > Titre Premier Durée de travail > Chapitre VI. Durée de travail des salariés occupés dans les secteurs de l’agriculture, de la viticulture et de l’horticulture",
+   "how": "keywords",
+   "score": 0.4189
+  },
+  {
+   "label": "A9",
+   "article_pk": 18048,
+   "act_title": "Code du travail",
+   "article": "Art. L. 152-6.",
+   "heading": null,
+   "path": "LIVRE PREMIER. Relations individuelles et collectives du travail > «Titre V Emploi et stages des élèves et étudiants» > Chapitre II. Stages des élèves et étudiants > Section 2. Stages pratiques en vue de l’acquisition d’une expérience professionnelle",
+   "how": "meaning",
+   "score": 0.5492
+  }
+ ],
+ "searched": {
+  "kinds_of_text": [
+   "general",
+   "repealed"
+  ],
+  "passages_in_those_kinds": 81637,
+  "words": {
+   "2014": 3520,
+   "temps": 3004,
+   "durait": 0,
+   "maximum": 3962,
+   "periode": 6102,
+   "essai": 720,
+   "salarie": 3035,
+   "duree": 6087,
+   "maximale": 3962,
+   "contrat": 25421,
+   "travail": 13981
+  },
+  "texts_whose_table_of_contents_was_read": [
+   "Code du travail",
+   "Loi du 20 juin 2020 portant\\n1° dérogation temporaire à certaines dispositions en matière ",
+   "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou"
+  ],
+  "period": [
+   "2014-01-01",
+   "2014-12-31"
+  ],
+  "closest": {
+   "article": "Art. L. 121-5.",
+   "heading": null,
+   "act_title": "Code du travail",
+   "holds": [
+    "maximum",
+    "periode",
+    "essai",
+    "salarie",
+    "duree",
+    "maximale",
+    "contrat"
+   ],
+   "lacks": [
+    "2014",
+    "temps",
+    "durait",
+    "travail"
+   ]
+  }
+ },
+ "notes": [
+  "text_not_held_for_that_date"
+ ],
+ "not_held": [
+  {
+   "name": "Code du travail",
+   "why": "held only from 2020-11-01",
+   "by": "code"
+  }
+ ],
+ "outcome": "candidates",
+ "build": {
+  "code": "local",
+  "data": "local",
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  }
+ },
+ "trace": {
+  "steps": [
+   {
+    "step": "question_code",
+    "who": "code",
+    "detail": {
+     "language": "fr",
+     "date": {
+      "from": "2014-01-01",
+      "to": "2014-12-31",
+      "grain": "year",
+      "text": "2014",
+      "how": "a year alone is the whole year"
+     },
+     "named_articles": [],
+     "named_acts": [],
+     "quantities": [],
+     "unplaced": []
+    },
+    "ms": 0
+   },
+   {
+    "step": "question_model",
+    "who": "model",
+    "detail": {
+     "question_type": "value",
+     "personal_case": false,
+     "french": "En 2014, combien de temps durait au maximum la période d'essai d'un salarié ?",
+     "legal_terms": [
+      "période d’essai",
+      "salarié",
+      "durée maximale",
+      "contrat de travail"
+     ],
+     "in_scope": true
+    },
+    "ms": 2010,
+    "tokens_in": 266,
+    "tokens_out": 113,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_exact",
+    "who": "code",
+    "detail": {
+     "named_found": 0,
+     "laws_named": 0
+    },
+    "ms": 0
+   },
+   {
+    "step": "find_words",
+    "who": "code",
+    "detail": {
+     "words_of_the_question": [
+      "2014",
+      "temps",
+      "durait",
+      "maximum",
+      "periode",
+      "essai",
+      "salarie"
+     ],
+     "terms_a_statute_would_use": [
+      "duree",
+      "maximale",
+      "contrat",
+      "travail"
+     ],
+     "articles_holding_each_word": {
+      "2014": 3520,
+      "temps": 3004,
+      "durait": 0,
+      "maximum": 3962,
+      "periode": 6102,
+      "essai": 720,
+      "salarie": 3035,
+      "duree": 6087,
+      "maximale": 3962,
+      "contrat": 25421,
+      "travail": 13981
+     },
+     "articles_kept": 10
+    },
+    "ms": 37
+   },
+   {
+    "step": "outline_walk",
+    "who": "model",
+    "detail": {
+     "texts_walked": 3,
+     "started_while_the_question_was_described": 3,
+     "walks": [
+      {
+       "act_id": "/eli/etat/leg/code/travail",
+       "title": "Code du travail",
+       "outline_rows": 471,
+       "parts_named": [
+        "Section 3. Période d’essai"
+       ],
+       "articles_in_parts": 1,
+       "ms": 991,
+       "tokens_in": 17957,
+       "tokens_out": 30,
+       "reason": "La section porte sur la période d’essai du contrat de travail."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/2020/06/20/a538",
+       "title": "Loi du 20 juin 2020 portant\\n1° dérogation temporaire à certaines dispositions en matière ",
+       "outline_rows": 1,
+       "parts_named": [],
+       "articles_in_parts": 0,
+       "ms": 1805,
+       "tokens_in": 301,
+       "tokens_out": 103,
+       "reason": "Cette annexe porte sur les activités commerciales et artisanales, pas sur la durée de la période d’essai en 2014."
+      },
+      {
+       "act_id": "/eli/etat/leg/loi/1990/11/09/n1",
+       "title": "Loi du 9 novembre 1990 ayant pour objet la création d'un registre public maritime luxembou",
+       "outline_rows": 125,
+       "parts_named": [
+        "Sous-section 3 Période d’essai",
+        "Sous-section 7 Période d’essai"
+       ],
+       "articles_in_parts": 2,
+       "ms": 3386,
+       "tokens_in": 7291,
+       "tokens_out": 220,
+       "reason": "Les règles de période d’essai figurent séparément pour les contrats à durée indéterminée et déterminée."
+      }
+     ],
+     "articles_from_the_parts": 3,
+     "whole_part_for_a_list": false
+    },
+    "ms": 2494,
+    "tokens_in": 25549,
+    "tokens_out": 353,
+    "model": "gpt-6-luna"
+   },
+   {
+    "step": "find_meaning",
+    "who": "code+embedding",
+    "detail": {
+     "index_rows": 97578,
+     "kinds_of_text_searched": [
+      "general",
+      "repealed"
+     ],
+     "rows_in_scope": 81637,
+     "rows_kept": 40,
+     "articles_kept": 12,
+     "acts": 2
+    },
+    "ms": 3142,
+    "model": "text-embedding-3-large"
+   },
+   {
+    "step": "date",
+    "who": "code",
+    "detail": {
+     "period": [
+      "2014-01-01",
+      "2014-12-31"
+     ],
+     "grain": "year",
+     "how": "a year alone is the whole year",
+     "candidates_moved_to_another_version": 0,
+     "not_applicable_then": 12,
+     "period_spans_several_versions": 0
+    },
+    "ms": 35
+   },
+   {
+    "step": "version_held",
+    "who": "code",
+    "detail": {
+     "held_for_that_date": false,
+     "earliest_version_held": "2020-11-01",
+     "text": "Code du travail"
+    },
+    "ms": null
+   },
+   {
+    "step": "read",
+    "who": "model",
+    "detail": {
+     "articles_read": 9,
+     "pointed": "A1",
+     "lines": [
+      5,
+      6,
+      8
+     ],
+     "answer_found": true,
+     "found_by": "keywords+meaning+outline",
+     "outline_walked": true,
+     "complete_answer_found": true,
+     "who_is_covered": "Salariés soumis au régime général de la période d’essai",
+     "text_reach": "general",
+     "question_is_about_that_group": false,
+     "reason": "L’article fixe le plafond général, les plafonds dérogatoires et la prolongation en cas de suspension ; le régime des CDD y renvoie."
+    },
+    "ms": 2555,
+    "tokens_in": 3796,
+    "tokens_out": 142,
+    "model": "gpt-6.2-sol"
+   },
+   {
+    "step": "copy_and_check",
+    "who": "code",
+    "detail": {
+     "lines_copied": 3,
+     "line_numbers_refused": []
+    },
+    "ms": null
+   }
+  ],
+  "ms": 7161,
+  "tokens": {
+   "text-embedding-3-large": [
+    26,
+    0
+   ],
+   "gpt-6-luna": [
+    25815,
+    466
+   ],
+   "gpt-6.2-sol": [
+    3796,
+    142
+   ]
+  },
+  "cost_usd_list_price": 0.01344,
+  "price_source": "Azure retail price list, data zone, read 2026-11-20; gpt-6.2-sol not listed yet, price of gpt-6.1-sol used; not yet compared with the bill",
+  "model_calls": 3,
+  "levels": [
+   {
+    "level": "decision",
+    "by": "code",
+    "rule": "topk:candidates",
+    "state": "not_held"
+   }
+  ],
+  "cost_usd": 0.01344,
+  "calls": [
+   {
+    "step": "question_model",
+    "model": "gpt-6-luna",
+    "ms": 2010,
+    "tokens_in": 266,
+    "tokens_out": 113
+   },
+   {
+    "step": "outline_walk",
+    "model": "gpt-6-luna",
+    "ms": 2494,
+    "tokens_in": 25549,
+    "tokens_out": 353
+   },
+   {
+    "step": "read",
+    "model": "gpt-6.2-sol",
+    "ms": 2555,
+    "tokens_in": 3796,
+    "tokens_out": 142
+   }
+  ]
+ },
+ "state": "not_held",
+ "pipeline": "topk",
+ "date_used": "2014-01-01",
+ "date_said": true,
+ "missing": null,
+ "clarify": null,
+ "list": null,
+ "evidence": null,
+ "meta": {
+  "build": {
+   "code": "local",
+   "data": "local",
+   "models": {
+    "understand": "gpt-6-luna",
+    "read": "gpt-6.2-sol",
+    "exception": "gpt-6.2-sol",
+    "outline": "gpt-6-luna"
+   }
+  },
+  "models": {
+   "understand": "gpt-6-luna",
+   "read": "gpt-6.2-sol",
+   "exception": "gpt-6.2-sol",
+   "outline": "gpt-6-luna"
+  },
+  "prompts": {
+   "version": "topk"
+  },
+  "parse": {
+   "language": "fr",
+   "date": {
+    "from": "2014-01-01",
+    "to": "2014-12-31",
+    "grain": "year",
+    "text": "2014",
+    "how": "a year alone is the whole year"
+   },
+   "question_type": "value",
+   "french": "En 2014, combien de temps durait au maximum la période d'essai d'un salarié ?",
+   "legal_terms": [
+    "période d’essai",
+    "salarié",
+    "durée maximale",
+    "contrat de travail"
+   ],
+   "personal_case": false
+  },
+  "candidates": [
+   {
+    "article_pk": 17926,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1,
+     "outline": 1
+    }
+   },
+   {
+    "article_pk": 17941,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 17951,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1,
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 18476,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 17987,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 17934,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   },
+   {
+    "article_pk": 18158,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 18180,
+    "role": "candidate",
+    "found_by": {
+     "keywords": 1
+    }
+   },
+   {
+    "article_pk": 18048,
+    "role": "candidate",
+    "found_by": {
+     "meaning": 1
+    }
+   }
+  ],
+  "read": [
+   {
+    "article_pk": 17926
+   },
+   {
+    "article_pk": 17941
+   },
+   {
+    "article_pk": 17951
+   },
+   {
+    "article_pk": 18476
+   },
+   {
+    "article_pk": 17987
+   },
+   {
+    "article_pk": 17934
+   },
+   {
+    "article_pk": 18158
+   },
+   {
+    "article_pk": 18180
+   },
+   {
+    "article_pk": 18048
+   }
+  ],
+  "replay": "eNq1U0uOm0AQvUqrNtngCGz8CZssopzCslAZygZN0036g8eyLOUaOYLP4ZvkJKkGk5kJ3kZCovp1vapXn75AB1kSQQsZON2-QAQFm1IXKNku39kte8LBK0Vy1iUM_ODzdyXmcZJGotDNviYlShKOmtaK0husnUAvGnytG98IiaK930yt2af8RNZizX-vhEWJpr7fxNeQ0nPYEHMWJ_wFxELmjKcI2AClXV6RLPnCPERnBaqyLtGRZXQP2XabrL_MV1zLeAHRdhmtos0uAoiUlzI6oLTUmzsGVcWsCyhsiIN-6yV64Qx2WIfiT9WZ8ZBXaCXP4mB0w5XP41nyULkPDgUT4crxGsj6LFDI0fpr0Gi0CNkFJKqjx2PIezCh3CCX8ZDi31Y4PSLJfLYIyJG7rBg8Ewayo1f3cOFTpU98QBEuBUqtSNRWuIrEqdKSehyuPElP1tVa5e7cBh0dSs8tYwmkiuq_jFnSEWXuyDQ81C28MX7__NVz2Gck9Fth7jcacqAM2gqteDyuV_IYE_e9JWO14sgFWq6kHzIX-PJ0J3ZRwNJkii0n2CZdP-Fu1lNskU64yXIzxTbxBIvTj35ckOEn-FA-aB3UDXoGBUPOIcsQt4_EZNn1Wy2pI94-KKmoLY_5w7ZyCi_p6Uuyrl_FtyfXbzbPa52suEHesrb4c5wsUi5ZhTGG9ctH9_ygTe4qdPlQzfUPvjdiTA"
+ }
+}

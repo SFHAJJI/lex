@@ -21,7 +21,7 @@ import { exportPdf } from "../scripts/export-pdf.mjs";
 import { readEvidenceBundle } from "../scripts/reading-answer.mjs";
 import { pageOfQuery, readingRequestFor, parseSitePath, sitePageFor } from "../scripts/permalinks.mjs";
 
-const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
+const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const envelopeOf = (scenarioStart) => {
   const entry = census.envelopes.find((candidate) => candidate.operation === "evidence_bundle" && candidate.scenario.startsWith(scenarioStart));
   assert.ok(entry, `the census holds the evidence_bundle envelope "${scenarioStart}..."`);

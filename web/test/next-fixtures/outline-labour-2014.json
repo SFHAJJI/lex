@@ -1,0 +1,154 @@
+{
+ "act_id": "/eli/etat/leg/code/travail",
+ "work": "code-travail",
+ "title": "Code du travail",
+ "asked": "2014-06-01",
+ "version": {
+  "id": 736,
+  "from": "2020-11-01",
+  "until": "2020-12-22",
+  "until_known": true,
+  "articles": 1133
+ },
+ "held": {
+  "versions": 29,
+  "first": "2020-11-01",
+  "last": "2026-07-01"
+ },
+ "before_first_held": true,
+ "outline_source": "node",
+ "outline": [
+  {
+   "node_id": "titre_préliminaire",
+   "parent": null,
+   "depth": 0,
+   "label": "Dispositions d’ordre public",
+   "articles": 1,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_010-1",
+   "last_anchor": "art_l_010-1"
+  },
+  {
+   "node_id": "livre_premier",
+   "parent": null,
+   "depth": 0,
+   "label": "Relations individuelles et collectives du travail",
+   "articles": 200,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_111-1",
+   "last_anchor": "art_l_166-9"
+  },
+  {
+   "node_id": "livre_premier.titre_premier",
+   "parent": "livre_premier",
+   "depth": 1,
+   "label": "La formation professionnelle",
+   "articles": 12,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_111-1",
+   "last_anchor": "art_l_111-12"
+  },
+  {
+   "node_id": "livre_premier.titre_premier.chapitre_unique",
+   "parent": "livre_premier.titre_premier",
+   "depth": 2,
+   "label": "Le droit de former, le contrat d’apprentissage et la convention de stage de formation",
+   "articles": 12,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_111-1",
+   "last_anchor": "art_l_111-12"
+  },
+  {
+   "node_id": "livre_premier.titre_ii",
+   "parent": "livre_premier",
+   "depth": 1,
+   "label": "Contrat de travail",
+   "articles": 59,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-1",
+   "last_anchor": "art_l_127-6"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier",
+   "parent": "livre_premier.titre_ii",
+   "depth": 2,
+   "label": "Le contrat de travail en général",
+   "articles": 9,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-1",
+   "last_anchor": "art_l_121-9"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier.section_1",
+   "parent": "livre_premier.titre_ii.chapitre_premier",
+   "depth": 3,
+   "label": "Dispositions générales",
+   "articles": 3,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-1",
+   "last_anchor": "art_l_121-3"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier.section_2",
+   "parent": "livre_premier.titre_ii.chapitre_premier",
+   "depth": 3,
+   "label": "Forme et preuve du contrat de travail",
+   "articles": 1,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-4",
+   "last_anchor": "art_l_121-4"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier.section_3",
+   "parent": "livre_premier.titre_ii.chapitre_premier",
+   "depth": 3,
+   "label": "Période d’essai",
+   "articles": 1,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-5",
+   "last_anchor": "art_l_121-5"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier.section_4",
+   "parent": "livre_premier.titre_ii.chapitre_premier",
+   "depth": 3,
+   "label": "Protection en cas d’incapacité de travail du salarié",
+   "articles": 1,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-6",
+   "last_anchor": "art_l_121-6"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier.section_5",
+   "parent": "livre_premier.titre_ii.chapitre_premier",
+   "depth": 3,
+   "label": "Révision du contrat de travail",
+   "articles": 1,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-7",
+   "last_anchor": "art_l_121-7"
+  },
+  {
+   "node_id": "livre_premier.titre_ii.chapitre_premier.section_6",
+   "parent": "livre_premier.titre_ii.chapitre_premier",
+   "depth": 3,
+   "label": "Suspension du contrat de travail",
+   "articles": 1,
+   "first_article": null,
+   "last_article": null,
+   "first_anchor": "art_l_121-8",
+   "last_anchor": "art_l_121-8"
+  }
+ ]
+}

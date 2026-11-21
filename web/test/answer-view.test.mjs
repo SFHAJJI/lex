@@ -9,6 +9,7 @@ import test from 'node:test';
 import { answerSentence, contentKeys, dateFor, quoteVerifies, searchCount, searchStepOf, sentencesOf, stepsRun, wordKey } from '../scripts/answer-view.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 import { COVERAGE_RECORD } from '../scripts/coverage-record.mjs';
+import { UNSEEN_RECORD } from '../scripts/unseen-record.mjs';
 import { renderLiveReferencePage } from '../.react-build/app.mjs';
 
 const ART_44 = "Article 44Délai de prescription1.Le délai de prescription de toute action dérivant du contrat d'assurance est de trois ans.Le délai court à partir du jour de l'événement qui donne ouverture à l'action. Toutefois, lorsque celui à qui appartient l'action prouve qu'il n'a eu connaissance de cet événement qu'à une date ultérieure, le délai ne commence à courir qu'à cette date.";
@@ -52,13 +53,18 @@ test('the work boxes read the trace, the search asked again and the quotation\'s
   assert.deepEqual(searchStepOf(trace), { query: 'délai de prescription', language: 'fra', limit: 10 });
   assert.equal(searchStepOf({ steps: [] }), null);
   assert.deepEqual(stepsRun(trace).map((step) => step.operation), ['search', 'evidence_bundle'], 'a step that did not fire is not said');
-  assert.deepEqual(searchCount({ result: { value: { hits: [1, 2, 3], truncated: false } } }), { matched: 3, more: false });
-  assert.deepEqual(searchCount({ result: { value: { hits: new Array(10).fill(0), truncated: true } } }), { matched: 10, more: true });
+  assert.deepEqual(searchCount({ result: { value: { hits: [1, 2, 3], truncated: false } } }), { matched: 3, more: false, named: false });
+  assert.deepEqual(searchCount({ result: { value: { hits: new Array(10).fill(0), truncated: true } } }), { matched: 10, more: true, named: false });
+  // Words that name an article ("article 5 of the GDPR") open it by its reference: no word search, no hit counted.
+  assert.deepEqual(searchCount({ result: { value: { hits: [], truncated: false, reference: { outcome: 'opens' } } } }), { matched: 0, more: false, named: true });
   assert.equal(searchCount(null), null);
   const quote = { article_text_sha256: 'a'.repeat(64) };
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'a'.repeat(64) } } }), true);
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'b'.repeat(64) } } }), false);
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'not_held' } } }), false);
+  // A digest missing on either side is no match (the review of #1055).
+  assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches' } } }), false, 'no digest served');
+  assert.equal(quoteVerifies({}, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'a'.repeat(64) } } }), false, 'no digest carried');
   assert.equal(dateFor('2025-11-25', 'fr'), '25/11/2025');
   assert.equal(dateFor('2025-11-25', 'en'), '2025-11-25');
 });
@@ -69,15 +75,82 @@ test('Decisions and Evidence print the recorded runs\' and the coverage answer\'
   const decisions = renderLiveReferencePage('decisions');
   assert.ok(decisions.includes(`${dev.wrongArticle} wrong articles in ${dev.cases} test questions.`));
   assert.ok(decisions.includes(`${dev.notFound + dev.wronglyRefused} of the ${dev.rightArticle + dev.wrongArticle + dev.notFound + dev.wronglyRefused} questions that call for an article get none.`));
-  assert.ok(decisions.includes(`Open problem: ${heldout.rightArticle} of ${heldout.cases} unseen questions get the right article.`));
-  assert.equal((decisions.match(/class="decision-card"/g) ?? []).length, 7, 'seven cards');
+  assert.ok(decisions.includes(`Measured: ${heldout.rightArticle} of ${heldout.cases} unseen questions get the right article.`));
+  // V4 (V5How's typography): each decision a row, with its own anchor How it works links.
+  assert.equal((decisions.match(/<li class="lx-dec-item" id="decision-[a-zA-Z]+" data-decision=/g) ?? []).length, 7, 'seven decisions');
   const evidence = renderLiveReferencePage('evidence');
   for (const [key, value] of [['right', dev.rightArticle], ['wrong', dev.wrongArticle], ['notFound', dev.notFound], ['wronglyRefused', dev.wronglyRefused], ['rightBehaviour', dev.rightBehaviour]]) {
     assert.match(evidence, new RegExp(`data-count="${key}"[^>]*><strong>${value}</strong>`), key);
   }
   assert.equal((evidence.match(/<tr data-outcome=/g) ?? []).length, dev.cases, 'every question, one by one');
   assert.ok(evidence.includes(`Model: ${dev.modelDeployment}`));
-  assert.ok(evidence.includes(`Held: ${COVERAGE_RECORD.works.toLocaleString('en-GB')} acts`));
-  assert.equal((evidence.match(/class="flow-accent"/g) ?? []).length, 2, 'the model and the owner, each in the accent colour');
+  // Held and missing from one source: together, what the catalogues list (the owner's question of 2026-11-14).
+  const held = COVERAGE_RECORD.versionsWithText;
+  const missing = COVERAGE_RECORD.versionsCatalogued - held;
+  assert.ok(evidence.includes(`Held: the text of ${held.toLocaleString('en-GB')} versions of ${COVERAGE_RECORD.worksWithText.toLocaleString('en-GB')} acts`));
+  assert.ok(evidence.includes(`Missing: the text of ${missing.toLocaleString('en-GB')} more of the ${COVERAGE_RECORD.versionsCatalogued.toLocaleString('en-GB')} versions`));
+  assert.equal(held + missing, COVERAGE_RECORD.versionsCatalogued);
+  assert.equal((evidence.match(/data-accent=""/g) ?? []).length, 2, 'the model and the owner, each marked');
   assert.ok(!/@example\.com/.test(evidence), 'no e-mail address on the page');
+});
+
+test('How it works shows the MLflow registry as MLflow holds it, the stability, and the held-out set accounted for', async () => {
+  const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
+  const { HOW_IT_WORKS_PARTS, PUBLIC_LINKS } = await import('../.react-build/app.mjs');
+  const page = renderLiveReferencePage('evidence');
+  assert.deepEqual([...page.matchAll(/data-reference-section="([a-z]+)"/g)].map((match) => match[1]), [...HOW_IT_WORKS_PARTS]);
+  // One row a registered version, in order; the champion the alias names.
+  assert.deepEqual([...page.matchAll(/data-registry-version="(\d+)"/g)].map((match) => Number(match[1])), REGISTRY_RECORD.versions.map((version) => version.version));
+  const champion = REGISTRY_RECORD.aliases.champion;
+  assert.match(page, new RegExp(`data-registry-version="${champion}" class="registry-champion"><th scope="row">${champion} · champion</th>`));
+  assert.ok(page.includes(`Registered model lex-assistant in MLflow ${REGISTRY_RECORD.mlflow_version}: ${REGISTRY_RECORD.versions.length} versions; the alias champion on version ${champion}`));
+  // The stability and the held-out set, from the runs; the three kinds of held-out miss add up to the misses.
+  const dev = EVALUATION_RECORD.dev;
+  assert.ok(page.includes(`the same verdict ${Math.floor(100 * dev.replaySameVerdict + 0.5)} % of the time and the same plan ${Math.floor(100 * dev.replaySamePlan + 0.5)} %`));
+  // The unseen questions are the sealed set's one run (2026-11-20): every count is the record's own, a wrong answer is
+  // said first, and the three groups add up to the questions asked.
+  const unseen = UNSEEN_RECORD;
+  assert.ok(page.includes(`${unseen.cases} unseen questions`) && page.includes(`Wrong answers asserted: ${unseen.otherLaws.wrong + unseen.insurance.wrong}.`), 'the unseen questions and the wrong answers asserted');
+  const other = /Outside insurance \((\d+)\), Lex shows candidate passages and asserts nothing: the right article is among them (\d+) times, passages without it (\d+) times, nothing or a refusal (\d+) times\./.exec(page);
+  assert.ok(other !== null, 'the unseen questions outside insurance, by outcome');
+  assert.deepEqual(other.slice(1).map(Number), [unseen.otherLaws.cases, unseen.otherLaws.candidatesWith + unseen.otherLaws.right, unseen.otherLaws.candidatesWithout, unseen.otherLaws.notFound + unseen.otherLaws.refused]);
+  assert.equal(Number(other[2]) + Number(other[3]) + Number(other[4]) + unseen.otherLaws.wrong, unseen.otherLaws.cases);
+  assert.ok(page.includes(`In insurance (${unseen.insurance.cases}): ${unseen.insurance.right} right answers, the right article shown without being asserted ${unseen.insurance.candidatesWith} times.`), 'the unseen insurance questions');
+  assert.ok(page.includes(`No article expected (${unseen.noArticle.cases}): ${unseen.noArticle.asExpected} handled as expected.`), 'the unseen questions with no article expected');
+  assert.equal(unseen.otherLaws.cases + unseen.insurance.cases + unseen.noArticle.cases, unseen.cases);
+  // What the assistant reads is said with what Lex holds: the law index's acts, the acts held, the catalogue's.
+  assert.ok(page.includes(`Read by the assistant: ${COVERAGE_RECORD.assistantActs.toLocaleString('en-GB')} Luxembourg acts`), 'what the assistant reads');
+  // The API's description, the public code and the two schedules, linked.
+  assert.ok(page.includes('href="/openapi.json" data-openapi=""'));
+  for (const href of Object.values(PUBLIC_LINKS)) assert.ok(page.includes(`href="${href}" rel="external"`), href);
+});
+
+test('an answer names the MLflow registry version of its very build and planner, and none when the registry lacks that build', async () => {
+  const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
+  const { plannerName, registryVersionFor } = await import('../scripts/answer-view.mjs');
+  const { askOutcome } = await import('../scripts/assistant-panel.mjs');
+  assert.equal(plannerName('azure-openai/gpt-4.1-mini/prompt-a625e51e3b58'), 'gpt-4.1-mini · prompt a625e51e');
+  const champion = REGISTRY_RECORD.versions.find((version) => version.aliases.includes('champion'));
+  assert.equal(registryVersionFor(REGISTRY_RECORD, champion.tags.planner_id, champion.tags.serving_commit).version, champion.version);
+  // The review of #1060: a planner alone is shared by versions of different builds and gate results, so it names none.
+  const first = REGISTRY_RECORD.versions[0];
+  const sharing = REGISTRY_RECORD.versions.filter((version) => version.tags.planner_id === first.tags.planner_id);
+  assert.ok(new Set(sharing.map((version) => version.tags.serving_commit)).size > 1, 'the record holds one planner over several builds');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, first.tags.planner_id), null, 'no build named, no version');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, first.tags.planner_id, 'f'.repeat(40)), null, 'a build the registry does not hold');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, 'azure-openai/gpt-4.1-mini/prompt-00000000', champion.tags.serving_commit), null, 'a planner it does not hold');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, first.tags.planner_id, first.tags.serving_commit.slice(0, 8)), null, 'a short commit names no build');
+  for (const version of REGISTRY_RECORD.versions) {
+    const named = registryVersionFor(REGISTRY_RECORD, version.tags.planner_id, version.tags.serving_commit);
+    assert.equal(named.tags.planner_id, version.tags.planner_id);
+    assert.equal(named.tags.serving_commit, version.tags.serving_commit, `version ${version.version}: the version named evaluated the same build`);
+  }
+  // One build evaluated twice, its gates failing once and passing once: the passing one (here the champion) is named.
+  const twice = REGISTRY_RECORD.versions.filter((version) => version.tags.serving_commit === champion.tags.serving_commit && version.tags.planner_id === champion.tags.planner_id);
+  if (twice.length > 1) assert.equal(registryVersionFor(REGISTRY_RECORD, champion.tags.planner_id, champion.tags.serving_commit).tags.gates, 'passed');
+  // The build is read from the envelope that carries the answer.
+  const dossier = { schema: 'lex-v3-answer-dossier/1' };
+  const commit = champion.tags.serving_commit;
+  assert.equal(askOutcome({ context: { commits: { serving_runtime_source_commit: commit } }, result: { object_type: 'answer_dossier', value: dossier } }, 'en').servingCommit, commit);
+  assert.equal(askOutcome({ context: {}, result: { object_type: 'answer_dossier', value: dossier } }, 'en').servingCommit, null);
 });
