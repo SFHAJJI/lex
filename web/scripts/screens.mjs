@@ -328,7 +328,8 @@ SHOTS.push(
 );
 // rc3 (22/11/2026): the release candidate rc3 (code t11 = t10's engine files, data 20261122c) at its private label address.
 // The Results page with the sealed run (lex-results/2) in both languages, first screen, tall, folds open and on a phone; the
-// footers; a few real answers of the deployed engine (40-45 s each) to see that t11 answers as t10 did.
+// footers; a few real answers of the deployed engine (40-45 s each) to see that t11 answers as t10 did. Second run: the
+// revision rc3b (the repair round: every key of the sealed file named in the page's language), same list.
 SHOTS.length = 0;
 SHOTS.push(
   ["w-fr-01-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
