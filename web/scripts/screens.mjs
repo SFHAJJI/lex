@@ -271,6 +271,61 @@ const FIRST_RUN = [
   ["t-en-06-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 6000],
 ];
 void FIRST_RUN;
+// rc2 (22/11/2026): the release candidate rc2 (code t10, data 20261122c) at its private label address, real answers of the
+// deployed engine (no fixture, no preview): about 10-20 s an answer, so each waits 40 s (45 s for the long ones); tall viewports
+// for the pages that scroll inside their frame. The questions check repair-engine's work (typed answer, the premium-tax rate from
+// the 1990 law beside the German original, not held for a date naming the right text, the dictionary on an English question,
+// the reference trigger on a life policy) and rc1's defects (paternity leave 2014, motor cover 2010, the evidence table in the dock).
+const RC2 = {
+  typed: "Un assuré peut-il résilier son contrat après un sinistre, et avec quel préavis ?",
+  premiumTax: "Quel est le taux de l'impôt sur les primes d'assurance au Luxembourg ?",
+  suicide: "Mon mari s'est suicidé huit mois après avoir souscrit une assurance sur la vie : l'assureur doit-il payer quelque chose ?",
+  bundled: "The shop says I must take their insurance if I buy the phone. Can they force me to buy both together?",
+  maternity: "En 2018, combien de semaines durait le congé de maternité ?",
+};
+SHOTS.length = 0;
+SHOTS.push(
+  ["v-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["v-fr-02-home--tall", "/fr/", 1366, 1600, false, false, null, 8000],
+  ["v-fr-03-premium-tax--tall", "/fr/radar.html", 1366, 4200, false, false, ASK(RC2.premiumTax), 40000],
+  ["v-fr-04-typed-answer--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(RC2.typed), 40000],
+  ["v-fr-05-typed-answer-trace-open--tall", "/fr/radar.html", 1366, 8000, false, false, ASK_LATE(RC2.typed, OPEN_TRACE, 34000), 40000],
+  ["v-fr-06-compound-trace-open--tall", "/fr/radar.html", 1366, 8000, false, false, ASK_LATE(B1.compound, OPEN_TRACE, 38000), 45000],
+  ["v-fr-07-suicide-life--tall", "/fr/radar.html", 1366, 4200, false, false, ASK(RC2.suicide), 40000],
+  ["v-fr-08-list-headings--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.listHeadings), 40000],
+  ["v-fr-09-not-held-2014--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(B1.notHeld), 40000],
+  ["v-fr-10-not-held-maternity-2018--tall", "/fr/radar.html", 1366, 2600, false, false, ASK(RC2.maternity), 40000],
+  ["v-fr-11-motor-2010--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(R.notFound), 40000],
+  ["v-fr-12-not-found--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(P.none), 40000],
+  ["v-fr-13-not-found--phone-whole", "/fr/radar.html", 390, 844, true, true, ASK(P.none), 40000],
+  ["v-fr-14-clarify--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(B1.clarify), 30000],
+  ["v-fr-15-out-of-scope--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(P.out), 30000],
+  ["v-fr-16-solvency--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(B1.solvency), 45000],
+  ["v-fr-17-css--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(B1.css), 40000],
+  ["v-fr-18-named-article--phone", `/fr${text("&article=art_21")}`, 390, 844, true, false, ASK(Q.named), 40000],
+  ["v-en-01-bundled--tall", "/en/radar.html", 1366, 3600, false, false, ASK(RC2.bundled), 40000],
+  ["v-en-02-english-mcr--tall", "/en/radar.html", 1366, 3600, false, false, ASK(R.english), 45000],
+  ["v-en-03-german--tall", "/en/radar.html", 1366, 3000, false, false, ASK(R.german), 40000],
+  ["v-fr-19-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
+  ["v-fr-20-compare-2011-2013-art38--1366x768", `/fr${text("&from=2011-04-16&to=2013-03-01&article=art_38")}`, 1366, 768, false, false, null, 0],
+  ["v-fr-21-text-css--1366x768", `/fr${CSS}`, 1366, 768, false, false, null, 8000],
+  ["v-fr-22-text-solvency--1366x768", "/fr/text.html?text=32009L0138&article=001", 1366, 768, false, false, null, 8000],
+  ["v-fr-23-text-code-route--1366x768", `/fr${ROUTE}`, 1366, 768, false, false, null, 8000],
+  ["v-fr-24-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["v-fr-25-how-dictionary-open--tall", "/fr/evidence.html", 1366, 9000, false, false, OPEN_DICT, 2500],
+  ["v-en-04-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["v-fr-26-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["v-fr-27-coverage-open--tall", "/fr/coverage.html", 1366, 9000, false, false, OPEN_ALL, 2500],
+  ["v-en-05-coverage--tall", "/en/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["v-fr-28-results--tall", "/fr/results.html", 1366, 6000, false, false, null, 7000],
+  ["v-en-06-results--tall", "/en/results.html", 1366, 6000, false, false, null, 7000],
+  ["v-fr-29-decisions--tall", "/fr/decisions.html", 1366, 4000, false, false, null, 6000],
+  ["v-fr-30-modifications--tall", "/fr/radar.html", 1366, 1800, false, false, null, 8000],
+  ["v-fr-31-privacy--1366-whole", "/fr/privacy.html", 1366, 768, false, true, null, 3000],
+  ["v-fr-32-home--phone", "/fr/", 390, 844, true, false, null, 6000],
+  ["v-fr-33-how--phone", "/fr/evidence.html", 390, 844, true, false, null, 7000],
+  ["v-en-07-home--1366x768", "/en/", 1366, 768, false, false, null, 6000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
