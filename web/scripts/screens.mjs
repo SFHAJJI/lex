@@ -366,6 +366,32 @@ SHOTS.push(
   ["d-fr-08-funnel--phone", "/fr/architecture.html", 390, 844, true, false, '(() => { const el = document.getElementById("arch-funnel"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
   ["d-fr-09-evaluation--phone", "/fr/architecture.html", 390, 844, true, false, '(() => { const el = document.getElementById("arch-evaluation"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
 );
+// rc-dossier (22/11/2026): the revision dossier1 (code t11d = tag rc3's engine + the dossier pages, data 20261122c) at the private
+// label address, no preview: the pages as the revision serves them. The dossier FR and EN at 1366x768, tall, folds open, phone;
+// How, coverage and results first screens. No question is asked (none of these pages asks one).
+const PART = (id) => `(() => { const el = document.getElementById(${JSON.stringify(id)}); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()`;
+SHOTS.length = 0;
+SHOTS.push(
+  ["e-fr-01-dossier--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["e-fr-02-data--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-data"), 2500],
+  ["e-fr-03-indexes--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-indexes"), 2500],
+  ["e-fr-04-references--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-references"), 2500],
+  ["e-fr-05-funnel--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-funnel"), 2500],
+  ["e-fr-06-evaluation--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-evaluation"), 2500],
+  ["e-fr-07-dossier--tall", "/fr/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["e-fr-08-dossier-open--tall", "/fr/architecture.html", 1366, 26000, false, false, OPEN_ALL, 3000],
+  ["e-fr-09-dossier--phone", "/fr/architecture.html", 390, 844, true, false, null, 9000],
+  ["e-fr-10-funnel--phone", "/fr/architecture.html", 390, 844, true, false, PART("arch-funnel"), 2500],
+  ["e-en-01-dossier--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
+  ["e-en-02-references--1366x768", "/en/architecture.html", 1366, 768, false, false, PART("arch-references"), 2500],
+  ["e-en-03-dossier--tall", "/en/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["e-en-04-dossier--phone", "/en/architecture.html", 390, 844, true, false, null, 9000],
+  ["e-en-05-references--phone", "/en/architecture.html", 390, 844, true, false, PART("arch-references"), 2500],
+  ["e-fr-11-how--1366x768", "/fr/evidence.html", 1366, 768, false, false, null, 5000],
+  ["e-fr-12-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 6000],
+  ["e-fr-13-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["e-en-06-how--1366x768", "/en/evidence.html", 1366, 768, false, false, null, 5000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
