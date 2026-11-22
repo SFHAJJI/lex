@@ -43,6 +43,19 @@ export function prose(value, locale) {
 /** A build `{ code, data }` the file names, or null. */
 const buildOf = (value) => (text(objectOr(value)?.code) !== null && text(objectOr(value)?.data) !== null ? { code: value.code.trim(), data: value.data.trim() } : null);
 const sameBuild = (a, b) => a !== null && b !== null && a.code === b.code && a.data === b.data;
+/** rc3: a brick's row key, with the run's name when the file gives one (two full runs are two rows "all"). */
+export const ablationKey = (row) => (text(row?.run) === null ? row.what : `${row.what}-${row.run.trim()}`);
+const fingerprintOf = (value) => (typeof objectOr(value)?.engine === 'string' && /^[0-9a-f]{16}$/u.test(value.engine) ? value.engine : null);
+
+/**
+ * rc3 (22/11/2026): whether two builds `{ code, data, engine }` run the same engine on the same data: the same data tag and the
+ * same fingerprint of the files that compute an answer (`app/engine_id.py`; the server reports its own in `/api/next/config`).
+ */
+export const sameEngine = (a, b) => {
+  const one = objectOr(a);
+  const two = objectOr(b);
+  return one !== null && two !== null && text(one.data) !== null && one.data === two.data && fingerprintOf(one) !== null && fingerprintOf(one) === fingerprintOf(two);
+};
 
 /** A table of rows under its column names; each cell a string. */
 function Table({ columns, rows, mark }) {
@@ -69,8 +82,226 @@ function Filled({ template, place, piece, values = {} }) {
   return <>{before}<span lang={piece.lang}>{piece.text.replace(/[.\s]+$/u, '')}</span>{after}</>;
 }
 
-/** The results in `lex-results/2`, drawn whole. `served` is the build answering on the site (`/api/next/config`), or null. */
-export function Results2View({ results, locale = CHROME_LOCALE, note = null, served = null }) {
+/**
+ * fix-pages3 (22/11/2026): the other runs the file carries (`runs`, RESULTS-SCHEMA.md), each a run in the same shape as the
+ * file's own, with a unique `key`; an entry without a key or a set is left out.
+ */
+export function moreRuns(results) {
+  const seen = new Set();
+  return (Array.isArray(results?.runs) ? results.runs : []).filter((run) => {
+    const key = text(objectOr(run)?.key);
+    if (key === null || key === 'main' || !/^[a-z0-9-]+$/u.test(key) || seen.has(key) || objectOr(run.set) === null) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Whether a run's build is the one answering on the site (`served`, `/api/next/config` `build`): true, false, or null unknown. */
+export function describesSite(run, served) {
+  const own = buildOf(run?.build);
+  const now = buildOf(served);
+  if (own === null || now === null) return null;
+  return sameBuild(own, now) || sameEngine(run.build, served);
+}
+
+/** A run is drawn whole only when final; a run the file marks otherwise is named, with no figure. */
+const isFinal = (run) => run?.status === undefined || run?.status === 'final';
+
+/**
+ * The runs in the order they are drawn: the one that describes the site's answers first, then the others by the day they were
+ * scored, newest first (the file's own run before its `runs` on the same day).
+ */
+export function orderedRuns(results, served) {
+  const all = [{ run: results, key: 'main', at: 0 }, ...moreRuns(results).map((run, at) => ({ run, key: run.key.trim(), at: at + 1 }))];
+  const rank = (entry) => (describesSite(entry.run, served) === true ? 0 : 1);
+  return all.sort((a, b) => rank(a) - rank(b) || String(b.run.made ?? '').localeCompare(String(a.run.made ?? '')) || a.at - b.at);
+}
+
+/**
+ * The results in `lex-results/2`, drawn whole. `served` is the build answering on the site (`/api/next/config`), or null. One
+ * run: as before. Several runs (`runs`) or the walk's value (`walk_value`): a table of the runs first, the walk's value, then
+ * each run under its own heading, with `noteFor(run)` (whether it describes the site's answers) before any of its numbers.
+ */
+export function Results2View({ results, locale = CHROME_LOCALE, note = null, served = null, noteFor = null }) {
+  const table = nextCopy(locale);
+  const runs = moreRuns(results);
+  const walkValue = objectOr(results.walk_value);
+  if (runs.length === 0 && walkValue === null) {
+    return (
+      <div data-next-page="results" data-next-state="ready" data-results-schema={RESULTS_SCHEMA} data-run={results.run ?? ''}>
+        <h1>{table.results.heading}</h1>
+        {note}
+        <RunBody results={results} locale={locale} served={served} />
+      </div>
+    );
+  }
+  const ordered = orderedRuns(results, served);
+  return (
+    <div data-next-page="results" data-next-state="ready" data-results-schema={RESULTS_SCHEMA} data-run={results.run ?? ''} data-results-runs={String(ordered.length)}>
+      <h1>{table.results.heading}</h1>
+      <RunsTable entries={ordered} locale={locale} served={served} />
+      <WalkValue value={walkValue} locale={locale} served={served} />
+      {ordered.map(({ run, key }) => {
+        const title = runTitle(run, locale);
+        return (
+          <section className="lx-next-run" key={key} id={`run-${key === 'main' ? text(run.run) ?? 'main' : key}`} data-results-run={key} aria-labelledby={`run-${key}-heading`}>
+            <h2 id={`run-${key}-heading`} lang={title.lang}>{title.text}</h2>
+            {noteFor === null ? null : noteFor(run)}
+            {isFinal(run) ? <RunBody results={run} locale={locale} served={served} level="h3" idPrefix={key === 'main' ? '' : `${key}-`} />
+              : <p className="lx-muted lx-next-gap" data-results-pending="">{runPendingLine(run, locale)}</p>}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A run's heading: its own title, else its set and its size. */
+function runTitle(run, locale) {
+  const copy = nextCopy(locale);
+  const own = prose(run?.title, locale);
+  if (own !== null) return own;
+  const set = objectOr(run?.set);
+  const name = text(set?.name) ?? text(run?.run) ?? '';
+  return { text: isCount(set?.n) ? fillNext(copy.results4.runTitle, { name, n: countedForm(copy.results2.questions, set.n, locale) }) : name, lang: undefined };
+}
+
+/** A run not scored yet: that no figure is shown, its build, the build it is compared with. */
+function runPendingLine(run, locale) {
+  const copy = nextCopy(locale).results4;
+  const build = buildOf(run?.build);
+  const previous = buildOf(run?.previous?.build);
+  const parts = [copy.pending];
+  if (build !== null) parts.push(fillNext(copy.pendingBuild, build));
+  if (previous !== null) parts.push(fillNext(copy.pendingAgainst, previous));
+  return parts.join(' ');
+}
+
+/** The table of the runs: the set, the version measured, right and wrong asserted with their margins, the decision, the site. */
+function RunsTable({ entries, locale, served }) {
+  const table = nextCopy(locale);
+  const copy = table.results4;
+  const count = (value) => (isCount(value) ? groupedCount(value, locale) : '');
+  const interval = (value) => {
+    const pair = pairOf(value);
+    return pair === null ? '' : fillNext(table.results2.interval, { low: decimal(pair[0], locale), high: decimal(pair[1], locale) });
+  };
+  return (
+    <section aria-labelledby="results-runs" data-results-runs-table="">
+      <h2 id="results-runs">{copy.runsHeading}</h2>
+      <Table
+        mark="runs"
+        columns={['run', 'build', 'right', 'wrong', 'decision', 'site'].map((key) => copy.runsColumns[key])}
+        rows={entries.map(({ run, key }) => {
+          const title = runTitle(run, locale);
+          const build = buildOf(run.build);
+          const totals = objectOr(run.totals);
+          const n = isCount(objectOr(run.set)?.n) ? run.set.n : null;
+          const final = isFinal(run);
+          const site = describesSite(run, served);
+          const result = text(objectOr(run.decision)?.result);
+          const against = buildOf(run.previous?.build);
+          const said = (value, pair) => (isCount(value) && n !== null ? fillNext(copy.runsCount, { count: count(value), n: count(n), interval: interval(pair) || '—' }) : count(value));
+          return {
+            key,
+            head: title.text,
+            lang: title.lang,
+            cells: [
+              build === null ? '' : `${fillNext(copy.runsBuild, build)}${against === null ? '' : ` ${fillNext(copy.runsAgainst, against)}`}`,
+              final ? said(totals?.right, totals?.intervals?.right) : copy.pendingShort,
+              final ? said(totals?.wrong, totals?.intervals?.wrong) : '',
+              !final || result === null ? '' : copy.decisions[result] ?? result,
+              site === null ? '—' : site ? copy.siteYes : copy.siteNo,
+            ],
+          };
+        })}
+      />
+    </section>
+  );
+}
+
+/** fix-pages3: what the walk down the tables of contents adds (`walk_value`, written by walk-analysis), when the file says it. */
+function WalkValue({ value, locale, served }) {
+  if (value === null) return null;
+  const table = nextCopy(locale);
+  const copy = table.results4.walk;
+  const count = (one) => (isCount(one) ? groupedCount(one, locale) : '');
+  const interval = (one) => {
+    const pair = pairOf(one);
+    return pair === null ? '' : fillNext(table.results2.interval, { low: decimal(pair[0], locale), high: decimal(pair[1], locale) });
+  };
+  const pValue = (one) => (isCount(one) ? (one < 0.001 ? `< ${decimal(0.001, locale)}` : decimal(Number(one.toPrecision(2)), locale)) : '—');
+  const search = (key) => (Object.hasOwn(copy.searches, key) ? copy.searches[key] : key);
+  const found = (row) => (isCount(row.found) && isCount(row.of) ? fillNext(copy.outOf, { count: count(row.found), of: count(row.of) }) : count(row.found));
+  const build = buildOf(value.build);
+  const site = describesSite(value, served);
+  const method = prose(value.method, locale);
+  const verdict = prose(value.verdict, locale);
+  const findings = (Array.isArray(value.findings) ? value.findings : []).map((one) => prose(one, locale)).filter((one) => one !== null);
+  const recall = rowsOf(value.recall, 'search');
+  const only = rowsOf(value.only, 'search');
+  const ablation = objectOr(value.ablation);
+  const withRun = objectOr(ablation?.with);
+  const withoutRun = objectOr(ablation?.without);
+  const discordant = pairOf(ablation?.discordant);
+  const slices = rowsOf(ablation?.slices, 'slice');
+  const cost = objectOr(value.cost);
+  const costKeys = ['calls_per_answer', 'share_of_calls', 'ms_per_answer', 'share_of_time', 'usd_per_answer', 'share_of_cost'];
+  return (
+    <section aria-labelledby="results-walk" data-results-walk="">
+      <h2 id="results-walk">{copy.heading}</h2>
+      {verdict === null ? null : <p lang={verdict.lang} data-results-walk-verdict=""><strong>{verdict.text}</strong></p>}
+      {build === null || text(value.run) === null ? null : (
+        <p className={site === false ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results-walk-build="">
+          {fillNext(copy.build, { run: value.run, code: build.code, data: build.data })}{site === false ? <> {table.results2.notServed}</> : null}
+        </p>
+      )}
+      {method === null ? null : <p className="lx-muted" lang={method.lang}>{method.text}</p>}
+      {findings.length === 0 ? null : <ul className="lx-next-findings" data-results-walk-findings="">{findings.map((one) => <li key={one.text} lang={one.lang}>{one.text}</li>)}</ul>}
+      {recall.length === 0 ? null : (
+        <>
+          <h3>{copy.recallHeading}</h3>
+          <Table mark="walk-recall" columns={['search', 'found', 'interval'].map((key) => copy.recallColumns[key])}
+            rows={recall.map((row) => ({ key: row.search, head: search(row.search), cells: [found(row), interval(row.interval)] }))} />
+        </>
+      )}
+      {only.length === 0 ? null : (
+        <>
+          <h3>{copy.onlyHeading}</h3>
+          <Table mark="walk-only" columns={['search', 'found', 'right'].map((key) => copy.onlyColumns[key])}
+            rows={only.map((row) => ({ key: row.search, head: search(row.search), cells: [found(row), count(row.right)] }))} />
+        </>
+      )}
+      {ablation === null || !isCount(withRun?.right) || !isCount(withoutRun?.right) || !isCount(ablation.n) ? null : (
+        <>
+          <h3>{copy.ablationHeading}</h3>
+          <p data-results-walk-ablation="">
+            {fillNext(copy.ablation, { with: count(withRun.right), without: count(withoutRun.right), n: count(ablation.n), a: discordant === null ? '—' : count(discordant[0]), b: discordant === null ? '—' : count(discordant[1]), p: pValue(ablation.p) })}
+          </p>
+          {slices.length === 0 ? null : (
+            <details className="lx-how-fold">
+              <summary>{copy.slicesSummary}</summary>
+              <Table mark="walk-slices" columns={['slice', 'n', 'with', 'without', 'discordant', 'p'].map((key) => copy.sliceColumns[key])}
+                rows={slices.map((row) => {
+                  const pair = pairOf(row.discordant);
+                  return { key: row.slice, head: Object.hasOwn(table.results2.slices, row.slice) ? table.results2.slices[row.slice] : row.slice, cells: [count(row.n), count(row.with), count(row.without), pair === null ? '' : fillNext(copy.pair, { a: count(pair[0]), b: count(pair[1]) }), pValue(row.p)] };
+                })} />
+            </details>
+          )}
+        </>
+      )}
+      {cost === null || costKeys.some((key) => !isCount(cost[key])) ? null : (
+        <p data-results-walk-cost="">
+          {fillNext(copy.cost, { calls: decimal(cost.calls_per_answer, locale, 1), callsShare: decimal(cost.share_of_calls, locale, 1), seconds: decimal(cost.ms_per_answer / 1000, locale, 1), timeShare: decimal(cost.share_of_time, locale, 1), usd: decimal(cost.usd_per_answer, locale), costShare: decimal(cost.share_of_cost, locale, 1) })}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** One run's sections, the body of the page for one run: `level` the tag of its section headings, `idPrefix` its ids' prefix. */
+function RunBody({ results, locale = CHROME_LOCALE, served = null, level = 'h2', idPrefix = '' }) {
+  const H = level;
   const table = nextCopy(locale);
   const copy = table.results2;
   const pipelines = table.results3.pipelines;
@@ -116,13 +347,32 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       run: results.run, date: numericDate(results.made), code: build.code, data: build.data,
       ...(measuredPipeline !== null && Object.hasOwn(pipelines, measuredPipeline) ? { pipeline: pipelines[measuredPipeline] } : {}),
     }) : null;
+  // rc3 (22/11/2026): a build the file names answers on this site when it is the one served, or when it is the build measured
+  // and the server runs the engine measured on the same data (`sameEngine`).
+  const notAnswering = (own) => servedBuild !== null && own !== null && !sameBuild(own, servedBuild) && !(sameBuild(own, build) && sameEngine(results.build, served));
   // The build a section names, said under its heading, and said not to be the one answering when it is not.
   const sectionBuild = (value, key) => {
     const own = buildOf(value);
     if (own === null || sameBuild(own, build)) return null;
     const line = fillNext(copy.sectionBuild, { code: own.code, data: own.data });
-    return <p className={servedBuild !== null && !sameBuild(own, servedBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build={key}>{line}{servedBuild !== null && !sameBuild(own, servedBuild) ? <> {copy.notServed}</> : null}</p>;
+    return <p className={notAnswering(own) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build={key}>{line}{notAnswering(own) ? <> {copy.notServed}</> : null}</p>;
   };
+  const ablationBuild = buildOf(ablation?.build);
+  const pValue = (value) => (isCount(value) ? (value < 0.001 ? `< ${decimal(0.001, locale)}` : decimal(Number(value.toPrecision(2)), locale)) : null);
+  const effectCell = (row) => {
+    const said = row.effect === 'measured' ? copy.ablationEffect.measured : row.effect === 'no measured effect on this set' ? copy.ablationEffect.none : text(row.effect);
+    if (said === null) return '';
+    const first = pValue(row.p_vs_R1);
+    const second = pValue(row.p_vs_R2);
+    return first !== null && second !== null ? fillNext(copy.ablationEffectP, { effect: said, first, second }) : said;
+  };
+  const hasEffect = ablationRows.some((row) => text(row.effect) !== null);
+  // The rule the effects are said by: the page's own sentence when the file's rule is that one (exact McNemar, p < 0.05,
+  // against both full runs), else the file's words, marked with their language.
+  const ablationRule = text(ablation?.rule) === null ? null
+    : /mcnemar/iu.test(ablation.rule) && /p\s*<\s*0\.05/u.test(ablation.rule) && /\bboth\b/iu.test(ablation.rule) ? { text: copy.ablationRule, lang: undefined } : prose(ablation.rule, locale);
+  const checkedBy = prose(scoring?.checked_by, locale);
+  const gateMeans = prose(misses?.gate_means, locale);
   const written = prose(set?.written_by, locale);
   const setNote = prose(set?.note, locale);
   const rule = prose(scoring?.rule, locale);
@@ -131,14 +381,20 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
   const priceSource = prose(cost?.price_source, locale);
   const conditions = prose(latency?.conditions, locale);
   const walk = retrieval !== null && isCount(retrieval.walk_found) && isCount(retrieval.walk_of) ? retrieval : null;
+  // fix-pages3: the version compared with, named by the file (rc3, the live version), and said to be the one answering when it is.
+  const previousName = prose(previous?.name, locale);
+  const previousBuild = buildOf(previous?.build);
+  const previousServed = previous !== null && describesSite(previous, served) === true;
+  const decision = objectOr(results.decision);
+  const decisionResult = text(decision?.result);
+  const decisionRule = text(decision?.rule) !== null || objectOr(decision?.rule) !== null ? prose(decision.rule, locale) : null;
+  const decisionChecks = (Array.isArray(decision?.checks) ? decision.checks : []).filter((check) => text(check?.pair) !== null && pairOf(check?.right) !== null);
+  const copy4 = table.results4;
   return (
-    <div data-next-page="results" data-next-state="ready" data-results-schema={RESULTS_SCHEMA} data-run={results.run ?? ''}>
-      <h1>{table.results.heading}</h1>
-      {note}
-
+    <>
       {totals === null && wrong.length === 0 ? null : (
-        <section aria-labelledby="results2-wrong" data-results2-section="wrong">
-          <h2 id="results2-wrong">{copy.wrongHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-wrong`} data-results2-section="wrong">
+          <H id={`${idPrefix}results2-wrong`}>{copy.wrongHeading}</H>
           {wrongCount === 0 ? <p data-results2-wrong-count="0"><strong>{copy.wrongNone}</strong>{n !== null && wrongInterval !== null ? <> {fillNext(copy.wrongLine, { n: count(n), low: decimal(wrongInterval[0], locale), high: decimal(wrongInterval[1], locale) })}</> : null}</p> : (
             <p data-results2-wrong-count={String(wrongCount)}>
               <strong>{countedForm(copy.wrongCount, wrongCount, locale)}</strong>
@@ -159,8 +415,8 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       )}
 
       {set === null && scoring === null && runLine === null ? null : (
-        <section aria-labelledby="results2-set" data-results2-section="set">
-          <h2 id="results2-set">{copy.setHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-set`} data-results2-section="set">
+          <H id={`${idPrefix}results2-set`}>{copy.setHeading}</H>
           {set === null || n === null ? null : (
             <p>
               {written === null
@@ -179,12 +435,13 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
               {lenient.map((one) => <span key={one.text} data-results2-lenient=""> <Filled template={copy.lenient} place="rule" piece={one} /></span>)}
             </p>
           )}
+          {checkedBy === null ? null : <p className="lx-muted" lang={checkedBy.lang} data-results2-checked="">{checkedBy.text}</p>}
         </section>
       )}
 
       {totals === null ? null : (
-        <section aria-labelledby="results2-totals" data-results2-section="totals">
-          <h2 id="results2-totals">{copy.totalsHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-totals`} data-results2-section="totals">
+          <H id={`${idPrefix}results2-totals`}>{copy.totalsHeading}</H>
           <Table
             mark="totals"
             columns={[copy.totalsColumns.state, n === null ? copy.totalsColumns.count : countedForm(copy.outOf, n, locale), copy.totalsColumns.interval]}
@@ -196,16 +453,16 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       )}
 
       {retrieval === null || ((!isCount(retrieval.right_article_read) || !isCount(retrieval.of)) && walk === null) ? null : (
-        <section aria-labelledby="results2-retrieval" data-results2-section="retrieval">
-          <h2 id="results2-retrieval">{copy.retrievalHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-retrieval`} data-results2-section="retrieval">
+          <H id={`${idPrefix}results2-retrieval`}>{copy.retrievalHeading}</H>
           {isCount(retrieval.right_article_read) && isCount(retrieval.of) ? <p>{fillNext(copy.retrieval, { right: count(retrieval.right_article_read), of: count(retrieval.of), interval: interval(retrieval.interval) || '—' })}</p> : null}
           {walk === null ? null : <p data-results2-walk="">{fillNext(copy.walk, { right: count(walk.walk_found), of: count(walk.walk_of), interval: interval(walk.walk_interval) || '—' })}</p>}
         </section>
       )}
 
       {slices.length === 0 ? null : (
-        <section aria-labelledby="results2-slices" data-results2-section="slices">
-          <h2 id="results2-slices">{copy.slicesHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-slices`} data-results2-section="slices">
+          <H id={`${idPrefix}results2-slices`}>{copy.slicesHeading}</H>
           <Table
             mark="slices"
             columns={['slice', 'n', 'right', 'wrong', 'notFound', 'interval'].map((key) => copy.slicesColumns[key])}
@@ -229,13 +486,14 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       )}
 
       {misses === null ? null : (
-        <section aria-labelledby="results2-misses" data-results2-section="misses">
-          <h2 id="results2-misses">{copy.missesHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-misses`} data-results2-section="misses">
+          <H id={`${idPrefix}results2-misses`}>{copy.missesHeading}</H>
           <Table
             mark="misses"
             columns={[copy.missesColumns.label, copy.missesColumns.count]}
             rows={Object.keys(copy.missesLabels).filter((key) => isCount(misses[key])).map((key) => ({ key, head: copy.missesLabels[key], cells: [count(misses[key])] }))}
           />
+          {gateMeans === null || !isCount(misses.gate) ? null : <p className="lx-muted" lang={gateMeans.lang} data-results2-gate="">{gateMeans.text}</p>}
           {missItems.length === 0 ? null : (
             <details className="lx-how-fold">
               <summary>{copy.missesItems}</summary>
@@ -253,8 +511,8 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       )}
 
       {absent === null || !isCount(absent.n) ? null : (
-        <section aria-labelledby="results2-absent" data-results2-section="absent">
-          <h2 id="results2-absent">{copy.absentHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-absent`} data-results2-section="absent">
+          <H id={`${idPrefix}results2-absent`}>{copy.absentHeading}</H>
           <p>{fillNext(copy.absentIntro, { n: countedForm(copy.questions, absent.n, locale) })}</p>
           <Table
             mark="absent"
@@ -265,25 +523,30 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       )}
 
       {ablationRows.length === 0 ? null : (
-        <section aria-labelledby="results2-ablation" data-results2-section="ablation">
-          <h2 id="results2-ablation">{copy.ablationHeading}</h2>
-          {buildOf(ablation.build) === null ? null : (
-            <p className={servedBuild !== null && !sameBuild(buildOf(ablation.build), servedBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build="ablation">
-              {fillNext(copy.ablationBuild, buildOf(ablation.build))}
-              {servedBuild !== null && !sameBuild(buildOf(ablation.build), servedBuild) ? <> {copy.notServed}</> : null}
+        <section aria-labelledby={`${idPrefix}results2-ablation`} data-results2-section="ablation">
+          <H id={`${idPrefix}results2-ablation`}>{copy.ablationHeading}</H>
+          {ablationBuild === null ? null : (
+            <p className={notAnswering(ablationBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build="ablation">
+              {fillNext(copy.ablationBuild, ablationBuild)}
+              {notAnswering(ablationBuild) ? <> {copy.notServed}</> : null}
             </p>
           )}
           <Table
             mark="ablation"
-            columns={['what', 'right', 'wrong', 'interval'].map((key) => copy.ablationColumns[key])}
-            rows={ablationRows.map((row) => ({ key: row.what, head: name(copy.ablation, row.what), cells: [count(row.right), count(row.wrong), interval(row.interval)] }))}
+            columns={['what', 'right', 'wrong', 'interval', ...(hasEffect ? ['effect'] : [])].map((key) => copy.ablationColumns[key])}
+            rows={ablationRows.map((row) => ({
+              key: ablationKey(row),
+              head: text(row.run) === null ? name(copy.ablation, row.what) : fillNext(copy.ablationRun, { what: name(copy.ablation, row.what), run: row.run.trim() }),
+              cells: [count(row.right), count(row.wrong), interval(row.interval), ...(hasEffect ? [effectCell(row)] : [])],
+            }))}
           />
+          {hasEffect && ablationRule !== null ? <p className="lx-muted" data-results2-ablation-rule="" lang={ablationRule.lang}>{ablationRule.text}</p> : null}
         </section>
       )}
 
       {baseline === null || !isCount(baseline.right) ? null : (
-        <section aria-labelledby="results2-baseline" data-results2-section="baseline">
-          <h2 id="results2-baseline">{copy.baselineHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-baseline`} data-results2-section="baseline">
+          <H id={`${idPrefix}results2-baseline`}>{copy.baselineHeading}</H>
           {sectionBuild(baseline.build, 'baseline')}
           {baselineWhat === null ? null : <p className="lx-muted"><Filled template={copy.baselineWhat} place="what" piece={baselineWhat} /></p>}
           <Table
@@ -301,8 +564,9 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       )}
 
       {previous === null || !isCount(previous.right) ? null : (
-        <section aria-labelledby="results2-previous" data-results2-section="previous">
-          <h2 id="results2-previous">{copy.previousHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-previous`} data-results2-section="previous">
+          <H id={`${idPrefix}results2-previous`} lang={previousName?.lang}>{previousName === null ? copy.previousHeading : fillNext(copy4.previousNamedHeading, { name: previousName.text })}</H>
+          {previousServed ? <p className="lx-muted" data-results2-previous-served="">{copy4.previousServed}</p> : null}
           <Table
             mark="previous"
             columns={['who', 'right', 'wrong', 'notFound', 'interval'].map((key) => copy.previousColumns[key])}
@@ -310,13 +574,19 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
               ...(isCount(totals?.right) ? [{ key: 'now', head: build === null ? copy.previousNowBare : fillNext(copy.previousNow, build), cells: [count(totals.right), count(totals.wrong), count(totals.not_found), interval(totals.intervals?.right)] }] : []),
               {
                 key: 'before',
-                head: buildOf(previous.build) === null ? copy.previousBeforeBare : fillNext(copy.previousBefore, buildOf(previous.build)),
+                head: previousName !== null ? (previousBuild === null ? previousName.text : fillNext(copy4.previousNamed, { name: previousName.text, ...previousBuild }))
+                  : previousBuild === null ? copy.previousBeforeBare : fillNext(copy.previousBefore, previousBuild),
                 cells: [count(previous.right), count(previous.wrong), count(previous.not_found), interval(previous.interval)],
               },
             ]}
           />
           {isCount(previous.n) && n !== null && previous.n !== n ? <p className="lx-muted lx-next-gap" data-results2-previous-n="">{fillNext(copy.previousOtherN, { n: count(previous.n), now: count(n) })}</p> : null}
-          {isCount(previous.better) && isCount(previous.worse) ? <p data-results2-previous-changed="">{fillNext(copy.previousChanged, { better: count(previous.better), worse: count(previous.worse) })}</p> : null}
+          {isCount(previous.better) && isCount(previous.worse) ? (
+            <p data-results2-previous-changed="">
+              {fillNext(copy.previousChanged, { better: count(previous.better), worse: count(previous.worse) })}
+              {isCount(previous.p) ? <> {fillNext(copy4.previousP, { p: pValue(previous.p) })}</> : null}
+            </p>
+          ) : null}
           {previousItems.length === 0 ? null : (
             <details className="lx-how-fold">
               <summary>{copy.previousItems}</summary>
@@ -330,17 +600,40 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
         </section>
       )}
 
+      {decisionResult === null ? null : (
+        <section aria-labelledby={`${idPrefix}results2-decision`} data-results2-section="decision">
+          <H id={`${idPrefix}results2-decision`}>{copy4.decisionHeading}</H>
+          <p data-results2-decision={decisionResult}><strong>{fillNext(copy4.decisionLine, { result: copy4.decisions[decisionResult] ?? decisionResult })}</strong></p>
+          {decisionRule === null ? null : <p className="lx-muted" lang={decisionRule.lang} data-results2-decision-rule="">{decisionRule.text}</p>}
+          {decisionChecks.length === 0 ? null : (
+            <Table
+              mark="decision"
+              columns={['pair', 'right', 'discordant', 'p', 'wrong'].map((key) => copy4.decisionColumns[key])}
+              rows={decisionChecks.map((check) => {
+                const right = pairOf(check.right);
+                const discordant = pairOf(check.discordant);
+                const wrongPair = pairOf(check.wrong_asserted);
+                return {
+                  key: check.pair, head: check.pair,
+                  cells: [fillNext(copy4.pair, { a: count(right[0]), b: count(right[1]) }), discordant === null ? '' : fillNext(copy4.pair, { a: count(discordant[0]), b: count(discordant[1]) }), pValue(check.p) ?? '', wrongPair === null ? '' : fillNext(copy4.pair, { a: count(wrongPair[0]), b: count(wrongPair[1]) })],
+                };
+              })}
+            />
+          )}
+        </section>
+      )}
+
       {noise === null || !isCount(noise.runs) || !Array.isArray(noise.right) ? null : (
-        <section aria-labelledby="results2-noise" data-results2-section="noise">
-          <h2 id="results2-noise">{copy.noiseHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-noise`} data-results2-section="noise">
+          <H id={`${idPrefix}results2-noise`}>{copy.noiseHeading}</H>
           {sectionBuild(noise.build, 'noise')}
           <p>{fillNext(copy.noise, { runs: countedForm(copy.runs, noise.runs, locale), right: noise.right.filter(isCount).map(count).join(table.listSeparator), wrong: (Array.isArray(noise.wrong) ? noise.wrong : []).filter(isCount).map(count).join(table.listSeparator) || '—' })}</p>
         </section>
       )}
 
       {cost === null && latency === null ? null : (
-        <section aria-labelledby="results2-cost" data-results2-section="cost">
-          <h2 id="results2-cost">{copy.costHeading}</h2>
+        <section aria-labelledby={`${idPrefix}results2-cost`} data-results2-section="cost">
+          <H id={`${idPrefix}results2-cost`}>{copy.costHeading}</H>
           {[usd(cost?.usd_per_answer?.mean), usd(cost?.usd_per_answer?.median), usd(cost?.usd_per_answer?.p90)].every((value) => value !== null) ? (
             <p>{fillNext(copy.cost, { mean: usd(cost.usd_per_answer.mean), median: usd(cost.usd_per_answer.median), slow: usd(cost.usd_per_answer.p90) })}</p>
           ) : null}
@@ -354,6 +647,6 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
           {priceSource === null ? null : <p className="lx-muted" lang={priceSource.lang}>{priceSource.text}</p>}
         </section>
       )}
-    </div>
+    </>
   );
 }

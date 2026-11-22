@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from 'react';
 import { CHROME_LOCALE, livePath } from '../scripts/live-chrome.mjs';
-import { SHAPE_REASONS_FR, countedForm, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
+import { SHAPE_REASONS_EN, SHAPE_REASONS_FR, countedForm, decimal, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
 import { HowView, brickCounts } from './NextPages.jsx';
 
 /** The pipelines whose design is the funnel's; any other (topk, the earlier one) is said by the earlier page. */
@@ -27,6 +27,9 @@ export const CONFIG_ADDRESS = '/api/next/config';
 const CORPUS = '/api/next/corpus';
 export const DICTIONARY_ADDRESS = '/api/next/dictionary';
 export const SHAPES_ADDRESS = '/api/next/shapes';
+// fix-pages3 (22/11/2026): who has checked what, counted from the data; each code's dated wordings, by the home's rule.
+export const REVIEW_ADDRESS = '/api/next/review';
+export const CODES_ADDRESS = '/api/next/codes';
 
 const isCount = (value) => typeof value === 'number' && Number.isFinite(value);
 const objectOr = (value) => (value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null);
@@ -97,8 +100,18 @@ export function keptLine(config, locale) {
   return what.length === 0 ? null : fillNext(copy.keptSome, { what: what.join(nextCopy(locale).listSeparator) });
 }
 
+/**
+ * fix-pages3 (22/11/2026, K-UI-7): each code's dated wordings as `[title, first, last, count]`: from `/api/next/codes` (the
+ * French chain's distinct dates up to today, the home page's rule) when it answered, else from the corpus counts (every row).
+ */
+export function codeRows(corpus, codes) {
+  const counted = Array.isArray(objectOr(codes)?.codes) ? codes.codes.filter((row) => text(row?.title) !== null && isCount(row?.versions) && row.versions > 0) : [];
+  if (counted.length > 0) return counted.map((row) => [row.title, row.first, row.last, row.versions]);
+  return corpus === null ? [] : rowsOf(corpus.codes).filter((row) => typeof row[0] === 'string' && isCount(row[3]));
+}
+
 /** The limits, with their figures: each code's versions held and the earliest, then the limits the copy states. */
-function Limits({ corpus, locale }) {
+function Limits({ corpus, codes = null, locale }) {
   const table = nextCopy(locale);
   const copy = table.how;
   // pages2 (21/11/2026, K-UI-7): the funnel's own limits (references to other texts followed, the EU insurance texts held),
@@ -113,7 +126,7 @@ function Limits({ corpus, locale }) {
       <div className="lx-how-table-scroll">
         <table className="lx-how-table">
           <tbody>
-            {corpus === null ? null : rowsOf(corpus.codes).filter((row) => typeof row[0] === 'string' && isCount(row[3])).map((row) => (
+            {codeRows(corpus, codes).map((row) => (
               <tr key={row[0]} data-limit="code">
                 <th scope="row" lang={lawLang}>{row[0]}</th>
                 <td>{countedForm(limits.codeVersions, row[3], locale, { from: numericDate(row[1]), to: numericDate(row[2]) })}</td>
@@ -189,6 +202,7 @@ export function ShapesSection({ shapes = null, locale = CHROME_LOCALE }) {
   const decided = rows.map((row) => text(row.decided_at)).find((value) => value !== null) ?? null;
   const reasonOf = (row) => {
     if (locale === 'fr' && Object.hasOwn(SHAPE_REASONS_FR, row.part)) return { text: SHAPE_REASONS_FR[row.part], lang: undefined };
+    if (locale === 'en' && Object.hasOwn(SHAPE_REASONS_EN, row.part)) return { text: SHAPE_REASONS_EN[row.part], lang: undefined };
     return text(row.reason) === null ? null : { text: row.reason.trim(), lang: locale === 'en' ? undefined : 'en' };
   };
   return (
@@ -227,8 +241,87 @@ export function ShapesSection({ shapes = null, locale = CHROME_LOCALE }) {
   );
 }
 
+/**
+ * fix-pages3 (22/11/2026, K-QUEST-3, K-PARSE-6): who has checked what, from `/api/next/review` (counted by code in the data the
+ * engine reads): the dictionary's rows and the routing lines, how many, how many signed by a named person, who wrote them.
+ * Nothing while the server has not answered; a line it does not count is left out.
+ */
+export function ReviewSection({ review = null, locale = CHROME_LOCALE }) {
+  const table = nextCopy(locale);
+  const copy = table.how2;
+  const value = objectOr(review);
+  if (value === null) return null;
+  const dictionary = objectOr(value.dictionary);
+  const routing = objectOr(value.routing);
+  const rows = [];
+  if (dictionary !== null && isCount(dictionary.rows) && isCount(dictionary.validated)) {
+    const names = (Array.isArray(dictionary.validators) ? dictionary.validators : []).map(text).filter((one) => one !== null);
+    rows.push({ key: 'dictionary', what: copy.reviewDictionary, count: groupedCount(dictionary.rows, locale), signed: dictionary.validated, said: countedForm(copy.reviewSigned, dictionary.validated, locale, { names: names.join(table.listSeparator) || '—' }), by: copy.reviewDictionaryBy });
+  }
+  if (routing !== null && isCount(routing.lines)) {
+    const reviewed = isCount(routing.reviewed_by_a_person) ? routing.reviewed_by_a_person : 0;
+    const sources = Object.entries(objectOr(routing.by_source) ?? {}).filter(([, n]) => isCount(n) && n > 0)
+      .map(([source]) => (/^model:/u.test(source) ? fillNext(copy.reviewModel, { model: source.slice(6) }) : source));
+    const prompts = Object.keys(objectOr(routing.by_prompt) ?? {}).filter((one) => text(one) !== null && one !== 'unknown').map((version) => fillNext(copy.reviewPrompt, { version }));
+    const names = (Array.isArray(routing.validators) ? routing.validators : []).map(text).filter((one) => one !== null);
+    rows.push({
+      key: 'routing', what: copy.reviewRouting, count: groupedCount(routing.lines, locale), signed: reviewed,
+      said: reviewed === 0 && text(routing.reviewer_column) === null ? copy.reviewNoColumn : countedForm(copy.reviewSigned, reviewed, locale, { names: names.join(table.listSeparator) || '—' }),
+      by: [...sources, ...prompts].join(table.listSeparator),
+    });
+  }
+  // The resolver's precision marked by a person (meta key ref_review, written by app/apply_review.py), else said unmarked.
+  if (Object.hasOwn(value, 'references')) {
+    const marked = objectOr(value.references);
+    const right = isCount(marked?.right) ? marked.right : null;
+    const judged = right !== null && isCount(marked?.wrong) ? right + marked.wrong : null;
+    const pair = Array.isArray(marked?.wilson95) && isCount(marked.wilson95[0]) && isCount(marked.wilson95[1]) ? marked.wilson95.map((one) => (one <= 1 ? one * 100 : one)) : null;
+    const names = (Array.isArray(marked?.reviewers) ? marked.reviewers : []).map(text).filter((one) => one !== null);
+    rows.push({
+      key: 'references', what: copy.reviewReferences, count: isCount(marked?.drawn) ? groupedCount(marked.drawn, locale) : '—', signed: judged ?? 0,
+      said: judged === null || judged === 0 ? copy.reviewReferencesNone : fillNext(copy.reviewReferencesMarked, {
+        right: groupedCount(right, locale), judged: groupedCount(judged, locale), names: names.join(table.listSeparator) || '—',
+        interval: pair === null ? '—' : fillNext(table.results2.interval, { low: decimal(Math.round(pair[0] * 10) / 10, locale), high: decimal(Math.round(pair[1] * 10) / 10, locale) }),
+      }),
+      by: copy.reviewReferencesBy,
+    });
+  }
+  if (rows.length === 0) return null;
+  return (
+    <section className="lx-how-block lx-how-wide" aria-labelledby="how-review" data-reference-section="review" id="review" data-how-review="">
+      <h2 id="how-review">{copy.reviewHeading}</h2>
+      <p>{copy.reviewIntro}</p>
+      <div className="lx-how-table-scroll">
+        <table className="lx-how-table lx-next-shapes">
+          <thead><tr>{['what', 'count', 'signed', 'by'].map((key) => <th scope="col" key={key}>{copy.reviewColumns[key]}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} data-review={row.key} data-review-signed={String(row.signed)}>
+                <th scope="row">{row.what}</th>
+                <td>{row.count}</td>
+                <td className={row.signed === 0 ? 'lx-next-draft' : undefined}>{row.said}</td>
+                <td>{row.by}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/** What the server keeps, among the commitments: from its configuration, the words found in no text only while it says so. */
+export function commitmentLines(config, locale) {
+  const copy = nextCopy(locale).how2;
+  const kept = objectOr(objectOr(config)?.kept_on_server);
+  const vocabulary = kept !== null && typeof kept.vocabulary_misses === 'string';
+  const lines = [...copy.commitments];
+  lines.splice(Math.min(3, lines.length), 0, vocabulary ? `${copy.commitmentKept} ${copy.commitmentVocabulary}` : copy.commitmentKept);
+  return lines;
+}
+
 /** How it works, drawn from the corpus counts and the server's configuration (each null while not known). */
-export function HowFunnelView({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null, shapes = null }) {
+export function HowFunnelView({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null, shapes = null, review = null, codes = null }) {
   const table = nextCopy(locale);
   const copy = table.how2;
   const dock = table.dock;
@@ -300,16 +393,17 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
         </aside>
       </div>
       <div className="lx-how-more">
-        <Limits corpus={corpus} locale={locale} />
+        <Limits corpus={corpus} codes={codes} locale={locale} />
         <section className="lx-how-block lx-how-wide" aria-labelledby="how-commitments" data-reference-section="commitments" id="commitments">
           <h2 id="how-commitments">{table.how.commitmentsHeading}</h2>
-          <ul className="lx-how-lines">{copy.commitments.map((line) => <li key={line}>{line}</li>)}</ul>
+          <ul className="lx-how-lines">{commitmentLines(config, locale).map((line) => <li key={line}>{line}</li>)}</ul>
         </section>
         {/* repair-pages (22/11/2026, K-OPS-1, K-UI-2, K-QUEST-3, K-PARSE-6, K-REF-2): each departure from the method, said as a choice. */}
         <section className="lx-how-block lx-how-wide" aria-labelledby="how-departures" data-reference-section="departures" id="departures" data-how-departures="">
           <h2 id="how-departures">{copy.departuresHeading}</h2>
           <ul className="lx-how-lines">{copy.departures.map((line) => <li key={line}>{line}</li>)}</ul>
         </section>
+        <ReviewSection review={review} locale={locale} />
         <ShapesSection shapes={shapes} locale={locale} />
         <DictionarySection dictionary={dictionary} locale={locale} />
         {counts.length === 0 ? null : (
@@ -328,10 +422,10 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
  * the earlier pipeline's (`HowView`). Until the configuration is read, the heading and a loading line only: the page never
  * describes a design before it knows it is the one running.
  */
-export function HowForPipeline({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null, shapes = null }) {
+export function HowForPipeline({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null, shapes = null, review = null, codes = null }) {
   const pipeline = objectOr(config)?.pipeline;
   if (configState === 'ready' && typeof pipeline === 'string' && !FUNNEL_PIPELINES.includes(pipeline)) return <HowView corpus={corpus} state={state} locale={locale} />;
-  if (configState === 'ready' && FUNNEL_PIPELINES.includes(pipeline)) return <HowFunnelView corpus={corpus} config={config} state={state} configState={configState} locale={locale} dictionary={dictionary} shapes={shapes} />;
+  if (configState === 'ready' && FUNNEL_PIPELINES.includes(pipeline)) return <HowFunnelView corpus={corpus} config={config} state={state} configState={configState} locale={locale} dictionary={dictionary} shapes={shapes} review={review} codes={codes} />;
   const copy = nextCopy(locale).how2;
   return (
     <div className="lx-how" data-next-page="how" data-next-state={configState === 'failed' ? 'failed' : 'loading'}>
@@ -347,7 +441,9 @@ export function NextHowFunnel({ fetchImpl = undefined, locale = CHROME_LOCALE })
   // repair-pages: the dictionary's rows and their status (K-QUEST-3).
   const dictionary = useJson(DICTIONARY_ADDRESS, fetchImpl);
   const shapes = useJson(SHAPES_ADDRESS, fetchImpl);
-  return <HowForPipeline corpus={corpus.data} config={config.data} state={corpus.state} configState={config.state} locale={locale} dictionary={dictionary.data} shapes={shapes.data} />;
+  const review = useJson(REVIEW_ADDRESS, fetchImpl);
+  const codes = useJson(CODES_ADDRESS, fetchImpl);
+  return <HowForPipeline corpus={corpus.data} config={config.data} state={corpus.state} configState={config.state} locale={locale} dictionary={dictionary.data} shapes={shapes.data} review={review.data} codes={codes.data} />;
 }
 
 /** The design choices, live: the configuration asked once the page is drawn. */

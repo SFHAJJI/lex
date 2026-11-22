@@ -773,6 +773,18 @@ test('pages2: the results say whether they describe the build that answers', asy
   assert.ok(other.includes('Le site répond aujourd’hui avec le code t8 et les données 20261120c (l’entonnoir)'));
   const same = fr.renderResults({ ...results2, build: config.build }, { locale: 'fr', config });
   assert.ok(same.includes('data-results-build="same"'));
+  // rc3 (22/11/2026): another code tag on the same data, with the fingerprint of the files measured, is said to be described;
+  // another fingerprint, another data tag or no fingerprint is not.
+  const measured = { ...results2, build: { code: 't10', data: '20261122c', engine: '01f1b08c054c474c' }, ablation: { ...results2.ablation, build: { code: 't10', data: '20261122c' } } };
+  const engineSame = fr.renderResults(measured, { locale: 'fr', config: { ...config, build: { code: 't11', data: '20261122c', engine: '01f1b08c054c474c' } } });
+  assert.ok(engineSame.includes('data-results-build="same-engine"'));
+  assert.ok(engineSame.includes('le code t11 sur les mêmes données') && engineSame.includes('empreinte 01f1b08c054c474c'));
+  assert.ok(!engineSame.includes('Ce n’est pas la version qui répond sur ce site.'), 'the bricks measured on t10 answer on t11');
+  for (const build of [{ code: 't11', data: '20261122c', engine: '3c02888b2f305455' }, { code: 't11', data: '20261122d', engine: '01f1b08c054c474c' }, { code: 't11', data: '20261122c' }]) {
+    const html = fr.renderResults(measured, { locale: 'fr', config: { ...config, build } });
+    assert.ok(html.includes('data-results-build="other"'), JSON.stringify(build));
+    assert.ok(html.includes('Ce n’est pas la version qui répond sur ce site.'), JSON.stringify(build));
+  }
   const earlier = JSON.parse(await readFile(new URL('../test/next-fixtures/results.json', import.meta.url), 'utf8'));
   assert.ok(fr.renderResults(earlier, { locale: 'fr', config }).includes('Le fichier de ces résultats ne nomme pas la version mesurée.'));
   assert.ok(!fr.renderResults(earlier, { locale: 'fr' }).includes('data-results-build'), 'nothing said before the configuration is read');
@@ -858,4 +870,41 @@ test('repair-pages: the French page says every shape decision and every column p
   assert.deepEqual((coverage.columns ?? []).map((row) => `${row.table}.${row.column}`).filter((key) => !Object.hasOwn(COLUMN_WORDS_FR, key)), [], 'a column has no French words');
   for (const [key, words] of Object.entries(COLUMN_WORDS_FR)) for (const value of Object.values(words)) assert.deepEqual(frenchFaultsIn(value), [], key);
   for (const [key, value] of Object.entries(SHAPE_REASONS_FR)) assert.deepEqual(frenchFaultsIn(value), [], key);
+});
+
+test('fix-pages3: the searches side by side name every article, from the answer or the store, never by a bare id', async () => {
+  const { traceLevels: levelsOf, namesAddress, unnamedArticles } = await import('../scripts/next-contract.mjs');
+  const answer = JSON.parse(await readFile(new URL('../test/next-fixtures/funnel-real/solvency-ii.json', import.meta.url), 'utf8'));
+  const detectors = answer.trace.levels.find((level) => level.level === 'detectors');
+  const first = detectors.candidates[0].article_pk;
+  const bare = { ...answer, meta: { ...answer.meta, candidates: [] }, trace: { ...answer.trace, levels: answer.trace.levels.map((level) => (level.level === 'arbiter' ? { ...level, candidates: [] } : level)) } };
+  const unnamed = unnamedArticles(bare);
+  assert.ok(unnamed.includes(first), 'an article no part of the answer names is asked of the store');
+  assert.ok(namesAddress(bare).startsWith(`/api/next/names?pk=${unnamed[0]}`), 'the address carries ids only');
+  const rows = (locale, stored = null) => levelsOf(bare, locale, stored).find((level) => level.level === 'detectors').rows.find((row) => row.table !== null).table.rows;
+  const waiting = rows('fr').find((row) => row.pk === first);
+  assert.equal(waiting.head, `article sans nom dans la réponse (identifiant ${first})`, 'before the store answers: in words, never "#id"');
+  const named = rows('fr', { [first]: { article: 'Art. 12', act_id: 'celex:other', act_title: 'Un autre texte.' } }).find((row) => row.pk === first);
+  assert.equal(named.head, 'Art. 12, Un autre texte', 'an article of another text is named with its text');
+  const same = rows('en', { [first]: { article: 'Art. 12', act_id: answer.blocks[0].act_id, act_title: 'The same text' } }).find((row) => row.pk === first);
+  assert.equal(same.head, 'Art. 12', 'an article of the answer\'s own text is named alone');
+  assert.ok(named.finds.every((find) => typeof find.name === 'string' && /n° [0-9]/u.test(find.rank)), 'each search that found it, with its rank');
+  assert.equal(namesAddress({ ...answer, trace: { levels: [] } }), null);
+});
+
+test('fix-pages3: How counts each code by the home page\'s rule, and says a word is kept only when the configuration does', async () => {
+  const { fr, en } = await loadRenderers('test-pages3');
+  const codes = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/codes.json', import.meta.url), 'utf8'));
+  const labour = codes.codes.find((row) => row.title === 'Code du travail');
+  assert.equal(labour.versions, 29, 'the French chain\'s distinct dates: 29, as the home page says');
+  assert.equal(labour.rows, 30, 'the store holds 30 rows, one a duplicate copy');
+  assert.deepEqual(fr.codeRows({ codes: [['Code du travail', '2020-11-01', '2026-07-26', 30]] }, codes).find((row) => row[0] === 'Code du travail'), ['Code du travail', '2020-11-01', '2026-07-26', 29]);
+  assert.deepEqual(fr.codeRows({ codes: [['Code du travail', '2020-11-01', '2026-07-26', 30]] }, null), [['Code du travail', '2020-11-01', '2026-07-26', 30]], 'the corpus counts until the codes are read');
+  const copy = nextCopy('en').how2;
+  assert.ok(!en.commitmentLines({ kept_on_server: { questions: false, answers: false } }, 'en').some((line) => line.includes(copy.commitmentVocabulary)));
+  assert.ok(en.commitmentLines({ kept_on_server: { questions: false, answers: false, vocabulary_misses: 'words' } }, 'en').some((line) => line.includes(copy.commitmentVocabulary)));
+  assert.equal(en.commitmentLines(null, 'en').length, copy.commitments.length + 1);
+  const { SHAPE_REASONS_EN, SHAPE_REASONS_FR } = await import('../scripts/next-copy.mjs');
+  for (const reasons of [SHAPE_REASONS_EN, SHAPE_REASONS_FR]) assert.ok(!/jamais la réponse|never the answer/u.test(reasons.eu_directive), 'the directive sentence says no more than the code');
+  assert.deepEqual(Object.keys(SHAPE_REASONS_EN).filter((key) => !Object.hasOwn(SHAPE_REASONS_FR, key)), []);
 });

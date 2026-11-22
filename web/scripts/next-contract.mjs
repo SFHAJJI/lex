@@ -164,7 +164,9 @@ export function notHeldWhy(why, locale) {
 export function notHeldLines(answer, locale) {
   const copy = nextCopy(locale).contract;
   return list(answer?.not_held).filter((entry) => text(entry?.name) !== null).map((entry) => {
-    const why = enginePhrase(entry.why, locale) ?? notHeldWhy(entry.why, locale) ?? (locale === 'en' ? text(entry.why) : /^(?:cité|nommé|publié)/u.test(text(entry.why) ?? '') ? text(entry.why) : null);
+    // repair-pages: a text a model named and code found in the catalogue (repair-engine's `by: model+code`) says so in words.
+    const named = entry?.by === 'model+code' ? nextCopy(locale).contract3.namedFound : null;
+    const why = enginePhrase(entry.why, locale) ?? notHeldWhy(entry.why, locale) ?? named ?? (locale === 'en' ? text(entry.why) : /^(?:cité|nommé|publié)/u.test(text(entry.why) ?? '') ? text(entry.why) : null);
     return { name: text(entry.name), line: why === null ? text(entry.name) : fillNext(copy.notHeldItem, { name: text(entry.name), why }) };
   });
 }
@@ -734,6 +736,23 @@ export function articleNamer(answer) {
   return (pk) => names.get(pk) ?? null;
 }
 
+/** fix-pages3 (K-UI-2): the ids of the articles the trace's searches found that the answer does not name (at most 80). */
+export function unnamedArticles(answer) {
+  const name = articleNamer(answer);
+  const out = [];
+  for (const level of list(answer?.trace?.levels)) {
+    if (level?.level !== 'detectors') continue;
+    for (const candidate of list(level.candidates)) if (isCount(candidate?.article_pk) && name(candidate.article_pk) === null && !out.includes(candidate.article_pk)) out.push(candidate.article_pk);
+  }
+  return out.slice(0, 80);
+}
+
+/** fix-pages3: the address that asks the store the names of those articles, or null when every one is named. */
+export function namesAddress(answer) {
+  const ids = unnamedArticles(answer);
+  return ids.length === 0 ? null : `/api/next/names?${ids.map((id) => `pk=${id}`).join('&')}`;
+}
+
 /**
  * The evidence of a "not found" (or of proposed passages), in plain words: what Lex holds (the coverage), each word searched
  * with its forms and the number of articles that hold it (the rarest first), how much the searches went through, and the
@@ -785,7 +804,7 @@ export function evidenceView(answer, locale) {
   for (const block of list(answer?.blocks)) if (text(block?.act_id) !== null && actTitle(block?.act_title) !== null) titles.set(block.act_id, actTitle(block.act_title));
   const floors = list(objectOr(evidence.coverage_detail)?.date_floor_of_the_texts_picked)
     .filter((entry) => isIsoDate(entry?.first_held) && titles.has(entry?.act_id))
-    .map((entry) => fillNext(nextCopy(locale).contract2.floor, { title: titles.get(entry.act_id).replace(/\s*>.*$/u, ''), date: numericDate(entry.first_held) }));
+    .map((entry) => fillNext(nextCopy(locale).contract2.floor, { title: titles.get(entry.act_id).replace(/\s*>.*$/u, '').replace(/[.\s]+$/u, ''), date: numericDate(entry.first_held) }));
   if (coverage === null && terms.length === 0 && swept === null && near === null && floors.length === 0) return null;
   // repair-pages (K-GEN-5): what the grade rests on (draft words), and the question's own words in another language, apart.
   const extra3 = nextCopy(locale).contract3;
@@ -809,12 +828,23 @@ function row(key, said, by, extra = {}) {
  * The funnel's levels, one section each, in the engine's order: `{ level, name, by, rows }`. Each row says what was done
  * there, with its counts; the code or the model that did it. A level the copy does not name is shown by its key.
  */
-export function traceLevels(answer, locale) {
+export function traceLevels(answer, locale, stored = null) {
   const table = nextCopy(locale);
   const copy = table.contract.trace;
   const extra = table.contract2.trace;
   const name = articleNamer(answer);
-  const article = (pk) => name(pk) ?? (isCount(pk) ? `#${pk}` : '');
+  // fix-pages3 (22/11/2026, K-UI-2): an article the answer does not name is named as the store names it (`/api/next/names`,
+  // asked by the dock once per answer: `stored`), with its text when it is not the answer's main one; until then, or if the
+  // store does not answer, in words with its id, never "#96096".
+  const mainAct = text(list(answer?.blocks)[0]?.act_id);
+  const storedName = (pk) => {
+    const entry = objectOr(objectOr(stored)?.[String(pk)]);
+    const label = text(entry?.article);
+    if (label === null) return null;
+    const title = actTitle(entry.act_title);
+    return title !== null && text(entry.act_id) !== null && entry.act_id !== mainAct ? fillNext(table.contract3.namedIn, { article: label, title: title.replace(/[.\s]+$/u, '') }) : label;
+  };
+  const article = (pk) => name(pk) ?? storedName(pk) ?? (isCount(pk) ? fillNext(table.contract3.unnamedArticle, { id: String(pk) }) : '');
   const titles = new Map();
   for (const level of list(answer?.trace?.levels)) for (const act of list(level?.acts)) if (text(act?.act_id) !== null && actTitle(act?.title) !== null) titles.set(act.act_id, actTitle(act.title));
   for (const block of list(answer?.blocks)) if (text(block?.act_id) !== null && actTitle(block?.act_title) !== null && !titles.has(block.act_id)) titles.set(block.act_id, actTitle(block.act_title));
@@ -910,8 +940,12 @@ export function traceLevels(answer, locale) {
               columns: ['article', ...columns].map((column) => copy.detectorColumns[column] ?? extra.detectorColumns[column]),
               rows: candidates.map((candidate) => ({
                 key: String(candidate.article_pk),
+                pk: candidate.article_pk,
                 head: article(candidate.article_pk),
                 cells: columns.map((column) => (isCount(candidate.found_by?.[column]) ? fillNext(copy.rank, { rank: groupedCount(candidate.found_by[column], locale) }) : copy.notFoundBy)),
+                // fix-pages3 (K-UI-2): the searches that found the article, each with its rank, for a list that fits the dock.
+                finds: columns.filter((column) => isCount(candidate.found_by?.[column]))
+                  .map((column) => ({ key: column, name: copy.detectorColumns[column] ?? extra.detectorColumns[column], rank: fillNext(copy.rank, { rank: groupedCount(candidate.found_by[column], locale) }) })),
                 note: candidate.meaning_only === true ? copy.meaningOnly : candidate.amending === true ? extra.amending : null,
               })),
             },

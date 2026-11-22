@@ -1,0 +1,105 @@
+{
+ "codes": [
+  {
+   "act_id": "/eli/etat/leg/code/civil",
+   "work": "code-civil",
+   "title": "Code civil",
+   "versions": 18,
+   "first": "2016-09-01",
+   "last": "2025-12-26",
+   "versions_later": 0,
+   "rows": 18
+  },
+  {
+   "act_id": "/eli/etat/leg/code/consommation",
+   "work": "code-consommation",
+   "title": "Code consommation",
+   "versions": 15,
+   "first": "2018-07-01",
+   "last": "2026-09-27",
+   "versions_later": 0,
+   "rows": 15
+  },
+  {
+   "act_id": "/eli/etat/leg/code/instruction_criminelle",
+   "work": "code-instruction-criminelle",
+   "title": "Code d'Instruction Criminelle",
+   "versions": 1,
+   "first": "2016-10-01",
+   "last": "2016-10-01",
+   "versions_later": 0,
+   "rows": 1
+  },
+  {
+   "act_id": "/eli/etat/leg/code/commerce",
+   "work": "code-commerce",
+   "title": "Code de commerce",
+   "versions": 7,
+   "first": "2010-12-21",
+   "last": "2026-08-03",
+   "versions_later": 0,
+   "rows": 7
+  },
+  {
+   "act_id": "/eli/etat/leg/code/route",
+   "work": "code-route",
+   "title": "Code de la route",
+   "versions": 1,
+   "first": "2026-06-12",
+   "last": "2026-06-12",
+   "versions_later": 0,
+   "rows": 1
+  },
+  {
+   "act_id": "/eli/etat/leg/code/securite_sociale",
+   "work": "code-securite-sociale",
+   "title": "Code de la sécurité sociale",
+   "versions": 1,
+   "first": "2026-01-01",
+   "last": "2026-01-01",
+   "versions_later": 0,
+   "rows": 1
+  },
+  {
+   "act_id": "/eli/etat/leg/code/procedure_penale",
+   "work": "code-procedure-penale",
+   "title": "Code de procédure pénale",
+   "versions": 36,
+   "first": "2017-04-01",
+   "last": "2026-06-07",
+   "versions_later": 0,
+   "rows": 36
+  },
+  {
+   "act_id": "/eli/etat/leg/code/travail",
+   "work": "code-travail",
+   "title": "Code du travail",
+   "versions": 29,
+   "first": "2020-11-01",
+   "last": "2026-07-26",
+   "versions_later": 0,
+   "rows": 30
+  },
+  {
+   "act_id": "/eli/etat/leg/code/penal",
+   "work": "code-penal",
+   "title": "Code pénal",
+   "versions": 36,
+   "first": "2016-07-10",
+   "last": "2025-12-19",
+   "versions_later": 0,
+   "rows": 36
+  },
+  {
+   "act_id": "/eli/etat/leg/code/procedure_civile",
+   "work": "code-procedure-civile",
+   "title": "Nouveau Code de procédure civile",
+   "versions": 17,
+   "first": "2015-09-01",
+   "last": "2025-12-19",
+   "versions_later": 0,
+   "rows": 17
+  }
+ ],
+ "rule": "the French chain's distinct dated wordings, held up to today (as /api/next/versions)"
+}

@@ -109,6 +109,11 @@ export const KNOWN_DIGITS = Object.freeze([
   /^results\.fresh\.columns\.interval$/u,
   /^decisions2\.items\.\d+\.(?:gain|title)$/u,
   /^results2\.(?:wrongLine|totalsColumns\.interval|slicesColumns\.interval|ablationColumns\.interval|baselineColumns\.interval|previousColumns\.interval)$/u,
+  // rc3: the threshold of the ablation's rule (p < 0.05), said when the file's rule is that one.
+  /^results2\.ablationRule$/u,
+  // fix-pages3 (22/11/2026): the rank of the first article (no. 1) in the searches' legend; the interval's level in the walk's table.
+  /^contract3\.findsLegend$/u,
+  /^results4\.walk\.recallColumns\.interval$/u,
   // repair-pages: the euro changeover law and its rate, quoted.
   /^contract2\.source\.francs$/u,
 ]);
@@ -634,6 +639,15 @@ export function contractFaults(html, answer, locale) {
   if ((answer.unchanged_by_later_amendments ?? []).length > 0 && !html.includes('data-dock-card="unchanged"')) faults.push('an original wording no amendment targets is not said');
   if (blocks.some((block) => block.authentic_language === 'de') && !html.includes('data-dock-source="german"')) faults.push('a German authentic text is not said so');
   for (const dropped of trace.names_dropped ?? []) if (typeof dropped?.name === 'string' && html.includes('data-dock-trace=""') && !html.includes(inMarkup(dropped.name))) faults.push('a name the model gave and code dropped is not said in the trace');
+  // fix-pages3 (22/11/2026, K-UI-2): the searches side by side fit the dock: a list, one article a line, every candidate drawn,
+  // none named by its bare id ("#96096"); no table of the trace has more than four columns.
+  const detectors = (trace.levels ?? []).filter((level) => level?.level === 'detectors').flatMap((level) => (level.candidates ?? []).filter((candidate) => Number.isFinite(candidate?.article_pk)));
+  if (detectors.length > 0) {
+    if (/<table[^>]*data-trace-table="detectors"/u.test(html)) faults.push('the searches side by side are a table, cut in the dock');
+    if (count(/<li data-find="/gu) !== detectors.length) faults.push(`${count(/<li data-find="/gu)} articles of the searches drawn for ${detectors.length}`);
+  }
+  if (/>#[0-9]{3,}</u.test(html) || /data-find="[0-9]+"[^>]*>(?:<span[^>]*>)?#[0-9]/u.test(html)) faults.push('an article is named by its bare id');
+  for (const head of html.matchAll(/<table class="lx-dock-table"[^>]*data-trace-table="[^"]*"[^>]*>\s*<thead><tr>((?:<th[^>]*>[^<]*<\/th>)+)<\/tr>/gu)) if ((head[1].match(/<th/gu) ?? []).length > 4) faults.push('a table of the trace has more than four columns: it is cut in the dock');
   if ((answer.repealed_named ?? []).length > 0 && !html.includes('data-dock-card="repealed"')) faults.push('a text named and repealed is not said');
   if ((answer.directive_transposed_by?.transposed_by ?? []).length > 0 && !html.includes('data-dock-card="transposed-by"')) faults.push('the law that transposes the directive is not named');
   for (const entry of answer.eu_not_held ?? []) if (typeof entry?.sentence === 'string' && !html.includes(inMarkup(entry.sentence))) faults.push('an EU text not held is not said');
@@ -680,7 +694,17 @@ export function results2Faults(html, results, locale) {
     if (!html.includes(`<tr data-row="${inMarkup(row.slice)}"><th scope="row">${inMarkup(name)}</th><td>${count(row.n)}</td><td>${count(row.right)}</td><td>${count(row.wrong)}</td><td>${count(row.not_found)}</td><td>${inMarkup(said)}</td></tr>`)) faults.push(`the slice ${row.slice} is not said as the file counts it`);
   }
   if (results.misses) for (const key of Object.keys(copy.missesLabels)) if (Number.isFinite(results.misses[key]) && !html.includes(`<tr data-row="${key}"><th scope="row">${inMarkup(copy.missesLabels[key])}</th><td>${count(results.misses[key])}</td></tr>`)) faults.push(`the misses by ${key} are not said`);
-  for (const row of results.ablation?.rows ?? []) if (!html.includes(`<tr data-row="${row.what}"><th scope="row">${inMarkup(copy.ablation[row.what] ?? row.what)}</th><td>${count(row.right)}</td>`)) faults.push(`the run ${row.what} is not said`);
+  // rc3: a row with a run's name ("all", R1 and R2) is keyed and named with it.
+  for (const row of results.ablation?.rows ?? []) {
+    const run = typeof row.run === 'string' && row.run.trim() ? row.run.trim() : null;
+    const label = copy.ablation[row.what] ?? row.what;
+    const head = run === null ? label : fillNext(copy.ablationRun, { what: label, run });
+    if (!html.includes(`<tr data-row="${inMarkup(run === null ? row.what : `${row.what}-${run}`)}"><th scope="row">${inMarkup(head)}</th><td>${count(row.right)}</td>`)) faults.push(`the run ${row.what}${run === null ? '' : ` ${run}`} is not said`);
+  }
+  const keys = (results.ablation?.rows ?? []).map((row) => (typeof row.run === 'string' && row.run.trim() ? `${row.what}-${row.run.trim()}` : row.what));
+  if (new Set(keys).size !== keys.length) faults.push('two bricks rows share a key');
+  if (results.misses && Number.isFinite(results.misses.gate) && results.misses.gate_means && !html.includes('data-results2-gate=""')) faults.push('what a miss at the decision means is not said');
+  if (results.scoring?.checked_by && !html.includes('data-results2-checked=""')) faults.push('the re-check of the scoring is not said');
   if (results.baseline && Number.isFinite(results.baseline.naive_right_lex_not) && !html.includes('data-results2-baseline-wins=""')) faults.push('where the naive pipeline did fine is not said');
   if (results.set && !html.includes(`data-results2-used="${results.set.used_before === true ? 'before' : 'once'}"`)) faults.push('whether the questions were seen before is not said');
   if (results.scoring?.lenient?.length > 0 && !html.includes('data-results2-lenient=""')) faults.push('the lenient rule is not said next to the numbers');
@@ -695,6 +719,73 @@ export function results2Faults(html, results, locale) {
   if (Number.isFinite(results.retrieval?.walk_found) && !html.includes('data-results2-walk=""')) faults.push('what the walk alone found is not said');
   if (typeof results.latency?.conditions === 'string' && !html.includes('data-results2-conditions=""')) faults.push('how the times were taken is not said');
   if (results.build && results.run && results.made && !html.includes('data-results2-run=""')) faults.push('the build measured is not named');
+  if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
+  return faults;
+}
+
+/**
+ * fix-pages3 (22/11/2026): the fixture's run with two more runs (RESULTS-SCHEMA.md `runs`: a final one, measured on `measured`,
+ * compared with `against`; one not scored yet) and the walk's value (`walk_value`). Synthetic: every figure is made up for the check.
+ */
+export function syntheticRuns(results, { measured, against }) {
+  const second = {
+    ...results, key: 'fixture-05', status: 'final', run: 'fixture-05', made: '2026-11-23',
+    set: { ...results.set, name: 'fixture-05' }, build: { ...measured },
+    previous: { ...results.previous, name: { fr: 'la version comparée', en: 'the version compared' }, build: { ...against }, p: 0.012 },
+    decision: { rule: { fr: 'la règle du jeu de démonstration', en: 'the fixture’s rule' }, result: 'PROMOTE', checks: [{ pair: 'R1~prev', right: [100, 90], discordant: [14, 4], p: 0.031, wrong_asserted: [1, 2] }] },
+  };
+  const pending = { key: 'fixture-06', status: 'pending', run: 'fixture-06', made: '2026-11-24', set: { name: 'fixture-06', n: 50 }, build: { code: 't99', data: '20991231a' }, previous: { build: { ...measured } } };
+  const walk = {
+    run: results.run, made: results.made, build: results.build, by: 'code', n: results.set?.n ?? 120, of: 100,
+    method: { fr: 'Méthode du jeu de démonstration.', en: 'The fixture’s method.' },
+    recall: [{ search: 'walk_parts', found: 80, of: 100, interval: [71.1, 86.7] }, { search: 'words', found: 70, of: 100, interval: [60.4, 78.1] }, { search: 'any', found: 95, of: 100, interval: [88.8, 97.8] }],
+    only: [{ search: 'walk_parts', found: 5, of: 100, right: 4 }],
+    ablation: { with: { run: 'R1', right: 90 }, without: { run: 'no_outline', right: 91 }, n: 120, discordant: [6, 7], p: 1, slices: [{ slice: 'insurance', n: 40, with: 30, without: 31, discordant: [2, 3], p: 1 }] },
+    cost: { calls_per_answer: 2.1, share_of_calls: 30, ms_per_answer: 3100, share_of_time: 22.5, usd_per_answer: 0.004, share_of_cost: 17.4 },
+    findings: [{ fr: 'Un constat du jeu de démonstration.', en: 'A finding of the fixture.' }], verdict: { fr: 'Le verdict du jeu de démonstration.', en: 'The fixture’s verdict.' },
+  };
+  return { ...results, runs: [second, pending], walk_value: walk };
+}
+
+/**
+ * fix-pages3: what the Results page must hold of several runs: the table of runs (each a row), each run under its own heading
+ * with its note before its numbers, the run that describes the site's answers first, a run not scored yet with no figure, the
+ * walk's value, no id twice; and each final run read like a single one (`results2Faults`).
+ */
+export function runsFaults(html, results, served, locale) {
+  const faults = markupFaults(html);
+  const copy = nextCopy(locale).results4;
+  if (!html.includes('data-results-runs-table=""')) faults.push('the table of the runs is not drawn');
+  const runs = [{ key: 'main', run: results }, ...results.runs.map((run) => ({ key: run.key, run }))];
+  for (const { key } of runs) if (!html.includes(`<tr data-row="${key}"`)) faults.push(`the run ${key} has no row in the table of runs`);
+  const order = [...html.matchAll(/data-results-run="([a-z0-9-]+)"/gu)].map((match) => match[1]);
+  if (order.length !== runs.length) faults.push(`${order.length} runs drawn for ${runs.length}`);
+  const describes = runs.filter(({ run }) => run.build && served && ((run.build.code === served.code && run.build.data === served.data) || (run.build.engine && run.build.engine === served.engine && run.build.data === served.data)));
+  if (describes.length > 0 && order[0] !== describes[0].key) faults.push('the run that describes the site\'s answers is not drawn first');
+  const ids = [...html.matchAll(/\sid="([^"]+)"/gu)].map((match) => match[1]);
+  if (new Set(ids).size !== ids.length) faults.push('an id is used twice');
+  for (const { key, run } of runs) {
+    const start = html.indexOf(`data-results-run="${key}"`);
+    const next = order.map((one) => html.indexOf(`data-results-run="${one}"`)).filter((at) => at > start).sort((a, b) => a - b)[0] ?? html.length;
+    const part = html.slice(start, next);
+    if (run.status === 'pending') {
+      if (!part.includes('data-results-pending=""') || part.includes('data-results2-section=')) faults.push(`the run ${key}, not scored yet, shows figures or does not say so`);
+      continue;
+    }
+    if (!part.includes('data-results-build=')) faults.push(`the run ${key} does not say whether it describes the site's answers`);
+    else if (part.indexOf('data-results-build=') > part.indexOf('data-results2-section=')) faults.push(`the run ${key} gives numbers before saying which version they describe`);
+    faults.push(...results2Faults(part, run, locale).filter((fault) => !/markup|English sentence/u.test(fault)).map((fault) => `${key}: ${fault}`));
+    if (run.decision?.result && !part.includes(`data-results2-decision="${run.decision.result}"`)) faults.push(`the decision of ${key} is not said`);
+    if (run.previous?.name && !part.includes(inMarkup(fillNext(copy.previousNamedHeading, { name: run.previous.name[locale] })))) faults.push(`the version ${key} is compared with is not named`);
+  }
+  const walk = results.walk_value;
+  if (walk) {
+    if (!html.includes('data-results-walk=""')) faults.push('the walk\'s value is not drawn');
+    if (!html.includes(inMarkup(walk.verdict[locale]))) faults.push('the walk\'s verdict is not said');
+    for (const row of walk.recall) if (!html.includes(`<tr data-row="${row.search}"><th scope="row">${inMarkup(copy.walk.searches[row.search] ?? row.search)}</th><td>${inMarkup(fillNext(copy.walk.outOf, { count: groupedCount(row.found, locale), of: groupedCount(row.of, locale) }))}</td>`)) faults.push(`the walk's recall by ${row.search} is not said as the file counts it`);
+    if (!/data-results-walk-ablation=""[^>]*>[^<]*\b91\b/u.test(html)) faults.push('the walk switched off is not counted');
+    if (!html.includes('data-results-walk-cost=""')) faults.push('what the walk costs is not said');
+  }
   if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
   return faults;
 }
@@ -735,6 +826,9 @@ export async function renderAll({ write = false, tag = '' } = {}) {
   // repair-pages (22/11/2026): the dictionary as /api/next/dictionary answers it (12 of its rows).
   const dictionary = JSON.parse(await readFile(new URL('../test/next-fixtures/dictionary.json', import.meta.url), 'utf8'));
   const shapes = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/shapes.json', import.meta.url), 'utf8'));
+  // fix-pages3 (22/11/2026): /api/next/review and /api/next/codes as this tree's server answers them (saved 22/11, data 20261122c).
+  const review = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/review.json', import.meta.url), 'utf8'));
+  const codes = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/codes.json', import.meta.url), 'utf8'));
   const coverageNew = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/coverage.json', import.meta.url), 'utf8'));
   const renderings = [];
   for (const locale of LOCALES) {
@@ -808,6 +902,36 @@ export async function renderAll({ write = false, tag = '' } = {}) {
         if (locale === 'fr' && /data-part="[^"]+"><th scope="row">[^<]*<\/th><td>[^<]*<\/td><td>[^<]*<\/td><td lang="en">/u.test(withDictionary)) dFaults.push('a shape decision is said in English on the French page');
         if (locale === 'fr') for (const sentence of englishSentences()) if (withDictionary.includes(inMarkup(sentence))) dFaults.push(`an English sentence on the French page: ${sentence}`);
         renderings.push({ name: 'how-funnel-dictionary', locale, html: withDictionary, faults: dFaults });
+      }
+      // fix-pages3 (22/11/2026): who has checked what, counted from the data (/api/next/review); each code's wordings by the
+      // home page's rule (/api/next/codes: the Code du travail 29, not the 30 rows of /api/corpus); what the server keeps, said
+      // from its configuration only.
+      {
+        const html = render.renderHowFunnel(corpus, config, { locale, dictionary, shapes, review, codes });
+        const rFaults = markupFaults(html);
+        const how2 = copy.how2;
+        if (!html.includes('data-how-review=""')) rFaults.push('who has checked what is not said');
+        for (const [key, part] of [['dictionary', review.dictionary], ['routing', review.routing]]) {
+          const signed = key === 'dictionary' ? part.validated : part.reviewed_by_a_person;
+          if (!html.includes(`data-review="${key}" data-review-signed="${signed}"`)) rFaults.push(`the review of the ${key} is not counted as the data says (${signed} signed)`);
+          const total = key === 'dictionary' ? part.rows : part.lines;
+          if (!new RegExp(`data-review="${key}"[^>]*><th scope="row">[^<]*</th><td>${groupedCount(total, locale).replace(/\s/gu, '\\s')}</td>`, 'u').test(html)) rFaults.push(`the ${key}'s size is not the data's`);
+        }
+        if (review.routing.reviewed_by_a_person === 0 && !html.includes(inMarkup(how2.reviewNoColumn))) rFaults.push('routing lines no person reviewed are not called drafts');
+        if (review.references === null && !(html.includes('data-review="references"') && html.includes(inMarkup(how2.reviewReferencesNone)))) rFaults.push('references no person marked are not said so');
+        // The day a person marks them (app/apply_review.py: routing_line.validator, meta ref_review), the page says so from the data.
+        const signed = render.renderHowFunnel(corpus, config, { locale, review: { ...review, routing: { ...review.routing, reviewed_by_a_person: 148, reviewer_column: 'validator', validators: ['TT'] }, references: { drawn: 40, marked: 40, right: 33, wrong: 5, wilson95: [0.72, 0.94], reviewers: ['TT'] } } });
+        if (!signed.includes('data-review="routing" data-review-signed="148"') || !signed.includes(inMarkup(countedForm(how2.reviewSigned, 148, locale, { names: 'TT' })))) rFaults.push('routing lines a person signed are not counted');
+        if (!signed.includes(inMarkup(fillNext(how2.reviewReferencesMarked, { right: '33', judged: '38', names: 'TT', interval: fillNext(copy.results2.interval, { low: decimal(72, locale), high: decimal(94, locale) }) })))) rFaults.push('the references a person marked are not counted');
+        for (const row of codes.codes) {
+          if (!html.includes(inMarkup(countedForm(copy.how.limits.codeVersions, row.versions, locale, { from: numericDate(row.first), to: numericDate(row.last) })))) rFaults.push(`the versions of ${row.title} are not counted by the home page's rule (${row.versions})`);
+        }
+        if (html.includes(inMarkup(how2.commitmentVocabulary))) rFaults.push('a word of a question is said to be kept although the configuration does not say so');
+        const vocabulary = render.renderHowFunnel(corpus, { ...config, kept_on_server: { ...config.kept_on_server, vocabulary_misses: 'each word found in no text held' } }, { locale });
+        if (!vocabulary.includes(inMarkup(how2.commitmentVocabulary))) rFaults.push('the words written down, which the configuration says, are not said among the commitments');
+        for (const banned of ['n’est jamais la réponse', 'is never the answer', 'never answers a reader']) if (html.includes(banned)) rFaults.push(`the page says more than the code: ${banned}`);
+        if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) rFaults.push(`an English sentence on the French page: ${sentence}`);
+        renderings.push({ name: 'how-funnel-review', locale, html, faults: rFaults });
       }
       const failed = render.renderHowFunnel(null, null, { locale, state: 'failed', configState: 'failed' });
       renderings.push({ name: 'how-funnel-failed', locale, html: failed, faults: [...markupFaults(failed), ...(failed.includes(inMarkup(copy.how2.configFailed)) ? [] : ['a failed configuration is not said'])] });
@@ -897,9 +1021,47 @@ export async function renderAll({ write = false, tag = '' } = {}) {
     {
       const html = render.renderResults(results2, { locale });
       renderings.push({ name: 'results-v2', locale, html, faults: results2Faults(html, results2, locale) });
+      // fix-pages3 (22/11/2026): several runs and the walk's value; the new run answering (promoted), then the version compared
+      // with answering (before a promotion).
+      for (const [name, served, against] of [['results-runs-promoted', { code: 't77', data: '20261123z' }, { code: 't76', data: '20261123z' }], ['results-runs-before', { code: 't76', data: '20261123z' }, { code: 't76', data: '20261123z' }]]) {
+        const multi = syntheticRuns(results2, { measured: { code: 't77', data: '20261123z' }, against });
+        const html = render.renderResults(multi, { locale, config: { ...config, build: served } });
+        const faults = runsFaults(html, multi, served, locale);
+        if (name === 'results-runs-before' && !html.includes('data-results2-previous-served=""')) faults.push('the version compared with, answering on the site, is not said to be');
+        renderings.push({ name, locale, html, faults });
+      }
       const bare = { schema: results2.schema, run: results2.run, totals: results2.totals };
       const thin = render.renderResults(bare, { locale });
       renderings.push({ name: 'results-v2-thin', locale, html: thin, faults: [...markupFaults(thin), ...(thin.includes('data-results2-section="slices"') ? ['a slice section drawn with no slice'] : [])] });
+      // rc3 (22/11/2026): the engine's own file, when it is in lex-results/2, read against itself like the fixture, served by
+      // a build with another code tag and the same fingerprint (said to describe it) and by one with another fingerprint (not).
+      if (current !== null && current.schema === 'lex-results/2') {
+        const measured = current.build ?? {};
+        const sameServed = { ...config, build: { code: `${measured.code}-next`, data: measured.data, engine: measured.engine } };
+        const html = render.renderResults(current, { locale, config: sameServed });
+        const faults = results2Faults(html, current, locale);
+        if (typeof measured.engine === 'string' && !html.includes('data-results-build="same-engine"')) faults.push('a build running the engine measured is not said to be described');
+        if (html.includes(inMarkup(nextCopy(locale).results2.notServed))) faults.push('a section is said not to be the version answering, although its engine answers');
+        // rc3: every key of the file the page names is named in the page's language, never shown as the file's key.
+        const copy2 = nextCopy(locale);
+        for (const row of current.slices ?? []) if (!Object.hasOwn(copy2.results2.slices, row.slice)) faults.push(`the slice ${row.slice} has no name`);
+        for (const row of current.by_type ?? []) if (!Object.hasOwn(copy2.questionTypes, row.type)) faults.push(`the kind ${row.type} has no name`);
+        for (const row of current.previous?.items ?? []) for (const state of [row.before, row.now]) if (!Object.hasOwn(copy2.results2.itemStates, state)) faults.push(`the state ${state} has no name`);
+        for (const key of Object.keys(current.totals ?? {})) if (key !== 'intervals' && !Object.hasOwn(copy2.results2.states, key)) faults.push(`the total ${key} has no name`);
+        if (typeof current.cost?.price_source === 'string' && locale === 'fr') faults.push('the price source is said in one language only');
+        // fix-pages3: the walk's value and the other runs of the engine's file, when it carries them, read like the fixture's.
+        if (current.walk_value || current.runs) {
+          faults.push(...runsFaults(html, { ...current, runs: current.runs ?? [] }, sameServed.build, locale).filter((fault) => !/fixture|91/u.test(fault)).filter((fault) => !fault.startsWith('the walk switched off is not counted')));
+          for (const row of current.walk_value?.recall ?? []) if (!Object.hasOwn(copy2.results4.walk.searches, row.search)) faults.push(`the walk's search ${row.search} has no name`);
+          for (const row of current.walk_value?.ablation?.slices ?? []) if (!Object.hasOwn(copy2.results2.slices, row.slice)) faults.push(`the walk's slice ${row.slice} has no name`);
+          if (current.walk_value?.ablation && !new RegExp(`data-results-walk-ablation=""[^>]*>[^<]*${current.walk_value.ablation.without.right}`, 'u').test(html)) faults.push('the walk switched off is not counted as the file says');
+        }
+        if (locale === 'fr') for (const row of current.misses?.items ?? []) if (/«[^»]*\b(?:partial|not_held|not_found|out_of_scope|clarify)\b[^»]*»/u.test(row.note?.fr ?? '')) faults.push(`a French note names an engine state by its key (${row.id})`);
+        renderings.push({ name: 'results-current-v2', locale, html, faults });
+        const otherServed = { ...config, build: { code: `${measured.code}-next`, data: measured.data, engine: '0000000000000000' } };
+        const other = render.renderResults(current, { locale, config: otherServed });
+        renderings.push({ name: 'results-current-v2-other', locale, html: other, faults: [...markupFaults(other), ...(other.includes('data-results-build="other"') ? [] : ['a build with another engine is not said to be another'])] });
+      }
     }
     for (const state of ['first', 'pending', 'failure', 'rate', 'folded', 'kept']) {
       const html = render.renderDockState(state, { locale });

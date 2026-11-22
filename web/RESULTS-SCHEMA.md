@@ -122,3 +122,124 @@ The page also draws these, each optional, each where a reader of the section nee
 The page says, under its heading and in words, whether the build measured (`build`) is the one answering on the site
 (`GET /api/next/config` `build`); when it is not, it says so before any number. Each section that names its own build says
 it too. A section without a build is the top-level build's.
+
+## Added by rc3 (22/11/2026)
+
+```json
+{
+  "build": { "code": "t10", "data": "20261122c", "engine": "01f1b08c054c474c" },   // `python app/engine_id.py --git <tag>`
+  "totals": { "asserted_incomplete": 0, "error": 0 },          // drawn with the other states
+  "misses": { "gate": 0, "gate_means": { "fr": "…", "en": "…" } },   // the decision cause, and what it means
+  "ablation": { "rule": "… exact McNemar p < 0.05 against both release runs",
+                "rows": [ { "what": "all", "run": "R1" }, { "what": "no_corpus_model", "effect": "measured | no measured effect on this set", "p_vs_R1": 0.0, "p_vs_R2": 0.0 } ] },
+  "scoring": { "checked_by": { "fr": "…", "en": "…" } }
+}
+```
+
+`build.engine` is the fingerprint of the files that compute an answer (`app/engine_id.py`: sha256 over server, core, funnel,
+refs, question, question_topk, build_lexical, llm, dictionary.json, coverage_gaps.json; 16 hex digits). The server reports its
+own in `/api/next/config` `build.engine`, computed at start from the files it runs. When the code tags differ but the data tags
+and the two fingerprints are equal, the page says the figures describe the build answering (`data-results-build="same-engine"`),
+and no section is said not to be the version answering. Any other difference is said as before.
+
+## Added by fix-pages3 (22/11/2026; nothing above was changed or removed)
+
+The page now draws several runs, and what the walk down the tables of contents adds. Two new top-level keys, both optional;
+the top-level run (sealed-set-04 today) stays as it is and is drawn as one run among the others.
+
+### `runs`: more runs on the same page (sealed-set-05: rc4 against the live rc3)
+
+```json
+{
+  "runs": [
+    {
+      "key": "sealed-05",                  // unique, [a-z0-9-]+: the run's anchor on the page (#run-sealed-05)
+      "status": "final",                   // "final": drawn whole. "pending": the page names the run, its set and its builds,
+                                           //   says it is not scored yet, and draws no figure. Anything else: as "pending".
+      "title": { "fr": "rc4 contre la version en ligne (rc3)", "en": "rc4 against the live version (rc3)" },   // optional, one line
+
+      // then every key of a top-level run, in the same shape as above (schema optional here):
+      "run": "sealed-05", "made": "2026-11-22",
+      "build": { "code": "t12", "data": "20261122d", "engine": "0123456789abcdef" },   // the candidate measured (rc4); engine = engine_id.py
+      "pipeline": "combo",
+      "models": { "question": "gpt-6-luna", "read": "gpt-6.2-sol", "embedding": "text-embedding-3-large" },
+      "set": { "name": "sealed-set-05", "n": 0, "written_by": { "fr": "…", "en": "…" }, "fixed_before_run": true, "used_before": false,
+               "note": { "fr": "…", "en": "…" } },   // note: only what written_by and fixed_before_run / used_before do not already say
+      "scoring": { … }, "totals": { … }, "wrong": [ … ], "retrieval": { … }, "slices": [ … ], "by_law": [ … ], "by_type": [ … ],
+      "misses": { … }, "absent": { … }, "baseline": { … }, "noise": { … }, "cost": { … }, "latency": { … }, "ablation": { … },
+
+      "previous": {                        // the version it is compared with, on the same questions: here the live rc3
+        "name": { "fr": "rc3, la version en ligne", "en": "rc3, the live version" },   // optional: the row's name (else "the previous one")
+        "build": { "code": "t11", "data": "20261122c", "engine": "01f1b08c054c474c" }, "pipeline": "combo",
+        "where": "https://law.soufien.lu, POST /api/next/ask, one question at a time, 6 s apart",
+        "n": 0, "right": 0, "wrong": 0, "not_found": 0, "interval": [0.0, 0.0], "wrong_interval": [0.0, 0.0],
+        "better": 0, "worse": 0,           // right in this run and not in the previous / the other way round
+        "p": 0.0,                          // exact two-sided McNemar on those two counts (optional)
+        "items": [ { "id": "b012", "question": "…", "before": "right", "now": "partial" } ]
+      },
+
+      "decision": {                        // the fixed rule and what it gave (optional; also read on the top-level run)
+        "rule": { "fr": "…", "en": "…" },  // or one string
+        "result": "PROMOTE",               // PROMOTE | KEEP | any other word, shown as written
+        "checks": [ { "pair": "R1~rc3", "right": [0, 0], "discordant": [0, 0], "p": 0.0, "wrong_asserted": [0, 0] } ]
+      }
+    }
+  ]
+}
+```
+
+- The page puts first a table of the runs (the top-level one and each of `runs`): the set, its size, the build measured, right and
+  wrong asserted with their intervals, the decision, and whether the build measured is the one answering on the site (by code:
+  the same code and data tags, or the same data tag and the same `build.engine` fingerprint as `/api/next/config`).
+- Then each run in its own section, the run that describes the site's answers first, the others by `made`, newest first. A run
+  that is not the version answering says so under its heading, before any number.
+- `previous.build` equal to the build answering on the site is said to be the version answering ("rc3, the live version").
+- Write the sealed-set-05 run as one entry of `runs`; do not change the top-level run (sealed-set-04).
+
+### `walk_value`: what the walk down the tables of contents adds (walk-analysis, from the saved runs; no new run)
+
+```json
+{
+  "walk_value": {
+    "run": "sealed-04",                    // the run whose saved answers were read
+    "made": "2026-11-22",
+    "build": { "code": "t10", "data": "20261122c", "engine": "01f1b08c054c474c" },   // the build of those answers
+    "by": "code",                          // computed by code from the saved answers and the set's gold
+    "method": { "fr": "…", "en": "…" },    // one or two sentences: what was read, how "found" is decided
+    "n": 260,                              // the questions read
+    "of": 222,                             // the questions with a gold article (the denominator of `recall` unless a row says another)
+
+    "recall": [                            // the gold article among what each search (or the walk) brought, measured apart
+      { "search": "walk_parts", "found": 0, "of": 222, "interval": [0.0, 0.0] }
+    ],
+    // search keys the page names in words: walk_parts (in a part the walk opened), walk_stop (the article the walk stopped on),
+    // outline (the outline column of the detectors), exact (named in the question), words, meaning, words_all, meaning_all,
+    // dictionary, routing (the text was kept at the corpus level), any (any search), read (among the articles read)
+    // (any other key is shown as written)
+
+    "only": [                              // the gold article brought by this search and by no other
+      { "search": "walk_parts", "found": 0, "of": 222, "right": 0 }   // right: of those, answered right by the full run
+    ],
+
+    "ablation": {                          // the walk switched off (arm no_outline) against the full run, same questions
+      "with": { "run": "R1", "right": 208 }, "without": { "run": "no_outline", "right": 210 }, "n": 260,
+      "discordant": [0, 0],                // right with the walk only / right without it only
+      "p": 0.80,                           // exact two-sided McNemar
+      "slices": [ { "slice": "insurance", "n": 0, "with": 0, "without": 0, "discordant": [0, 0], "p": 0.0 } ]   // slice keys as `slices`
+    },
+
+    "cost": {                              // what the walk costs, from the traces; shares in percent, one decimal
+      "calls_per_answer": 0.0, "share_of_calls": 0.0, "ms_per_answer": 0, "share_of_time": 0.0,
+      "usd_per_answer": 0.0, "share_of_cost": 0.0
+    },
+
+    "findings": [ { "fr": "…", "en": "…" } ],   // each one sentence, with figures that are in the fields above
+    "verdict": { "fr": "…", "en": "…" }          // one sentence: what the walk is worth on this set
+  }
+}
+```
+
+- The page draws `walk_value` as its own section after the table of runs, with the build it read (said not to be the version
+  answering when it is not). Every section is optional: a missing field is left out, never guessed.
+- `findings` and `verdict` are the evaluation's own words; the page draws them as written, in the page's language when the file
+  gives both.

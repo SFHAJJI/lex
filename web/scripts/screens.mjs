@@ -349,6 +349,30 @@ SHOTS.push(
   ["w-fr-11-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
   ["w-fr-12-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
 );
+// fix-pages3 (22/11/2026): a preview of this branch's pages (built on the runner, API https://law.soufien.lu, the new /api/next/*
+// addresses from fixtures saved from this tree's server functions). The dock's searches as a list with every article named (a
+// real answer of rc3b, the live engine, kept as a fixture: no model is called), the home's example cards at 1366x768, the Results
+// page with the walk's value and the table of runs, How with "who has checked what", Decisions; desktop and phone.
+const PRESCRIPTION = "Quel est le délai de prescription des actions qui dérivent du contrat d'assurance ?";
+const OPEN_FINDS = "document.querySelectorAll('details[data-dock-trace]').forEach((d) => { d.open = true; }); setTimeout(() => { document.querySelectorAll('details[data-finds-more]').forEach((d) => { d.open = true; }); }, 2500);";
+SHOTS.length = 0;
+SHOTS.push(
+  ["x-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["x-fr-02-home--phone", "/fr/", 390, 844, true, false, null, 6000],
+  ["x-fr-03-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_THEN(PRESCRIPTION, OPEN_FINDS), 9000],
+  ["x-fr-04-trace-open--phone-whole", "/fr/radar.html", 390, 844, true, true, ASK_THEN(PRESCRIPTION, OPEN_FINDS), 9000],
+  ["x-en-01-trace-open--tall", "/en/radar.html", 1366, 9000, false, false, ASK_THEN(PRESCRIPTION, OPEN_FINDS), 9000],
+  ["x-fr-05-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["x-fr-06-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["x-fr-07-results-open--tall", "/fr/results.html", 1366, 16000, false, false, OPEN_ALL, 2500],
+  ["x-fr-08-results--phone-whole", "/fr/results.html", 390, 844, true, true, null, 7000],
+  ["x-en-02-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["x-en-03-results--tall", "/en/results.html", 1366, 9000, false, false, null, 7000],
+  ["x-fr-09-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["x-en-04-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["x-fr-10-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
+  ["x-fr-11-how--phone-whole", "/fr/evidence.html", 390, 844, true, true, null, 7000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });

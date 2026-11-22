@@ -1,0 +1,26 @@
+{
+ "dictionary": {
+  "rows": 86,
+  "by_status": {
+   "draft": 86
+  },
+  "validated": 0,
+  "validators": []
+ },
+ "routing": {
+  "lines": 25267,
+  "by_status": {
+   "draft": 25267
+  },
+  "by_source": {
+   "model:gpt-4.1-mini": 25267
+  },
+  "by_prompt": {
+   "route-v1": 25267
+  },
+  "reviewed_by_a_person": 0,
+  "reviewer_column": null,
+  "validators": []
+ },
+ "references": null
+}

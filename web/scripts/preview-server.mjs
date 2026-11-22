@@ -53,7 +53,16 @@ async function nextFixture(method, url, body) {
   // results in lex-results/2 as the evaluation will write them (results-v2.json), so the pages are photographed as they will read.
   if (pathname === "/api/next/config") return readJson("preview/config.json");
   if (pathname === "/api/next/coverage") return readJson("preview/coverage.json");
-  if (pathname === "/api/next/results") return readJson("results-v2.json");
+  // fix-pages3 (22/11/2026): the engine's own results file (preview/results.json: app/results.json with the walk's value, plus a
+  // pending sealed-05 entry to show its place), who has checked what, each code's wordings, and the store's names of the articles
+  // the real answer's searches found (all saved from this tree's server functions on data 20261122c).
+  if (pathname === "/api/next/results") return (await tryRead("preview/results.json")) ?? readJson("results-v2.json");
+  if (pathname === "/api/next/review") return readJson("preview/review.json");
+  if (pathname === "/api/next/codes") return readJson("preview/codes.json");
+  if (pathname === "/api/next/names") {
+    const saved = (await tryRead("preview/names.json")) ?? {};
+    return Object.fromEntries(searchParams.getAll("pk").filter((pk) => Object.hasOwn(saved, pk)).map((pk) => [pk, saved[pk]]));
+  }
   if (pathname === "/api/next/dictionary") return readJson("preview/dictionary.json");
   if (pathname === "/api/next/versions") return readJson("preview/versions.json");
   if (pathname === "/api/next/sources") {

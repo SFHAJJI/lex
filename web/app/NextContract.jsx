@@ -24,7 +24,7 @@ import {
   CONTRACT_ASSERTED, callRows, readableReason, clarifiedQuestion, clarifyOf, contextAddress, contractBlockView, contractBuild, contractFoot, contractStateOf, dateLine,
   evidenceView, listStatement, notHeldLines, replayToken, replayTokenHref, traceLevels, understoodFields, widened,
   amendedSince, blockMarks, blockSource, blockVia, checksView, contractVersions, engineSaid, listItemsView, notesView, partsView, pointedLines, reasonBy, seeAlsoView, sourcesAddress,
-  blockLanguage, reasonLang, codeReasonInEnglish, sentenceLanguage, typedAnswerView, conflictView, verificationLine, unchangedLines,
+  blockLanguage, reasonLang, codeReasonInEnglish, sentenceLanguage, typedAnswerView, conflictView, verificationLine, unchangedLines, namesAddress,
 } from '../scripts/next-contract.mjs';
 
 /** The language tag the law's own words are marked with on a page written in another language. */
@@ -161,7 +161,8 @@ function EngineNotes({ answer, locale }) {
   return cards.map(([key, heading, lines]) => (
     <div className="lx-dock-card lx-dock-notheld" data-dock-card={key} key={key}>
       <p className="lx-dock-lead">{heading}</p>
-      <ul className="lx-dock-step-list">{lines.map((line) => <li key={line} lang={key === 'eu-not-held' ? undefined : lawLang(locale)}>{line}</li>)}</ul>
+      {/* The engine's sentence on a European text not held is in the question's language: marked with it when it is not the page's. */}
+      <ul className="lx-dock-step-list">{lines.map((line) => <li key={line} lang={key === 'eu-not-held' ? ((language) => (language === null || language === locale ? undefined : language))(sentenceLanguage(line)) : lawLang(locale)}>{line}</li>)}</ul>
     </div>
   ));
 }
@@ -528,12 +529,56 @@ function Evidence({ answer, locale }) {
   );
 }
 
+/** How many articles of the searches side by side are listed before the fold (fix-pages3). */
+export const FINDS_SHOWN = 10;
+
+/**
+ * fix-pages3 (22/11/2026, K-UI-2): the searches side by side, as a list that fits the dock at 1366 px and on a phone: each
+ * article on its own line with the searches that found it and its rank in each (a search that did not find it is not named),
+ * the first ten shown, the others behind a fold. The same rows as the table the trace held before (`traceLevels`).
+ */
+function Finds({ table, locale }) {
+  const copy = nextCopy(locale).contract3;
+  const separator = ' · ';
+  const item = (entry) => (
+    <li key={entry.key} data-find={entry.key} data-meaning-only={entry.note === null ? undefined : ''}>
+      <span className="lx-dock-finds-head" lang={lawLang(locale)}>{entry.head}</span>
+      {entry.note === null ? null : <span className="lx-dock-caution-note"> ({entry.note})</span>}
+      <span className="lx-dock-finds-ranks">{entry.finds.length === 0 ? copy.findsNone : entry.finds.map((find) => `${find.name} ${find.rank}`).join(separator)}</span>
+    </li>
+  );
+  const first = table.rows.slice(0, FINDS_SHOWN);
+  const rest = table.rows.slice(FINDS_SHOWN);
+  return (
+    <div className="lx-dock-finds" data-trace-table="detectors">
+      <p className="lx-dock-finds-legend">{copy.findsLegend}</p>
+      <ol className="lx-dock-finds-list">{first.map(item)}</ol>
+      {rest.length === 0 ? null : (
+        <details className="lx-dock-finds-more" data-finds-more="">
+          <summary>{countedForm(copy.findsMore, rest.length, locale)}</summary>
+          <ol className="lx-dock-finds-list" start={FINDS_SHOWN + 1}>{rest.map(item)}</ol>
+        </details>
+      )}
+    </div>
+  );
+}
+
 /** The trace, folded: the levels, the model calls, the foot line, the versions, the replay link. */
-function Trace({ answer, turn, locale }) {
+function Trace({ answer, turn, locale, fetchImpl }) {
   const table = nextCopy(locale);
   const dock = table.dock;
   const copy = table.contract.trace;
-  const levels = traceLevels(answer, locale);
+  // fix-pages3 (K-UI-2): the articles the searches found that the answer does not name, asked of the store when the trace is
+  // first opened (one GET, ids only, never a word of the question).
+  const [stored, setStored] = useState(null);
+  const [asked, setAsked] = useState(false);
+  const names = namesAddress(answer);
+  const onToggle = (event) => {
+    if (!event.currentTarget.open || asked || names === null) return;
+    setAsked(true);
+    readContext(names, fetchImpl).then((read) => { if (read.state === 'ready') setStored(read.data); });
+  };
+  const levels = traceLevels(answer, locale, stored);
   const calls = callRows(answer, locale);
   const foot = contractFoot(answer, locale);
   const build = contractBuild(answer, locale);
@@ -544,7 +589,7 @@ function Trace({ answer, turn, locale }) {
   if (levels.length === 0 && calls.length === 0 && foot === null) return null;
   const count = Array.isArray(answer?.trace?.calls) ? answer.trace.calls.length : null;
   return (
-    <details className="lx-dock-card lx-dock-built lx-dock-trace" data-dock-built="" data-dock-trace="">
+    <details className="lx-dock-card lx-dock-built lx-dock-trace" data-dock-built="" data-dock-trace="" onToggle={onToggle}>
       <summary className="lx-dock-built-head">
         <span className="lx-dock-built-title">{copy.summary}</span>
         {count === null ? null : <span className="lx-dock-built-facts"><span className="lx-dock-built-by" data-dock-by={count > 0 ? 'model' : 'code'}>{countedForm(dock.builtBy, count, locale)}</span></span>}
@@ -568,7 +613,7 @@ function Trace({ answer, turn, locale }) {
                     ))}
                   </ul>
                 )}
-                {row.table === null ? null : (
+                {row.table === null ? null : level.level === 'detectors' ? <Finds table={row.table} locale={locale} /> : (
                   <div className="lx-dock-table-scroll">
                     <table className="lx-dock-table" data-trace-table={level.level}>
                       <thead><tr>{row.table.columns.map((column) => <th scope="col" key={column}>{column}</th>)}</tr></thead>
@@ -691,7 +736,7 @@ export function ContractAnswer({ turn, locale, onAsk, onOpen, typedDay, fetchImp
           {cards}
         </>
       ) : null}
-      <Trace answer={answer} turn={turn} locale={locale} />
+      <Trace answer={answer} turn={turn} locale={locale} fetchImpl={fetchImpl} />
     </>
   );
 }

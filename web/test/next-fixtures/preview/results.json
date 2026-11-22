@@ -1,0 +1,3011 @@
+{
+ "schema": "lex-results/2",
+ "run": "sealed-04",
+ "made": "2026-11-22",
+ "build": {
+  "code": "t10",
+  "data": "20261122c",
+  "git_tag": "rc2",
+  "commit": "05829bd",
+  "image": "crlexv3soufien.azurecr.io/lex-next:t10 on lex-next-base:20261122c",
+  "note": "answered locally by the code extracted from git tag rc2 (the code of image lex-next:t10) on a hashed copy of the data image 20261122c; LEX_CODE_TAG=rc2 in those answers",
+  "engine": "01f1b08c054c474c",
+  "engine_files": [
+   "server.py",
+   "core.py",
+   "funnel.py",
+   "refs.py",
+   "question.py",
+   "question_topk.py",
+   "build_lexical.py",
+   "llm.py",
+   "dictionary.json",
+   "coverage_gaps.json"
+  ],
+  "engine_note": "rc3: app\\engine_id.py --git rc2 (sha256 of the files that compute an answer, read from git tag rc2); a build whose server reports the same fingerprint and the same data tag answers with the engine measured"
+ },
+ "pipeline": "combo",
+ "models": {
+  "question": "gpt-6-luna",
+  "corpus": "gpt-6-luna",
+  "walk": "gpt-4.1-mini",
+  "articles": "gpt-4.1-mini",
+  "arbiter": "gpt-4.1-mini",
+  "read": "gpt-6.2-sol",
+  "exception": "gpt-6.2-sol",
+  "verify": "gpt-6-luna",
+  "embedding": "text-embedding-3-large"
+ },
+ "set": {
+  "name": "sealed-set-04",
+  "n": 260,
+  "written_by": {
+   "fr": "deux rédacteurs indépendants et un vérificateur, à partir du texte de la loi et des questions d’un assureur et de la vie courante",
+   "en": "two independent writers and a checker, from the law’s text and from an insurer’s and everyday questions"
+  },
+  "fixed_before_run": true,
+  "used_before": false,
+  "note": {
+   "fr": "Jamais vues par les constructeurs : le coordinateur a vu un résumé nommant le sujet de quelques questions, aucun constructeur ne l’a vu, et seuls les deux correcteurs (sealed-eval, sealed-check) ont ouvert le jeu, après le gel du code au tag rc2.",
+   "en": "Never seen by the builders: the coordinator saw a summary naming a few items’ topics, no builder did, and only the two scorers (sealed-eval, sealed-check) opened the set, after the code was frozen at tag rc2."
+  },
+  "languages": {
+   "fr": 204,
+   "en": 30,
+   "de": 20,
+   "lb": 6
+  }
+ },
+ "scoring": {
+  "by": "code",
+  "rule": {
+   "fr": "juste : une réponse affirmée dont un article attendu figure dans les blocs avec au moins une de ses lignes clés citée (et l’exception attendue quand il y en a une) ; « partiel », « texte non détenu » nommant le texte manquant, « non trouvé », « question à préciser » et « hors champ » comptent juste sur les questions qui les attendent ; faux affirmé : une réponse affirmée sans aucun article attendu, ou affirmée sur une question vague, sans réponse ou hors champ ; tous les dénominateurs sont les 260 questions",
+   "en": "right: an asserted answer whose blocks hold an expected article with at least one of its key lines quoted (and the expected exception when there is one); partial, text not held naming the missing text, not found, clarify and out of scope count right on the questions that expect them; wrong asserted: an asserted answer with no expected article, or asserted on a vague, unanswerable or out-of-scope question; every denominator is the 260 questions"
+  },
+  "lenient": [
+   {
+    "fr": "L1, à côté du chiffre : « partiel » ou « non détenu » nommant le texte manquant compté juste sur les questions partielles et sans réponse : 209 justes",
+    "en": "L1, beside the number: partial or not held naming the missing text counted right on partial and unanswerable questions: 209 right"
+   },
+   {
+    "fr": "L3, plus strict : tous les articles attendus cités : 191 justes",
+    "en": "L3, stricter: every expected article quoted: 191 right"
+   }
+  ],
+  "checked_by": {
+   "fr": "Re-vérifié par sealed-check en lisant la loi : 39 résultats changés sur les dix passages (et 4 marques de recherche), chacun avec sa raison (une règle d’équivalence générale et 8 questions corrigées), les mêmes corrections pour chaque passage ; 40 réponses justes tirées au hasard relues (graine 20261122), toutes confirmées.",
+   "en": "Re-checked by sealed-check by reading the law: 39 outcomes changed across the ten arms (and 4 retrieval marks), each with its reason (one general equivalence rule and 8 items corrected), the same corrections for every arm; 40 random right answers re-read (seed 20261122), all confirmed."
+  },
+  "files": [
+   "experiments/sealed/protocol.md",
+   "experiments/sealed/score_sealed.py",
+   "experiments/sealed/rescore_check.py",
+   "experiments/sealed/check-corrections.json",
+   "experiments/sealed/results-checked.json",
+   "experiments/sealed/REPORT.md"
+  ]
+ },
+ "totals": {
+  "right": 208,
+  "wrong": 1,
+  "partial": 28,
+  "candidates": 0,
+  "not_held": 3,
+  "not_found": 13,
+  "clarify": 0,
+  "out_of_scope": 2,
+  "asserted_incomplete": 5,
+  "error": 0,
+  "intervals": {
+   "right": [
+    74.7,
+    84.4
+   ],
+   "wrong": [
+    0.1,
+    2.1
+   ],
+   "partial": [
+    7.6,
+    15.1
+   ],
+   "candidates": [
+    0.0,
+    1.5
+   ],
+   "not_held": [
+    0.4,
+    3.3
+   ],
+   "not_found": [
+    2.9,
+    8.4
+   ],
+   "clarify": [
+    0.0,
+    1.5
+   ],
+   "out_of_scope": [
+    0.2,
+    2.8
+   ],
+   "asserted_incomplete": [
+    0.8,
+    4.4
+   ],
+   "error": [
+    0.0,
+    1.5
+   ]
+  }
+ },
+ "wrong": [
+  {
+   "id": "a029",
+   "question": "J'ai payé ma prime en espèces à mon agent d'assurance, qui a depuis disparu avec l'argent. L'assureur dit que je n'ai pas payé et menace de suspendre ma garantie. A-t-il raison ?",
+   "expected": "Art. 289, Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "given": "Art. 20, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 21, Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "what": "article",
+   "runs": [
+    "R1"
+   ]
+  }
+ ],
+ "retrieval": {
+  "right_article_read": 202,
+  "of": 222,
+  "interval": [
+   86.5,
+   94.1
+  ]
+ },
+ "slices": [
+  {
+   "slice": "all",
+   "n": 260,
+   "right": 208,
+   "wrong": 1,
+   "not_found": 13,
+   "interval": [
+    74.7,
+    84.4
+   ],
+   "wrong_interval": [
+    0.1,
+    2.1
+   ],
+   "right_r2": 208,
+   "wrong_r2": 0,
+   "right_t8": 163,
+   "wrong_t8": 6
+  },
+  {
+   "slice": "de",
+   "n": 20,
+   "right": 12,
+   "wrong": 0,
+   "not_found": 2,
+   "interval": [
+    38.7,
+    78.1
+   ],
+   "wrong_interval": [
+    0.0,
+    16.1
+   ],
+   "right_r2": 12,
+   "wrong_r2": 0,
+   "right_t8": 13,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "en",
+   "n": 30,
+   "right": 20,
+   "wrong": 0,
+   "not_found": 4,
+   "interval": [
+    48.8,
+    80.8
+   ],
+   "wrong_interval": [
+    0.0,
+    11.3
+   ],
+   "right_r2": 22,
+   "wrong_r2": 0,
+   "right_t8": 18,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "fr",
+   "n": 204,
+   "right": 172,
+   "wrong": 1,
+   "not_found": 6,
+   "interval": [
+    78.7,
+    88.7
+   ],
+   "wrong_interval": [
+    0.1,
+    2.7
+   ],
+   "right_r2": 170,
+   "wrong_r2": 0,
+   "right_t8": 128,
+   "wrong_t8": 6
+  },
+  {
+   "slice": "lb",
+   "n": 6,
+   "right": 4,
+   "wrong": 0,
+   "not_found": 1,
+   "interval": [
+    30.0,
+    90.3
+   ],
+   "wrong_interval": [
+    0.0,
+    39.0
+   ],
+   "right_r2": 4,
+   "wrong_r2": 0,
+   "right_t8": 4,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "compound",
+   "n": 10,
+   "right": 5,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    23.7,
+    76.3
+   ],
+   "wrong_interval": [
+    0.0,
+    27.8
+   ],
+   "right_r2": 5,
+   "wrong_r2": 0,
+   "right_t8": 3,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "dated",
+   "n": 22,
+   "right": 16,
+   "wrong": 0,
+   "not_found": 1,
+   "interval": [
+    51.8,
+    86.9
+   ],
+   "wrong_interval": [
+    0.0,
+    14.9
+   ],
+   "right_r2": 17,
+   "wrong_r2": 0,
+   "right_t8": 13,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "definition",
+   "n": 14,
+   "right": 8,
+   "wrong": 0,
+   "not_found": 3,
+   "interval": [
+    32.6,
+    78.6
+   ],
+   "wrong_interval": [
+    -0.0,
+    21.5
+   ],
+   "right_r2": 8,
+   "wrong_r2": 0,
+   "right_t8": 7,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "eu",
+   "n": 43,
+   "right": 30,
+   "wrong": 0,
+   "not_found": 3,
+   "interval": [
+    54.9,
+    81.4
+   ],
+   "wrong_interval": [
+    0.0,
+    8.2
+   ],
+   "right_r2": 32,
+   "wrong_r2": 0,
+   "right_t8": 25,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "everyday",
+   "n": 76,
+   "right": 62,
+   "wrong": 0,
+   "not_found": 7,
+   "interval": [
+    71.4,
+    88.7
+   ],
+   "wrong_interval": [
+    0.0,
+    4.8
+   ],
+   "right_r2": 59,
+   "wrong_r2": 0,
+   "right_t8": 47,
+   "wrong_t8": 1
+  },
+  {
+   "slice": "grand_ducal_regulation",
+   "n": 6,
+   "right": 4,
+   "wrong": 0,
+   "not_found": 1,
+   "interval": [
+    30.0,
+    90.3
+   ],
+   "wrong_interval": [
+    0.0,
+    39.0
+   ],
+   "right_r2": 4,
+   "wrong_r2": 0,
+   "right_t8": 2,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "insurance",
+   "n": 96,
+   "right": 71,
+   "wrong": 1,
+   "not_found": 5,
+   "interval": [
+    64.4,
+    81.7
+   ],
+   "wrong_interval": [
+    0.2,
+    5.7
+   ],
+   "right_r2": 75,
+   "wrong_r2": 0,
+   "right_t8": 57,
+   "wrong_t8": 1
+  },
+  {
+   "slice": "insurance_customer",
+   "n": 22,
+   "right": 20,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    72.2,
+    97.5
+   ],
+   "wrong_interval": [
+    0.0,
+    14.9
+   ],
+   "right_r2": 22,
+   "wrong_r2": 0,
+   "right_t8": 16,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "list",
+   "n": 32,
+   "right": 24,
+   "wrong": 0,
+   "not_found": 1,
+   "interval": [
+    57.9,
+    86.8
+   ],
+   "wrong_interval": [
+    0.0,
+    10.7
+   ],
+   "right_r2": 24,
+   "wrong_r2": 0,
+   "right_t8": 25,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "lu",
+   "n": 196,
+   "right": 156,
+   "wrong": 1,
+   "not_found": 11,
+   "interval": [
+    73.4,
+    84.6
+   ],
+   "wrong_interval": [
+    0.1,
+    2.8
+   ],
+   "right_r2": 153,
+   "wrong_r2": 0,
+   "right_t8": 127,
+   "wrong_t8": 3
+  },
+  {
+   "slice": "no_answer",
+   "n": 16,
+   "right": 11,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    44.4,
+    85.8
+   ],
+   "wrong_interval": [
+    0.0,
+    19.4
+   ],
+   "right_r2": 13,
+   "wrong_r2": 0,
+   "right_t8": 12,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "other_laws",
+   "n": 164,
+   "right": 137,
+   "wrong": 0,
+   "not_found": 8,
+   "interval": [
+    77.1,
+    88.4
+   ],
+   "wrong_interval": [
+    0.0,
+    2.3
+   ],
+   "right_r2": 133,
+   "wrong_r2": 0,
+   "right_t8": 106,
+   "wrong_t8": 5
+  },
+  {
+   "slice": "out_of_scope",
+   "n": 13,
+   "right": 13,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    77.2,
+    100.0
+   ],
+   "wrong_interval": [
+    0.0,
+    22.8
+   ],
+   "right_r2": 13,
+   "wrong_r2": 0,
+   "right_t8": 13,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "partial",
+   "n": 5,
+   "right": 3,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    23.1,
+    88.2
+   ],
+   "wrong_interval": [
+    0.0,
+    43.5
+   ],
+   "right_r2": 3,
+   "wrong_r2": 0,
+   "right_t8": 0,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "reference",
+   "n": 82,
+   "right": 55,
+   "wrong": 0,
+   "not_found": 8,
+   "interval": [
+    56.3,
+    76.3
+   ],
+   "wrong_interval": [
+    0.0,
+    4.5
+   ],
+   "right_r2": 56,
+   "wrong_r2": 0,
+   "right_t8": 43,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "regulator",
+   "n": 4,
+   "right": 4,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    51.0,
+    100.0
+   ],
+   "wrong_interval": [
+    0.0,
+    49.0
+   ],
+   "right_r2": 4,
+   "wrong_r2": 0,
+   "right_t8": 1,
+   "wrong_t8": 0
+  },
+  {
+   "slice": "vague",
+   "n": 12,
+   "right": 10,
+   "wrong": 0,
+   "not_found": 0,
+   "interval": [
+    55.2,
+    95.3
+   ],
+   "wrong_interval": [
+    0.0,
+    24.2
+   ],
+   "right_r2": 10,
+   "wrong_r2": 0,
+   "right_t8": 0,
+   "wrong_t8": 3
+  }
+ ],
+ "by_law": [
+  {
+   "law": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+   "n": 45,
+   "right": 38,
+   "wrong": 0,
+   "interval": [
+    71.2,
+    92.2
+   ]
+  },
+  {
+   "law": "aucun texte attendu (question vague, hors champ ou texte non détenu)",
+   "n": 34,
+   "right": 30,
+   "wrong": 0,
+   "interval": [
+    73.4,
+    95.3
+   ]
+  },
+  {
+   "law": "Code du travail",
+   "n": 18,
+   "right": 14,
+   "wrong": 0,
+   "interval": [
+    54.8,
+    91.0
+   ]
+  },
+  {
+   "law": "Loi du 7 décembre 2015 sur le secteur des assurances.",
+   "n": 15,
+   "right": 8,
+   "wrong": 1,
+   "interval": [
+    30.1,
+    75.2
+   ]
+  },
+  {
+   "law": "Code de la route",
+   "n": 10,
+   "right": 6,
+   "wrong": 0,
+   "interval": [
+    31.3,
+    83.2
+   ]
+  },
+  {
+   "law": "Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physi…",
+   "n": 8,
+   "right": 7,
+   "wrong": 0,
+   "interval": [
+    52.9,
+    97.8
+   ]
+  },
+  {
+   "law": "Loi du 21 septembre 2006 sur le bail à usage d’habitation et modifiant certaines dispositions du Code civil.",
+   "n": 8,
+   "right": 7,
+   "wrong": 0,
+   "interval": [
+    52.9,
+    97.8
+   ]
+  },
+  {
+   "law": "Code civil",
+   "n": 8,
+   "right": 5,
+   "wrong": 0,
+   "interval": [
+    30.6,
+    86.3
+   ]
+  },
+  {
+   "law": "Règlement (UE) 2024/1689 du Parlement européen et du Conseil du 13 juin 2024 établissant des règles harmonisées concerna…",
+   "n": 7,
+   "right": 5,
+   "wrong": 0,
+   "interval": [
+    35.9,
+    91.8
+   ]
+  },
+  {
+   "law": "Code consommation",
+   "n": 6,
+   "right": 6,
+   "wrong": 0,
+   "interval": [
+    61.0,
+    100.0
+   ]
+  },
+  {
+   "law": "Loi du 16 avril 2003 relative à l’assurance obligatoire de la responsabilité civile en matière de véhicules automoteurs.",
+   "n": 4,
+   "right": 4,
+   "wrong": 0,
+   "interval": [
+    51.0,
+    100.0
+   ]
+  },
+  {
+   "law": "Loi du 8 mars 2017 sur la nationalité luxembourgeoise et portant abrogation de : 1. la loi du 23 octobre 2008 sur la nat…",
+   "n": 4,
+   "right": 4,
+   "wrong": 0,
+   "interval": [
+    51.0,
+    100.0
+   ]
+  },
+  {
+   "law": "autres textes (moins de 4 questions chacun)",
+   "n": 93,
+   "right": 74,
+   "wrong": 0,
+   "interval": [
+    70.3,
+    86.5
+   ]
+  }
+ ],
+ "by_type": [
+  {
+   "type": "rule",
+   "n": 89,
+   "right": 73,
+   "wrong": 1,
+   "interval": [
+    72.8,
+    88.6
+   ]
+  },
+  {
+   "type": "exception",
+   "n": 48,
+   "right": 41,
+   "wrong": 0,
+   "interval": [
+    72.8,
+    92.8
+   ]
+  },
+  {
+   "type": "list",
+   "n": 28,
+   "right": 21,
+   "wrong": 0,
+   "interval": [
+    56.6,
+    87.3
+   ]
+  },
+  {
+   "type": "change",
+   "n": 22,
+   "right": 16,
+   "wrong": 0,
+   "interval": [
+    51.8,
+    86.9
+   ]
+  },
+  {
+   "type": "absent",
+   "n": 15,
+   "right": 10,
+   "wrong": 0,
+   "interval": [
+    41.7,
+    84.8
+   ]
+  },
+  {
+   "type": "out_of_scope",
+   "n": 13,
+   "right": 13,
+   "wrong": 0,
+   "interval": [
+    77.2,
+    100.0
+   ]
+  },
+  {
+   "type": "vague",
+   "n": 12,
+   "right": 10,
+   "wrong": 0,
+   "interval": [
+    55.2,
+    95.3
+   ]
+  },
+  {
+   "type": "condition",
+   "n": 10,
+   "right": 7,
+   "wrong": 0,
+   "interval": [
+    39.7,
+    89.2
+   ]
+  },
+  {
+   "type": "compound",
+   "n": 10,
+   "right": 5,
+   "wrong": 0,
+   "interval": [
+    23.7,
+    76.3
+   ]
+  },
+  {
+   "type": "procedure",
+   "n": 6,
+   "right": 5,
+   "wrong": 0,
+   "interval": [
+    43.6,
+    97.0
+   ]
+  },
+  {
+   "type": "value",
+   "n": 5,
+   "right": 5,
+   "wrong": 0,
+   "interval": [
+    56.5,
+    100.0
+   ]
+  },
+  {
+   "type": "definition",
+   "n": 2,
+   "right": 2,
+   "wrong": 0,
+   "interval": [
+    34.2,
+    100.0
+   ]
+  }
+ ],
+ "misses": {
+  "corpus_gap": 0,
+  "retrieval": 20,
+  "reading": 4,
+  "gate": 28,
+  "gate_means": {
+   "fr": "porte de décision : l’article et ses lignes étaient montrés mais l’état retenu n’était pas le bon (partiel, non trouvé, réponse affirmée au lieu de partielle), ou l’état d’une question sans réponse dans le droit était faux",
+   "en": "gate: the article and its lines were shown but the state chosen was not the right one (partial, not found, asserted instead of partial), or the state of a question with no answer in the law was wrong"
+  },
+  "items": [
+   {
+    "id": "a003",
+    "question": "Lors de la souscription de l'assurance incendie de mon atelier, j'ai oublié – sans aucune intention de tromper – de signaler que j'y stockais des bidons de solvant. Un incendie survient avant que l'assureur ne s'en aperçoive et il refuse de payer quoi que ce soit. En a-t-il le droit ?",
+    "label": "reading",
+    "sub": "asserted_exception_missing",
+    "note": {
+     "fr": "la règle attendue est citée (Art. 13, Loi du 27 juillet 1997 sur le contrat d'assurance.) ; l’exception ou le second article attendu manque",
+     "en": "the expected rule is quoted (Art. 13, Loi du 27 juillet 1997 sur le contrat d'assurance.); the expected exception or second article is missing"
+    }
+   },
+   {
+    "id": "a014",
+    "question": "Ich wurde wegen zu schnellen Fahrens zu einer Geldbuße verurteilt. Übernimmt meine Rechtsschutzversicherung die Buße?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 97, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 93, Loi du 27 juillet 1997 sur le contrat d'assurance.",
+     "en": "the expected article was not read: Art. 97, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 93, Loi du 27 juillet 1997 sur le contrat d'assurance."
+    }
+   },
+   {
+    "id": "a021",
+    "question": "Nous assurons la flotte de camions et les entrepôts d'un groupe logistique (bilan de 40 millions d'euros, 600 salariés). Le client veut un préavis de résiliation de six mois au lieu de celui prévu par la loi. Peut-on y déroger par contrat ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 3, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 43, Loi du 7 décembre 2015 sur le secteur des assurances.",
+     "en": "the expected article was not read: Art. 3, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 43, Loi du 7 décembre 2015 sur le secteur des assurances."
+    }
+   },
+   {
+    "id": "a023",
+    "question": "Back in June 2013, could a Luxembourg insurer still charge men and women different premiums for a newly sold term life policy?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a027",
+    "question": "We are designing a bespoke property and liability programme for a manufacturing group with €20m turnover, a €10m balance sheet and 120 employees. Do we have to run it through our product approval process with a defined target market?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 43, Loi du 7 décembre 2015 sur le secteur des assurances.",
+     "en": "the expected article was not read: Art. 43, Loi du 7 décembre 2015 sur le secteur des assurances."
+    }
+   },
+   {
+    "id": "a029",
+    "question": "J'ai payé ma prime en espèces à mon agent d'assurance, qui a depuis disparu avec l'argent. L'assureur dit que je n'ai pas payé et menace de suspendre ma garantie. A-t-il raison ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 289, Loi du 7 décembre 2015 sur le secteur des assurances.",
+     "en": "the expected article was not read: Art. 289, Loi du 7 décembre 2015 sur le secteur des assurances."
+    }
+   },
+   {
+    "id": "a030",
+    "question": "Wir verarbeiten Gesundheitsdaten von Antragstellern für eine private Krankenversicherung. Welche der gesetzlich vorgeschriebenen Schutzmaßnahmen dürfen wir weglassen, wenn wir das intern begründen und dokumentieren, und welche nie?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a033",
+    "question": "Quelles sanctions pénales risque une société qui vend des contrats d'assurance au Luxembourg sans y avoir jamais obtenu d'agrément ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a036",
+    "question": "Je lance ma société de courtage en assurances. Quel montant minimum de couverture doit prévoir mon assurance responsabilité civile professionnelle ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « texte non détenu »",
+     "en": "the article and its lines were shown; the decision chose «not_held»"
+    }
+   },
+   {
+    "id": "a037",
+    "question": "Ich will mich als selbständiger Versicherungsmakler zulassen lassen. Welches Eigenvermögen muss ich nachweisen, und wie belege ich gegenüber dem CAA jedes Jahr meine Berufshaftpflichtversicherung?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a038",
+    "question": "A small Luxembourg mutual writes about €12 million of gross premiums a year, holds €40 million of technical provisions, writes no liability, credit or suretyship business and takes no inward reinsurance. Under the rules that apply in March 2027, does it fall outside Solvency II because of its size?",
+    "label": "reading",
+    "sub": "asserted_exception_missing",
+    "note": {
+     "fr": "la règle attendue est citée (Art. 4, Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'a…) ; l’exception ou le second article attendu manque",
+     "en": "the expected rule is quoted (Art. 4, Directive 2009/138/CE du Parlement européen et du Conseil du 25 novembre 2009 sur l'accès aux activités de l'a…); the expected exception or second article is missing"
+    }
+   },
+   {
+    "id": "a041",
+    "question": "For the risk margin in our technical provisions as at 30 June 2027, which cost-of-capital rate do we have to assume?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 39, Règlement délégué (UE) 2015/35 de la Commission du 10 octobre 2014 complétant la directive 2009/138/CE du Parl…",
+     "en": "the expected article was not read: Art. 39, Règlement délégué (UE) 2015/35 de la Commission du 10 octobre 2014 complétant la directive 2009/138/CE du Parl…"
+    }
+   },
+   {
+    "id": "a042",
+    "question": "Wir sind ein kleiner Versicherungsverein mit 4 Mio. EUR Bruttoprämien, 20 Mio. EUR versicherungstechnischen Rückstellungen, ohne Haftpflicht-, Kredit- oder Kautionsgeschäft und ohne Rückversicherung, und wir haben eine Maklertochter mit 30 Mitarbeitern. Gilt DORA für den Verein? Und für die Maklertochter?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a045",
+    "question": "An online travel agency sells baggage-loss cover for €35 per trip alongside its flight-and-hotel bookings. Does it have to be registered as an insurance intermediary in Luxembourg?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 281-1, Loi du 7 décembre 2015 sur le secteur des assurances.; Art. 1, Directive (UE) 2016/97 du Parlement européen et du Conseil du 20 janvier 2016 sur la distribution d’assurances…",
+     "en": "the expected article was not read: Art. 281-1, Loi du 7 décembre 2015 sur le secteur des assurances.; Art. 1, Directive (UE) 2016/97 du Parlement européen et du Conseil du 20 janvier 2016 sur la distribution d’assurances…"
+    }
+   },
+   {
+    "id": "a046",
+    "question": "Which products are outside the scope of the PRIIPs key information document rules? We sell motor, term life and unit-linked savings policies, and also run an employer pension plan.",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a053",
+    "question": "Une PME cliente voudrait une franchise de 10 000 euros par sinistre sur la RC auto de ses camionnettes pour faire baisser sa prime. Est-ce permis ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a055",
+    "question": "Our policyholder caused an accident while driving with 1.4 g of alcohol per litre of blood; we paid the victim €40,000 under his motor liability policy. How much can we claim back from him?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. t066:6, Code de la route; Art. t001:12, Code de la route",
+     "en": "the expected article was not read: Art. t066:6, Code de la route; Art. t001:12, Code de la route"
+    }
+   },
+   {
+    "id": "a057",
+    "question": "J'ai été embauché en 2023 et le règlement du plan de pension complémentaire de mon employeur prévoit que mes droits ne me sont acquis qu'après cinq ans de service. Est-ce encore légal ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 8, Loi du 1er août 2018 portant : 1. transposition de la directive 2014/50/UE du Parlement européen et du Conseil…",
+     "en": "the expected article was not read: Art. 8, Loi du 1er août 2018 portant : 1. transposition de la directive 2014/50/UE du Parlement européen et du Conseil…"
+    }
+   },
+   {
+    "id": "a062",
+    "question": "Au moment de verser le capital d'une assurance-vie, nous découvrons que le bénéficiaire est ministre en exercice dans un pays tiers. Quelles mesures devons-nous prendre avant de payer ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a064",
+    "question": "Quel est le taux de l'impôt sur les primes applicable à une assurance responsabilité civile familiale au Luxembourg ?",
+    "label": "gate",
+    "sub": "overclaimed",
+    "note": {
+     "fr": "l’article attendu est cité (Art. 10, Loi du 6 décembre 1990 portant réforme de certaines dispositions en matière des impôts directs et indirects.) mais affirmé comme réponse complète alors que le texte de base n’est pas détenu dans sa version d’aujourd’hui",
+     "en": "the expected article is quoted (Art. 10, Loi du 6 décembre 1990 portant réforme de certaines dispositions en matière des impôts directs et indirects.) but asserted as a complete answer although the base text is not held in today’s wording"
+    }
+   },
+   {
+    "id": "a068",
+    "question": "According to EIOPA's Guidelines on system of governance, how should we document and repeat the fit-and-proper assessment of our key function holders?",
+    "label": "gate",
+    "sub": "state:partial",
+    "note": {
+     "fr": "aucun article attendu ; la décision a retenu « partielle (attendu : texte non détenu) »",
+     "en": "no article expected; the decision chose «partial (expected not_held)»"
+    }
+   },
+   {
+    "id": "a070",
+    "question": "Deux voitures immatriculées au Luxembourg, conduites par des résidents luxembourgeois, se percutent en France. Quelle loi régit la responsabilité civile et l'indemnisation des dommages ?",
+    "label": "gate",
+    "sub": "state:partial",
+    "note": {
+     "fr": "aucun article attendu ; la décision a retenu « partielle (attendu : texte non détenu) »",
+     "en": "no article expected; the decision chose «partial (expected not_held)»"
+    }
+   },
+   {
+    "id": "a074",
+    "question": "Pour quels événements familiaux ou personnels un salarié a-t-il droit à un congé extraordinaire payé, et combien de jours pour chacun ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a080",
+    "question": "Je vais louer un appartement par l'intermédiaire d'une agence. Quel montant maximum de garantie locative peut-on m'exiger, et qui doit payer les honoraires de l'agence ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a092",
+    "question": "Un client me doit 8 000 euros de facture. Devant quel juge dois-je l'assigner, et sa décision pourra-t-elle faire l'objet d'un appel ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 2, Nouveau Code de procédure civile",
+     "en": "the expected article was not read: Art. 2, Nouveau Code de procédure civile"
+    }
+   },
+   {
+    "id": "a106",
+    "question": "Quelles pratiques d'intelligence artificielle sont aujourd'hui purement et simplement interdites dans l'Union ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a107",
+    "question": "En juin 2025, combien de pratiques d'IA l'article 5 du règlement européen sur l'intelligence artificielle interdisait-il, et lesquelles ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "a112",
+    "question": "Quels conducteurs sont soumis au seuil d'alcool réduit de 0,2 g par litre de sang au lieu de 0,5 g ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. t001:12, Code de la route",
+     "en": "the expected article was not read: Art. t001:12, Code de la route"
+    }
+   },
+   {
+    "id": "a122",
+    "question": "Ma fille de 17 ans veut se marier avec l'accord de ses parents. Est-ce possible au Luxembourg ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 144, Code civil",
+     "en": "the expected article was not read: Art. 144, Code civil"
+    }
+   },
+   {
+    "id": "a129",
+    "question": "Ma compagne doit accoucher en mars. À combien de jours de congé de naissance ai-je droit, et dois-je prévenir mon employeur à l'avance ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b001",
+    "question": "Mon père est décédé à l'hôpital le mois dernier. Qui, dans la famille, peut consulter son dossier médical et en obtenir une copie ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b002",
+    "question": "Je viens d'apprendre que je suis enceinte ; mon employeur, qui ne le savait pas, m'a envoyé hier une lettre de licenciement. Que puis-je faire ?",
+    "label": "reading",
+    "sub": "asserted_exception_missing",
+    "note": {
+     "fr": "la règle attendue est citée (Art. l337-1, Code du travail) ; l’exception ou le second article attendu manque",
+     "en": "the expected rule is quoted (Art. l337-1, Code du travail); the expected exception or second article is missing"
+    }
+   },
+   {
+    "id": "b005",
+    "question": "Mir kréien e Wëllef. Bis wéini musse mir en op der Gemeng umellen, a wéi eng Pabeiere brauche mir dofir?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 3, Loi du 9 mai 2008 relative aux chiens.; Art. 3, Loi du 9 mai 2008 relative aux chiens.",
+     "en": "the expected article was not read: Art. 3, Loi du 9 mai 2008 relative aux chiens.; Art. 3, Loi du 9 mai 2008 relative aux chiens."
+    }
+   },
+   {
+    "id": "b010",
+    "question": "Mon généraliste me demande 50 € et deux mois de délai pour me remettre une copie de mon dossier médical. Est-ce normal ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b017",
+    "question": "En mai 2025, j'avais demandé un document à un ministère, sans réponse. D'après la loi de l'époque, quel délai avait-il pour me le communiquer, et son silence valait-il refus ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b024",
+    "question": "Ma mère, qui nous a abandonnés quand j'étais enfant, est aujourd'hui sans ressources en maison de retraite et me demande de participer aux frais. Suis-je obligé de payer ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 205, Code civil",
+     "en": "the expected article was not read: Art. 205, Code civil"
+    }
+   },
+   {
+    "id": "b028",
+    "question": "Darf ich an der roten Ampel kurz aufs Handy schauen, wenn das Auto sowieso steht? Und wie viele Punkte verliere ich, wenn ich erwischt werde?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 170bis, Code de la route; Art. t001:2bis, Code de la route",
+     "en": "the expected article was not read: Art. 170bis, Code de la route; Art. t001:2bis, Code de la route"
+    }
+   },
+   {
+    "id": "b029",
+    "question": "I'll reach 40 years of pension contributions in 2027, when I'm 61. Can I take early retirement straight away, or do I have to keep working a little longer?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 184, Code de la sécurité sociale",
+     "en": "the expected article was not read: Art. 184, Code de la sécurité sociale"
+    }
+   },
+   {
+    "id": "b030",
+    "question": "Mäi Jong ass 12 Joer al an huet eng kleng Dron kritt. Dierf hien se eleng zu Lëtzebuerg fléie loossen?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b032",
+    "question": "Mon fournisseur d'électricité m'envoie des publicités personnalisées à partir de ma consommation. Puis-je l'obliger à arrêter, même s'il invoque son intérêt légitime ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 21, Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des perso…",
+     "en": "the expected article was not read: Art. 21, Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des perso…"
+    }
+   },
+   {
+    "id": "b055",
+    "question": "Le ministère veut me retirer de sa propre initiative mon autorisation d'établissement. Que doit-il faire avant de décider, et sa décision doit-elle être motivée ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 9, Règlement grand-ducal du 8 juin 1979 relatif à la procédure à suivre par les administrations relevant de l'Eta…; Art. 6, Règlement grand-ducal du 8 juin 1979 relatif à la procédure à suivre par les administrations relevant de l'Eta…",
+     "en": "the expected article was not read: Art. 9, Règlement grand-ducal du 8 juin 1979 relatif à la procédure à suivre par les administrations relevant de l'Eta…; Art. 6, Règlement grand-ducal du 8 juin 1979 relatif à la procédure à suivre par les administrations relevant de l'Eta…"
+    }
+   },
+   {
+    "id": "b061",
+    "question": "Meine Mutter hatte im Juni 2023 einen schweren Unfall, und ich musste mich fünf Tage um sie kümmern. Hatte ich damals als Angestellter Anspruch auf bezahlten Sonderurlaub dafür?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b071",
+    "question": "Puis-je acheter une bombe au poivre pour me défendre quand je rentre tard le soir ?",
+    "label": "reading",
+    "sub": "not_found",
+    "note": {
+     "fr": "l’article attendu a été lu (Art. 2, Loi du 2 février 2022 sur les armes et munitions et portant : 1° transposition de la directive (UE) 2021/555 d…; Art. 6, Loi du 2 février 2022 sur les armes et munitions et portant : 1° transposition de la directive (UE) 2021/555 d…) mais n’est pas dans la réponse (état « non trouvé »)",
+     "en": "the expected article was read (Art. 2, Loi du 2 février 2022 sur les armes et munitions et portant : 1° transposition de la directive (UE) 2021/555 d…; Art. 6, Loi du 2 février 2022 sur les armes et munitions et portant : 1° transposition de la directive (UE) 2021/555 d…) but is not in the answer (state «not_found»)"
+    }
+   },
+   {
+    "id": "b075",
+    "question": "Je gère les achats d'une petite commune. Pour un petit marché de fournitures, puis-je simplement consulter quelques fournisseurs sans publier d'avis ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b077",
+    "question": "J'ai désigné mon ex-épouse comme bénéficiaire de mon assurance-vie. Puis-je la remplacer par ma nouvelle compagne sans son accord ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 112, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 121, Loi du 27 juillet 1997 sur le contrat d'assurance.",
+     "en": "the expected article was not read: Art. 112, Loi du 27 juillet 1997 sur le contrat d'assurance.; Art. 121, Loi du 27 juillet 1997 sur le contrat d'assurance."
+    }
+   },
+   {
+    "id": "b084",
+    "question": "J'ai déclaré un vol à mon assureur trois semaines après au lieu des cinq jours prévus au contrat, parce que j'étais à l'hôpital. Peut-il refuser de payer ?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 28, Loi du 27 juillet 1997 sur le contrat d'assurance.",
+     "en": "the expected article was not read: Art. 28, Loi du 27 juillet 1997 sur le contrat d'assurance."
+    }
+   },
+   {
+    "id": "b100",
+    "question": "Ich habe online zwei Dinge gekauft: eine Reiseversicherung für meinen zehntägigen Urlaub und einen Staubsauger. Kann ich beides innerhalb von 14 Tagen ohne Grund widerrufen?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b101",
+    "question": "Deux soucis avec mon voisin : son sapin de 6 mètres est planté à un mètre de la limite de mon jardin, et son chien a mordu mon fils dans la rue. Puis-je exiger qu'il coupe l'arbre, et est-il responsable de la morsure ?",
+    "label": "gate",
+    "sub": "withheld",
+    "note": {
+     "fr": "l’article et ses lignes étaient montrés ; la décision a retenu « partielle »",
+     "en": "the article and its lines were shown; the decision chose «partial»"
+    }
+   },
+   {
+    "id": "b106",
+    "question": "Darf mein luxemburgischer Mobilfunkanbieter mir für Telefonate im Urlaub in Portugal Zusatzkosten berechnen?",
+    "label": "retrieval",
+    "sub": null,
+    "note": {
+     "fr": "l’article attendu n’a pas été lu : Art. 7, Règlement (UE) 2015/2120 du Parlement européen et du Conseil du 25 novembre 2015 établissant des mesures relat…",
+     "en": "the expected article was not read: Art. 7, Règlement (UE) 2015/2120 du Parlement européen et du Conseil du 25 novembre 2015 établissant des mesures relat…"
+    }
+   },
+   {
+    "id": "b108",
+    "question": "Combien la CNS rembourse-t-elle pour une paire de lunettes pour un adulte ?",
+    "label": "gate",
+    "sub": "state:partial",
+    "note": {
+     "fr": "aucun article attendu ; la décision a retenu « partielle (attendu : texte non détenu) »",
+     "en": "no article expected; the decision chose «partial (expected not_held)»"
+    }
+   },
+   {
+    "id": "b113",
+    "question": "Deposit",
+    "label": "gate",
+    "sub": "state:out_of_scope",
+    "note": {
+     "fr": "aucun article attendu ; la décision a retenu « hors champ (attendu : question à préciser) »",
+     "en": "no article expected; the decision chose «out_of_scope (expected clarify)»"
+    }
+   },
+   {
+    "id": "b119",
+    "question": "Chien",
+    "label": "gate",
+    "sub": "state:out_of_scope",
+    "note": {
+     "fr": "aucun article attendu ; la décision a retenu « hors champ (attendu : question à préciser) »",
+     "en": "no article expected; the decision chose «out_of_scope (expected clarify)»"
+    }
+   }
+  ]
+ },
+ "absent": {
+  "n": 13,
+  "said_not_held": 9,
+  "said_not_held_naming_it": 9,
+  "said_not_found": 1,
+  "asserted": 0,
+  "other": 3,
+  "t8": {
+   "said_not_held": 1,
+   "said_not_found": 11,
+   "asserted": 0
+  }
+ },
+ "ablation": {
+  "build": {
+   "code": "t10",
+   "data": "20261122c"
+  },
+  "rule": "an effect is called only if exact McNemar p < 0.05 against both release runs",
+  "rows": [
+   {
+    "what": "all",
+    "run": "R1",
+    "n": 260,
+    "right": 208,
+    "wrong": 1,
+    "interval": [
+     74.7,
+     84.4
+    ]
+   },
+   {
+    "what": "all",
+    "run": "R2",
+    "n": 260,
+    "right": 208,
+    "wrong": 0,
+    "interval": [
+     74.7,
+     84.4
+    ]
+   },
+   {
+    "what": "no_outline",
+    "n": 260,
+    "right": 210,
+    "wrong": 1,
+    "interval": [
+     75.5,
+     85.1
+    ],
+    "p_vs_R1": 0.804,
+    "p_vs_R2": 0.804,
+    "effect": "no measured effect on this set",
+    "calls_mean": 4.09,
+    "usd_mean": 0.02031
+   },
+   {
+    "what": "no_words",
+    "n": 260,
+    "right": 202,
+    "wrong": 2,
+    "interval": [
+     72.2,
+     82.3
+    ],
+    "p_vs_R1": 0.18,
+    "p_vs_R2": 0.238,
+    "effect": "no measured effect on this set",
+    "calls_mean": 6.96,
+    "usd_mean": 0.02218
+   },
+   {
+    "what": "no_meaning",
+    "n": 260,
+    "right": 204,
+    "wrong": 2,
+    "interval": [
+     73.1,
+     83.0
+    ],
+    "p_vs_R1": 0.523,
+    "p_vs_R2": 0.523,
+    "effect": "no measured effect on this set",
+    "calls_mean": 7.07,
+    "usd_mean": 0.02442
+   },
+   {
+    "what": "no_references",
+    "n": 260,
+    "right": 197,
+    "wrong": 0,
+    "interval": [
+     70.2,
+     80.6
+    ],
+    "p_vs_R1": 0.0433,
+    "p_vs_R2": 0.0433,
+    "effect": "measured",
+    "calls_mean": 6.8,
+    "usd_mean": 0.01984
+   },
+   {
+    "what": "no_arbiter",
+    "n": 260,
+    "right": 204,
+    "wrong": 1,
+    "interval": [
+     73.1,
+     83.0
+    ],
+    "p_vs_R1": 0.424,
+    "p_vs_R2": 0.481,
+    "effect": "no measured effect on this set",
+    "calls_mean": 6.15,
+    "usd_mean": 0.02696
+   },
+   {
+    "what": "no_corpus_model",
+    "n": 260,
+    "right": 192,
+    "wrong": 1,
+    "interval": [
+     68.2,
+     78.8
+    ],
+    "p_vs_R1": 0.00249,
+    "p_vs_R2": 0.00249,
+    "effect": "measured",
+    "calls_mean": 6.8,
+    "usd_mean": 0.02387
+   }
+  ]
+ },
+ "baseline": {
+  "what": {
+   "fr": "les 8 passages les plus proches par le sens dans tout le magasin (text-embedding-3-large), lus par le même lecteur ; ni filtre, ni table des matières, ni arbitre, ni renvoi",
+   "en": "the 8 passages closest by meaning in the whole store (text-embedding-3-large), read by the same reader; no filter, outline, arbiter or reference"
+  },
+  "build": {
+   "code": "t10",
+   "data": "20261122c"
+  },
+  "n": 260,
+  "right": 154,
+  "wrong": 6,
+  "interval": [
+   53.2,
+   65.0
+  ],
+  "naive_right_lex_not": 8,
+  "lex_right_naive_not": 62,
+  "p": 1.83e-11,
+  "items": [
+   {
+    "id": "a030",
+    "question": "Wir verarbeiten Gesundheitsdaten von Antragstellern für eine private Krankenversicherung. Welche der gesetzlich vorgeschriebenen Schutzmaßnahmen dürfen wir weglassen, wenn wir das intern begründen und dokumentieren, und welche nie?",
+    "naive": "right",
+    "lex": "partial"
+   },
+   {
+    "id": "a070",
+    "question": "Deux voitures immatriculées au Luxembourg, conduites par des résidents luxembourgeois, se percutent en France. Quelle loi régit la responsabilité civile et l'indemnisation des dommages ?",
+    "naive": "right",
+    "lex": "partial"
+   },
+   {
+    "id": "a074",
+    "question": "Pour quels événements familiaux ou personnels un salarié a-t-il droit à un congé extraordinaire payé, et combien de jours pour chacun ?",
+    "naive": "right",
+    "lex": "partial"
+   },
+   {
+    "id": "a080",
+    "question": "Je vais louer un appartement par l'intermédiaire d'une agence. Quel montant maximum de garantie locative peut-on m'exiger, et qui doit payer les honoraires de l'agence ?",
+    "naive": "right",
+    "lex": "partial"
+   },
+   {
+    "id": "a129",
+    "question": "Ma compagne doit accoucher en mars. À combien de jours de congé de naissance ai-je droit, et dois-je prévenir mon employeur à l'avance ?",
+    "naive": "right",
+    "lex": "partial"
+   },
+   {
+    "id": "b010",
+    "question": "Mon généraliste me demande 50 € et deux mois de délai pour me remettre une copie de mon dossier médical. Est-ce normal ?",
+    "naive": "right",
+    "lex": "partial"
+   },
+   {
+    "id": "b028",
+    "question": "Darf ich an der roten Ampel kurz aufs Handy schauen, wenn das Auto sowieso steht? Und wie viele Punkte verliere ich, wenn ich erwischt werde?",
+    "naive": "right",
+    "lex": "not_found"
+   },
+   {
+    "id": "b029",
+    "question": "I'll reach 40 years of pension contributions in 2027, when I'm 61. Can I take early retirement straight away, or do I have to keep working a little longer?",
+    "naive": "right",
+    "lex": "not_found"
+   }
+  ]
+ },
+ "previous": {
+  "build": {
+   "code": "t8",
+   "data": "20261120c"
+  },
+  "pipeline": "topk",
+  "where": "https://law.soufien.lu (revision ca-lex-next--0000007), POST /api/next/ask, one question at a time, 6 s apart",
+  "n": 260,
+  "right": 163,
+  "wrong": 6,
+  "not_found": 38,
+  "interval": [
+   56.7,
+   68.3
+  ],
+  "wrong_interval": [
+   1.1,
+   4.9
+  ],
+  "better": 63,
+  "worse": 18,
+  "p": 5.2e-07,
+  "p_r2": 2.42e-07,
+  "items": [
+   {
+    "id": "a031",
+    "question": "Un courtier nous demande la copie complète du dossier sinistre d'un client dont il a placé le contrat chez nous. Pouvons-nous le lui transmettre sans violer le secret professionnel ?",
+    "before": "asserted_incomplete",
+    "now": "right"
+   },
+   {
+    "id": "a039",
+    "question": "Notre conseil d'administration demande à quel niveau de prudence et sur quel horizon notre capital de solvabilité requis doit être calibré, et quels risques il doit couvrir au minimum.",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "a040",
+    "question": "Pour couvrir notre SCR, quelle proportion minimale de fonds propres de niveau 1 nous faut-il, et jusqu'où pouvons-nous compter des éléments de niveau 3 ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a043",
+    "question": "Un rançongiciel a chiffré nos serveurs de gestion des sinistres et des données de clients ont été exfiltrées. Dans quel délai devons-nous prévenir la CNPD, et devons-nous aussi déclarer l'incident au CAA – dans quels délais ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "a047",
+    "question": "À quelle fréquence devons-nous revoir le document d'informations clés de notre contrat d'assurance-vie en unités de compte, et qu'est-ce qui doit être vérifié lors de cette revue ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a048",
+    "question": "Ech hu bei menger Assurance eng schrëftlech Reklamatioun gemaach an no dräi Méint nach ëmmer keng Äntwert. Kann ech mech gratis un de CAA wenden, bis wéini, a muss meng Assurance sech dann un dem CAA seng Conclusioun halen?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a049",
+    "question": "Dans quels cas le CAA déclarera-t-il irrecevable ma demande de règlement extrajudiciaire d'un litige avec mon assureur ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a051",
+    "question": "En octobre 2024, j'ai été blessé à Luxembourg, où j'habite, par un automobiliste assuré auprès d'un assureur luxembourgeois qui venait d'être mis en liquidation. Qui va m'indemniser ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "a052",
+    "question": "Quels montants de garantie minimum un contrat d'assurance RC automobile doit-il prévoir au Luxembourg pour les dommages corporels et matériels ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a054",
+    "question": "Ich habe dieses Jahr mit meinem Auto einen Haftpflichtschaden verursacht, den die Versicherung bezahlt hat. Um wie viele Stufen steige ich in der Bonus-Malus-Skala, und kann ich das irgendwie vermeiden?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a056",
+    "question": "Je me suis arrêté pour secourir les blessés d'un accident de voiture sur la N7 : mes vêtements sont fichus et j'ai dû payer un taxi pour rentrer. Quelqu'un doit-il me rembourser ?",
+    "before": "wrong",
+    "now": "right"
+   },
+   {
+    "id": "a058",
+    "question": "En juin 2000, un salarié de 52 ans quittant son employeur luxembourgeois pouvait-il se faire racheter ses droits acquis dans le régime complémentaire de pension, et sous quelle forme ?",
+    "before": "not_held",
+    "now": "right"
+   },
+   {
+    "id": "a060",
+    "question": "En allant au travail, je fais un détour pour déposer ma fille chez la nounou, puis j'ai un accident. Est-ce couvert comme accident de trajet ? Et si j'avais fait un crochet pour aller à la salle de sport ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a061",
+    "question": "Auf dem Weg zur Arbeit hatte ich einen Unfall, bei dem ich verletzt und mein Auto beschädigt wurde. Ersetzt die Unfallversicherung (AAA) auch den Schaden am Auto, und in welcher Höhe?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a071",
+    "question": "Mon futur employeur me propose un CDI avec une période d'essai de huit mois, renouvelable une fois. Est-ce légal ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "a072",
+    "question": "Je travaille depuis sept ans dans la même entreprise et je veux démissionner. Quel préavis dois-je respecter, et puis-je simplement envoyer un e-mail à mon chef ?",
+    "before": "not_held",
+    "now": "right"
+   },
+   {
+    "id": "a090",
+    "question": "Mon ancien employeur ne m'a jamais payé des heures supplémentaires faites en 2022. Jusqu'à quand puis-je les réclamer ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "a096",
+    "question": "Je vis légalement au Luxembourg depuis 22 ans mais je ne parle pas luxembourgeois. Puis-je quand même devenir Luxembourgeois sans passer l'examen de langue ?",
+    "before": "wrong",
+    "now": "right"
+   },
+   {
+    "id": "a098",
+    "question": "J'habite au Luxembourg et j'ai acheté sur un site allemand qui vise les clients luxembourgeois ; ses conditions générales choisissent le droit allemand. Est-ce que je perds la protection du droit luxembourgeois ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a100",
+    "question": "Lors d'un séjour de ski en Autriche, un ami luxembourgeois m'a blessé en me percutant sur la piste. Nous habitons tous les deux au Luxembourg. Quel droit s'applique à ma demande de dommages et intérêts ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a105",
+    "question": "Quelle amende maximale risque une entreprise qui utilise un système d'IA interdit par le règlement européen, et est-ce différent pour une PME ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "a111",
+    "question": "Lors d'un contrôle routier, j'ai soufflé l'équivalent de 0,7 g d'alcool par litre de sang, sans aucun signe d'ivresse. Qu'est-ce que je risque ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a113",
+    "question": "Avec ma trottinette non électrique, dois-je rouler sur la chaussée comme un vélo ou sur le trottoir comme un piéton ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a123",
+    "question": "Préavis ?",
+    "before": "wrong",
+    "now": "right"
+   },
+   {
+    "id": "a124",
+    "question": "Congé parental ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b004",
+    "question": "Pour un contrôle de nos fiches de paie de juin 2024 : quel montant de base, à l'indice 100, le Code du travail retenait-il alors pour le salaire social minimum d'un salarié non qualifié, et comment en tirait-on le taux horaire ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b020",
+    "question": "Je travaille à la caisse d'une station-service. Un client de 16 ans veut acheter une canette de bière. Ai-je le droit de la lui vendre ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b026",
+    "question": "J'ai acheté des écouteurs intra-auriculaires sur le site d'une boutique luxembourgeoise ; j'ai ouvert l'emballage scellé et je les ai essayés. Dix jours après la livraison, puis-je encore les renvoyer sans justification ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b039",
+    "question": "En 2021, notre assemblée de copropriété a voté l'installation de panneaux photovoltaïques sur le toit commun. Quelle majorité la loi exigeait-elle à l'époque pour ce genre de travaux ?",
+    "before": "not_held",
+    "now": "right"
+   },
+   {
+    "id": "b043",
+    "question": "Nous sommes une société privée luxembourgeoise de 42 salariés. Sommes-nous obligés de mettre en place un canal interne de signalement pour les lanceurs d'alerte ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b044",
+    "question": "J'ai été condamné il y a trois ans à une amende de 1 500 € pour une infraction routière. Est-ce que cela figurera sur l'extrait de casier judiciaire (bulletin n° 3) que mon futur employeur me demande ?",
+    "before": "wrong",
+    "now": "right"
+   },
+   {
+    "id": "b046",
+    "question": "Combien de temps ma petite entreprise commerciale doit-elle conserver ses factures et ses livres comptables, et puis-je ne garder que des copies scannées ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b048",
+    "question": "Je travaille dans une banque au Luxembourg. Puis-je demander aux RH le salaire moyen, ventilé par sexe, des collègues qui font le même travail que moi, et dans quel délai doivent-ils répondre ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b051",
+    "question": "Mon opérateur internet me facture des frais que je conteste ; je lui ai écrit il y a deux mois sans réponse. Puis-je demander une médiation à l'ILR ? Est-ce payant, et combien de temps cela prend-il ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b052",
+    "question": "J'ai déposé une réclamation auprès de ma banque il y a 14 mois pour un virement perdu ; elle l'a rejetée. Puis-je encore saisir la CSSF pour une résolution extrajudiciaire, et combien cela coûte-t-il ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b054",
+    "question": "Je suis Portugaise et je vis au Luxembourg depuis dix ans. Puis-je faire changer mon nom de famille ici, et quels types de changement la loi permet-elle ?",
+    "before": "not_held",
+    "now": "right"
+   },
+   {
+    "id": "b056",
+    "question": "After our divorce in Luxembourg I moved lawfully to Belgium with our son two months ago. My ex wants the Luxembourg court to change the visiting arrangements it fixed. Which country's courts can decide?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b060",
+    "question": "Mon autocar longue distance Luxembourg–Paris (environ 380 km) est parti avec trois heures de retard et la compagnie ne m'a rien proposé. À quoi ai-je droit ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b064",
+    "question": "Je n'ai pas les fonds pour la garantie locative de mon nouvel appartement. L'État peut-il m'aider, à quelles conditions et jusqu'à quel montant ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b065",
+    "question": "Une animalerie peut-elle vendre des chatons en magasin au Luxembourg ? Et une association peut-elle offrir un lapin comme lot de tombola ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b070",
+    "question": "J'étais commerçant indépendant, j'ai arrêté mon activité il y a trois mois et je suis écrasé de dettes personnelles. Puis-je demander la procédure de surendettement ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b072",
+    "question": "Je reçois des appels d'arnaque qui affichent un numéro luxembourgeois mais viennent manifestement de l'étranger. Les opérateurs ont-ils le droit de bloquer ces appels ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b073",
+    "question": "Un journal en ligne a publié un article sur moi. Puis-je exiger, au titre du RGPD, qu'il me dise de qui il tient ces informations ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b076",
+    "question": "Je suis malvoyante. Le restaurant où je voulais dîner a refusé l'entrée à mon chien-guide et voulait me facturer un supplément pour lui. En a-t-il le droit ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b078",
+    "question": "I am selling my house; the notarial deed is signed on 1 March. Does my home insurance end automatically, and is the buyer covered in the meantime?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b081",
+    "question": "En souscrivant mon assurance décès, j'ai indiqué par erreur être né en 1982 au lieu de 1980. L'assureur peut-il annuler le contrat ?",
+    "before": "not_held",
+    "now": "right"
+   },
+   {
+    "id": "b082",
+    "question": "J'ai installé un poêle à bois dans ma maison assurée. Dois-je le déclarer à mon assureur, et que se passe-t-il si un incendie survient avant que je l'aie fait ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b088",
+    "question": "Je suis poursuivi pour un accident causé à un tiers ; ma responsabilité civile est plafonnée à un million d'euros. Mon assureur paiera-t-il aussi les frais d'avocat et les intérêts ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b094",
+    "question": "En juin 2024, notre voiture garée, moteur coupé, dans notre cour privée a pris feu et a endommagé la façade du voisin. Selon la loi de l'époque, l'assurance RC auto devait-elle couvrir ce dommage ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b098",
+    "question": "Hier soir, une voiture a renversé mon scooter à Esch et a pris la fuite sans qu'on puisse l'identifier. Qui m'indemnise, et dans quelles limites ?",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b099",
+    "question": "I'm 15. Two questions: can I legally buy a beer at a festival stand in Luxembourg, and am I old enough to fly my drone on my own?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b102",
+    "question": "Nous créons une SARL à deux. Quel capital minimum faut-il, faut-il tout verser chez le notaire, et dans quel délai devons-nous ensuite nous inscrire au registre des bénéficiaires effectifs ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b103",
+    "question": "Dans notre immeuble en copropriété, qui doit installer et entretenir les détecteurs de fumée dans la cage d'escalier, et quelle majorité faut-il pour voter des travaux de rénovation énergétique ?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b104",
+    "question": "Under the new European Health Data Space rules, can I ask my Luxembourg GP to send my electronic health record to a doctor in Portugal?",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b105",
+    "question": "Ma mère, Française, vivait au Luxembourg depuis 20 ans et vient de décéder. Sa succession sera-t-elle réglée selon la loi française ou luxembourgeoise ?",
+    "before": "not_held",
+    "now": "right"
+   },
+   {
+    "id": "b111",
+    "question": "Garantie",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b112",
+    "question": "Kündigung Wohnung",
+    "before": "partial",
+    "now": "right"
+   },
+   {
+    "id": "b114",
+    "question": "Assurance vie",
+    "before": "out_of_scope",
+    "now": "right"
+   },
+   {
+    "id": "b115",
+    "question": "Accident",
+    "before": "out_of_scope",
+    "now": "right"
+   },
+   {
+    "id": "b116",
+    "question": "Divorce",
+    "before": "wrong",
+    "now": "right"
+   },
+   {
+    "id": "b117",
+    "question": "Pension",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "b118",
+    "question": "TVA",
+    "before": "wrong",
+    "now": "right"
+   },
+   {
+    "id": "b120",
+    "question": "Résiliation",
+    "before": "not_found",
+    "now": "right"
+   },
+   {
+    "id": "a014",
+    "question": "Ich wurde wegen zu schnellen Fahrens zu einer Geldbuße verurteilt. Übernimmt meine Rechtsschutzversicherung die Buße?",
+    "before": "right",
+    "now": "not_found"
+   },
+   {
+    "id": "a030",
+    "question": "Wir verarbeiten Gesundheitsdaten von Antragstellern für eine private Krankenversicherung. Welche der gesetzlich vorgeschriebenen Schutzmaßnahmen dürfen wir weglassen, wenn wir das intern begründen und dokumentieren, und welche nie?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "a045",
+    "question": "An online travel agency sells baggage-loss cover for €35 per trip alongside its flight-and-hotel bookings. Does it have to be registered as an insurance intermediary in Luxembourg?",
+    "before": "right",
+    "now": "not_found"
+   },
+   {
+    "id": "a068",
+    "question": "According to EIOPA's Guidelines on system of governance, how should we document and repeat the fit-and-proper assessment of our key function holders?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "a070",
+    "question": "Deux voitures immatriculées au Luxembourg, conduites par des résidents luxembourgeois, se percutent en France. Quelle loi régit la responsabilité civile et l'indemnisation des dommages ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "a074",
+    "question": "Pour quels événements familiaux ou personnels un salarié a-t-il droit à un congé extraordinaire payé, et combien de jours pour chacun ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "a080",
+    "question": "Je vais louer un appartement par l'intermédiaire d'une agence. Quel montant maximum de garantie locative peut-on m'exiger, et qui doit payer les honoraires de l'agence ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "a107",
+    "question": "En juin 2025, combien de pratiques d'IA l'article 5 du règlement européen sur l'intelligence artificielle interdisait-il, et lesquelles ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "a122",
+    "question": "Ma fille de 17 ans veut se marier avec l'accord de ses parents. Est-ce possible au Luxembourg ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "b001",
+    "question": "Mon père est décédé à l'hôpital le mois dernier. Qui, dans la famille, peut consulter son dossier médical et en obtenir une copie ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "b005",
+    "question": "Mir kréien e Wëllef. Bis wéini musse mir en op der Gemeng umellen, a wéi eng Pabeiere brauche mir dofir?",
+    "before": "right",
+    "now": "not_found"
+   },
+   {
+    "id": "b032",
+    "question": "Mon fournisseur d'électricité m'envoie des publicités personnalisées à partir de ma consommation. Puis-je l'obliger à arrêter, même s'il invoque son intérêt légitime ?",
+    "before": "right",
+    "now": "not_found"
+   },
+   {
+    "id": "b061",
+    "question": "Meine Mutter hatte im Juni 2023 einen schweren Unfall, und ich musste mich fünf Tage um sie kümmern. Hatte ich damals als Angestellter Anspruch auf bezahlten Sonderurlaub dafür?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "b077",
+    "question": "J'ai désigné mon ex-épouse comme bénéficiaire de mon assurance-vie. Puis-je la remplacer par ma nouvelle compagne sans son accord ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "b084",
+    "question": "J'ai déclaré un vol à mon assureur trois semaines après au lieu des cinq jours prévus au contrat, parce que j'étais à l'hôpital. Peut-il refuser de payer ?",
+    "before": "right",
+    "now": "asserted_incomplete"
+   },
+   {
+    "id": "b100",
+    "question": "Ich habe online zwei Dinge gekauft: eine Reiseversicherung für meinen zehntägigen Urlaub und einen Staubsauger. Kann ich beides innerhalb von 14 Tagen ohne Grund widerrufen?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "b101",
+    "question": "Deux soucis avec mon voisin : son sapin de 6 mètres est planté à un mètre de la limite de mon jardin, et son chien a mordu mon fils dans la rue. Puis-je exiger qu'il coupe l'arbre, et est-il responsable de la morsure ?",
+    "before": "right",
+    "now": "partial"
+   },
+   {
+    "id": "b108",
+    "question": "Combien la CNS rembourse-t-elle pour une paire de lunettes pour un adulte ?",
+    "before": "right",
+    "now": "partial"
+   }
+  ]
+ },
+ "noise": {
+  "build": {
+   "code": "t10",
+   "data": "20261122c"
+  },
+  "runs": 2,
+  "right": [
+   208,
+   208
+  ],
+  "wrong": [
+   1,
+   0
+  ],
+  "discordant": [
+   7,
+   7
+  ],
+  "p": 1.0
+ },
+ "dated": {
+  "n": 22,
+  "right": 16,
+  "wrong_version": 0,
+  "wrong_asserted": 0,
+  "read_right_version": 21
+ },
+ "list": {
+  "n": 32,
+  "right": 24,
+  "lines_complete": 23,
+  "count_said": 21,
+  "count_equal": 13
+ },
+ "cost": {
+  "usd_per_answer": {
+   "mean": 0.02321,
+   "median": 0.02152,
+   "p90": 0.04038
+  },
+  "model_calls_per_answer": {
+   "mean": 7.03,
+   "max": 15
+  },
+  "all_arms_usd": 56.5,
+  "price_source": {
+   "fr": "Prix catalogue Azure, zone de données UE, sur la trace de chaque réponse (jetons comptés × prix catalogue) ; pas encore comparé à la facture",
+   "en": "Azure retail list price, EU data zone, from the trace of each answer (tokens counted × list price); not yet compared with the bill"
+  }
+ },
+ "latency": {
+  "median_ms": 14249,
+  "p90_ms": 19888,
+  "max_ms": 29632,
+  "conditions": {
+   "fr": "sur ce PC, quatre réponses à la fois et au plus trois appels de modèle en vol ; temps de la trace de chaque réponse",
+   "en": "on this PC, four answers at a time and at most three model calls in flight; time from each answer’s trace"
+  }
+ },
+ "decision": {
+  "rule": "protocol.md: PROMOTE only if, for both R1 and R2 (all items, and again on the items without an error in either arm), right(R) > right(t8) with exact two-sided McNemar p < 0.05 and wrong asserted(R) <= wrong asserted(t8), and no blocking defect (B1-B3) in the rc2 smoke test and screenshots",
+  "checks": [
+   {
+    "pair": "R1~t8",
+    "right": [
+     208,
+     163
+    ],
+    "p": 5.2e-07,
+    "discordant": [
+     63,
+     18
+    ],
+    "more_right_significant": true,
+    "wrong_asserted": [
+     1,
+     6
+    ],
+    "no_more_wrong": true
+   },
+   {
+    "pair": "R1~t8:no_error",
+    "right": [
+     208,
+     163
+    ],
+    "p": 5.2e-07,
+    "discordant": [
+     63,
+     18
+    ],
+    "more_right_significant": true,
+    "wrong_asserted": [
+     1,
+     6
+    ],
+    "no_more_wrong": true
+   },
+   {
+    "pair": "R2~t8",
+    "right": [
+     208,
+     163
+    ],
+    "p": 2.42e-07,
+    "discordant": [
+     61,
+     16
+    ],
+    "more_right_significant": true,
+    "wrong_asserted": [
+     0,
+     6
+    ],
+    "no_more_wrong": true
+   },
+   {
+    "pair": "R2~t8:no_error",
+    "right": [
+     208,
+     163
+    ],
+    "p": 2.42e-07,
+    "discordant": [
+     61,
+     16
+    ],
+    "more_right_significant": true,
+    "wrong_asserted": [
+     0,
+     6
+    ],
+    "no_more_wrong": true
+   }
+  ],
+  "blocking_defect": false,
+  "result": "PROMOTE"
+ },
+ "walk_value": {
+  "run": "sealed-04",
+  "made": "2026-11-22",
+  "build": {
+   "code": "t10",
+   "data": "20261122c",
+   "engine": "01f1b08c054c474c"
+  },
+  "by": "code",
+  "method": {
+   "fr": "Lu par code dans les réponses enregistrées du test scellé (R1, R2 et la marche coupée, mêmes 260 questions, aucune nouvelle exécution) : un article est « trouvé » quand il est l'article attendu ou le même article dans la teneur applicable à la date (la règle des chiffres vérifiés) ; le coût est l'écart, question par question, entre R1 et la marche coupée.",
+   "en": "Read by code from the saved answers of the sealed test (R1, R2 and the walk switched off, the same 260 questions, no new run): an article is \"found\" when it is the expected article or the same article in the wording that applies on the date (the rule of the checked figures); the cost is the difference, question by question, between R1 and the walk switched off."
+  },
+  "n": 260,
+  "of": 222,
+  "recall": [
+   {
+    "search": "walk_parts",
+    "found": 160,
+    "of": 222,
+    "interval": [
+     65.8,
+     77.6
+    ]
+   },
+   {
+    "search": "walk_stop",
+    "found": 141,
+    "of": 222,
+    "interval": [
+     57.0,
+     69.6
+    ]
+   },
+   {
+    "search": "outline",
+    "found": 171,
+    "of": 222,
+    "interval": [
+     71.1,
+     82.1
+    ]
+   },
+   {
+    "search": "exact",
+    "found": 1,
+    "of": 222,
+    "interval": [
+     0.1,
+     2.5
+    ]
+   },
+   {
+    "search": "words",
+    "found": 132,
+    "of": 222,
+    "interval": [
+     52.9,
+     65.7
+    ]
+   },
+   {
+    "search": "meaning",
+    "found": 187,
+    "of": 222,
+    "interval": [
+     78.9,
+     88.4
+    ]
+   },
+   {
+    "search": "words_all",
+    "found": 86,
+    "of": 222,
+    "interval": [
+     32.6,
+     45.3
+    ]
+   },
+   {
+    "search": "meaning_all",
+    "found": 180,
+    "of": 222,
+    "interval": [
+     75.4,
+     85.7
+    ]
+   },
+   {
+    "search": "dictionary",
+    "found": 5,
+    "of": 222,
+    "interval": [
+     1.0,
+     5.2
+    ]
+   },
+   {
+    "search": "routing",
+    "found": 202,
+    "of": 222,
+    "interval": [
+     86.5,
+     94.1
+    ]
+   },
+   {
+    "search": "any",
+    "found": 207,
+    "of": 222,
+    "interval": [
+     89.1,
+     95.9
+    ]
+   },
+   {
+    "search": "read",
+    "found": 202,
+    "of": 222,
+    "interval": [
+     86.5,
+     94.1
+    ]
+   }
+  ],
+  "only": [
+   {
+    "search": "outline",
+    "found": 7,
+    "of": 222,
+    "right": 4
+   },
+   {
+    "search": "exact",
+    "found": 0,
+    "of": 222,
+    "right": 0
+   },
+   {
+    "search": "words",
+    "found": 0,
+    "of": 222,
+    "right": 0
+   },
+   {
+    "search": "meaning",
+    "found": 2,
+    "of": 222,
+    "right": 1
+   },
+   {
+    "search": "words_all",
+    "found": 1,
+    "of": 222,
+    "right": 1
+   },
+   {
+    "search": "meaning_all",
+    "found": 4,
+    "of": 222,
+    "right": 3
+   },
+   {
+    "search": "dictionary",
+    "found": 0,
+    "of": 222,
+    "right": 0
+   }
+  ],
+  "ablation": {
+   "with": {
+    "run": "R1",
+    "right": 208
+   },
+   "without": {
+    "run": "no_outline",
+    "right": 210
+   },
+   "n": 260,
+   "discordant": [
+    7,
+    9
+   ],
+   "p": 0.803619,
+   "also": {
+    "run": "R2",
+    "right": 208,
+    "discordant": [
+     7,
+     9
+    ],
+    "p": 0.803619
+   },
+   "noise": {
+    "runs": [
+     "R1",
+     "R2"
+    ],
+    "discordant": [
+     7,
+     7
+    ]
+   },
+   "difference_interval": [
+    -3.9,
+    2.3
+   ],
+   "slices": [
+    {
+     "slice": "insurance",
+     "n": 96,
+     "with": 71,
+     "without": 74,
+     "discordant": [
+      3,
+      6
+     ],
+     "p": 0.507812,
+     "with_r2": 75,
+     "discordant_r2": [
+      3,
+      2
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "other_laws",
+     "n": 164,
+     "with": 137,
+     "without": 136,
+     "discordant": [
+      4,
+      3
+     ],
+     "p": 1.0,
+     "with_r2": 133,
+     "discordant_r2": [
+      4,
+      7
+     ],
+     "p_r2": 0.548828
+    },
+    {
+     "slice": "eu",
+     "n": 43,
+     "with": 30,
+     "without": 32,
+     "discordant": [
+      1,
+      3
+     ],
+     "p": 0.625,
+     "with_r2": 32,
+     "discordant_r2": [
+      1,
+      1
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "dated",
+     "n": 22,
+     "with": 16,
+     "without": 15,
+     "discordant": [
+      1,
+      0
+     ],
+     "p": 1.0,
+     "with_r2": 17,
+     "discordant_r2": [
+      2,
+      0
+     ],
+     "p_r2": 0.5
+    },
+    {
+     "slice": "list",
+     "n": 32,
+     "with": 24,
+     "without": 24,
+     "discordant": [
+      1,
+      1
+     ],
+     "p": 1.0,
+     "with_r2": 24,
+     "discordant_r2": [
+      1,
+      1
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "reference",
+     "n": 82,
+     "with": 55,
+     "without": 57,
+     "discordant": [
+      3,
+      5
+     ],
+     "p": 0.726562,
+     "with_r2": 56,
+     "discordant_r2": [
+      2,
+      3
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "definition",
+     "n": 14,
+     "with": 8,
+     "without": 9,
+     "discordant": [
+      0,
+      1
+     ],
+     "p": 1.0,
+     "with_r2": 8,
+     "discordant_r2": [
+      0,
+      1
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "compound",
+     "n": 10,
+     "with": 5,
+     "without": 6,
+     "discordant": [
+      1,
+      2
+     ],
+     "p": 1.0,
+     "with_r2": 5,
+     "discordant_r2": [
+      1,
+      2
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "big_codes",
+     "n": 53,
+     "with": 39,
+     "without": 38,
+     "discordant": [
+      2,
+      1
+     ],
+     "p": 1.0,
+     "with_r2": 38,
+     "discordant_r2": [
+      3,
+      3
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "large_texts",
+     "n": 70,
+     "with": 49,
+     "without": 46,
+     "discordant": [
+      4,
+      1
+     ],
+     "p": 0.375,
+     "with_r2": 47,
+     "discordant_r2": [
+      4,
+      3
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "smaller_texts",
+     "n": 156,
+     "with": 129,
+     "without": 133,
+     "discordant": [
+      3,
+      7
+     ],
+     "p": 0.34375,
+     "with_r2": 130,
+     "discordant_r2": [
+      3,
+      6
+     ],
+     "p_r2": 0.507812
+    },
+    {
+     "slice": "no_answer",
+     "n": 16,
+     "with": 11,
+     "without": 13,
+     "discordant": [
+      0,
+      2
+     ],
+     "p": 0.5,
+     "with_r2": 13,
+     "discordant_r2": [
+      0,
+      0
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "fr",
+     "n": 204,
+     "with": 172,
+     "without": 172,
+     "discordant": [
+      6,
+      6
+     ],
+     "p": 1.0,
+     "with_r2": 170,
+     "discordant_r2": [
+      5,
+      7
+     ],
+     "p_r2": 0.774414
+    },
+    {
+     "slice": "en",
+     "n": 30,
+     "with": 20,
+     "without": 21,
+     "discordant": [
+      0,
+      1
+     ],
+     "p": 1.0,
+     "with_r2": 22,
+     "discordant_r2": [
+      1,
+      0
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "de",
+     "n": 20,
+     "with": 12,
+     "without": 12,
+     "discordant": [
+      1,
+      1
+     ],
+     "p": 1.0,
+     "with_r2": 12,
+     "discordant_r2": [
+      1,
+      1
+     ],
+     "p_r2": 1.0
+    },
+    {
+     "slice": "lb",
+     "n": 6,
+     "with": 4,
+     "without": 5,
+     "discordant": [
+      0,
+      1
+     ],
+     "p": 1.0,
+     "with_r2": 4,
+     "discordant_r2": [
+      0,
+      1
+     ],
+     "p_r2": 1.0
+    }
+   ]
+  },
+  "cost": {
+   "calls_per_answer": 2.94,
+   "share_of_calls": 41.8,
+   "ms_per_answer": 3435,
+   "share_of_time": 24.2,
+   "usd_per_answer": 0.0029,
+   "share_of_cost": 12.6,
+   "conditions": "paired difference R1 minus the walk switched off, over the 260 answers; local runs on a PC, 4 answers at a time, at most 3 model calls in flight",
+   "interval_calls": [
+    2.6808,
+    3.2038
+   ],
+   "interval_ms": [
+    3010,
+    3871
+   ],
+   "interval_usd": [
+    0.0019,
+    0.0038
+   ],
+   "walk_own_calls_per_answer": 2.98,
+   "walk_own_usd_per_answer": 0.0016,
+   "articles_read_per_answer": {
+    "with": 9.0,
+    "without": 7.8
+   }
+  },
+  "recall_other_searches": {
+   "found": 200,
+   "of": 222,
+   "interval": [
+    85.5,
+    93.4
+   ],
+   "what": "every search but the walk: words, meaning (in the kept texts and over the store), the article named, the draft dictionary"
+  },
+  "recall_given_text_kept": {
+   "kept": 202,
+   "walk": 171,
+   "walk_interval": [
+    79.0,
+    89.0
+   ],
+   "others": 190,
+   "others_interval": [
+    89.9,
+    96.6
+   ]
+  },
+  "recall_slices": [
+   {
+    "slice": "list",
+    "of": 32,
+    "walk": 25,
+    "walk_interval": [
+     61.3,
+     89.0
+    ],
+    "others": 30,
+    "walk_only": 0,
+    "text_kept": 31,
+    "walk_when_kept": 25,
+    "walk_when_kept_interval": [
+     63.7,
+     90.8
+    ],
+    "others_when_kept": 30
+   },
+   {
+    "slice": "reference",
+    "of": 81,
+    "walk": 65,
+    "walk_interval": [
+     70.3,
+     87.5
+    ],
+    "others": 69,
+    "walk_only": 4,
+    "text_kept": 71,
+    "walk_when_kept": 65,
+    "walk_when_kept_interval": [
+     82.8,
+     96.1
+    ],
+    "others_when_kept": 66
+   },
+   {
+    "slice": "big_codes",
+    "of": 53,
+    "walk": 34,
+    "walk_interval": [
+     50.7,
+     75.7
+    ],
+    "others": 48,
+    "walk_only": 1,
+    "text_kept": 44,
+    "walk_when_kept": 34,
+    "walk_when_kept_interval": [
+     63.0,
+     87.2
+    ],
+    "others_when_kept": 40
+   },
+   {
+    "slice": "large_texts",
+    "of": 70,
+    "walk": 44,
+    "walk_interval": [
+     51.1,
+     73.2
+    ],
+    "others": 60,
+    "walk_only": 2,
+    "text_kept": 59,
+    "walk_when_kept": 44,
+    "walk_when_kept_interval": [
+     62.2,
+     83.9
+    ],
+    "others_when_kept": 52
+   },
+   {
+    "slice": "smaller_texts",
+    "of": 152,
+    "walk": 127,
+    "walk_interval": [
+     76.8,
+     88.6
+    ],
+    "others": 140,
+    "walk_only": 5,
+    "text_kept": 143,
+    "walk_when_kept": 127,
+    "walk_when_kept_interval": [
+     82.6,
+     93.0
+    ],
+    "others_when_kept": 138
+   },
+   {
+    "slice": "insurance",
+    "of": 87,
+    "walk": 62,
+    "walk_interval": [
+     61.0,
+     79.7
+    ],
+    "others": 76,
+    "walk_only": 3,
+    "text_kept": 79,
+    "walk_when_kept": 62,
+    "walk_when_kept_interval": [
+     68.2,
+     86.1
+    ],
+    "others_when_kept": 73
+   },
+   {
+    "slice": "dated",
+    "of": 22,
+    "walk": 13,
+    "walk_interval": [
+     38.7,
+     76.7
+    ],
+    "others": 21,
+    "walk_only": 0,
+    "text_kept": 21,
+    "walk_when_kept": 13,
+    "walk_when_kept_interval": [
+     40.9,
+     79.2
+    ],
+    "others_when_kept": 20
+   },
+   {
+    "slice": "other_laws",
+    "of": 135,
+    "walk": 109,
+    "walk_interval": [
+     73.3,
+     86.5
+    ],
+    "others": 124,
+    "walk_only": 4
+   },
+   {
+    "slice": "eu",
+    "of": 38,
+    "walk": 31,
+    "walk_interval": [
+     66.6,
+     90.8
+    ],
+    "others": 32,
+    "walk_only": 3
+   }
+  ],
+  "walk_only_without_walk": {
+   "items": 7,
+   "read": 5,
+   "right": 5,
+   "reached_by": {
+    "not read": 2,
+    "widening on the reading's \"missing\"": 3,
+    "reference hop": 1,
+    "found by another search": 1
+   }
+  },
+  "funnel": {
+   "with": {
+    "candidates_per_answer": 35.6,
+    "gold_found": 207,
+    "gold_found_not_shown_to_arbiter": 8,
+    "gold_read": 202,
+    "of": 222
+   },
+   "without": {
+    "candidates_per_answer": 16.5,
+    "gold_found": 201,
+    "gold_found_not_shown_to_arbiter": 1,
+    "gold_read": 205,
+    "of": 222
+   },
+   "arbiter_shown_at_most": 18
+  },
+  "meaning_only_checked": {
+   "with": {
+    "answers": 14,
+    "held_back": 2
+   },
+   "without": {
+    "answers": 59,
+    "held_back": 4
+   }
+  },
+  "power": {
+   "smallest_difference_detectable_points": 4.3,
+   "questions_needed_for_2_points": 1206,
+   "method": "McNemar sample size (Connor 1987), alpha 0.05 two-sided, power 0.80, discordant share as measured R1 vs walk off"
+  },
+  "findings": [
+   {
+    "fr": "Sans la marche, le même code a donné 210 réponses justes sur 260 contre 208 et 208 pour les deux passages complets (discordances 7 / 9, p = 0,80) ; entre les deux passages complets eux-mêmes, 7 / 7 : l'écart est celui du bruit.",
+    "en": "Without the walk the same code gave 210 right answers of 260, against 208 and 208 for the two full runs (discordant 7 / 9, p = 0.80); the two full runs differ from each other by 7 / 7: the gap is the size of the noise."
+   },
+   {
+    "fr": "Ce que la marche ajoute aux réponses justes se situe entre −3,9 et +2,3 points (95 %) ; cet ensemble ne voit pas un effet plus petit qu'environ 4,3 points (il faudrait environ 1206 questions pour 2 points).",
+    "en": "What the walk adds to right answers lies between -3.9 and +2.3 points (95 %); this set cannot see an effect smaller than about 4.3 points (about 1206 questions would be needed for 2 points)."
+   },
+   {
+    "fr": "La marche a trouvé l'article attendu pour 171 questions sur 222 (171 des 202 où le bon texte avait été retenu) ; les autres recherches ensemble (mots, sens, article nommé, dictionnaire) pour 200 ; la marche seule pour 7, dont 4 justes ; sans la marche, 5 de ces 7 articles ont quand même été lus (par la lecture qui nomme l'article manquant, par le renvoi ou par les mots) et 5 réponses étaient justes.",
+    "en": "The walk found the expected article for 171 questions of 222 (171 of the 202 where the right text had been kept); the other searches together (words, meaning, named article, dictionary) for 200; the walk alone for 7, 4 of them right; without the walk, 5 of those 7 articles were read all the same (by the reading naming the missing article, by the reference hop or by words) and 5 answers were right."
+   },
+   {
+    "fr": "La marche ajoute en moyenne 19 candidats par question (35,6 contre 16,5) à une liste que l'arbitre coupe à 18 : avec elle, 8 articles attendus trouvés n'ont jamais été montrés à l'arbitre, sans elle 1 ; l'article attendu a été lu 202 fois avec la marche et 205 fois sans.",
+    "en": "The walk adds 19 candidates per question on average (35.6 against 16.5) to a list the arbiter cuts at 18: with it, 8 expected articles that were found never reached the arbiter, without it 1; the expected article was read 202 times with the walk and 205 times without."
+   },
+   {
+    "fr": "Là où la marche devrait compter le plus, elle trouve moins, pas plus : quand le bon texte était retenu, elle a trouvé l'article 34 fois sur 44 dans les grands codes et 44 sur 59 dans les textes de 400 articles ou plus, contre 127 sur 143 dans les plus petits (les autres recherches : 40, 52 et 138).",
+    "en": "Where the walk should matter most it finds less, not more: when the right text was kept, it found the article 34 times of 44 in the big codes and 44 of 59 in texts of 400 articles or more, against 127 of 143 in the smaller ones (the other searches: 40, 52 and 138)."
+   },
+   {
+    "fr": "Par tranche, aucun écart n'est mesuré : textes de 400 articles ou plus 49 justes avec la marche, 46 sans (p = 0,38) ; textes plus petits 129 et 133 (p = 0,34) ; questions datées 16 et 15 ; listes 24 et 24.",
+    "en": "By slice no gap is measured: texts of 400 articles or more 49 right with the walk, 46 without (p = 0.38); smaller texts 129 and 133 (p = 0.34); dated questions 16 and 15; lists 24 and 24."
+   },
+   {
+    "fr": "Ce que la marche apporte sans changer le score : une seconde preuve. Sans elle, 59 réponses reposaient sur un passage trouvé par le sens seul et ont dû être revérifiées (contre 14), et 4 ont été retenues en réponse partielle faute de confirmation (contre 2).",
+    "en": "What the walk brings without moving the score: a second line of evidence. Without it, 59 answers rested on a passage found by meaning alone and had to be checked again (against 14), and 4 were held back as partial for want of confirmation (against 2)."
+   },
+   {
+    "fr": "Elle coûte 2,94 appels de modèle de plus par réponse (41,8 % des appels), 3,4 s (24,2 % du temps, mesuré sur un PC à 4 réponses à la fois) et 0,0029 USD (12,6 % du coût) : 0,0016 USD pour ses propres appels, le reste surtout pour lire 9,0 articles au lieu de 7,8.",
+    "en": "It costs 2.94 more model calls per answer (41.8 % of the calls), 3.4 s (24.2 % of the time, measured on a PC at 4 answers at a time) and 0.0029 USD (12.6 % of the cost): 0.0016 USD for its own calls, the rest mostly for reading 9.0 articles instead of 7.8."
+   }
+  ],
+  "verdict": {
+   "fr": "Sur cet ensemble, la marche dans les tables des matières n'ajoute aucune réponse juste mesurable ; elle sert à montrer le chemin et à confirmer les passages trouvés par le sens, pour un quart du temps et deux appels sur cinq.",
+   "en": "On this set the walk down the tables of contents adds no measurable right answer; it serves to show the path and to confirm passages found by meaning, for a quarter of the time and two calls in five."
+  }
+ },
+ "runs": [
+  {
+   "key": "sealed-05",
+   "status": "pending",
+   "run": "sealed-05",
+   "title": {
+    "fr": "sealed-set-05 : rc4 contre la version en ligne (rc3)",
+    "en": "sealed-set-05: rc4 against the live version (rc3)"
+   },
+   "set": {
+    "name": "sealed-set-05"
+   },
+   "previous": {
+    "name": {
+     "fr": "rc3, la version en ligne",
+     "en": "rc3, the live version"
+    },
+    "build": {
+     "code": "t11",
+     "data": "20261122c",
+     "engine": "01f1b08c054c474c"
+    }
+   }
+  }
+ ],
+ "preview_note": "fix-pages3 preview only: app/results.json of 22/11 08:20 plus a pending sealed-05 entry to show the layout; not served by any server"
+}
