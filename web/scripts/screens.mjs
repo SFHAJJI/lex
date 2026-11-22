@@ -548,6 +548,22 @@ SHOTS.push(
   ["r5u-fr-05-architecture-evaluation--tall", "/fr/architecture.html", 1366, 7000, false, false, PART("arch-evaluation"), 9000],
   ["r5u-fr-06-results--phone", "/fr/results.html", 390, 844, true, false, null, 7000],
 );
+// rc5v (22/11/2026): the last pages build before the demo (code t13v on 20261122e, engine unchanged) at the revision's own
+// address (0 %, no label): who opened each sealed set, test 07's figures said by version side by side, p and intervals written
+// one way, the phone gutter. Results FR first screen, tall, from test 07, from the sealed set 4 run, phone; Results EN first
+// screen and from test 07; the dossier FR part six; home FR. No question is asked.
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5v-fr-01-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["r5v-fr-02-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["r5v-fr-03-results-test07--tall", "/fr/results.html", 1366, 9000, false, false, PART("run-test-07"), 7000],
+  ["r5v-fr-04-results-sealed04--tall", "/fr/results.html", 1366, 3000, false, false, PART("run-sealed-04"), 7000],
+  ["r5v-en-01-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["r5v-en-02-results-test07--tall", "/en/results.html", 1366, 9000, false, false, PART("run-test-07"), 7000],
+  ["r5v-fr-05-architecture-evaluation--tall", "/fr/architecture.html", 1366, 7000, false, false, PART("arch-evaluation"), 9000],
+  ["r5v-fr-06-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["r5v-fr-07-results--phone", "/fr/results.html", 390, 844, true, false, null, 7000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
