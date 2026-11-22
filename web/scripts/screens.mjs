@@ -326,6 +326,28 @@ SHOTS.push(
   ["v-fr-33-how--phone", "/fr/evidence.html", 390, 844, true, false, null, 7000],
   ["v-en-07-home--1366x768", "/en/", 1366, 768, false, false, null, 6000],
 );
+// rc3 (22/11/2026): the release candidate rc3 (code t11 = t10's engine files, data 20261122c) at its private label address.
+// The Results page with the sealed run (lex-results/2) in both languages, first screen, tall, folds open and on a phone; the
+// footers; a few real answers of the deployed engine (40-45 s each) to see that t11 answers as t10 did.
+SHOTS.length = 0;
+SHOTS.push(
+  ["w-fr-01-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["w-fr-02-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["w-fr-03-results-open--tall", "/fr/results.html", 1366, 16000, false, false, OPEN_ALL, 2500],
+  ["w-fr-04-results--phone", "/fr/results.html", 390, 844, true, false, null, 7000],
+  ["w-fr-05-results--phone-whole", "/fr/results.html", 390, 844, true, true, null, 7000],
+  ["w-en-01-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["w-en-02-results--tall", "/en/results.html", 1366, 9000, false, false, null, 7000],
+  ["w-en-03-results-open--tall", "/en/results.html", 1366, 16000, false, false, OPEN_ALL, 2500],
+  ["w-fr-06-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["w-fr-07-premium-tax--tall", "/fr/radar.html", 1366, 4200, false, false, ASK(RC2.premiumTax), 40000],
+  ["w-fr-08-typed-answer-trace-open--tall", "/fr/radar.html", 1366, 8000, false, false, ASK_LATE(RC2.typed, OPEN_TRACE, 34000), 40000],
+  ["w-fr-09-not-found--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(P.none), 40000],
+  ["w-en-04-bundled--tall", "/en/radar.html", 1366, 3600, false, false, ASK(RC2.bundled), 40000],
+  ["w-fr-10-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["w-fr-11-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["w-fr-12-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
