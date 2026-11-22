@@ -414,6 +414,29 @@ SHOTS.push(
   ["y-fr-14-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
   ["y-fr-15-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
 );
+// rc5 (22/11/2026): the release candidate rc5 (code t13 = rc4's engine + the owner's review applied + the architecture dossier
+// merged + the administration-source label; data 20261122e) at its private label address `cand`, real answers of the deployed
+// engine (no preview, no fixture). Home; the dock's searches list after a real answer at 1366x768; real answers with the trace
+// open (the heir's three months and forty days, the 1969 VAT law asked as in force); the architecture dossier first screen, its
+// "who has checked what" part and tall; Results; How (who has checked what); Decisions (the approval line). Three questions only.
+const PART = (id) => `(() => { const el = document.getElementById(${JSON.stringify(id)}); if (!el) return "no part"; el.scrollIntoView(); return "scrolled"; })()`;
+const RC5 = { vat1969: "La loi du 5 août 1969 concernant la taxe sur la valeur ajoutée est-elle toujours en vigueur ?" };
+SHOTS.length = 0;
+SHOTS.push(
+  ["z-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["z-fr-02-searches--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK_FINDS(PRESCRIPTION, false), 3000],
+  ["z-fr-03-heir-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_FINDS(RC4.heir, true), 3000],
+  ["z-fr-04-vat-1969-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_FINDS(RC5.vat1969, false), 3000],
+  ["z-fr-05-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["z-fr-06-architecture-checked--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-operations"), 2500],
+  ["z-fr-07-architecture--tall", "/fr/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["z-en-01-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
+  ["z-fr-08-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["z-fr-09-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["z-fr-10-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["z-en-02-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["z-fr-11-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
