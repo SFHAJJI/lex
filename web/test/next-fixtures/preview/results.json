@@ -2988,7 +2988,7 @@
    "status": "pending",
    "run": "sealed-05",
    "title": {
-    "fr": "sealed-set-05 : rc4 contre la version en ligne (rc3)",
+    "fr": "sealed-set-05 : rc4 contre la version en ligne (rc3)",
     "en": "sealed-set-05: rc4 against the live version (rc3)"
    },
    "set": {
@@ -3007,5 +3007,5 @@
    }
   }
  ],
- "preview_note": "fix-pages3 preview only: app/results.json of 22/11 08:20 plus a pending sealed-05 entry to show the layout; not served by any server"
+ "preview_note": "fix-pages3 preview only: app/results.json plus a pending sealed-05 entry to show the layout; not served by any server"
 }

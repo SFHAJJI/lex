@@ -4249,7 +4249,6 @@ html[data-layout="v4"] .lx-next-shapes th code { white-space: nowrap; }
 html[data-layout="v4"] .lx-dock-body > * { flex-shrink: 0; }
 /* A table in the trace breaks between words, never inside one ("Artic le"); a word longer than its column scrolls in the frame. */
 html[data-layout="v4"] .lx-dock-level .lx-dock-table th, html[data-layout="v4"] .lx-dock-level .lx-dock-table td { overflow-wrap: normal; word-break: normal; }
-html[data-layout="v4"] .lx-dock-level .lx-dock-table code { overflow-wrap: anywhere; }
 /* The searches side by side: one article a line, the searches that found it under its name. */
 html[data-layout="v4"] .lx-dock-finds { margin: 2px 0 0; }
 html[data-layout="v4"] .lx-dock-finds-legend { margin: 0 0 4px; font-size: 12.5px; line-height: 1.45; color: var(--lx-muted); }
@@ -4258,11 +4257,24 @@ html[data-layout="v4"] .lx-dock-finds-list > li { padding: 4px 0; border-top: 1p
 html[data-layout="v4"] .lx-dock-finds-list > li:first-child { border-top: 0; }
 html[data-layout="v4"] .lx-dock-finds-head { font-weight: 600; color: var(--lx-ink); }
 html[data-layout="v4"] .lx-dock-finds-ranks { display: block; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-find { white-space: nowrap; }
+html[data-layout="v4"] .lx-dock-finds code { font-size: 12.5px; overflow-wrap: normal; }
 html[data-layout="v4"] .lx-dock-finds-more { margin: 4px 0 0; }
 html[data-layout="v4"] .lx-dock-finds-more > summary { cursor: pointer; font-size: 13px; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
 /* Results: the table of runs, and each run under its own heading. */
 html[data-layout="v4"] .lx-next-runs td, html[data-layout="v4"] .lx-next-runs th { text-align: left; vertical-align: top; white-space: normal; }
-html[data-layout="v4"] .lx-next-run { margin-top: 36px; padding-top: 18px; border-top: 2px solid var(--lx-line); }
-html[data-layout="v4"] .lx-next-run > h2 { margin-top: 0; }
+/* (.lx-prose section resets margins and borders: these name the section's class to win.) */
+html[data-layout="v4"] .lx-prose section.lx-next-run { margin: 48px 0 0; padding: 20px 0 0; border-top: 2px solid var(--lx-line); }
+html[data-layout="v4"] .lx-prose section.lx-next-run > h2 { margin-top: 0; font-size: 26px; }
+html[data-layout="v4"] .lx-prose section[data-results-walk] { margin: 40px 0 0; }
 html[data-layout="v4"] .lx-next-findings { margin: 8px 0 0; padding-left: 20px; }
+/* On a phone the table of runs is drawn as one block a run, each figure under its column's name (no sideways scroll). */
+@media (max-width: 760px) {
+  html[data-layout="v4"] .lx-next-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  html[data-layout="v4"] .lx-next-stack, html[data-layout="v4"] .lx-next-stack tbody, html[data-layout="v4"] .lx-next-stack tr, html[data-layout="v4"] .lx-next-stack th, html[data-layout="v4"] .lx-next-stack td { display: block; width: auto; text-align: left; }
+  html[data-layout="v4"] .lx-next-stack tr { padding: 10px 0; border-top: 1px solid var(--lx-line); }
+  html[data-layout="v4"] .lx-next-stack th, html[data-layout="v4"] .lx-next-stack td { border: 0; padding: 2px 0; }
+  html[data-layout="v4"] .lx-next-stack td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--lx-muted); }
+  html[data-layout="v4"] .lx-next-stack td[data-label]:empty { display: none; }
+}
 /* == v4: fix-pages3 end == */

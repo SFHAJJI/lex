@@ -58,16 +58,16 @@ export const sameEngine = (a, b) => {
 };
 
 /** A table of rows under its column names; each cell a string. */
-function Table({ columns, rows, mark }) {
+function Table({ columns, rows, mark, className = 'lx-how-table lx-next-counts', stack = false }) {
   return (
     <div className="lx-how-table-scroll">
-      <table className="lx-how-table lx-next-counts" data-results2={mark}>
+      <table className={className} data-results2={mark}>
         <thead><tr>{columns.map((column) => <th scope="col" key={column}>{column}</th>)}</tr></thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.key} data-row={row.key} className={row.className}>
               <th scope="row" lang={row.lang}>{row.head}</th>
-              {row.cells.map((cell, at) => <td key={at} lang={row.cellLang?.[at]}>{cell}</td>)}
+              {row.cells.map((cell, at) => <td key={at} lang={row.cellLang?.[at]} data-label={stack ? columns[at + 1] : undefined}>{cell}</td>)}
             </tr>
           ))}
         </tbody>
@@ -191,6 +191,8 @@ function RunsTable({ entries, locale, served }) {
       <h2 id="results-runs">{copy.runsHeading}</h2>
       <Table
         mark="runs"
+        className="lx-how-table lx-next-runs lx-next-stack"
+        stack
         columns={['run', 'build', 'right', 'wrong', 'decision', 'site'].map((key) => copy.runsColumns[key])}
         rows={entries.map(({ run, key }) => {
           const title = runTitle(run, locale);
@@ -207,7 +209,7 @@ function RunsTable({ entries, locale, served }) {
             head: title.text,
             lang: title.lang,
             cells: [
-              build === null ? '' : `${fillNext(copy.runsBuild, build)}${against === null ? '' : ` ${fillNext(copy.runsAgainst, against)}`}`,
+              [build === null ? null : fillNext(copy.runsBuild, build), against === null ? null : fillNext(copy.runsAgainst, against)].filter((one) => one !== null).join(' '),
               final ? said(totals?.right, totals?.intervals?.right) : copy.pendingShort,
               final ? said(totals?.wrong, totals?.intervals?.wrong) : '',
               !final || result === null ? '' : copy.decisions[result] ?? result,
@@ -381,6 +383,10 @@ function RunBody({ results, locale = CHROME_LOCALE, served = null, level = 'h2',
   const priceSource = prose(cost?.price_source, locale);
   const conditions = prose(latency?.conditions, locale);
   const walk = retrieval !== null && isCount(retrieval.walk_found) && isCount(retrieval.walk_of) ? retrieval : null;
+  const datedOf = objectOr(results.dated);
+  const dated = datedOf !== null && ['n', 'right', 'read_right_version', 'wrong_version', 'wrong_asserted'].every((key) => isCount(datedOf[key])) ? datedOf : null;
+  const listOf = objectOr(results.list);
+  const listed = listOf !== null && ['n', 'right', 'lines_complete', 'count_said', 'count_equal'].every((key) => isCount(listOf[key])) ? listOf : null;
   // fix-pages3: the version compared with, named by the file (rc3, the live version), and said to be the one answering when it is.
   const previousName = prose(previous?.name, locale);
   const previousBuild = buildOf(previous?.build);
@@ -468,6 +474,9 @@ function RunBody({ results, locale = CHROME_LOCALE, served = null, level = 'h2',
             columns={['slice', 'n', 'right', 'wrong', 'notFound', 'interval'].map((key) => copy.slicesColumns[key])}
             rows={slices.map((row) => ({ key: row.slice, head: name(copy.slices, row.slice), cells: [count(row.n), count(row.right), count(row.wrong), count(row.not_found), interval(row.interval)] }))}
           />
+          {/* fix-pages3: the dated questions and the lists, measured apart (protocol K-TIME-5 and the list items), when the file counts them. */}
+          {dated === null ? null : <p data-results2-dated=""><strong>{copy4.datedHeading}</strong> {fillNext(copy4.dated, { n: count(dated.n), right: count(dated.right), read: count(dated.read_right_version), version: count(dated.wrong_version), wrong: count(dated.wrong_asserted) })}</p>}
+          {listed === null ? null : <p data-results2-list=""><strong>{copy4.listHeading}</strong> {fillNext(copy4.list, { n: count(listed.n), right: count(listed.right), complete: count(listed.lines_complete), said: count(listed.count_said), equal: count(listed.count_equal) })}</p>}
         </section>
       )}
 

@@ -243,3 +243,18 @@ the top-level run (sealed-set-04 today) stays as it is and is drawn as one run a
   answering when it is not). Every section is optional: a missing field is left out, never guessed.
 - `findings` and `verdict` are the evaluation's own words; the page draws them as written, in the page's language when the file
   gives both.
+
+### Drawn since fix-pages3: `dated` and `list` (already in the sealed-04 file; meanings from experiments\sealed\protocol.md)
+
+```json
+{
+  "dated": { "n": 22, "right": 16, "read_right_version": 21, "wrong_version": 0, "wrong_asserted": 0 },
+  // read_right_version: the wording of the date asked was among the articles read; wrong_version: the right article asserted in
+  // another wording; wrong_asserted: a wrong answer asserted (K-TIME-5)
+  "list": { "n": 32, "right": 24, "lines_complete": 23, "count_said": 21, "count_equal": 13 }
+  // lines_complete: the lines of every list item of the expected articles quoted; count_said: Lex said how many items
+  // (list.items_total); count_equal: that number equals the number expected
+}
+```
+
+Drawn under the slices, one sentence each, only when every field is a count.

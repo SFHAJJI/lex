@@ -646,7 +646,8 @@ export function contractFaults(html, answer, locale) {
     if (/<table[^>]*data-trace-table="detectors"/u.test(html)) faults.push('the searches side by side are a table, cut in the dock');
     if (count(/<li data-find="/gu) !== detectors.length) faults.push(`${count(/<li data-find="/gu)} articles of the searches drawn for ${detectors.length}`);
   }
-  if (/>#[0-9]{3,}</u.test(html) || /data-find="[0-9]+"[^>]*>(?:<span[^>]*>)?#[0-9]/u.test(html)) faults.push('an article is named by its bare id');
+  for (const level of trace.levels ?? []) if (level?.level === 'references' && typeof level.trigger === 'string' && !Object.hasOwn(copy.trace.triggers, level.trigger) && !Object.hasOwn(copy.engine?.triggers ?? {}, level.trigger)) faults.push(`the references' trigger ${level.trigger} has no name in words`);
+  if (/>#[0-9]{3,}</u.test(html) ||/data-find="[0-9]+"[^>]*>(?:<span[^>]*>)?#[0-9]/u.test(html)) faults.push('an article is named by its bare id');
   for (const head of html.matchAll(/<table class="lx-dock-table"[^>]*data-trace-table="[^"]*"[^>]*>\s*<thead><tr>((?:<th[^>]*>[^<]*<\/th>)+)<\/tr>/gu)) if ((head[1].match(/<th/gu) ?? []).length > 4) faults.push('a table of the trace has more than four columns: it is cut in the dock');
   if ((answer.repealed_named ?? []).length > 0 && !html.includes('data-dock-card="repealed"')) faults.push('a text named and repealed is not said');
   if ((answer.directive_transposed_by?.transposed_by ?? []).length > 0 && !html.includes('data-dock-card="transposed-by"')) faults.push('the law that transposes the directive is not named');
@@ -719,6 +720,9 @@ export function results2Faults(html, results, locale) {
   if (Number.isFinite(results.retrieval?.walk_found) && !html.includes('data-results2-walk=""')) faults.push('what the walk alone found is not said');
   if (typeof results.latency?.conditions === 'string' && !html.includes('data-results2-conditions=""')) faults.push('how the times were taken is not said');
   if (results.build && results.run && results.made && !html.includes('data-results2-run=""')) faults.push('the build measured is not named');
+  // fix-pages3: the dated questions and the lists, measured apart, said when the file counts them.
+  if (Number.isFinite(results.dated?.read_right_version) && !html.includes('data-results2-dated=""')) faults.push('the dated questions are not said apart');
+  if (Number.isFinite(results.list?.lines_complete) && !html.includes('data-results2-list=""')) faults.push('the lists are not said apart');
   if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
   return faults;
 }

@@ -544,7 +544,11 @@ function Finds({ table, locale }) {
     <li key={entry.key} data-find={entry.key} data-meaning-only={entry.note === null ? undefined : ''}>
       <span className="lx-dock-finds-head" lang={lawLang(locale)}>{entry.head}</span>
       {entry.note === null ? null : <span className="lx-dock-caution-note"> ({entry.note})</span>}
-      <span className="lx-dock-finds-ranks">{entry.finds.length === 0 ? copy.findsNone : entry.finds.map((find) => `${find.name} ${find.rank}`).join(separator)}</span>
+      <span className="lx-dock-finds-ranks">
+        {entry.finds.length === 0 ? copy.findsNone : entry.finds.map((find, at) => (
+          <span key={find.key}>{at === 0 ? null : separator}<span className="lx-dock-find">{`${find.name} ${find.rank}`}</span></span>
+        ))}
+      </span>
     </li>
   );
   const first = table.rows.slice(0, FINDS_SHOWN);
@@ -644,11 +648,21 @@ function Trace({ answer, turn, locale, fetchImpl }) {
       {calls.length === 0 ? null : (
         <section className="lx-dock-level" data-level="calls">
           <h4 className="lx-dock-level-head"><span className="lx-dock-row-name">{copy.callsHeading}</span><Tag by="model" copy={dock} /></h4>
-          <div className="lx-dock-table-scroll">
-            <table className="lx-dock-table" data-trace-table="calls">
-              <thead><tr>{['step', 'model', 'time', 'tokens'].map((key) => <th scope="col" key={key}>{copy.callColumns[key]}</th>)}</tr></thead>
-              <tbody>{calls.map((call) => <tr key={call.key} data-call-note={call.note ? '' : undefined}><th scope="row"><code>{call.step}</code></th><td><code>{call.model}</code>{call.note ? <span className="lx-dock-caution-note"> ({call.note})</span> : null}</td><td>{call.time}</td><td>{call.tokens}</td></tr>)}</tbody>
-            </table>
+          {/* fix-pages3 (K-UI-2): one call a line (a four-column table broke the model's name inside the dock). */}
+          <div className="lx-dock-finds" data-trace-table="calls">
+            <p className="lx-dock-finds-legend">{table.contract3.callsLegend}</p>
+            <ol className="lx-dock-finds-list">
+              {calls.map((call) => (
+                <li key={call.key} data-call={call.step} data-call-note={call.note ? '' : undefined}>
+                  <span className="lx-dock-finds-head"><code>{call.step}</code></span>
+                  <span className="lx-dock-finds-ranks">
+                    <span className="lx-dock-find"><code>{call.model}</code></span>
+                    {[call.time, call.tokens].filter((one) => one.length > 0).map((one) => <span key={one}>{' · '}<span className="lx-dock-find">{one}</span></span>)}
+                    {call.note ? <span className="lx-dock-caution-note"> ({call.note})</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
       )}
