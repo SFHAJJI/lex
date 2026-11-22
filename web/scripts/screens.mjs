@@ -533,6 +533,21 @@ SHOTS.push(
   ["r5t-fr-17-home--phone", "/fr/", 390, 844, true, false, null, 6000],
   ["r5t-fr-18-heir-answer--phone", "/fr/radar.html", 390, 844, true, false, ASK_DONE(RC4.heir, false), 3000],
 );
+// rc5u (22/11/2026): a pages-only release on rc5's engine (code t13u on 20261122e) at the revision's own address (0 %, no label):
+// test 07 (a candidate held, the live version measured beside it, the walk measured in the run) on the Results page and in the
+// dossier's part six. Results FR first screen, tall, tall from test 07, phone; Results EN first screen and from test 07; the
+// dossier FR first screen and its evaluation part. No question is asked.
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5u-fr-01-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["r5u-fr-02-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["r5u-fr-03-results-test07--tall", "/fr/results.html", 1366, 9000, false, false, PART("run-test-07"), 7000],
+  ["r5u-en-01-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["r5u-en-02-results-test07--tall", "/en/results.html", 1366, 9000, false, false, PART("run-test-07"), 7000],
+  ["r5u-fr-04-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5u-fr-05-architecture-evaluation--tall", "/fr/architecture.html", 1366, 7000, false, false, PART("arch-evaluation"), 9000],
+  ["r5u-fr-06-results--phone", "/fr/results.html", 390, 844, true, false, null, 7000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
