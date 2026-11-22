@@ -109,6 +109,8 @@ export const KNOWN_DIGITS = Object.freeze([
   /^results\.fresh\.columns\.interval$/u,
   /^decisions2\.items\.\d+\.(?:gain|title)$/u,
   /^results2\.(?:wrongLine|totalsColumns\.interval|slicesColumns\.interval|ablationColumns\.interval|baselineColumns\.interval|previousColumns\.interval)$/u,
+  // repair-pages: the euro changeover law and its rate, quoted.
+  /^contract2\.source\.francs$/u,
 ]);
 
 /** The entries of either table that hold a digit outside the known list. */
@@ -732,6 +734,8 @@ export async function renderAll({ write = false, tag = '' } = {}) {
   const context = JSON.parse(await readFile(new URL('context-art16.json', CONTRACT_FIXTURES), 'utf8'));
   // repair-pages (22/11/2026): the dictionary as /api/next/dictionary answers it (12 of its rows).
   const dictionary = JSON.parse(await readFile(new URL('../test/next-fixtures/dictionary.json', import.meta.url), 'utf8'));
+  const shapes = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/shapes.json', import.meta.url), 'utf8'));
+  const coverageNew = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/coverage.json', import.meta.url), 'utf8'));
   const renderings = [];
   for (const locale of LOCALES) {
     const render = renderers[locale];
@@ -788,9 +792,10 @@ export async function renderAll({ write = false, tag = '' } = {}) {
       for (const banned of ['sans base de données vectorielle', 'ne lit pas encore les textes européens', 'qui ne se voient pas', 'indépendants']) if (how.includes(banned)) faults.push(`the page says what the engine does not do: ${banned}`);
       if (locale === 'fr') for (const sentence of englishSentences()) if (how.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
       renderings.push({ name: 'how-funnel', locale, html: how, faults });
-      // repair-pages: the departures said as choices; every dictionary row drawn with its status, a draft called a draft.
+      // repair-pages: the departures said as choices; every dictionary row drawn with its status, a draft called a draft; the
+      // shape of each part of the corpus, with its reason in the page's language.
       {
-        const withDictionary = render.renderHowFunnel(corpus, config, { locale, dictionary });
+        const withDictionary = render.renderHowFunnel(corpus, config, { locale, dictionary, shapes });
         const dFaults = markupFaults(withDictionary);
         if (!withDictionary.includes('data-how-departures=""') || copy.how2.departures.some((line) => !withDictionary.includes(inMarkup(line)))) dFaults.push('a departure from the method is not said');
         const drawn = (withDictionary.match(/data-dictionary-row="/gu) ?? []).length;
@@ -798,6 +803,9 @@ export async function renderAll({ write = false, tag = '' } = {}) {
         const drafts = dictionary.rows.filter((row) => !(row.status === 'validated' && row.validator)).length;
         if ((withDictionary.match(/data-dictionary-row="draft"/gu) ?? []).length !== drafts) dFaults.push('a draft row is not called a draft');
         if (!withDictionary.includes(`>${inMarkup(copy.how2.dictionaryStatus.draft)}</td>`)) dFaults.push('the word for a draft is not shown');
+        const shapeRows = (withDictionary.match(/<tr data-shape="/gu) ?? []).length;
+        if (shapeRows !== shapes.rows.length) dFaults.push(`${shapeRows} shape decisions drawn for ${shapes.rows.length}`);
+        if (locale === 'fr' && /data-part="[^"]+"><th scope="row">[^<]*<\/th><td>[^<]*<\/td><td>[^<]*<\/td><td lang="en">/u.test(withDictionary)) dFaults.push('a shape decision is said in English on the French page');
         if (locale === 'fr') for (const sentence of englishSentences()) if (withDictionary.includes(inMarkup(sentence))) dFaults.push(`an English sentence on the French page: ${sentence}`);
         renderings.push({ name: 'how-funnel-dictionary', locale, html: withDictionary, faults: dFaults });
       }
@@ -855,6 +863,20 @@ export async function renderAll({ write = false, tag = '' } = {}) {
         if (!html.includes(inMarkup(countedForm(words.quarantine, real.ingest.quarantined.length, locale)))) rFaults.push('the files set aside are not counted');
         if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) rFaults.push(`an English sentence on the French page: ${sentence}`);
         renderings.push({ name: 'coverage-real', locale, html, faults: rFaults });
+      }
+      // repair-pages (22/11/2026): the data builders' file of 22/11 (served, columns, text flags, repairs) as the server sends it.
+      {
+        const html = render.renderCoverage(coverageNew, { locale });
+        const nFaults = markupFaults(html);
+        const words = nextCopy(locale).coverage;
+        if (coverageNew.served && !(html.includes('data-coverage="served"') && html.includes(groupedCount(coverageNew.served.luxembourg_served_as_todays_law, locale)))) nFaults.push('the texts served as today\'s law are not counted');
+        for (const row of coverageNew.columns ?? []) if (!html.includes(`data-column="${inMarkup(`${row.table}.${row.column}`)}"`)) nFaults.push(`the column ${row.table}.${row.column} is not profiled`);
+        if (locale === 'fr' && /data-column="[^"]+"[\s\S]{0,400}?lang="en"/u.test(html)) nFaults.push('a column is described in English on the French page');
+        for (const key of Object.keys(coverageNew.text_flags ?? {})) if (!html.includes(`data-flag="${key}"`)) nFaults.push(`the flag ${key} is not counted`);
+        if ((coverageNew.repairs ?? []).length > 0 && !html.includes('data-coverage="repairs"')) nFaults.push('the repairs are not listed');
+        if (html.includes(inMarkup(words.why.newer_version_not_held.split(':')[0])) && /plus récente existe|newer version exists/u.test(html)) nFaults.push('a newer version is claimed');
+        if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) nFaults.push(`an English sentence on the French page: ${sentence}`);
+        renderings.push({ name: 'coverage-22-11', locale, html, faults: nFaults });
       }
     }
     // The text's table of contents: one link a heading to its first article, the version's dates, the earliest version held.

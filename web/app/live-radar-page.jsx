@@ -24,6 +24,8 @@ export function renderLiveRadarPage() {
       <div className="lx-changes">
         <h1>{copy.heading}</h1>
         <p>{copy.intro}</p>
+        {/* repair-pages (22/11/2026): which data this page reads (the reading service), said where it is read. */}
+        <p className="lx-muted" data-radar-store="">{copy.storeNote}</p>
         <div id={LIVE_RADAR_ROOT}>{liveRadarTree()}</div>
       </div>
       <script src={livePath('client-live-radar.js')} defer />

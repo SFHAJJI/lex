@@ -757,9 +757,10 @@ test('pages2: a text the reading service does not hold is read from the engine, 
   const solvency = JSON.parse(await readFile(new URL('../test/next-fixtures/text-solvency.json', import.meta.url), 'utf8'));
   const eu = fr.nextTextState(solvency, '32009L0138');
   assert.equal(eu.text.publisher, 'eu-eurlex');
-  // repair-pages (22/11/2026): an EU act the engine holds in several dated wordings shows each on the axis (the header and
-  // the outline then say the same count).
-  assert.equal(eu.text.versions.length, solvency.versions.filter((version) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(version.from ?? '')).length, 'each dated wording held is on the axis');
+  // repair-pages (22/11/2026): an EU act the engine holds in several dated wordings is read in one on the axis, and its
+  // header counts them all, as the outline does.
+  assert.equal(eu.text.versions.length, 1, 'an EU act is read in the wording that applies, as the reading service reads it');
+  assert.equal(eu.text.heldCount, solvency.versions.filter((version) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(version.from ?? '')).length, 'the header counts every dated wording held, as the outline does');
   assert.equal(fr.nextTextState({ error: 'unknown text' }, 'x'), null);
 });
 
@@ -791,7 +792,8 @@ test('pages2: the answer asks once where its versions\' words come from; a refus
   const { sourcesAddress } = await import('../scripts/next-contract.mjs');
   const real = JSON.parse(await readFile(new URL('../test/next-fixtures/funnel-real/b1-css-pdf.json', import.meta.url), 'utf8'));
   assert.equal(sourcesAddress(real), `/api/next/sources?${[...new Set(real.blocks.map((block) => block.version.id))].map((id) => `version=${id}`).join('&')}`);
-  assert.equal(sourcesAddress({ blocks: [{ version: { id: 3 }, source: { ocr: true } }] }), null, 'a block that says its source is not asked about');
+  // repair-pages: every version is asked about, for the data builders' flags (German only, OCR, francs).
+  assert.equal(sourcesAddress({ blocks: [{ version: { id: 3 }, source: { ocr: true } }] }), '/api/next/sources?version=3', 'a version is asked about for its flags');
   assert.equal(sourcesAddress({ blocks: [] }), null);
   const { fr } = await loadRenderers('test-replay');
   const refused = await fr.runReplay('abcdefgh123', async () => ({ ok: false, status: 400, json: async () => ({ error: 'token_not_from_this_server' }) }));
@@ -846,4 +848,14 @@ test('repair-pages: the coverage page says the served count and no newer version
   assert.equal(en.prose({ fr: 'écrites', en: 'written' }, 'en').text, 'written');
   assert.equal(en.prose('questions écrites par une session', 'en').lang, 'fr', 'French prose on an English page is marked');
   assert.equal(fr.prose('questions écrites par une session', 'fr').lang, undefined);
+});
+
+test('repair-pages: the French page says every shape decision and every column profile of the data builders in French', async () => {
+  const { SHAPE_REASONS_FR, COLUMN_WORDS_FR } = await import('../scripts/next-copy.mjs');
+  const shapes = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/shapes.json', import.meta.url), 'utf8'));
+  const coverage = JSON.parse(await readFile(new URL('../test/next-fixtures/preview/coverage.json', import.meta.url), 'utf8'));
+  assert.deepEqual(shapes.rows.map((row) => row.part).filter((part) => !Object.hasOwn(SHAPE_REASONS_FR, part)), [], 'a part of the corpus has no French reason');
+  assert.deepEqual((coverage.columns ?? []).map((row) => `${row.table}.${row.column}`).filter((key) => !Object.hasOwn(COLUMN_WORDS_FR, key)), [], 'a column has no French words');
+  for (const [key, words] of Object.entries(COLUMN_WORDS_FR)) for (const value of Object.values(words)) assert.deepEqual(frenchFaultsIn(value), [], key);
+  for (const [key, value] of Object.entries(SHAPE_REASONS_FR)) assert.deepEqual(frenchFaultsIn(value), [], key);
 });

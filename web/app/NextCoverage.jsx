@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { CHROME_LOCALE } from '../scripts/live-chrome.mjs';
-import { countedForm, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
+import { COLUMN_WORDS_FR, countedForm, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
 
 export const NEXT_COVERAGE_ROOT = 'lx-next-coverage';
 export const COVERAGE_ADDRESS = '/api/next/coverage';
@@ -53,7 +53,11 @@ export function coverageView(coverage, locale) {
   // (`in_force.served_today`) when the file carries it, else the server's count in the store (`in_force_store`), each said
   // with its own denominator and the reasons a text in force is not served, every figure the answer's.
   const store = objectOr(file.in_force_store);
-  const servedOwn = isCount(first(inForce, 'served_today')) && isCount(inForceHeld) ? { held: inForceHeld, served: inForce.served_today, why: objectOr(first(inForce, 'not_served_why')) } : null;
+  // The data builders' own section (`served`, repair-data 22/11/2026) first, else the server's count in the store.
+  const servedFile = objectOr(file.served);
+  const servedOwn = servedFile !== null && isCount(servedFile.luxembourg_served_as_todays_law) && isCount(servedFile.luxembourg_in_force_held_not_served)
+    ? { served: servedFile.luxembourg_served_as_todays_law, stale: servedFile.luxembourg_in_force_held_not_served, why: objectOr(servedFile.not_served_why), store: true }
+    : isCount(first(inForce, 'served_today')) && isCount(inForceHeld) ? { held: inForceHeld, served: inForce.served_today, why: objectOr(first(inForce, 'not_served_why')) } : null;
   const servedFrom = servedOwn ?? (store !== null && isCount(store.served_today) && isCount(store.stale_in_force) ? { served: store.served_today, stale: store.stale_in_force, why: objectOr(store.not_served_why), store: true } : null);
   const served = servedFrom === null ? null : {
     line: servedFrom.store
@@ -127,9 +131,24 @@ export function coverageView(coverage, locale) {
   const outlineCounts = objectOr(file.outline);
   const outline = outlineCounts !== null && isCount(outlineCounts.acts_with_outline_today) && isCount(outlineCounts.acts)
     ? fillNext(copy.outline, { with: groupedCount(outlineCounts.acts_with_outline_today, locale), acts: groupedCount(outlineCounts.acts, locale) }) : null;
+  // repair-pages (22/11/2026, K-SCOPE-3, K-META-1): each column of the act and version tables, its meaning, fill rate (all,
+  // Luxembourg, EU) and null rule, as the data builders profile them (`columns`, or the server's `column_profile`); the
+  // facts flagged on texts (`text_flags`); the repairs applied, by rule (`repairs`). The data's words are English: the French
+  // page says them from COLUMN_WORDS_FR, and marks as English any it does not know.
+  const percent = (value) => (typeof value === 'number' && Number.isFinite(value) ? fillNext(copy.percent, { value: (Math.round(value * 1000) / 10).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB') }) : '');
+  const columns = (Array.isArray(file.columns) ? file.columns : Array.isArray(file.column_profile) ? file.column_profile : []).filter((row) => objectOr(row) !== null).map((row) => {
+    const key = `${first(row, 'table', 'tbl') ?? ''}.${first(row, 'column', 'col') ?? ''}`;
+    const words = locale === 'fr' ? COLUMN_WORDS_FR[key] ?? null : null;
+    // The data's English says "null" for an empty value: a reader is told "empty".
+    const said = (field) => (words !== null && typeof words[field] === 'string' ? { text: words[field], lang: undefined } : text(row[field]) === null ? null : { text: row[field].trim().replace(/\bnull\b/gu, 'empty'), lang: locale === 'en' ? undefined : 'en' });
+    return { key, meaning: said('meaning'), fill: percent(row.fill_rate), fillLu: percent(row.fill_rate_lu), fillEu: percent(row.fill_rate_eu), nullRule: said('null_rule'), use: said('used_for'), scoped: text(row.scope) !== null };
+  }).filter((row) => row.key !== '.');
+  const flagCounts = objectOr(file.text_flags);
+  const flags = flagCounts === null ? [] : Object.entries(flagCounts).filter(([, n]) => isCount(n) && n > 0).map(([key, n]) => ({ key, name: copy.flags[key] ?? key, count: n }));
+  const repairs = (Array.isArray(file.repairs) ? file.repairs : []).filter((row) => objectOr(row) !== null && text(row.rule) !== null && isCount(row.changes));
   const view = {
     made: iso(made) ? numericDate(made) : null, byType, share, served, named, floors, pdfCount, pdfItems, sources: sources.map(datesInLine),
-    held, status, keyTexts, today, checks, quarantine, references, outline,
+    held, status, keyTexts, today, checks, quarantine, references, outline, columns, flags, repairs,
   };
   return byType.length === 0 && share === null && served === null && named.length === 0 && floors.length === 0 && pdfCount === null && sources.length === 0 && held === null && keyTexts.length === 0 ? null : view;
 }
@@ -263,6 +282,44 @@ export function CoverageView({ coverage = null, locale = CHROME_LOCALE }) {
             </details>
           )}
         </>
+      )}
+      {view.flags.length === 0 ? null : (
+        <>
+          <h3 id="next-coverage-flags">{copy.flagsHeading}</h3>
+          <p className="lx-next-note">{copy.flagsNote}</p>
+          <ul className="lx-how-lines" data-coverage="flags">
+            {view.flags.map((row) => <li key={row.key} data-flag={row.key}>{fillNext(copy.flagItem, { flag: row.name, count: count(row.count) })}</li>)}
+          </ul>
+        </>
+      )}
+      {view.columns.length === 0 ? null : (
+        <>
+          <h3 id="next-coverage-columns">{copy.columnsHeading}</h3>
+          <p className="lx-next-note">{copy.columnsNote}</p>
+          <div className="lx-how-table-scroll">
+            <table className="lx-how-table lx-next-shapes" data-coverage="columns">
+              <thead><tr>{['column', 'meaning', 'fill', 'nullRule', 'use'].map((key) => <th scope="col" key={key}>{copy.columnHeads[key]}</th>)}</tr></thead>
+              <tbody>
+                {view.columns.map((row) => (
+                  <tr key={row.key} data-column={row.key}>
+                    <th scope="row"><code>{row.key}</code></th>
+                    <td lang={row.meaning?.lang}>{row.meaning?.text ?? ''}</td>
+                    <td>{row.fill}{row.fillLu === '' && row.fillEu === '' ? null : <span className="lx-dock-term-forms">{fillNext(copy.fillSplit, { lu: row.fillLu || '—', eu: row.fillEu || '—' })}</span>}{row.scoped ? <span className="lx-dock-term-forms">{copy.fillScoped}</span> : null}</td>
+                    <td lang={row.nullRule?.lang}>{row.nullRule?.text ?? ''}</td>
+                    <td lang={row.use?.lang}>{row.use?.text ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {view.repairs.length === 0 ? null : (
+        <details data-coverage="repairs">
+          <summary>{countedForm(copy.repairsSummary, view.repairs.reduce((sum, row) => sum + row.changes, 0), locale)}</summary>
+          <p className="lx-next-note">{copy.repairsNote}</p>
+          <ul className="lx-how-lines">{view.repairs.map((row, at) => <li key={`${row.rule}-${at}`}>{fillNext(copy.repairItem, { rule: row.rule, what: row.what ?? '', changes: count(row.changes) })}</li>)}</ul>
+        </details>
       )}
       {view.today.length === 0 && view.checks.length === 0 && view.quarantine === null && view.references === null && view.outline === null ? null : (
         <details data-coverage="details">

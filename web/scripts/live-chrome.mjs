@@ -667,6 +667,8 @@ const EN = Object.freeze({
     title: "Changes",
     heading: "What changed in Luxembourg law",
     intro: "The texts of which Lex holds a new version for the period you choose. Open one to see the old and the new wording side by side.",
+    // repair-pages (22/11/2026): which data this page reads, said where it is read.
+    storeNote: "This page reads Lex’s reading service, whose index is dated at the foot of the page; the assistant reads its own data, dated there too, so a version the assistant quotes may not be listed here yet.",
     // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
     sent: "The dates of the period, and the texts whose titles this page shows, go to this server in the requests and nowhere else; the title filter stays in this page, and this page keeps nothing.",
     // The period: four presets as one segmented control, then the two dates, written day first.

@@ -994,6 +994,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Modifications',
     heading: 'Ce qui a changé dans le droit luxembourgeois',
     intro: 'Les textes dont Lex détient une nouvelle version pour la période choisie. Ouvrez-en un pour voir l’ancien et le nouveau libellé côte à côte.',
+    storeNote: 'Cette page lit le service de lecture de Lex, dont l’index est daté en bas de page ; l’assistant lit ses propres données, datées au même endroit : une version que l’assistant cite peut ne pas encore figurer ici.',
     sent: 'Les dates de la période, et les textes dont cette page affiche le titre, sont envoyés à ce serveur dans les requêtes et nulle part ailleurs ; le filtre par titre reste dans cette page, et cette page ne conserve rien.',
     period: 'Période',
     presets: Object.freeze({ last30: '{days} derniers jours', thisYear: 'Cette année', lastYear: '{year}', dates: 'Choisir les dates' }),

@@ -226,8 +226,29 @@ const R = {
   german: "Wie lange ist die Kündigungsfrist des Vermieters bei einem Mietvertrag über eine Wohnung?",
 };
 const OPEN_DICT = "(() => { document.querySelectorAll('details[data-dictionary-rows]').forEach((d) => { d.open = true; }); return 'opened'; })()";
+// repair-pages, second run: the V4 pages scroll inside their frame, so whole pages are shot in tall viewports.
+const OPEN_ALL = "(() => { document.querySelectorAll('main details').forEach((d) => { d.open = true; }); return 'opened'; })()";
+const SECOND = [
+  ["u-fr-01-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["u-fr-02-how-dictionary-open--tall", "/fr/evidence.html", 1366, 9000, false, false, OPEN_DICT, 2500],
+  ["u-en-01-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["u-fr-03-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["u-fr-04-coverage-open--tall", "/fr/coverage.html", 1366, 9000, false, false, OPEN_ALL, 2500],
+  ["u-en-02-coverage--tall", "/en/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["u-fr-05-results--tall", "/fr/results.html", 1366, 6000, false, false, null, 7000],
+  ["u-en-03-results--tall", "/en/results.html", 1366, 6000, false, false, null, 7000],
+  ["u-fr-06-decisions--tall", "/fr/decisions.html", 1366, 4000, false, false, null, 6000],
+  ["u-fr-07-modifications--tall", "/fr/radar.html", 1366, 1800, false, false, null, 8000],
+  ["u-fr-08-text-solvency--1366x768", "/fr/text.html?text=32009L0138&article=001", 1366, 768, false, false, null, 8000],
+  ["u-fr-09-home--tall", "/fr/", 1366, 1600, false, false, null, 8000],
+  ["u-fr-10-typed-answer--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(R.fields), 9000],
+  ["u-en-04-english--tall", "/en/radar.html", 1366, 3600, false, false, ASK(R.english), 9000],
+  ["u-fr-11-how--phone", "/fr/evidence.html", 390, 844, true, false, null, 7000],
+  ["u-fr-12-coverage--phone", "/fr/coverage.html", 390, 844, true, false, null, 7000],
+];
 SHOTS.length = 0;
-SHOTS.push(
+SHOTS.push(...SECOND);
+const FIRST_RUN = [
   ["t-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
   ["t-fr-02-home--1366-whole", "/fr/", 1366, 768, false, true, null, 6000],
   ["t-fr-03-typed-answer--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(R.fields), 9000],
@@ -248,7 +269,8 @@ SHOTS.push(
   ["t-en-04-how--1366-whole", "/en/evidence.html", 1366, 768, false, true, null, 6000],
   ["t-en-05-coverage--1366-whole", "/en/coverage.html", 1366, 768, false, true, null, 6000],
   ["t-en-06-results--1366-whole", "/en/results.html", 1366, 768, false, true, null, 6000],
-);
+];
+void FIRST_RUN;
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });

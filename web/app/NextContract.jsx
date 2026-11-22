@@ -155,7 +155,7 @@ function EngineNotes({ answer, locale }) {
     ['repealed', copy.repealedHeading, said.repealed],
     ['transposed-by', copy.directiveHeading, said.transposedBy],
     ['eu-not-held', copy.euNotHeldHeading, said.euNotHeld],
-    ['amended-since', copy.amendedHeading, amendedSince(answer)],
+    ['amended-since', copy.amendedHeading, amendedSince(answer, locale)],
   ].filter(([, , lines]) => lines.length > 0);
   if (cards.length === 0) return null;
   return cards.map(([key, heading, lines]) => (
@@ -411,6 +411,8 @@ export function ContractBlock({ block, state, locale, onOpen, fetchImpl, answer 
       ))}
       {source === null ? null : <p className={source === 'ocr' ? 'lx-dock-remark lx-dock-caution' : 'lx-dock-remark'} data-dock-source={source}>{extra.source[source]}</p>}
       {german ? <p className="lx-dock-remark lx-dock-caution" data-dock-source="german">{extra.source.german}</p> : null}
+      {/* repair-pages: the data builders' flag on a text served today whose amounts are in francs (text_flag amounts_in_francs). */}
+      {versionSource?.flags?.amounts_in_francs !== undefined ? <p className="lx-dock-remark lx-dock-caution" data-dock-source="francs">{extra.source.francs}</p> : null}
       {wide === null ? (
         quoteLines.length === 0 ? null : (
           <div className="lx-dock-extract" data-dock-extract={anchor ?? ''} lang={wordsLang}>

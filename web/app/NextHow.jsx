@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from 'react';
 import { CHROME_LOCALE, livePath } from '../scripts/live-chrome.mjs';
-import { countedForm, fillNext, nextCopy, numericDate } from '../scripts/next-copy.mjs';
+import { SHAPE_REASONS_FR, countedForm, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
 import { HowView, brickCounts } from './NextPages.jsx';
 
 /** The pipelines whose design is the funnel's; any other (topk, the earlier one) is said by the earlier page. */
@@ -26,6 +26,7 @@ export const NEXT_DECISIONS_ROOT = 'lx-next-decisions';
 export const CONFIG_ADDRESS = '/api/next/config';
 const CORPUS = '/api/next/corpus';
 export const DICTIONARY_ADDRESS = '/api/next/dictionary';
+export const SHAPES_ADDRESS = '/api/next/shapes';
 
 const isCount = (value) => typeof value === 'number' && Number.isFinite(value);
 const objectOr = (value) => (value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null);
@@ -180,36 +181,54 @@ export function DictionarySection({ dictionary = null, locale = CHROME_LOCALE })
  * outlines, one document type in many copies read as a typed table, or case files), with the reason: the copy's rows, kept in
  * step with the data builders' SHAPE-DECISIONS.md by `test/next.test.mjs`. Nothing while the copy has none.
  */
-export function ShapesSection({ locale = CHROME_LOCALE }) {
+export function ShapesSection({ shapes = null, locale = CHROME_LOCALE }) {
   const copy = nextCopy(locale).how2.shapes;
-  const rows = Array.isArray(copy?.rows) ? copy.rows : [];
+  const rows = Array.isArray(objectOr(shapes)?.rows) ? shapes.rows.filter((row) => objectOr(row) !== null && text(row.part) !== null && text(row.shape) !== null) : [];
   if (rows.length === 0) return null;
+  const count = (value) => (isCount(value) ? groupedCount(value, locale) : '');
+  const decided = rows.map((row) => text(row.decided_at)).find((value) => value !== null) ?? null;
+  const reasonOf = (row) => {
+    if (locale === 'fr' && Object.hasOwn(SHAPE_REASONS_FR, row.part)) return { text: SHAPE_REASONS_FR[row.part], lang: undefined };
+    return text(row.reason) === null ? null : { text: row.reason.trim(), lang: locale === 'en' ? undefined : 'en' };
+  };
   return (
     <section className="lx-how-block lx-how-wide" aria-labelledby="how-shapes" data-reference-section="shapes" id="shapes" data-how-shapes="">
       <h2 id="how-shapes">{copy.heading}</h2>
       <p>{copy.intro}</p>
-      <div className="lx-how-table-scroll">
-        <table className="lx-how-table lx-next-shapes" data-shapes="">
-          <thead><tr>{['part', 'shape', 'how', 'why'].map((key) => <th scope="col" key={key}>{copy.columns[key]}</th>)}</tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.key} data-shape={row.shape} data-part={row.key}>
-                <th scope="row">{row.part}</th>
-                <td>{copy.names[row.shape] ?? row.shape}</td>
-                <td>{row.how}</td>
-                <td>{row.why}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {typeof copy.source === 'string' ? <p className="lx-next-note">{copy.source}</p> : null}
+      {['part', 'cross_cutting'].map((kind) => {
+        const these = rows.filter((row) => (row.kind ?? 'part') === kind);
+        if (these.length === 0) return null;
+        return (
+          <div key={kind}>
+            <h3>{copy.kinds[kind]}</h3>
+            <div className="lx-how-table-scroll">
+              <table className="lx-how-table lx-next-shapes" data-shapes={kind}>
+                <thead><tr>{['part', 'shape', 'counts', 'why'].map((key) => <th scope="col" key={key}>{copy.columns[key]}</th>)}</tr></thead>
+                <tbody>
+                  {these.map((row) => {
+                    const reason = reasonOf(row);
+                    return (
+                      <tr key={row.part} data-shape={row.shape} data-part={row.part}>
+                        <th scope="row">{(locale === 'fr' ? text(row.label_fr) : text(row.label_en)) ?? text(row.label_en) ?? row.part}</th>
+                        <td>{copy.names[row.shape] ?? row.shape}</td>
+                        <td>{[row.acts_held, row.in_force, row.served_today].every(isCount) ? fillNext(copy.counts, { held: count(row.acts_held), inForce: count(row.in_force), served: count(row.served_today) }) : count(row.acts_held)}</td>
+                        <td lang={reason?.lang}>{reason?.text ?? ''}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+      {decided === null ? null : <p className="lx-next-note">{fillNext(copy.decidedBy, { date: numericDate(decided.slice(0, 10)) })}</p>}
     </section>
   );
 }
 
 /** How it works, drawn from the corpus counts and the server's configuration (each null while not known). */
-export function HowFunnelView({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null }) {
+export function HowFunnelView({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null, shapes = null }) {
   const table = nextCopy(locale);
   const copy = table.how2;
   const dock = table.dock;
@@ -291,7 +310,7 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
           <h2 id="how-departures">{copy.departuresHeading}</h2>
           <ul className="lx-how-lines">{copy.departures.map((line) => <li key={line}>{line}</li>)}</ul>
         </section>
-        <ShapesSection locale={locale} />
+        <ShapesSection shapes={shapes} locale={locale} />
         <DictionarySection dictionary={dictionary} locale={locale} />
         {counts.length === 0 ? null : (
           <details className="lx-how-fold lx-how-wide" data-how-counts="">
@@ -309,10 +328,10 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
  * the earlier pipeline's (`HowView`). Until the configuration is read, the heading and a loading line only: the page never
  * describes a design before it knows it is the one running.
  */
-export function HowForPipeline({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null }) {
+export function HowForPipeline({ corpus = null, config = null, state = 'loading', configState = 'loading', locale = CHROME_LOCALE, dictionary = null, shapes = null }) {
   const pipeline = objectOr(config)?.pipeline;
   if (configState === 'ready' && typeof pipeline === 'string' && !FUNNEL_PIPELINES.includes(pipeline)) return <HowView corpus={corpus} state={state} locale={locale} />;
-  if (configState === 'ready' && FUNNEL_PIPELINES.includes(pipeline)) return <HowFunnelView corpus={corpus} config={config} state={state} configState={configState} locale={locale} dictionary={dictionary} />;
+  if (configState === 'ready' && FUNNEL_PIPELINES.includes(pipeline)) return <HowFunnelView corpus={corpus} config={config} state={state} configState={configState} locale={locale} dictionary={dictionary} shapes={shapes} />;
   const copy = nextCopy(locale).how2;
   return (
     <div className="lx-how" data-next-page="how" data-next-state={configState === 'failed' ? 'failed' : 'loading'}>
@@ -327,7 +346,8 @@ export function NextHowFunnel({ fetchImpl = undefined, locale = CHROME_LOCALE })
   const config = useJson(CONFIG_ADDRESS, fetchImpl);
   // repair-pages: the dictionary's rows and their status (K-QUEST-3).
   const dictionary = useJson(DICTIONARY_ADDRESS, fetchImpl);
-  return <HowForPipeline corpus={corpus.data} config={config.data} state={corpus.state} configState={config.state} locale={locale} dictionary={dictionary.data} />;
+  const shapes = useJson(SHAPES_ADDRESS, fetchImpl);
+  return <HowForPipeline corpus={corpus.data} config={config.data} state={corpus.state} configState={config.state} locale={locale} dictionary={dictionary.data} shapes={shapes.data} />;
 }
 
 /** The design choices, live: the configuration asked once the page is drawn. */

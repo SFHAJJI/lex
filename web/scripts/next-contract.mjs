@@ -312,7 +312,9 @@ export function readableReason(reason, answer) {
   if (value === null) return null;
   const read = list(answer?.meta?.read);
   const name = articleNamer(answer);
-  return value.replace(/\bA([0-9]{1,3})\b/gu, (whole, n) => name(read[Number(n) - 1]?.article_pk) ?? whole);
+  // repair-pages: a date a reason carries (yyyy-mm-dd) is said dd/mm/yyyy.
+  return value.replace(/\bA([0-9]{1,3})\b/gu, (whole, n) => name(read[Number(n) - 1]?.article_pk) ?? whole)
+    .replace(/\b([0-9]{4})-([0-9]{2})-([0-9]{2})\b/gu, '$3/$2/$1');
 }
 
 /** Where an asserted answer opens in the page: its first block's article, when its name is known; or null. */
@@ -500,6 +502,8 @@ export function blockVia(block, locale) {
   const copy = nextCopy(locale).contract2.via;
   // The engine names the article as its number is printed ("Art. 12."): its final full stop is left to the sentence.
   const from = text(String(block?.referenced_from ?? '').replace(/\.\s*$/u, ''));
+  // repair-pages: the article after the main one, which sets the consequence of its case (repair-engine's `consequence`).
+  if (block?.consequence === true) return from === null ? nextCopy(locale).contract3.consequenceBare : fillNext(nextCopy(locale).contract3.consequence, { from });
   if (block?.inbound === true) return from === null ? copy.inboundBare : fillNext(copy.inbound, { from });
   if (block?.retrieved_via === 'reference') return from === null ? copy.referenceBare : fillNext(copy.reference, { from });
   if (block?.retrieved_via === 'widened') return copy.widened;
@@ -514,17 +518,27 @@ export function blockMarks(block, locale) {
   const copy = nextCopy(locale).contract2.marks;
   const compiled = objectOr(block?.compiled_from);
   const title = actTitle(compiled?.title);
+  // repair-pages: an original wording a later text replaced (`replaced_by`), and the text that replaced it (`replaces`).
+  const extra = nextCopy(locale).contract3;
+  const replacedBy = objectOr(block?.replaced_by);
+  const replaces = objectOr(block?.replaces);
   return {
     compiled: title === null ? null : actTitle(compiled.compilation_title) === null ? fillNext(copy.compiledBare, { title }) : fillNext(copy.compiled, { title, compilation: actTitle(compiled.compilation_title) }),
-    original: block?.original_wording === true ? copy.original : null,
-    amends: block?.amends_this_text === true ? copy.amends : null,
+    original: block?.original_wording === true
+      ? (replacedBy !== null && text(replacedBy.label) !== null ? fillNext(isIsoDate(replacedBy.from) ? extra.replacedBy : extra.replacedByBare, { label: text(replacedBy.label), ...(isIsoDate(replacedBy.from) ? { date: numericDate(replacedBy.from) } : {}) }) : copy.original)
+      : null,
+    amends: block?.amends_this_text === true ? copy.amends : replaces !== null && text(replaces.label) !== null ? fillNext(extra.replaces, { label: text(replaces.label) }) : null,
   };
 }
 
 /** engine2's `amended_since` (the texts that amended an original wording held): their names, or an empty list. */
-export function amendedSince(answer) {
+export function amendedSince(answer, locale = 'fr') {
   const value = objectOr(answer?.amended_since);
-  return list(value?.acts).map((entry) => (typeof entry === 'string' ? actTitle(entry) : actTitle(entry?.title) ?? text(entry?.act_id))).filter((one) => one !== null);
+  const held = list(value?.acts).map((entry) => (typeof entry === 'string' ? actTitle(entry) : actTitle(entry?.title) ?? text(entry?.act_id))).filter((one) => one !== null);
+  // repair-pages: the amending texts Lex does not hold, named and said not held (repair-engine's `not_held_acts`).
+  const unheld = list(value?.not_held_acts).map((entry) => (typeof entry === 'string' ? actTitle(entry) : actTitle(entry?.title) ?? text(entry?.act_id))).filter((one) => one !== null)
+    .map((title) => fillNext(nextCopy(locale).contract3.notHeldAmending, { title }));
+  return [...held, ...unheld];
 }
 
 /** Where a block's words come from, as the engine marks it: a character recognition (OCR) or the publisher's PDF; or null. */
@@ -603,6 +617,15 @@ export function codeReasonInEnglish(reason) {
   match = /^(« ?[^»]+ ?») est défini par ((?:Art\.|Article)\s.+?) de ce texte(.*)$/u.exec(value);
   if (match !== null) return `${match[1]} is defined by ${match[2]} of this text${match[3]}`;
   if (/^désigné par la lecture/u.test(value)) return value.replace(/^désigné par la lecture/u, 'pointed at by the reading');
+  // repair-engine's reasons (22/11/2026): an amending text, an original wording, the consequence of a rule.
+  match = /^modifie ce texte \(en vigueur le ([^)]+)\)$/u.exec(value);
+  if (match !== null) return `amends this text (in force on ${match[1]})`;
+  match = /^texte d['’]origine de (.+?), que (.+?) modifie ou remplace \(en vigueur le ([^)]+)\)$/u.exec(value);
+  if (match !== null) return `the original wording of ${match[1]}, which ${match[2]} amends or replaces (in force on ${match[3]})`;
+  match = /^texte d['’]origine, modifié depuis le ([^ ]+) \(non consolidé\)$/u.exec(value);
+  if (match !== null) return `the original wording, amended since ${match[1]} (no consolidation held)`;
+  match = /^article suivant dans la même partie\s?: il règle la conséquence du cas visé par (.+?) \((« .*? »)\s?; mots repris de l['’]intitulé\s?: (.*)\)$/u.exec(value);
+  if (match !== null) return `the next article in the same part: it sets the consequence of the case ${match[1]} covers (${match[2]}; words taken up from the heading: ${match[3]})`;
   match = new RegExp(`^((?:Art\\.|Article)\\s[^—]{0,40}?)\\s(${verbs})\\s((?:Art\\.|Article|ANNEXE|Annexe)\\s.+)$`, 'u').exec(value);
   if (match !== null) return `${unit(match[1])} ${CODE_VERBS_EN[match[2]]} ${tail(match[3])}`;
   return null;
@@ -824,6 +847,9 @@ export function traceLevels(answer, locale) {
           if (said.length > 0) rows.push(row('sources', fillNext(extra.sourcesLine, { sources: said.join(table.listSeparator) }), 'code'));
         }
         if (text(level.missing_text) !== null) rows.push(row('missing-text', fillNext(extra.missingText, { name: text(level.missing_text) }), 'model'));
+        // repair-pages: what code made of that name (found in the catalogue or the store, or dropped).
+        const resolved = objectOr(level.missing_text_resolved);
+        if (resolved !== null) rows.push(row('missing-text-resolved', resolved.dropped === true ? table.contract3.missingTextDropped : actTitle(resolved.title) === null ? '' : fillNext(table.contract3.missingTextResolved, { title: actTitle(resolved.title) }), 'code'));
         // repair-pages (K-GEN-6, K-SCOPE-5): a name a model gave that matches no text of the catalogue or the store, dropped by code.
         for (const dropped of list(answer?.trace?.names_dropped).filter((entry) => text(entry?.name) !== null)) {
           rows.push(row('name-dropped', fillNext(table.contract3.namesDropped, { name: text(dropped.name) }), 'code'));
@@ -875,7 +901,7 @@ export function traceLevels(answer, locale) {
       }
       case 'detectors': {
         // pages2: the whole-store searches of the combined pipeline, and the consolidated article holding an amended wording.
-        const more = ['words_all', 'meaning_all', 'amended_text'].filter((column) => list(level.candidates).some((candidate) => isCount(candidate?.found_by?.[column])));
+        const more = ['words_all', 'meaning_all', 'amended_text', 'dictionary', 'replacing_text'].filter((column) => list(level.candidates).some((candidate) => isCount(candidate?.found_by?.[column])));
         const columns = ['exact', 'outline', 'words', 'meaning', ...more];
         const candidates = list(level.candidates).filter((candidate) => isCount(candidate?.article_pk));
         if (candidates.length > 0) {
@@ -919,8 +945,11 @@ export function traceLevels(answer, locale) {
       case 'read': {
         if (isCount(level.articles_read) && isCount(level.lines_quoted)) {
           const fixed = /^fixed k = ([0-9]+)$/u.exec(level.read_amount_set_by ?? '');
+          // repair-pages: a reason the copy does not know is said as the engine wrote it on the English page, and in general words
+          // on the French one (never English there).
           const setBy = copy.setBy[level.read_amount_set_by] ?? table.contract.engine.setBy[level.read_amount_set_by]
-            ?? (fixed === null ? null : fillNext(table.contract.engine.fixedK, { count: groupedCount(Number(fixed[1]), locale) })) ?? text(level.read_amount_set_by);
+            ?? (fixed === null ? null : fillNext(table.contract.engine.fixedK, { count: groupedCount(Number(fixed[1]), locale) }))
+            ?? (text(level.read_amount_set_by) === null ? null : locale === 'en' ? text(level.read_amount_set_by) : table.contract3.setByOther);
           if (setBy !== null) rows.push(row('read', fillNext(copy.read, { articles: countedForm(copy.readArticles, level.articles_read, locale), setBy, lines: countedForm(copy.readLines, level.lines_quoted, locale) }), byOf(level.by)));
         }
         // pages2: each round of reading, what it found (an answer, complete or not; what it said was missing), by the model.
@@ -1082,8 +1111,9 @@ export function replayRequest(token) {
  * the blocks that do not say it themselves; null when every block says it, or none names its version.
  */
 export function sourcesAddress(answer) {
-  // A block that carries its own `source` (engine2: a string, or an object) is never asked about.
-  const ids = [...new Set(list(answer?.blocks).filter((block) => blockSource(block) === null && (block?.source === undefined || block?.source === null) && isCount(block?.version?.id)).map((block) => block.version.id))].slice(0, 40);
+  // repair-pages (22/11/2026): every version an answer quotes is asked about once, for the facts the data builders flag on a text
+  // (held only in German, OCR, amounts in francs), which no block carries; a block's own `source` still comes first.
+  const ids = [...new Set(list(answer?.blocks).filter((block) => isCount(block?.version?.id)).map((block) => block.version.id))].slice(0, 40);
   return ids.length === 0 ? null : `/api/next/sources?${ids.map((id) => `version=${id}`).join('&')}`;
 }
 

@@ -396,9 +396,12 @@ export function nextTextState(value, identifier) {
   const europe = value.europe === true;
   const read = value.version ?? {};
   const held = (Array.isArray(value.versions) ? value.versions : []).filter((version) => iso(version?.from));
-  // repair-pages (22/11/2026): an EU act the engine holds in several dated wordings (Solvency II: 3) shows each of them on the
-  // axis, as a Luxembourg text does; the header no longer says "one version held" beside an outline that says three.
-  const chosen = held;
+  // An EU act is read in one wording on the axis, as the reading service reads it; a Luxembourg text with each of its versions.
+  // repair-pages (22/11/2026): the header says how many dated wordings the engine holds (Solvency II: 3), as the outline does,
+  // not "one version held" (`heldCount`, `heldFirst`).
+  const chosen = europe ? held.filter((version) => version.id === read.id) : held;
+  // Every dated wording held, as the outline counts them (a wording that applies later included).
+  const heldToday = held;
   const versions = Object.freeze(chosen.map((version, at) => Object.freeze({
     date: version.from, until: iso(version.until) ? version.until : null, articleCount: Number.isInteger(version.articles) ? version.articles : null,
     first: at === 0, changed: null, added: null, removed: null, unchanged: null, bar: null, previous: at > 0 ? chosen[at - 1].from : null, textHeld: true,
@@ -417,6 +420,7 @@ export function nextTextState(value, identifier) {
       title: typeof value.title === 'string' ? cleanTitle(value.title.replace(/\s*\((?:Text with EEA relevance|Texte présentant de l['’]intérêt pour l['’]EEE)\)\s*$/u, '')) : null, language, versions,
       contents, articleCount: Number.isInteger(read.articles) ? read.articles : contents.length, official: /^https:\/\//u.test(value.official ?? '') ? value.official : null,
       holder: { date: iso(read.from) ? read.from : null, permalink: null }, euDate: null, source: 'next', textSource: source,
+      heldCount: heldToday.length, heldFirst: heldToday[0]?.from ?? null,
     },
     page: Number.isInteger(value.page.number) ? value.page.number : 1,
     articles,
@@ -1108,7 +1112,11 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   const pageCount = Math.max(1, ...contents.map((c) => c.page));
   const readArticles = contents.filter((item) => loadedPages.includes(item.page));
 
-  const facts = isEurope && !(text.source === 'next' && versions.length > 1)
+  // repair-pages: an EU text read from the engine says how many dated wordings it holds, from the first.
+  const heldCount = isEurope && text.source === 'next' && Number.isInteger(text.heldCount) && text.heldCount > 1 ? text.heldCount : null;
+  const facts = heldCount !== null
+    ? `${counted(copy.articles, text.articleCount ?? contents.length)} ${fill(countedEntry(copy.versionsHeld, heldCount), { ...(countedEntry(copy.versionsHeld, heldCount).includes('{count}') ? { count: grouped(heldCount) } : {}), first: numericDate(text.heldFirst) })}`
+    : isEurope
     ? `${counted(copy.articles, text.articleCount ?? contents.length)} ${copy.oneVersion}.`
     : `${counted(copy.articles, text.articleCount ?? contents.length)} ${fill(countedEntry(copy.versionsHeld, versions.length), { ...(countedEntry(copy.versionsHeld, versions.length).includes('{count}') ? { count: grouped(versions.length) } : {}), first: numericDate(versions[0]?.date) })}`;
   const until = readVersion?.until ?? null;

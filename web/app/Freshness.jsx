@@ -44,6 +44,12 @@ export function FreshnessStrip({ facts = null, answers = true, engine = null }) 
   const engineLine = engine === null ? null : (
     <p data-engine-index={engine.builtOn ?? ''}>{fillText(engine.builtOn === null ? copy.engineUndated : copy.engineBuilt, { date: engine.builtOn ?? '', data: engine.data, code: engine.code })}</p>
   );
+  // On the side build's pages (the engine's line drawn), every date of the strip is dd/mm/yyyy, as the engine's (the owner's
+  // standard); the reading service's facts arrive as the language's own date (yyyy-mm-dd in English).
+  if (engine !== null && facts !== null) {
+    const dmy = (date) => (typeof date === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u.test(date) ? `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : date);
+    facts = { ...facts, builtOn: dmy(facts.builtOn), today: dmy(facts.today), channels: facts.channels.map((channel) => ({ ...channel, completedOn: dmy(channel.completedOn) })) };
+  }
   if (engineLine !== null && facts === null) {
     return (
       <section className="freshness-strip" aria-label={copy.heading} data-freshness="engine">

@@ -56,7 +56,11 @@ async function nextFixture(method, url, body) {
   if (pathname === "/api/next/results") return readJson("results-v2.json");
   if (pathname === "/api/next/dictionary") return readJson("preview/dictionary.json");
   if (pathname === "/api/next/versions") return readJson("preview/versions.json");
-  if (pathname === "/api/next/sources") return Object.fromEntries(searchParams.getAll("version").filter((id) => id === "17295").map((id) => [id, { identity_from: "publisher-pdf", ocr: false, pdf: true, language: "fra" }]));
+  if (pathname === "/api/next/sources") {
+    const saved = (await tryRead("preview/sources.json")) ?? {};
+    return Object.fromEntries(searchParams.getAll("version").map((id) => [id, saved[id] ?? (id === "17295" ? { identity_from: "publisher-pdf", ocr: false, pdf: true, language: "fra" } : null)]).filter(([, value]) => value !== null));
+  }
+  if (pathname === "/api/next/shapes") return readJson("preview/shapes.json");
   if (pathname === "/api/next/text") return tryRead(`preview/text-${searchParams.get("work")}.json`).then((value) => value ?? tryRead({ "code-securite-sociale": "text-css.json", "32009L0138": "text-solvency.json" }[searchParams.get("work")] ?? "none.json"));
   if (pathname === "/api/next/text-outline") return tryRead(`preview/outline-${searchParams.get("work")}.json`).then((value) => value ?? tryRead(`contexts/outline-${searchParams.get("work")}.json`));
   if (pathname === "/api/next/context") return tryRead(`contexts/${Number(searchParams.get("article_pk"))}.json`);
