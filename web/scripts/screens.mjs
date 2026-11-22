@@ -493,6 +493,15 @@ SHOTS.push(
   ["r5s-fr-18-not-held-communal--tall", "/fr/radar.html", 1366, 3600, false, false, ASK_DONE(RC4.communal, false), 3000],
   ["r5s-fr-19-notice-answer--phone", "/fr/radar.html", 390, 844, true, false, ASK_DONE(NOTICE, false), 3000],
 );
+// rc5s, second run: the shot that failed (asked from the home page, which opens the article's page when the answer comes, so
+// the waiting promise was cut: asked here with a fixed wait), the same answer on the Changes page, and the dossier's parts 8-9
+// (below the 16000 px of the tall shot). Two questions.
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5s2-fr-01-notice-answer-home--1366x768", "/fr/", 1366, 768, false, false, ASK(NOTICE), 45000],
+  ["r5s2-fr-02-notice-answer--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK_DONE(NOTICE, false), 3000],
+  ["r5s2-fr-03-architecture-changes--tall", "/fr/architecture.html", 1366, 4200, false, false, PART("arch-changes"), 2500],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
