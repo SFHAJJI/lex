@@ -295,7 +295,9 @@ export function HowFunnelView({ corpus = null, config = null, state = 'loading',
           <p className="lx-how-all">
             <a href={livePath('coverage.html')}>{copy.coverageLink}</a><br />
             <a href={livePath('decisions.html')}>{copy.decisionsLink}</a><br />
-            <a href={livePath('results.html')}>{copy.resultsLink}</a>
+            <a href={livePath('results.html')}>{copy.resultsLink}</a><br />
+            {/* dossier-page (22/11/2026): the architecture dossier. */}
+            <a href={livePath('architecture.html')} data-how-architecture="">{copy.architectureLink}</a>
           </p>
         </aside>
       </div>

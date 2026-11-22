@@ -229,7 +229,8 @@ test("a page that ships no script says its strip carries no answer, in English a
       // The side build's script (`client-live-next.js`: How it works, Design choices, Results, the coverage section) reads the
       // new engine's counts and configuration, never an answer that carries freshness: its pages say they carry no answer.
       const scripts = [...html.matchAll(/<script src="([^"]+)"/gu)].map((match) => match[1]);
-      if (scripts.some((src) => !src.endsWith('/client-live-next.js'))) {
+      // dossier-page (22/11/2026): the architecture dossier's script reads the engine's counts too, never an answer.
+      if (scripts.some((src) => !src.endsWith('/client-live-next.js') && !src.endsWith('/client-live-architecture.js'))) {
         // A script that asks the server, and redraws the strip from each answer (`client.jsx`): the as-built line is true.
         assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.asBuilt)}</div>`, label);
       } else {
@@ -246,6 +247,8 @@ test("a page that ships no script says its strip carries no answer, in English a
       ...LEGAL_PAGE_PATHS.map((path) => path.slice(1)), ...REFERENCE_PAGE_PATHS.map((path) => path.slice(1)), "locale-de.html", "locale-lb.html", "maintenance/en.html", "maintenance/fr.html",
       // The side build's Results page: it reads the engine's scored test, which carries no freshness.
       "en/results.html", "fr/results.html",
+      // The architecture dossier (dossier-page, 22/11/2026): the engine's counts and one stored answer, no answer that carries freshness.
+      "en/architecture.html", "fr/architecture.html",
       // Trust and Coverage (pages2, 21/11/2026): it reads the data builders' coverage file and the engine's counts, never an
       // answer that carries freshness; its strip no longer says it will show what an answer brings.
       "en/coverage.html", "fr/coverage.html",

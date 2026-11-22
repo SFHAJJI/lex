@@ -41,6 +41,9 @@ const EN = Object.freeze({
   questionTypes: Object.freeze({
     rule: 'a rule', value: 'an amount or a time limit', list: 'a list', definition: 'a definition', change: 'a change over time',
     procedure: 'a procedure', other: 'something else',
+    // rc3 (22/11/2026): the kinds the sealed set's file uses besides these.
+    exception: 'an exception', condition: 'a condition', compound: 'several questions in one', vague: 'a vague question',
+    absent: 'a text Lex does not hold', out_of_scope: 'outside the law',
   }),
   dock: Object.freeze({
     heading: 'Assistant',
@@ -566,7 +569,7 @@ const EN = Object.freeze({
       summaryLabel: 'Summary of the quoted lines, written by the AI model and checked by code (every number is in those lines): not the text of the law.',
     }),
     conflictHeading: 'Two texts do not say the same thing',
-    conflictText: 'Both are quoted, side by side, never merged: Lex does not decide between them. Read the two.',
+    conflictText: 'Both are quoted below, each flagged, never merged: Lex does not decide between them. Read the two.',
     conflictBadge: 'Does not say the same as another text quoted',
     verified: Object.freeze({
       code: 'Found by meaning alone, then confirmed by code: {reason}.',
@@ -591,6 +594,7 @@ const EN = Object.freeze({
     missingTextDropped: 'The text the model named outside the list matches no text of the catalogue or of the store: not shown.',
     notHeldAmending: '{title} (not held)',
     setByOther: 'the structure of the text and the kind of question',
+    namedFound: 'named by an AI model as the text that answers, found by code in the publisher’s catalogue, not held by Lex',
   }),
   textSource: Object.freeze({
     ocr: 'This text comes from a character recognition (OCR) of the scanned Mémorial: reading errors are possible; only the published text is authentic.',
@@ -852,6 +856,8 @@ const EN = Object.freeze({
     unnamed: 'The file of these results does not name the version measured.',
     answering: 'The site answers today with code {code} and data {data} ({pipeline}): these figures do not describe it.',
     answeringBare: 'The site answers today with code {code} and data {data}: these figures do not describe it.',
+    // rc3 (22/11/2026): a new code tag whose server reports the fingerprint of the files measured, on the same data.
+    sameEngine: 'Measured on code {measured} and data {data}. The site answers today with code {code} on the same data, and the files that compute its answers are, byte for byte, the ones measured (fingerprint {engine}): these figures describe its answers.',
     pipelines: Object.freeze({ funnel: 'the funnel', combo: 'the funnel, with the searches over every text', topk: 'the earlier engine, with three searches', naive: 'the search by meaning alone' }),
   }),
   results2: Object.freeze({
@@ -875,8 +881,8 @@ const EN = Object.freeze({
     totalsColumns: Object.freeze({ state: 'Result', count: 'Questions', interval: '95% interval' }),
     outOf: Object.freeze({ one: 'Out of {count} question', other: 'Out of {count} questions' }),
     states: Object.freeze({
-      right: 'right answer asserted', wrong: 'wrong answer asserted', partial: 'partial answer', candidates: 'passages proposed, no answer asserted', not_held: 'text not held, said so',
-      not_found: 'not found, said so', clarify: 'asked to make the question precise', out_of_scope: 'outside Lex’s field, said so',
+      right: 'right answer asserted', wrong: 'wrong answer asserted', asserted_incomplete: 'answer asserted, incomplete', partial: 'partial answer', candidates: 'passages proposed, no answer asserted', not_held: 'text not held, said so',
+      not_found: 'not found, said so', clarify: 'asked to make the question precise', out_of_scope: 'outside Lex’s field, said so', error: 'technical error, no answer',
     }),
     interval: 'from {low} to {high}%',
     retrievalHeading: 'The search, measured apart',
@@ -886,12 +892,16 @@ const EN = Object.freeze({
     slices: Object.freeze({
       insurance: 'insurance', other_laws: 'other laws', eu: 'European texts', dated: 'a past date', list: 'lists', reference: 'needs a reference', definition: 'definitions',
       no_answer: 'no answer in the law', out_of_scope: 'outside the law', absent: 'text not held', fr: 'in French', de: 'in German', en: 'in English', lb: 'in Luxembourgish',
+      // rc3 (22/11/2026): the slices the sealed set's file uses besides these.
+      all: 'all questions', lu: 'Luxembourg texts', grand_ducal_regulation: 'grand-ducal regulations', compound: 'several questions in one',
+      vague: 'vague questions', partial: 'a partial answer expected', everyday: 'everyday questions', insurance_customer: 'an insurer’s customer asking',
+      regulator: 'the regulator’s side',
     }),
     foldSummary: 'By text and by kind of question',
     lawColumns: Object.freeze({ law: 'Text asked about', n: 'Questions', right: 'Right', wrong: 'Wrong' }),
     typeColumns: Object.freeze({ type: 'Kind of question', n: 'Questions', right: 'Right', wrong: 'Wrong' }),
     missesHeading: 'Why the other questions were missed',
-    missesLabels: Object.freeze({ corpus_gap: 'the text is not held (corpus gap)', retrieval: 'the search did not bring the article (retrieval)', reading: 'the article was read, the answer missed (reading)' }),
+    missesLabels: Object.freeze({ corpus_gap: 'the text is not held (corpus gap)', retrieval: 'the search did not bring the article (retrieval)', reading: 'the article was read, the answer missed (reading)', gate: 'the article and its lines were shown, the state chosen was not the right one (decision)' }),
     missesColumns: Object.freeze({ label: 'Cause', count: 'Questions' }),
     missesItems: 'The questions missed, one by one',
     missesItemColumns: Object.freeze({ question: 'Question', label: 'Cause', note: 'What was missing' }),
@@ -901,11 +911,17 @@ const EN = Object.freeze({
     absentRows: Object.freeze({ said_not_held: 'said the text is not held', said_not_found: 'said nothing was found', asserted: 'asserted an answer', other: 'something else' }),
     ablationHeading: 'Each brick switched off',
     ablationBuild: 'Same questions, same build (code {code}, data {data}).',
-    ablationColumns: Object.freeze({ what: 'Run', right: 'Right', wrong: 'Wrong', interval: 'Right, 95% interval' }),
+    ablationColumns: Object.freeze({ what: 'Run', right: 'Right', wrong: 'Wrong', interval: 'Right, 95% interval', effect: 'Effect' }),
     ablation: Object.freeze({
       all: 'Everything switched on', no_outline: 'Without the table of contents', no_words: 'Without the search by words', no_meaning: 'Without the search by meaning',
       no_references: 'Without the references', no_arbiter: 'Without the arbiter', no_routing: 'Without the choice of texts',
+      no_corpus_model: 'Without the model call that picks the texts',
     }),
+    // rc3 (22/11/2026): a run's name beside its row, the effect the file says, and the rule it is said by.
+    ablationRun: '{what}, run {run}',
+    ablationEffect: Object.freeze({ measured: 'effect measured', none: 'no effect measured on this set' }),
+    ablationEffectP: '{effect} (p = {first} and {second})',
+    ablationRule: 'An effect is said only where the exact McNemar test gives p < 0.05 against both full runs.',
     baselineHeading: 'A naive pipeline on the same questions',
     baselineWhat: 'Naive: {what}.',
     baselineColumns: Object.freeze({ who: 'Pipeline', right: 'Right', wrong: 'Wrong', interval: 'Right, 95% interval' }),
@@ -913,7 +929,7 @@ const EN = Object.freeze({
     baselineLex: 'Lex',
     baselineWins: 'Naive right where Lex was not: {naive}. Lex right where naive was not: {lex}.',
     noiseHeading: 'The same questions, asked again',
-    noise: 'Right in each of {runs} runs: {right}. Wrong: {wrong}.',
+    noise: 'Right in each of {runs}: {right}. Wrong: {wrong}.',
     runs: Object.freeze({ one: '{count} run', other: '{count} runs' }),
     costHeading: 'Cost and time, measured',
     cost: 'Cost per answer at list price, on the tokens counted: {mean} USD on average, {median} USD median, {slow} USD for nine in ten.',
@@ -937,8 +953,9 @@ const EN = Object.freeze({
     previousItemColumns: Object.freeze({ question: 'Question', before: 'Before', now: 'Now' }),
     itemStates: Object.freeze({
       right: 'right', wrong: 'wrong, asserted', partial: 'partial', candidates: 'passages proposed', not_held: 'text not held', not_found: 'not found', clarify: 'asked to make precise', out_of_scope: 'outside Lex’s field',
+      asserted_incomplete: 'asserted, incomplete', error: 'technical error',
     }),
-    missesLabelsShort: Object.freeze({ corpus_gap: 'corpus gap', retrieval: 'retrieval', reading: 'reading' }),
+    missesLabelsShort: Object.freeze({ corpus_gap: 'corpus gap', retrieval: 'retrieval', reading: 'reading', gate: 'decision' }),
     conditions: 'How the times were taken: {how}.',
   }),
   how2: Object.freeze({
@@ -974,6 +991,8 @@ const EN = Object.freeze({
     coverageLink: 'What Lex holds, and what it does not',
     decisionsLink: 'The design choices, with what each costs',
     resultsLink: 'The measured results',
+    // dossier-page (22/11/2026): the architecture dossier, top to bottom.
+    architectureLink: 'The architecture dossier, top to bottom',
     countsSummary: 'The corpus in figures',
     configFailed: 'The server’s configuration could not be read; the models are not listed.',
     // pages2 (21/11/2026, K-UI-7): the funnel's own limits and commitments, read against funnel.py, refs.py and coverage.json.
@@ -1013,7 +1032,7 @@ const EN = Object.freeze({
     ]),
     limits: Object.freeze({
       notReadText: 'Case law, parliamentary papers, legal writing. A text the publisher gives only as a PDF is read once it has been converted and checked; the others are counted on the page What Lex holds.',
-      referencesText: 'A reference the reading flags is followed by code, one step, in the same text, to another Luxembourg text or to a text of the Union that Lex holds, at the date asked; a reference to a text not held is named. A reference to a long run of articles is not followed: it is listed under See also.',
+      referencesText: 'A reference the reading flags is followed by code, one step, in the same text, to another Luxembourg text or to a text of the Union that Lex holds, at the date asked; a reference to a text not held is named. A reference to a long run of articles is not followed: it is listed under See also. The words nearest before a reference decide its kind, by code: « sans préjudice de » leaves the rule intact, « sous réserve de » yields to it, « par dérogation à » sets it aside.',
       languagesText: 'Questions in German, Luxembourgish and English are accepted: the texts are searched in French, so a model renders the question in French and proposes the law’s terms, and the dictionary of everyday words adds its French terms. The Results page gives what the questions of each language got, when its file counts them.',
       dictionaryText: 'Everyday words are linked to the law’s terms by a dictionary whose every row says its status (draft or validated) and who validated it, below; the other legal terms are proposed by a model, then searched by code.',
       europeanText: 'The texts of the Union that Lex holds (among them Solvency II and its delegated regulation, the IDD, PRIIPs, IORP II and the GDPR) are searched and read like the Luxembourg texts. A directive does not apply to a person directly: when the Luxembourg law that transposes it is held, it is proposed too. What Lex does not hold is listed on the page What Lex holds.',
@@ -1180,7 +1199,7 @@ const EN = Object.freeze({
     pdfCount: Object.freeze({ zero: 'None.', one: '{count} annex.', other: '{count} annexes.' }),
     sourcesHeading: 'Sources and licences, as the publishers state them',
   }),
-  menu: Object.freeze({ results: 'Results' }),
+  menu: Object.freeze({ results: 'Results', architecture: 'Architecture' }),
 });
 
 const FR = Object.freeze({
@@ -1211,6 +1230,9 @@ const FR = Object.freeze({
   questionTypes: Object.freeze({
     rule: 'une règle', value: 'un montant ou un délai', list: 'une liste', definition: 'une définition', change: 'un changement dans le temps',
     procedure: 'une démarche', other: 'autre chose',
+    // rc3 (22/11/2026).
+    exception: 'une exception', condition: 'une condition', compound: 'plusieurs questions en une', vague: 'une question vague',
+    absent: 'un texte que Lex ne détient pas', out_of_scope: 'hors du droit',
   }),
   dock: Object.freeze({
     heading: 'Assistant',
@@ -1730,7 +1752,7 @@ const FR = Object.freeze({
       summaryLabel: `Résumé des lignes citées, rédigé par le modèle d’IA et vérifié par le code (chaque chiffre est dans ces lignes)${NB}: ce n’est pas le texte de la loi.`,
     }),
     conflictHeading: 'Deux textes ne disent pas la même chose',
-    conflictText: `Les deux sont cités, côte à côte, sans jamais être fusionnés${NB}: Lex ne tranche pas entre eux. Lisez les deux.`,
+    conflictText: `Les deux sont cités ci-dessous, chacun signalé, sans jamais être fusionnés${NB}: Lex ne tranche pas entre eux. Lisez les deux.`,
     conflictBadge: 'Ne dit pas la même chose qu’un autre texte cité',
     verified: Object.freeze({
       code: `Trouvé par le seul sens, puis confirmé par le code${NB}: {reason}.`,
@@ -1755,6 +1777,7 @@ const FR = Object.freeze({
     missingTextDropped: `Le texte que le modèle a nommé hors de la liste ne correspond à aucun texte du catalogue ni de la base${NB}: non montré.`,
     notHeldAmending: '{title} (non détenu)',
     setByOther: 'la structure du texte et le type de question',
+    namedFound: 'nommé par un modèle d’IA comme le texte qui répond, retrouvé par le code dans le catalogue de l’éditeur, non détenu par Lex',
   }),
   textSource: Object.freeze({
     ocr: `Ce texte provient d’une reconnaissance de caractères (OCR) du Mémorial numérisé${NB}: des erreurs de lecture sont possibles${NB}; seul le texte publié fait foi.`,
@@ -2014,6 +2037,8 @@ const FR = Object.freeze({
     unnamed: 'Le fichier de ces résultats ne nomme pas la version mesurée.',
     answering: `Le site répond aujourd’hui avec le code {code} et les données {data} ({pipeline})${NB}: ces chiffres ne la décrivent pas.`,
     answeringBare: `Le site répond aujourd’hui avec le code {code} et les données {data}${NB}: ces chiffres ne la décrivent pas.`,
+    // rc3 (22/11/2026).
+    sameEngine: `Mesurés sur le code {measured} et les données {data}. Le site répond aujourd’hui avec le code {code} sur les mêmes données, et les fichiers qui calculent ses réponses sont, octet pour octet, ceux qui ont été mesurés (empreinte {engine})${NB}: ces chiffres décrivent ses réponses.`,
     pipelines: Object.freeze({ funnel: 'l’entonnoir', combo: 'l’entonnoir, avec les recherches dans tous les textes', topk: 'le moteur antérieur, à trois recherches', naive: 'la seule recherche par le sens' }),
   }),
   results2: Object.freeze({
@@ -2037,8 +2062,8 @@ const FR = Object.freeze({
     totalsColumns: Object.freeze({ state: 'Résultat', count: 'Questions', interval: `Intervalle à 95${NB}%` }),
     outOf: Object.freeze({ one: 'Sur {count} question', other: 'Sur {count} questions' }),
     states: Object.freeze({
-      right: 'bonne réponse affirmée', wrong: 'réponse fausse affirmée', partial: 'réponse partielle', candidates: 'passages proposés, sans réponse affirmée', not_held: 'texte non détenu, dit comme tel',
-      not_found: 'non trouvé, dit comme tel', clarify: 'question à préciser, demandé', out_of_scope: 'hors du champ de Lex, dit comme tel',
+      right: 'bonne réponse affirmée', wrong: 'réponse fausse affirmée', asserted_incomplete: 'réponse affirmée, incomplète', partial: 'réponse partielle', candidates: 'passages proposés, sans réponse affirmée', not_held: 'texte non détenu, dit comme tel',
+      not_found: 'non trouvé, dit comme tel', clarify: 'question à préciser, demandé', out_of_scope: 'hors du champ de Lex, dit comme tel', error: 'erreur technique, sans réponse',
     }),
     interval: `de {low} à {high}${NB}%`,
     retrievalHeading: 'La recherche, mesurée à part',
@@ -2048,12 +2073,16 @@ const FR = Object.freeze({
     slices: Object.freeze({
       insurance: 'assurance', other_laws: 'autres lois', eu: 'textes européens', dated: 'une date passée', list: 'listes', reference: 'demande un renvoi', definition: 'définitions',
       no_answer: 'sans réponse dans la loi', out_of_scope: 'hors du droit', absent: 'texte non détenu', fr: 'en français', de: 'en allemand', en: 'en anglais', lb: 'en luxembourgeois',
+      // rc3 (22/11/2026).
+      all: 'toutes les questions', lu: 'textes luxembourgeois', grand_ducal_regulation: 'règlements grand-ducaux', compound: 'plusieurs questions en une',
+      vague: 'questions vagues', partial: 'réponse partielle attendue', everyday: 'vie courante', insurance_customer: 'un client d’assureur demande',
+      regulator: 'côté régulateur',
     }),
     foldSummary: 'Par texte et par type de question',
     lawColumns: Object.freeze({ law: 'Texte visé par la question', n: 'Questions', right: 'Justes', wrong: 'Fausses' }),
     typeColumns: Object.freeze({ type: 'Type de question', n: 'Questions', right: 'Justes', wrong: 'Fausses' }),
     missesHeading: 'Pourquoi les autres questions ont été manquées',
-    missesLabels: Object.freeze({ corpus_gap: 'le texte n’est pas détenu (lacune du corpus)', retrieval: 'la recherche n’a pas apporté l’article (recherche)', reading: 'l’article a été lu, la réponse manquée (lecture)' }),
+    missesLabels: Object.freeze({ corpus_gap: 'le texte n’est pas détenu (lacune du corpus)', retrieval: 'la recherche n’a pas apporté l’article (recherche)', reading: 'l’article a été lu, la réponse manquée (lecture)', gate: 'l’article et ses lignes étaient montrés, l’état retenu n’était pas le bon (décision)' }),
     missesColumns: Object.freeze({ label: 'Cause', count: 'Questions' }),
     missesItems: 'Les questions manquées, une par une',
     missesItemColumns: Object.freeze({ question: 'Question', label: 'Cause', note: 'Ce qui manquait' }),
@@ -2063,11 +2092,17 @@ const FR = Object.freeze({
     absentRows: Object.freeze({ said_not_held: 'a dit que le texte n’est pas détenu', said_not_found: 'a dit n’avoir rien trouvé', asserted: 'a affirmé une réponse', other: 'autre chose' }),
     ablationHeading: 'Chaque brique éteinte',
     ablationBuild: 'Mêmes questions, même version (code {code}, données {data}).',
-    ablationColumns: Object.freeze({ what: 'Essai', right: 'Justes', wrong: 'Fausses', interval: `Justes, intervalle à 95${NB}%` }),
+    ablationColumns: Object.freeze({ what: 'Essai', right: 'Justes', wrong: 'Fausses', interval: `Justes, intervalle à 95${NB}%`, effect: 'Effet' }),
     ablation: Object.freeze({
       all: 'Tout allumé', no_outline: 'Sans la table des matières', no_words: 'Sans la recherche par les mots', no_meaning: 'Sans la recherche par le sens',
       no_references: 'Sans les renvois', no_arbiter: 'Sans l’arbitre', no_routing: 'Sans le choix des textes',
+      no_corpus_model: 'Sans l’appel au modèle qui choisit les textes',
     }),
+    // rc3 (22/11/2026).
+    ablationRun: '{what}, essai {run}',
+    ablationEffect: Object.freeze({ measured: 'effet mesuré', none: 'aucun effet mesuré sur ce jeu' }),
+    ablationEffectP: '{effect} (p = {first} et {second})',
+    ablationRule: 'Un effet n’est dit que là où le test exact de McNemar donne p < 0,05 contre les deux essais complets.',
     baselineHeading: 'Une chaîne naïve sur les mêmes questions',
     baselineWhat: `Naïve${NB}: {what}.`,
     baselineColumns: Object.freeze({ who: 'Chaîne', right: 'Justes', wrong: 'Fausses', interval: `Justes, intervalle à 95${NB}%` }),
@@ -2099,8 +2134,9 @@ const FR = Object.freeze({
     previousItemColumns: Object.freeze({ question: 'Question', before: 'Avant', now: 'Maintenant' }),
     itemStates: Object.freeze({
       right: 'juste', wrong: 'fausse, affirmée', partial: 'partielle', candidates: 'passages proposés', not_held: 'texte non détenu', not_found: 'non trouvée', clarify: 'précision demandée', out_of_scope: 'hors du champ de Lex',
+      asserted_incomplete: 'affirmée, incomplète', error: 'erreur technique',
     }),
-    missesLabelsShort: Object.freeze({ corpus_gap: 'lacune du corpus', retrieval: 'recherche', reading: 'lecture' }),
+    missesLabelsShort: Object.freeze({ corpus_gap: 'lacune du corpus', retrieval: 'recherche', reading: 'lecture', gate: 'décision' }),
     conditions: `Comment les durées ont été prises${NB}: {how}.`,
   }),
   how2: Object.freeze({
@@ -2136,6 +2172,8 @@ const FR = Object.freeze({
     coverageLink: 'Ce que Lex détient, et ce qu’il ne détient pas',
     decisionsLink: 'Les choix de conception, et ce que chacun coûte',
     resultsLink: 'Les résultats mesurés',
+    // dossier-page (22/11/2026).
+    architectureLink: 'Le dossier d’architecture, de haut en bas',
     countsSummary: 'Le corpus en chiffres',
     configFailed: `La configuration du serveur n’a pas pu être lue${NB}; les modèles ne sont pas listés.`,
     comboNote: `Sur ce site, les recherches par les mots et par le sens portent aussi sur tous les textes détenus, en plus des textes retenus${NB}; leurs rangs ont leurs propres colonnes dans la trace.`,
@@ -2172,7 +2210,7 @@ const FR = Object.freeze({
     ]),
     limits: Object.freeze({
       notReadText: `La jurisprudence, les travaux parlementaires, la doctrine. Un texte que l’éditeur ne donne qu’en PDF est lu une fois converti et contrôlé${NB}; les autres sont comptés sur la page Ce que Lex détient.`,
-      referencesText: `Un renvoi signalé par la lecture est suivi par le code, d’un pas, dans le même texte, vers un autre texte luxembourgeois ou vers un texte de l’Union que Lex détient, à la date demandée${NB}; un renvoi vers un texte non détenu est nommé. Un renvoi vers une longue suite d’articles n’est pas suivi${NB}: il est listé sous Voir aussi.`,
+      referencesText: `Un renvoi signalé par la lecture est suivi par le code, d’un pas, dans le même texte, vers un autre texte luxembourgeois ou vers un texte de l’Union que Lex détient, à la date demandée${NB}; un renvoi vers un texte non détenu est nommé. Un renvoi vers une longue suite d’articles n’est pas suivi${NB}: il est listé sous Voir aussi. Les mots les plus proches avant un renvoi décident de son type, par le code${NB}: «${NB}sans préjudice de${NB}» laisse la règle intacte, «${NB}sous réserve de${NB}» s’y soumet, «${NB}par dérogation à${NB}» l’écarte.`,
       languagesText: `Les questions en allemand, en luxembourgeois et en anglais sont acceptées${NB}: les textes sont cherchés en français, aussi un modèle rend la question en français et propose les termes de la loi, et le dictionnaire des mots de tous les jours ajoute ses termes français. La page Résultats dit ce qu’ont obtenu les questions de chaque langue, quand son fichier les compte.`,
       dictionaryText: `Les mots de tous les jours sont reliés aux termes de la loi par un dictionnaire dont chaque ligne dit son état (brouillon ou validée) et qui l’a validée, plus bas${NB}; les autres termes de loi sont proposés par un modèle, puis cherchés par le code.`,
       europeanText: `Les textes de l’Union que Lex détient (dont Solvabilité II et son règlement délégué, l’IDD, PRIIPs, IORP II et le RGPD) sont cherchés et lus comme les textes luxembourgeois. Une directive ne s’applique pas directement à une personne${NB}: quand la loi luxembourgeoise qui la transpose est détenue, elle est proposée aussi. Ce que Lex ne détient pas est listé sur la page Ce que Lex détient.`,
@@ -2337,7 +2375,7 @@ const FR = Object.freeze({
     pdfCount: Object.freeze({ zero: 'Aucune.', one: '{count} annexe.', other: '{count} annexes.' }),
     sourcesHeading: 'Sources et licences, telles que les éditeurs les indiquent',
   }),
-  menu: Object.freeze({ results: 'Résultats' }),
+  menu: Object.freeze({ results: 'Résultats', architecture: 'Architecture' }),
 });
 
 /** The two tables, by interface language. */

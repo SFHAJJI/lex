@@ -349,6 +349,19 @@ SHOTS.push(
   ["w-fr-11-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
   ["w-fr-12-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
 );
+// dossier-page (22/11/2026): the architecture dossier (architecture.html) built from this branch, its live counts read from the
+// public site by GET (no question asked, no model call): first screen, whole page, every fold open, a phone; How it works for its link.
+SHOTS.length = 0;
+SHOTS.push(
+  ["d-fr-01-dossier--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["d-fr-02-dossier--1366-whole", "/fr/architecture.html", 1366, 768, false, true, null, 9000],
+  ["d-fr-03-dossier-open--1366-whole", "/fr/architecture.html", 1366, 768, false, true, OPEN_ALL, 3000],
+  ["d-fr-04-dossier--phone", "/fr/architecture.html", 390, 844, true, false, null, 9000],
+  ["d-fr-05-dossier--phone-whole", "/fr/architecture.html", 390, 844, true, true, null, 9000],
+  ["d-en-01-dossier--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
+  ["d-en-02-dossier--1366-whole", "/en/architecture.html", 1366, 768, false, true, null, 9000],
+  ["d-fr-06-how--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 7000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });

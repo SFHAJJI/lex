@@ -122,3 +122,22 @@ The page also draws these, each optional, each where a reader of the section nee
 The page says, under its heading and in words, whether the build measured (`build`) is the one answering on the site
 (`GET /api/next/config` `build`); when it is not, it says so before any number. Each section that names its own build says
 it too. A section without a build is the top-level build's.
+
+## Added by rc3 (22/11/2026)
+
+```json
+{
+  "build": { "code": "t10", "data": "20261122c", "engine": "01f1b08c054c474c" },   // `python app/engine_id.py --git <tag>`
+  "totals": { "asserted_incomplete": 0, "error": 0 },          // drawn with the other states
+  "misses": { "gate": 0, "gate_means": { "fr": "…", "en": "…" } },   // the decision cause, and what it means
+  "ablation": { "rule": "… exact McNemar p < 0.05 against both release runs",
+                "rows": [ { "what": "all", "run": "R1" }, { "what": "no_corpus_model", "effect": "measured | no measured effect on this set", "p_vs_R1": 0.0, "p_vs_R2": 0.0 } ] },
+  "scoring": { "checked_by": { "fr": "…", "en": "…" } }
+}
+```
+
+`build.engine` is the fingerprint of the files that compute an answer (`app/engine_id.py`: sha256 over server, core, funnel,
+refs, question, question_topk, build_lexical, llm, dictionary.json, coverage_gaps.json; 16 hex digits). The server reports its
+own in `/api/next/config` `build.engine`, computed at start from the files it runs. When the code tags differ but the data tags
+and the two fingerprints are equal, the page says the figures describe the build answering (`data-results-build="same-engine"`),
+and no section is said not to be the version answering. Any other difference is said as before.

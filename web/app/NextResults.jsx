@@ -43,6 +43,19 @@ export function prose(value, locale) {
 /** A build `{ code, data }` the file names, or null. */
 const buildOf = (value) => (text(objectOr(value)?.code) !== null && text(objectOr(value)?.data) !== null ? { code: value.code.trim(), data: value.data.trim() } : null);
 const sameBuild = (a, b) => a !== null && b !== null && a.code === b.code && a.data === b.data;
+/** rc3: a brick's row key, with the run's name when the file gives one (two full runs are two rows "all"). */
+export const ablationKey = (row) => (text(row?.run) === null ? row.what : `${row.what}-${row.run.trim()}`);
+const fingerprintOf = (value) => (typeof objectOr(value)?.engine === 'string' && /^[0-9a-f]{16}$/u.test(value.engine) ? value.engine : null);
+
+/**
+ * rc3 (22/11/2026): whether two builds `{ code, data, engine }` run the same engine on the same data: the same data tag and the
+ * same fingerprint of the files that compute an answer (`app/engine_id.py`; the server reports its own in `/api/next/config`).
+ */
+export const sameEngine = (a, b) => {
+  const one = objectOr(a);
+  const two = objectOr(b);
+  return one !== null && two !== null && text(one.data) !== null && one.data === two.data && fingerprintOf(one) !== null && fingerprintOf(one) === fingerprintOf(two);
+};
 
 /** A table of rows under its column names; each cell a string. */
 function Table({ columns, rows, mark }) {
@@ -116,13 +129,32 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       run: results.run, date: numericDate(results.made), code: build.code, data: build.data,
       ...(measuredPipeline !== null && Object.hasOwn(pipelines, measuredPipeline) ? { pipeline: pipelines[measuredPipeline] } : {}),
     }) : null;
+  // rc3 (22/11/2026): a build the file names answers on this site when it is the one served, or when it is the build measured
+  // and the server runs the engine measured on the same data (`sameEngine`).
+  const notAnswering = (own) => servedBuild !== null && own !== null && !sameBuild(own, servedBuild) && !(sameBuild(own, build) && sameEngine(results.build, served));
   // The build a section names, said under its heading, and said not to be the one answering when it is not.
   const sectionBuild = (value, key) => {
     const own = buildOf(value);
     if (own === null || sameBuild(own, build)) return null;
     const line = fillNext(copy.sectionBuild, { code: own.code, data: own.data });
-    return <p className={servedBuild !== null && !sameBuild(own, servedBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build={key}>{line}{servedBuild !== null && !sameBuild(own, servedBuild) ? <> {copy.notServed}</> : null}</p>;
+    return <p className={notAnswering(own) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build={key}>{line}{notAnswering(own) ? <> {copy.notServed}</> : null}</p>;
   };
+  const ablationBuild = buildOf(ablation?.build);
+  const pValue = (value) => (isCount(value) ? (value < 0.001 ? `< ${decimal(0.001, locale)}` : decimal(Number(value.toPrecision(2)), locale)) : null);
+  const effectCell = (row) => {
+    const said = row.effect === 'measured' ? copy.ablationEffect.measured : row.effect === 'no measured effect on this set' ? copy.ablationEffect.none : text(row.effect);
+    if (said === null) return '';
+    const first = pValue(row.p_vs_R1);
+    const second = pValue(row.p_vs_R2);
+    return first !== null && second !== null ? fillNext(copy.ablationEffectP, { effect: said, first, second }) : said;
+  };
+  const hasEffect = ablationRows.some((row) => text(row.effect) !== null);
+  // The rule the effects are said by: the page's own sentence when the file's rule is that one (exact McNemar, p < 0.05,
+  // against both full runs), else the file's words, marked with their language.
+  const ablationRule = text(ablation?.rule) === null ? null
+    : /mcnemar/iu.test(ablation.rule) && /p\s*<\s*0\.05/u.test(ablation.rule) && /\bboth\b/iu.test(ablation.rule) ? { text: copy.ablationRule, lang: undefined } : prose(ablation.rule, locale);
+  const checkedBy = prose(scoring?.checked_by, locale);
+  const gateMeans = prose(misses?.gate_means, locale);
   const written = prose(set?.written_by, locale);
   const setNote = prose(set?.note, locale);
   const rule = prose(scoring?.rule, locale);
@@ -179,6 +211,7 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
               {lenient.map((one) => <span key={one.text} data-results2-lenient=""> <Filled template={copy.lenient} place="rule" piece={one} /></span>)}
             </p>
           )}
+          {checkedBy === null ? null : <p className="lx-muted" lang={checkedBy.lang} data-results2-checked="">{checkedBy.text}</p>}
         </section>
       )}
 
@@ -236,6 +269,7 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
             columns={[copy.missesColumns.label, copy.missesColumns.count]}
             rows={Object.keys(copy.missesLabels).filter((key) => isCount(misses[key])).map((key) => ({ key, head: copy.missesLabels[key], cells: [count(misses[key])] }))}
           />
+          {gateMeans === null || !isCount(misses.gate) ? null : <p className="lx-muted" lang={gateMeans.lang} data-results2-gate="">{gateMeans.text}</p>}
           {missItems.length === 0 ? null : (
             <details className="lx-how-fold">
               <summary>{copy.missesItems}</summary>
@@ -267,17 +301,22 @@ export function Results2View({ results, locale = CHROME_LOCALE, note = null, ser
       {ablationRows.length === 0 ? null : (
         <section aria-labelledby="results2-ablation" data-results2-section="ablation">
           <h2 id="results2-ablation">{copy.ablationHeading}</h2>
-          {buildOf(ablation.build) === null ? null : (
-            <p className={servedBuild !== null && !sameBuild(buildOf(ablation.build), servedBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build="ablation">
-              {fillNext(copy.ablationBuild, buildOf(ablation.build))}
-              {servedBuild !== null && !sameBuild(buildOf(ablation.build), servedBuild) ? <> {copy.notServed}</> : null}
+          {ablationBuild === null ? null : (
+            <p className={notAnswering(ablationBuild) ? 'lx-muted lx-next-gap' : 'lx-muted'} data-results2-build="ablation">
+              {fillNext(copy.ablationBuild, ablationBuild)}
+              {notAnswering(ablationBuild) ? <> {copy.notServed}</> : null}
             </p>
           )}
           <Table
             mark="ablation"
-            columns={['what', 'right', 'wrong', 'interval'].map((key) => copy.ablationColumns[key])}
-            rows={ablationRows.map((row) => ({ key: row.what, head: name(copy.ablation, row.what), cells: [count(row.right), count(row.wrong), interval(row.interval)] }))}
+            columns={['what', 'right', 'wrong', 'interval', ...(hasEffect ? ['effect'] : [])].map((key) => copy.ablationColumns[key])}
+            rows={ablationRows.map((row) => ({
+              key: ablationKey(row),
+              head: text(row.run) === null ? name(copy.ablation, row.what) : fillNext(copy.ablationRun, { what: name(copy.ablation, row.what), run: row.run.trim() }),
+              cells: [count(row.right), count(row.wrong), interval(row.interval), ...(hasEffect ? [effectCell(row)] : [])],
+            }))}
           />
+          {hasEffect && ablationRule !== null ? <p className="lx-muted" data-results2-ablation-rule="" lang={ablationRule.lang}>{ablationRule.text}</p> : null}
         </section>
       )}
 

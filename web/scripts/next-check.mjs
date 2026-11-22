@@ -21,6 +21,7 @@ import { pathToFileURL } from 'node:url';
 import { NEXT_COPY, countedForm, decimal, fillNext, groupedCount, nextCopy, numericDate } from './next-copy.mjs';
 import { ASSERTED_OUTCOMES, identifierOf, outcomeOf } from './next-view.mjs';
 import { contractStateOf, legacyAnswer } from './next-contract.mjs';
+import { DOSSIER_COPY, dossierCopy } from './dossier-copy.mjs';
 
 /** The sample answers of the new engine (the contract the dock is built to): `lex-next/web-samples/`, beside this folder. */
 export const SAMPLES = new URL('../../web-samples/', import.meta.url);
@@ -109,6 +110,8 @@ export const KNOWN_DIGITS = Object.freeze([
   /^results\.fresh\.columns\.interval$/u,
   /^decisions2\.items\.\d+\.(?:gain|title)$/u,
   /^results2\.(?:wrongLine|totalsColumns\.interval|slicesColumns\.interval|ablationColumns\.interval|baselineColumns\.interval|previousColumns\.interval)$/u,
+  // rc3: the threshold of the ablation's rule (p < 0.05), said when the file's rule is that one.
+  /^results2\.ablationRule$/u,
   // repair-pages: the euro changeover law and its rate, quoted.
   /^contract2\.source\.francs$/u,
 ]);
@@ -680,7 +683,17 @@ export function results2Faults(html, results, locale) {
     if (!html.includes(`<tr data-row="${inMarkup(row.slice)}"><th scope="row">${inMarkup(name)}</th><td>${count(row.n)}</td><td>${count(row.right)}</td><td>${count(row.wrong)}</td><td>${count(row.not_found)}</td><td>${inMarkup(said)}</td></tr>`)) faults.push(`the slice ${row.slice} is not said as the file counts it`);
   }
   if (results.misses) for (const key of Object.keys(copy.missesLabels)) if (Number.isFinite(results.misses[key]) && !html.includes(`<tr data-row="${key}"><th scope="row">${inMarkup(copy.missesLabels[key])}</th><td>${count(results.misses[key])}</td></tr>`)) faults.push(`the misses by ${key} are not said`);
-  for (const row of results.ablation?.rows ?? []) if (!html.includes(`<tr data-row="${row.what}"><th scope="row">${inMarkup(copy.ablation[row.what] ?? row.what)}</th><td>${count(row.right)}</td>`)) faults.push(`the run ${row.what} is not said`);
+  // rc3: a row with a run's name ("all", R1 and R2) is keyed and named with it.
+  for (const row of results.ablation?.rows ?? []) {
+    const run = typeof row.run === 'string' && row.run.trim() ? row.run.trim() : null;
+    const label = copy.ablation[row.what] ?? row.what;
+    const head = run === null ? label : fillNext(copy.ablationRun, { what: label, run });
+    if (!html.includes(`<tr data-row="${inMarkup(run === null ? row.what : `${row.what}-${run}`)}"><th scope="row">${inMarkup(head)}</th><td>${count(row.right)}</td>`)) faults.push(`the run ${row.what}${run === null ? '' : ` ${run}`} is not said`);
+  }
+  const keys = (results.ablation?.rows ?? []).map((row) => (typeof row.run === 'string' && row.run.trim() ? `${row.what}-${row.run.trim()}` : row.what));
+  if (new Set(keys).size !== keys.length) faults.push('two bricks rows share a key');
+  if (results.misses && Number.isFinite(results.misses.gate) && results.misses.gate_means && !html.includes('data-results2-gate=""')) faults.push('what a miss at the decision means is not said');
+  if (results.scoring?.checked_by && !html.includes('data-results2-checked=""')) faults.push('the re-check of the scoring is not said');
   if (results.baseline && Number.isFinite(results.baseline.naive_right_lex_not) && !html.includes('data-results2-baseline-wins=""')) faults.push('where the naive pipeline did fine is not said');
   if (results.set && !html.includes(`data-results2-used="${results.set.used_before === true ? 'before' : 'once'}"`)) faults.push('whether the questions were seen before is not said');
   if (results.scoring?.lenient?.length > 0 && !html.includes('data-results2-lenient=""')) faults.push('the lenient rule is not said next to the numbers');
@@ -697,6 +710,139 @@ export function results2Faults(html, results, locale) {
   if (results.build && results.run && results.made && !html.includes('data-results2-run=""')) faults.push('the build measured is not named');
   if (locale === 'fr') for (const sentence of englishSentences()) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence}`);
   return faults;
+}
+
+// ---- dossier-page (22/11/2026): the architecture dossier (`app/NextArchitecture.jsx`, `scripts/dossier-copy.mjs`) ------------
+
+/** The live GET answers of 22/11/2026 the dossier is checked against (`test/next-fixtures/dossier-live/`, long lists cut). */
+export const DOSSIER_LIVE = new URL('../test/next-fixtures/dossier-live/', import.meta.url);
+/** The facts file and the stored answer the page is built with. */
+export const DOSSIER_FACTS = new URL('../app/dossier-facts.json', import.meta.url);
+export const DOSSIER_TRACE = new URL('../app/dossier-trace.json', import.meta.url);
+const DOSSIER_KEYS = Object.freeze(['corpus', 'config', 'coverage', 'results', 'shapes', 'dictionary', 'outline', 'article']);
+
+/** The dossier's live reads, from the fixtures: every address answered, or the ones named failed. */
+export async function dossierLive({ failed = [] } = {}) {
+  const live = {};
+  for (const key of DOSSIER_KEYS) {
+    live[key] = failed.includes(key) ? { state: 'failed', data: null } : { state: 'ready', data: JSON.parse(await readFile(new URL(`${key}.json`, DOSSIER_LIVE), 'utf8')) };
+  }
+  return live;
+}
+
+/** Where the dossier's two tables differ: keys, places, French typography, and any digit (no figure is typed in its copy). */
+export function dossierCopyFaults() {
+  const faults = copyKeyDifferences(DOSSIER_COPY.en, DOSSIER_COPY.fr).map((fault) => `keys: ${fault}`);
+  const french = new Map(leavesOf(DOSSIER_COPY.fr));
+  for (const [path, value] of leavesOf(DOSSIER_COPY.en)) {
+    if (typeof value === 'string' && typeof french.get(path) === 'string' && placesOf(value) !== placesOf(french.get(path))) faults.push(`places: ${path}: {${placesOf(value)}} in English, {${placesOf(french.get(path))}} in French`);
+  }
+  faults.push(...frenchTypographyFaults(DOSSIER_COPY.fr).map((fault) => `typography: ${fault}`));
+  for (const locale of LOCALES) {
+    for (const [path, value] of leavesOf(DOSSIER_COPY[locale])) if (typeof value === 'string' && /[0-9]/u.test(value)) faults.push(`digit: ${locale}.${path}: ${JSON.stringify(value)}`);
+  }
+  return faults;
+}
+
+/** The dossier's English sentences that must not stand on its French page (fourteen characters or more, no place, not the French). */
+export function dossierEnglishSentences() {
+  const french = new Map(leavesOf(DOSSIER_COPY.fr));
+  return leavesOf(DOSSIER_COPY.en).filter(([path, value]) => typeof value === 'string' && value.length >= 14 && !value.includes('{') && french.get(path) !== value).map(([, value]) => value);
+}
+
+/** The visible text of a rendering (the markup's text, entities read back). */
+const visibleText = (html) => html.replace(/<title>[\s\S]*?<\/title>/gu, ' ').replace(/<[^>]+>/gu, ' ').replace(/&#x27;/gu, '’').replace(/&quot;/gu, '"').replace(/&lt;/gu, '<').replace(/&gt;/gu, '>').replace(/&amp;/gu, '&');
+
+/**
+ * What the dossier must hold, drawn from `live` (all answered) in `locale`: its eight parts in order; every live count it says,
+ * as the API answered it; the facts file's figures with their sources; every level, block, line and arbiter row of the stored
+ * answer; dates dd/mm/yyyy; nothing English on the French page.
+ */
+export function dossierFaults(html, live, locale, facts, trace) {
+  const faults = markupFaults(html);
+  const copy = dossierCopy(locale);
+  const count = (value) => groupedCount(value, locale);
+  const has = (value, what) => { if (!html.includes(inMarkup(count(value)))) faults.push(`${what} (${count(value)}) is not said`); };
+  const parts = [...html.matchAll(/data-arch-part="([a-z]+)"/gu)].map((match) => match[1]);
+  if (parts.join(',') !== 'corpus,data,indexes,references,funnel,evaluation,operations,next') faults.push(`the parts are ${parts.join(', ')}`);
+  for (const key of parts) if (!html.includes(`id="arch-${key}"`) || !html.includes(`href="#arch-${key}"`)) faults.push(`the part ${key} has no anchor in the contents`);
+  if (!html.includes('data-arch-status="ready"')) faults.push('the live read is not said to be ready');
+  const corpus = live.corpus.data; const coverage = live.coverage.data; const results = live.results.data;
+  for (const [value, what] of [[corpus.acts, 'texts'], [corpus.versions, 'versions'], [corpus.toc_nodes, 'headings'], [corpus.articles, 'articles'], [corpus.lines, 'lines'], [corpus.edges, 'reference links'], [corpus.links_between_texts.total, 'links between texts']]) has(value, what);
+  for (const key of ['luxembourg_acts_held', 'luxembourg_in_force_held', 'luxembourg_served_as_todays_law', 'luxembourg_in_force_held_not_served', 'eu_acts_held', 'eu_served_as_todays_law']) has(coverage.served[key], `served.${key}`);
+  for (const [key, value] of Object.entries(coverage.references.lu_totals)) has(value, `references to another text, ${key}`);
+  has(coverage.references.unit_ties.tied, 'links tied to a unit');
+  has(coverage.references.precision.right, 'the stratified precision sample');
+  for (const [type, value] of corpus.edges_by_type) has(value, `links of kind ${type}`);
+  has(coverage.index.routing_lines.lines, 'routing lines'); has(coverage.index.vectors.rows, 'rows of the meaning index'); has(coverage.index.keyword_index.articles, 'articles of the keyword index');
+  has(live.dictionary.data.counts.rows, 'dictionary rows');
+  for (const row of live.shapes.data.rows) if (!html.includes(`data-part="${row.part}"`)) faults.push(`the shape of ${row.part} is not drawn`);
+  if ((html.match(/<tr data-type="/gu) ?? []).length !== coverage.served.by_type.length) faults.push('a kind of text is not counted');
+  has(results.totals.right, 'right answers'); has(results.retrieval.right_article_read, 'the right article read');
+  for (const row of results.ablation.rows) if (!html.includes(`data-run="${row.what === 'all' ? row.run : row.what}"`)) faults.push(`the run ${row.what} ${row.run ?? ''} is not drawn`);
+  if (!html.includes('data-run="previous"') || !html.includes('data-run="naive"')) faults.push('the previous Lex or the naive chain is not drawn');
+  if ((html.match(/<tr data-slice="/gu) ?? []).length !== results.slices.length) faults.push('a slice is not drawn');
+  for (const row of live.config.data.models) if (!html.includes(`<code>${inMarkup(row.deployment)}</code>`)) faults.push(`the model ${row.deployment} is not listed`);
+  if (!html.includes(inMarkup(live.config.data.build.engine))) faults.push('the live engine fingerprint is not said');
+  // The facts file: its figures, and each source named with its date.
+  for (const [value, what] of [[facts.store.refs_found, 'references found'], [facts.store.edges_to_an_article, 'links to an article'], [facts.store.definitions, 'definitions'], [facts.store.defined_terms, 'defined terms'], [facts.walk.right_without, 'right without the walk'], [facts.final_score.right, 'fresh questions right'], [facts.review.routing_lines, 'routing lines to review']]) has(value, what);
+  for (const [key, row] of Object.entries(facts.sources)) if (!html.includes(`data-source="${key}"`) || !html.includes(inMarkup(row.file))) faults.push(`the source ${key} is not named`);
+  // The stored answer: each level, each block with every quoted line, each arbiter row, the replay link.
+  if ((html.match(/<li data-level="(?:question|corpus|document|detectors|arbiter|read|references|decision)"/gu) ?? []).length !== 8) faults.push('a level of the funnel is not drawn');
+  for (const block of trace.blocks) {
+    if (!html.includes(`data-role="${block.role}" data-via="${block.retrieved_via}"`)) faults.push(`the block ${block.article} is not drawn`);
+    for (const line of block.quote) if (!html.includes(inMarkup(line.text))) faults.push(`a line of ${block.article} is not quoted`);
+  }
+  const arbiter = trace.trace.levels.find((level) => level.level === 'arbiter');
+  if ((html.match(/<tr data-role="/gu) ?? []).length !== arbiter.candidates.length) faults.push('an arbiter row is not drawn');
+  for (const candidate of arbiter.candidates) if (!html.includes(inMarkup(candidate.reason))) faults.push(`the arbiter's reason for ${candidate.label} is not shown`);
+  if (!html.includes(`href="/${locale}/#r=${encodeURIComponent(trace.meta.replay).replace(/&/gu, '&amp;')}"`)) faults.push('the replay link does not carry the signed token after #r=');
+  if (!html.includes(inMarkup(trace.question))) faults.push('the question is not shown');
+  // The structure drawn, its counts live.
+  if (!/<svg class="lx-arch-svg"[^>]*role="img"/u.test(html) || (html.match(/<g data-level="/gu) ?? []).length !== 6) faults.push('the structure is not drawn with its six levels');
+  if (/[0-9]{4}-[0-9]{2}-[0-9]{2}/u.test(visibleText(html.replace(/<code>[\s\S]*?<\/code>/gu, ' ')).replace(/\/eli\/[^\s]+/gu, ''))) faults.push('a date is not written dd/mm/yyyy');
+  if (locale === 'fr') {
+    for (const sentence of [...dossierEnglishSentences(), ...englishSentences()]) if (html.includes(inMarkup(sentence))) faults.push(`an English sentence on the French page: ${sentence.slice(0, 60)}`);
+    if (!html.includes(inMarkup(copy.heading))) faults.push('the French heading is missing');
+  }
+  return faults;
+}
+
+/** The dossier's renderings: every address answered (both languages), still loading, all failed, and one failed. */
+export async function dossierRenderings(renderers) {
+  const facts = JSON.parse(await readFile(DOSSIER_FACTS, 'utf8'));
+  const trace = JSON.parse(await readFile(DOSSIER_TRACE, 'utf8'));
+  const live = await dossierLive();
+  const at = new Date(2026, 10, 22, 10, 30);
+  const out = [];
+  for (const locale of LOCALES) {
+    const render = renderers[locale];
+    const copy = dossierCopy(locale);
+    const html = render.renderArchitecture(live, { locale, at });
+    out.push({ name: 'dossier', locale, html, faults: dossierFaults(html, live, locale, facts, trace) });
+    // Still loading: nothing of the live counts, the waiting mark, the stored answer whole.
+    const loading = render.renderArchitecture(render.loadingLive(), { locale });
+    const lFaults = markupFaults(loading);
+    if (!loading.includes('data-arch-status="loading"') || !loading.includes(inMarkup(copy.status.loading))) lFaults.push('loading is not said');
+    for (const value of [live.corpus.data.acts, live.coverage.data.served.luxembourg_served_as_todays_law, live.results.data.totals.right]) if (loading.includes(`>${inMarkup(groupedCount(value, locale))}<`)) lFaults.push(`a live count (${value}) is drawn before it is read`);
+    if (!loading.includes(inMarkup(trace.blocks[0].quote[0].text))) lFaults.push('the stored answer is not drawn while the counts load');
+    out.push({ name: 'dossier-loading', locale, html: loading, faults: lFaults });
+    // Nothing answered: said; every live figure a dash; the example from the stored read, said so.
+    const none = Object.fromEntries(DOSSIER_KEYS.map((key) => [key, { state: 'failed', data: null }]));
+    const failed = render.renderArchitecture(none, { locale, at });
+    const fFaults = markupFaults(failed);
+    if (!failed.includes('data-arch-status="failed"') || !failed.includes(inMarkup(copy.status.failed))) fFaults.push('a failed read is not said');
+    if (!failed.includes('data-example-from="stored"') || !failed.includes(inMarkup(fillNext(copy.data.exampleSource.stored, { date: numericDate(facts.sources.example.date), source: facts.sources.example.file })))) fFaults.push('the stored example is not said to be stored');
+    if (failed.includes(`>${inMarkup(groupedCount(live.corpus.data.acts, locale))}<`)) fFaults.push('a live count is drawn although nothing answered');
+    out.push({ name: 'dossier-failed', locale, html: failed, faults: fFaults });
+    // One address not answered: named in the status line.
+    const partialLive = await dossierLive({ failed: ['coverage'] });
+    const partial = render.renderArchitecture(partialLive, { locale, at });
+    const pFaults = markupFaults(partial);
+    if (!partial.includes('data-arch-status="partial"') || !partial.includes('/api/next/coverage')) pFaults.push('the address not answered is not named');
+    out.push({ name: 'dossier-partial', locale, html: partial, faults: pFaults });
+  }
+  return out;
 }
 
 /**
@@ -900,6 +1046,28 @@ export async function renderAll({ write = false, tag = '' } = {}) {
       const bare = { schema: results2.schema, run: results2.run, totals: results2.totals };
       const thin = render.renderResults(bare, { locale });
       renderings.push({ name: 'results-v2-thin', locale, html: thin, faults: [...markupFaults(thin), ...(thin.includes('data-results2-section="slices"') ? ['a slice section drawn with no slice'] : [])] });
+      // rc3 (22/11/2026): the engine's own file, when it is in lex-results/2, read against itself like the fixture, served by
+      // a build with another code tag and the same fingerprint (said to describe it) and by one with another fingerprint (not).
+      if (current !== null && current.schema === 'lex-results/2') {
+        const measured = current.build ?? {};
+        const sameServed = { ...config, build: { code: `${measured.code}-next`, data: measured.data, engine: measured.engine } };
+        const html = render.renderResults(current, { locale, config: sameServed });
+        const faults = results2Faults(html, current, locale);
+        if (typeof measured.engine === 'string' && !html.includes('data-results-build="same-engine"')) faults.push('a build running the engine measured is not said to be described');
+        if (html.includes(inMarkup(nextCopy(locale).results2.notServed))) faults.push('a section is said not to be the version answering, although its engine answers');
+        // rc3: every key of the file the page names is named in the page's language, never shown as the file's key.
+        const copy2 = nextCopy(locale);
+        for (const row of current.slices ?? []) if (!Object.hasOwn(copy2.results2.slices, row.slice)) faults.push(`the slice ${row.slice} has no name`);
+        for (const row of current.by_type ?? []) if (!Object.hasOwn(copy2.questionTypes, row.type)) faults.push(`the kind ${row.type} has no name`);
+        for (const row of current.previous?.items ?? []) for (const state of [row.before, row.now]) if (!Object.hasOwn(copy2.results2.itemStates, state)) faults.push(`the state ${state} has no name`);
+        for (const key of Object.keys(current.totals ?? {})) if (key !== 'intervals' && !Object.hasOwn(copy2.results2.states, key)) faults.push(`the total ${key} has no name`);
+        if (typeof current.cost?.price_source === 'string' && locale === 'fr') faults.push('the price source is said in one language only');
+        if (locale === 'fr') for (const row of current.misses?.items ?? []) if (/«[^»]*\b(?:partial|not_held|not_found|out_of_scope|clarify)\b[^»]*»/u.test(row.note?.fr ?? '')) faults.push(`a French note names an engine state by its key (${row.id})`);
+        renderings.push({ name: 'results-current-v2', locale, html, faults });
+        const otherServed = { ...config, build: { code: `${measured.code}-next`, data: measured.data, engine: '0000000000000000' } };
+        const other = render.renderResults(current, { locale, config: otherServed });
+        renderings.push({ name: 'results-current-v2-other', locale, html: other, faults: [...markupFaults(other), ...(other.includes('data-results-build="other"') ? [] : ['a build with another engine is not said to be another'])] });
+      }
     }
     for (const state of ['first', 'pending', 'failure', 'rate', 'folded', 'kept']) {
       const html = render.renderDockState(state, { locale });
@@ -941,6 +1109,8 @@ export async function renderAll({ write = false, tag = '' } = {}) {
       renderings.push({ name, locale, html, faults });
     }
   }
+  // dossier-page (22/11/2026): the architecture dossier, from the live answers of 22/11 and in its loading and failed states.
+  renderings.push(...await dossierRenderings(renderers));
   if (write) {
     await mkdir(OUTPUT, { recursive: true });
     for (const { name, locale, html } of renderings) await writeFile(new URL(`${name}.${locale}.html`, OUTPUT), `${html}\n`, 'utf8');
@@ -959,6 +1129,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   failed += group('copy: the templates name the same places in both languages', copyPlaceDifferences());
   failed += group('copy: French typography (no-break spaces, no straight apostrophe)', frenchTypographyFaults());
   failed += group('copy: no digit typed outside the known list', unexpectedDigits());
+  failed += group('copy: the architecture dossier (same keys and places, French typography, no digit)', dossierCopyFaults());
   failed += group('requests: no question in a request\'s address or a page\'s query', questionAddressFaults());
   failed += group('storage: no cookie, and only the conversation in the tab\'s session storage', storageFaults());
   const { renderings, samples } = await renderAll({ write: true });

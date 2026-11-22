@@ -60,3 +60,8 @@ export const renderReferences = (references, identifier) => renderToStaticMarkup
 /** The folded section of a text's links with other texts (in the language the bundle was built for), and the addresses asked. */
 export const renderLinks = (links) => renderToStaticMarkup(<TextLinks links={links} />);
 export { linksAddress, referencesAddress };
+
+/** dossier-page (22/11/2026): the architecture dossier drawn from live reads (each address's `{ state, data }`) and their time. */
+import { ArchitectureView, LIVE_ADDRESSES, exampleOf, funnelLevels, liveState, loadingLive, readAt } from './NextArchitecture.jsx';
+export { LIVE_ADDRESSES, exampleOf, funnelLevels, liveState, loadingLive, readAt };
+export const renderArchitecture = (live, { locale, at = null } = {}) => renderToStaticMarkup(<ArchitectureView live={live} at={at} locale={locale} />);

@@ -29,6 +29,8 @@ jobs:
       - name: Build and serve this branch's pages (preview only)
         if: hashFiles('.github/screens-preview') != ''
         working-directory: web
+        env:
+          LEX_PREVIEW_LIVE_GETS: "1"
         run: |
           npm ci
           node scripts/build-live.mjs

@@ -49,6 +49,8 @@ const readJson = async (name) => JSON.parse(await readFile(new URL(name, FIXTURE
 async function nextFixture(method, url, body) {
   const { pathname, searchParams } = new URL(url, "http://preview");
   const tryRead = async (name) => { try { return await readJson(name); } catch { return null; } };
+  // dossier-page (22/11/2026): with LEX_PREVIEW_LIVE_GETS=1 every GET of the engine's read-only API is the live site's.
+  if (method === "GET" && process.env.LEX_PREVIEW_LIVE_GETS === "1") return null;
   // repair-pages (22/11/2026): the answers this tree's server gives (test/next-fixtures/preview/, saved from it locally), and the
   // results in lex-results/2 as the evaluation will write them (results-v2.json), so the pages are photographed as they will read.
   if (pathname === "/api/next/config") return readJson("preview/config.json");

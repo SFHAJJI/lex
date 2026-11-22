@@ -124,6 +124,9 @@ const PINNED = Object.freeze({
   "app/NextDock.jsx: a navigation: window.location.assign(href);": "the text page: a law's address, a date and an article id (`textHref`)",
   "app/NextDock.jsx: the page's address: replacePageAddress(window, { hash: '' });": "the fragment cleared: nothing added to the address",
   // The old assistant page's act titles (`actTitlesOf`), which the dock's module carries: an act's address, in the body.
+  // repair-pages (22/11/2026): every page's footer asks the engine's configuration once (when its index was built): a fixed
+  // address, GET, no query, no word.
+  "app/freshness-client.jsx: fetch: const response = await fetchImpl('/api/next/config', { method: 'GET', headers: { accept: 'application/json' } });": "the engine's configuration: a fixed address, nothing added",
 });
 
 test("every place the pages' code could send a request or change an address is pinned, with why it carries no word", () => {

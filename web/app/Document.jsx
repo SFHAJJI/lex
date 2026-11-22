@@ -81,6 +81,8 @@ const V4_MENU = Object.freeze([
   Object.freeze({ key: 'menuEvidence', page: referencePage('evidence').file, states: Object.freeze([referencePage('evidence').state]) }),
   // The side build's Results page (`live-results-page.jsx`): its words are the side build's own table's (`next`).
   Object.freeze({ key: 'results', next: true, page: 'results.html', states: Object.freeze(['live-results']) }),
+  // dossier-page (22/11/2026): the architecture dossier (`live-architecture-page.jsx`), the side build's words too.
+  Object.freeze({ key: 'architecture', next: true, page: 'architecture.html', states: Object.freeze(['live-architecture']) }),
 ]);
 
 /** The magnifier the V4 fields carry, drawn, decorative. */

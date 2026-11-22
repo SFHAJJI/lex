@@ -57,6 +57,8 @@ const PAGES = Object.freeze([
   // The side build's Results page, with the script that draws the three pieces that read the new engine's counts
   // (How it works at evidence.html, Results, and the section at the top of Trust and Coverage): `NextPages.jsx`.
   ["live-results-page", "renderLiveResultsPage", "results.html", "client-live-next-entry.jsx", "client-live-next.js"],
+  // dossier-page (22/11/2026): the architecture dossier, with its own script (it carries one stored answer and the facts file).
+  ["live-architecture-page", "renderLiveArchitecturePage", "architecture.html", "client-live-architecture-entry.jsx", "client-live-architecture.js"],
 ]);
 
 /**

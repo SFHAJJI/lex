@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import { CHROME_LOCALE } from '../scripts/live-chrome.mjs';
 import { countWord, countedForm, decimal, fillNext, groupedCount, nextCopy, numericDate } from '../scripts/next-copy.mjs';
-import { Results2View, isResults2 } from './NextResults.jsx';
+import { Results2View, isResults2, sameEngine } from './NextResults.jsx';
 import { coverageLines } from '../scripts/next-view.mjs';
 
 /** The roots the browser's script draws into, and the addresses asked. */
@@ -372,6 +372,9 @@ export function resultsBuildNote(results, config, locale) {
   const answering = fillNext(pipeline === null ? copy.answeringBare : copy.answering, { code: now.code, data: now.data, ...(pipeline === null ? {} : { pipeline }) });
   const measured = results.build !== null && typeof results.build === 'object' && typeof results.build.code === 'string' && typeof results.build.data === 'string' ? results.build : null;
   if (measured !== null && measured.code === now.code && measured.data === now.data) return { same: true, text: fillNext(copy.same, { code: now.code, data: now.data }) };
+  // rc3 (22/11/2026): another code tag on the same data whose server reports the fingerprint of the files measured
+  // (app/engine_id.py) runs the engine measured, and is said to.
+  if (sameEngine(measured, now)) return { same: true, engine: true, text: fillNext(copy.sameEngine, { measured: measured.code, code: now.code, data: now.data, engine: now.engine }) };
   const before = measured === null ? copy.unnamed : fillNext(copy.measured, { code: measured.code, data: measured.data });
   return { same: false, text: `${before} ${answering}` };
 }
@@ -379,7 +382,7 @@ export function resultsBuildNote(results, config, locale) {
 /** The note drawn under the results' heading. */
 function BuildNote({ note }) {
   if (note === null) return null;
-  return <p className={note.same ? 'lx-muted' : 'lx-muted lx-next-gap'} data-results-build={note.same ? 'same' : 'other'}>{note.text}</p>;
+  return <p className={note.same ? 'lx-muted' : 'lx-muted lx-next-gap'} data-results-build={note.same ? (note.engine ? 'same-engine' : 'same') : 'other'}>{note.text}</p>;
 }
 
 /** The scored test, drawn from the results answer (`results` null while it is not known). */

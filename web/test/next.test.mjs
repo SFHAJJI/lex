@@ -773,6 +773,18 @@ test('pages2: the results say whether they describe the build that answers', asy
   assert.ok(other.includes('Le site répond aujourd’hui avec le code t8 et les données 20261120c (l’entonnoir)'));
   const same = fr.renderResults({ ...results2, build: config.build }, { locale: 'fr', config });
   assert.ok(same.includes('data-results-build="same"'));
+  // rc3 (22/11/2026): another code tag on the same data, with the fingerprint of the files measured, is said to be described;
+  // another fingerprint, another data tag or no fingerprint is not.
+  const measured = { ...results2, build: { code: 't10', data: '20261122c', engine: '01f1b08c054c474c' }, ablation: { ...results2.ablation, build: { code: 't10', data: '20261122c' } } };
+  const engineSame = fr.renderResults(measured, { locale: 'fr', config: { ...config, build: { code: 't11', data: '20261122c', engine: '01f1b08c054c474c' } } });
+  assert.ok(engineSame.includes('data-results-build="same-engine"'));
+  assert.ok(engineSame.includes('le code t11 sur les mêmes données') && engineSame.includes('empreinte 01f1b08c054c474c'));
+  assert.ok(!engineSame.includes('Ce n’est pas la version qui répond sur ce site.'), 'the bricks measured on t10 answer on t11');
+  for (const build of [{ code: 't11', data: '20261122c', engine: '3c02888b2f305455' }, { code: 't11', data: '20261122d', engine: '01f1b08c054c474c' }, { code: 't11', data: '20261122c' }]) {
+    const html = fr.renderResults(measured, { locale: 'fr', config: { ...config, build } });
+    assert.ok(html.includes('data-results-build="other"'), JSON.stringify(build));
+    assert.ok(html.includes('Ce n’est pas la version qui répond sur ce site.'), JSON.stringify(build));
+  }
   const earlier = JSON.parse(await readFile(new URL('../test/next-fixtures/results.json', import.meta.url), 'utf8'));
   assert.ok(fr.renderResults(earlier, { locale: 'fr', config }).includes('Le fichier de ces résultats ne nomme pas la version mesurée.'));
   assert.ok(!fr.renderResults(earlier, { locale: 'fr' }).includes('data-results-build'), 'nothing said before the configuration is read');
@@ -858,4 +870,43 @@ test('repair-pages: the French page says every shape decision and every column p
   assert.deepEqual((coverage.columns ?? []).map((row) => `${row.table}.${row.column}`).filter((key) => !Object.hasOwn(COLUMN_WORDS_FR, key)), [], 'a column has no French words');
   for (const [key, words] of Object.entries(COLUMN_WORDS_FR)) for (const value of Object.values(words)) assert.deepEqual(frenchFaultsIn(value), [], key);
   for (const [key, value] of Object.entries(SHAPE_REASONS_FR)) assert.deepEqual(frenchFaultsIn(value), [], key);
+});
+
+// dossier-page (22/11/2026): the architecture dossier.
+import { DOSSIER_FACTS, DOSSIER_TRACE, dossierCopyFaults, dossierLive, dossierRenderings } from '../scripts/next-check.mjs';
+
+test('dossier-page: the architecture dossier says the live counts, one real answer and every source, in both languages, with no figure typed', async () => {
+  assert.deepEqual(dossierCopyFaults(), [], 'the two tables hold the same keys and places, the French its typography, neither a digit');
+  const renderers = await loadRenderers('test-dossier');
+  const { LIVE_ADDRESSES, exampleOf, liveState, loadingLive, readAt, renderHowFunnel } = renderers.fr;
+  // What the page asks when it opens: GET addresses of the engine's read-only API, none of which calls a model.
+  for (const address of Object.values(LIVE_ADDRESSES)) assert.match(address, /^\/api\/next\/(?:corpus|config|coverage|results|shapes|dictionary|text-outline|article-by)(?:\?|$)/u);
+  assert.ok(!Object.values(LIVE_ADDRESSES).some((address) => /\/(?:ask|replay)\b/u.test(address)), 'the page never asks a question');
+  const live = await dossierLive();
+  assert.equal(liveState(live).state, 'ready');
+  assert.deepEqual(liveState(await dossierLive({ failed: ['results'] })), { state: 'partial', missing: ['results'] });
+  assert.equal(liveState(loadingLive()).state, 'loading');
+  assert.deepEqual(readAt(new Date(2026, 10, 22, 9, 5), 'fr'), { date: '22/11/2026', time: '09 h 05' });
+  assert.deepEqual(readAt(new Date(2026, 10, 22, 9, 5), 'en'), { date: '22/11/2026', time: '09:05' });
+  // The example path: the publisher's headings found by code from the live reads, else the copy read on 22/11, said so.
+  const example = exampleOf(live);
+  assert.equal(example.from, 'live');
+  assert.deepEqual(example.path.map((node) => node.node_id), ['section_1', 'section_1.section_2', 'section_1.section_2.section_4']);
+  assert.equal(example.article.lines[0].unit, 'art_21/a1');
+  assert.equal(exampleOf({ ...live, article: { state: 'failed', data: null } }).from, 'stored');
+  // The stored answer is the live engine's (code, data and engine fingerprint those the server reports), replayed with no model call.
+  const facts = JSON.parse(await readFile(DOSSIER_FACTS, 'utf8'));
+  const trace = JSON.parse(await readFile(DOSSIER_TRACE, 'utf8'));
+  assert.equal(facts.engine, live.config.data.build.engine);
+  assert.equal(facts.engine, live.results.data.build.engine, 'the sealed results describe the engine that answers');
+  assert.deepEqual([trace.meta.build.code, trace.meta.build.data], [facts.code, facts.data]);
+  assert.equal(facts.trace.replay_model_calls, 0);
+  assert.equal(trace.pipeline, live.config.data.pipeline);
+  // Every rendering: all answered (fr, en), loading, nothing answered, one address not answered.
+  const rows = await dossierRenderings(renderers);
+  assert.equal(rows.length, 8);
+  for (const row of rows) assert.deepEqual(row.faults, [], `${row.name} (${row.locale})`);
+  // How it works links the dossier.
+  const how = renderHowFunnel(live.corpus.data, live.config.data, { locale: 'fr' });
+  assert.ok(how.includes('href="/fr/architecture.html" data-how-architecture=""') || how.includes('data-how-architecture=""'), 'How it works links the dossier');
 });

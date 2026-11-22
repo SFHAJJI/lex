@@ -161,7 +161,8 @@ function EngineNotes({ answer, locale }) {
   return cards.map(([key, heading, lines]) => (
     <div className="lx-dock-card lx-dock-notheld" data-dock-card={key} key={key}>
       <p className="lx-dock-lead">{heading}</p>
-      <ul className="lx-dock-step-list">{lines.map((line) => <li key={line} lang={key === 'eu-not-held' ? undefined : lawLang(locale)}>{line}</li>)}</ul>
+      {/* The engine's sentence on a European text not held is in the question's language: marked with it when it is not the page's. */}
+      <ul className="lx-dock-step-list">{lines.map((line) => <li key={line} lang={key === 'eu-not-held' ? ((language) => (language === null || language === locale ? undefined : language))(sentenceLanguage(line)) : lawLang(locale)}>{line}</li>)}</ul>
     </div>
   ));
 }

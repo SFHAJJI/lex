@@ -164,7 +164,9 @@ export function notHeldWhy(why, locale) {
 export function notHeldLines(answer, locale) {
   const copy = nextCopy(locale).contract;
   return list(answer?.not_held).filter((entry) => text(entry?.name) !== null).map((entry) => {
-    const why = enginePhrase(entry.why, locale) ?? notHeldWhy(entry.why, locale) ?? (locale === 'en' ? text(entry.why) : /^(?:cité|nommé|publié)/u.test(text(entry.why) ?? '') ? text(entry.why) : null);
+    // repair-pages: a text a model named and code found in the catalogue (repair-engine's `by: model+code`) says so in words.
+    const named = entry?.by === 'model+code' ? nextCopy(locale).contract3.namedFound : null;
+    const why = enginePhrase(entry.why, locale) ?? notHeldWhy(entry.why, locale) ?? named ?? (locale === 'en' ? text(entry.why) : /^(?:cité|nommé|publié)/u.test(text(entry.why) ?? '') ? text(entry.why) : null);
     return { name: text(entry.name), line: why === null ? text(entry.name) : fillNext(copy.notHeldItem, { name: text(entry.name), why }) };
   });
 }
@@ -785,7 +787,7 @@ export function evidenceView(answer, locale) {
   for (const block of list(answer?.blocks)) if (text(block?.act_id) !== null && actTitle(block?.act_title) !== null) titles.set(block.act_id, actTitle(block.act_title));
   const floors = list(objectOr(evidence.coverage_detail)?.date_floor_of_the_texts_picked)
     .filter((entry) => isIsoDate(entry?.first_held) && titles.has(entry?.act_id))
-    .map((entry) => fillNext(nextCopy(locale).contract2.floor, { title: titles.get(entry.act_id).replace(/\s*>.*$/u, ''), date: numericDate(entry.first_held) }));
+    .map((entry) => fillNext(nextCopy(locale).contract2.floor, { title: titles.get(entry.act_id).replace(/\s*>.*$/u, '').replace(/[.\s]+$/u, ''), date: numericDate(entry.first_held) }));
   if (coverage === null && terms.length === 0 && swept === null && near === null && floors.length === 0) return null;
   // repair-pages (K-GEN-5): what the grade rests on (draft words), and the question's own words in another language, apart.
   const extra3 = nextCopy(locale).contract3;

@@ -1,0 +1,320 @@
+{
+ "schema": "lex-dossier-facts/1",
+ "made": "2026-11-22",
+ "by": "dossier-page",
+ "engine": "01f1b08c054c474c",
+ "code": "t11",
+ "data": "20261122c",
+ "sources": {
+  "final_counts": {
+   "file": "build-log\\repair-data-final-counts.out",
+   "date": "2026-11-22"
+  },
+  "refs": {
+   "file": "build-log\\refs.md, experiments\\refs\\tables-R.md",
+   "date": "2026-11-21"
+  },
+  "walk": {
+   "file": "experiments\\walk\\WALK-VALUE.md, experiments\\walk\\walk_metrics.json",
+   "date": "2026-11-22"
+  },
+  "sealed": {
+   "file": "experiments\\sealed\\tables-checked.md",
+   "date": "2026-11-22"
+  },
+  "final_score": {
+   "file": "VERDICT-FINAL.md",
+   "date": "2026-11-22"
+  },
+  "code": {
+   "file": "app\\funnel.py, app\\refs.py, app\\build_routing.py, app\\embed_index.py, app\\build_lexical.py (git tag rc3)",
+   "date": "2026-11-22"
+  },
+  "example": {
+   "file": "GET /api/next/text-outline, /api/next/article-by, /api/next/context",
+   "date": "2026-11-22"
+  },
+  "trace": {
+   "file": "POST /api/next/ask, POST /api/next/replay",
+   "date": "2026-11-22"
+  },
+  "review": {
+   "file": "review\\DICTIONARY-REVIEW.md, ROUTING-REVIEW.md, REFERENCES-REVIEW.md (review-manifest.json)",
+   "date": "2026-11-22"
+  }
+ },
+ "store": {
+  "refs_found": 1371994,
+  "edges": 983033,
+  "edges_to_an_article": 944930,
+  "definitions": 30137,
+  "defined_terms": 16346,
+  "vector_rows_in_use": 189063,
+  "vector_rows_zeroed": 9440,
+  "source": "final_counts"
+ },
+ "budgets": {
+  "hop_budget": 1,
+  "hop_targets": 3,
+  "hub": 5,
+  "small_articles": 6,
+  "small_chars": 16000,
+  "list_articles": 30,
+  "read_articles": 16,
+  "read_chars": 48000,
+  "corpus_shown": 24,
+  "routing_top": 30,
+  "corpus_picks": 3,
+  "walk_levels": 5,
+  "walk_picks": 3,
+  "detector_top": 6,
+  "arbiter_shown": 18,
+  "article_step_shown": 36,
+  "cost_cap_usd": 0.06,
+  "row_first_chars": 3000,
+  "row_stretch_chars": 2500,
+  "route_group_min_articles": 150,
+  "route_group_min_node": 25,
+  "weight_question": 1.0,
+  "weight_dictionary": 0.8,
+  "weight_model": 0.6,
+  "replay_signature": "HMAC-SHA256",
+  "keyword_engine": "SQLite FTS5",
+  "routing_model": "gpt-4.1-mini",
+  "routing_prompt": "route-v1",
+  "source": "code"
+ },
+ "precision": [
+  {
+   "key": "random_frozen",
+   "drawn": 40,
+   "resolved": 31,
+   "right": 31,
+   "refused": 6,
+   "not_served": 3,
+   "source": "refs"
+  },
+  {
+   "key": "hops_followed",
+   "drawn": 40,
+   "resolved": 38,
+   "right": 37,
+   "refused": 0,
+   "not_served": 2,
+   "source": "refs"
+  }
+ ],
+ "refs_experiment": {
+  "set_n": 226,
+  "half_n": 112,
+  "reference_items": 28,
+  "replicates": 2,
+  "right_before": 64.5,
+  "right_after": 74.0,
+  "noise_right": 5,
+  "complete_before": 10.0,
+  "complete_after": 12.5,
+  "noise_complete": 1,
+  "right_two_hops": 75.0,
+  "usd_extra": 0.0016,
+  "second_reading_share": 15,
+  "second_reading_seconds": 2.0,
+  "source": "refs"
+ },
+ "walk": {
+  "right_with": 208,
+  "right_without": 210,
+  "n": 260,
+  "gain_points": -0.8,
+  "gain_low": -3.9,
+  "gain_high": 2.3,
+  "p": 0.8,
+  "calls_extra": 2.9,
+  "seconds_extra": 3.4,
+  "usd_extra": 0.0029,
+  "walk_found": 171,
+  "others_found": 200,
+  "expected": 222,
+  "walk_only": 7,
+  "meaning_only_with": 14,
+  "meaning_only_without": 59,
+  "read_with": 9.0,
+  "read_without": 7.8,
+  "arbiter_candidates_with": 35.6,
+  "arbiter_candidates_without": 16.5,
+  "recall_big_codes": [
+   34,
+   44
+  ],
+  "recall_small_texts": [
+   127,
+   143
+  ],
+  "detectable_points": 4.3,
+  "source": "walk"
+ },
+ "final_score": {
+  "n": 30,
+  "right": 29,
+  "firm": 23,
+  "firm_wrong": 0,
+  "median_s": 10.4,
+  "p90_s": 13.0,
+  "calls": 7.9,
+  "usd": 0.021,
+  "source": "final_score"
+ },
+ "ablation_discordant": {
+  "no_references": [
+   18,
+   7
+  ],
+  "no_corpus_model": [
+   21,
+   5
+  ],
+  "no_outline": [
+   7,
+   9
+  ],
+  "no_words": [
+   10,
+   4
+  ],
+  "no_meaning": [
+   13,
+   9
+  ],
+  "no_arbiter": [
+   9,
+   5
+  ],
+  "source": "sealed"
+ },
+ "review": {
+  "date": "2026-11-22",
+  "dictionary_rows": 86,
+  "routing_lines": 148,
+  "routing_texts": 40,
+  "references": 40,
+  "source": "review"
+ },
+ "sealed_check": {
+  "right_as_run": 203,
+  "wrong_as_run": 5,
+  "right_checked": 208,
+  "wrong_checked": 1,
+  "random_rights_checked": 40,
+  "source": "sealed"
+ },
+ "example": {
+  "work": "loi-1997-07-27-n10",
+  "anchor": "art_21",
+  "act_id": "/eli/etat/leg/loi/1997/07/27/n10",
+  "title": "Loi du 27 juillet 1997 sur le contrat d'assurance.",
+  "type": "LOI",
+  "in_force_since": "1997-09-07",
+  "version": {
+   "id": 3149,
+   "from": "2025-11-25",
+   "until": null,
+   "until_known": true,
+   "articles": 148
+  },
+  "held": {
+   "versions": 10,
+   "first": "2006-12-25",
+   "last": "2025-11-25"
+  },
+  "path": [
+   {
+    "node_id": "section_1",
+    "label": "TITRE I LE CONTRAT D'ASSURANCE EN GENERAL",
+    "articles": 75,
+    "first": "Article 1er",
+    "last": "Article 62-11"
+   },
+   {
+    "node_id": "section_1.section_2",
+    "label": "Chapitre II - Dispositions communes à tous les contrats",
+    "articles": 41,
+    "first": "Article 9",
+    "last": "Article 47"
+   },
+   {
+    "node_id": "section_1.section_2.section_4",
+    "label": "Section IV - Exécution du contrat",
+    "articles": 12,
+    "first": "Article 18",
+    "last": "Article 29"
+   }
+  ],
+  "article": {
+   "article_pk": 96064,
+   "label": "Article 21",
+   "heading": "Défaut de paiement de la prime",
+   "wording_since": "1997-09-07",
+   "versions_same_text": true,
+   "versions": 10,
+   "lines": [
+    {
+     "n": 1,
+     "text": "A défaut de paiement d'une prime, ou d'une fraction de prime, dans les dix jours de son échéance et indépendamment du droit pour l'assureur de poursuivre l'exécution du contrat en justice, la garantie peut être suspendue à l'expiration d'un délai d'au moins trente jours suivant l'envoi au preneur d'assurance d'une lettre recommandée au dernier domicile connu.",
+     "unit": "art_21/a1",
+     "label": null
+    }
+   ]
+  },
+  "neighbours": [
+   {
+    "label": "Article 20",
+    "heading": "Modalités de paiement de la prime et avis d’échéance",
+    "units": [
+     "art_20/a1",
+     "art_20/a1/pt1",
+     "art_20/a1/pt2",
+     "art_20/a1/pt3",
+     "art_20/a1/pt4"
+    ]
+   },
+   {
+    "label": "Article 26",
+    "heading": "Déclaration du sinistre",
+    "units": [
+     "art_26/p1/a1",
+     "art_26/p1/a2",
+     "art_26/p2/a1"
+    ]
+   }
+  ],
+  "cited_by": [
+   {
+    "article": "Article 24",
+    "heading": "Assurances sur la vie",
+    "type": "not_applicable",
+    "trigger": "ne sont pas applicables",
+    "certainty": "sure",
+    "raw": "articles 21 à 23"
+   }
+  ],
+  "cited_by_of_24": [
+   {
+    "article": "Article 126",
+    "heading": "Application des dispositions relatives aux assurances sur la vie",
+    "type": "exception",
+    "trigger": "à l'exception d",
+    "certainty": "sure",
+    "raw": "article 24"
+   }
+  ],
+  "line_24": "Les dispositions des articles 21 à 23 ne sont pas applicables aux assurances sur la vie.",
+  "source": "example"
+ },
+ "trace": {
+  "asked": "2026-11-22T09:21:24Z",
+  "replay_model_calls": 0,
+  "replay_same_data": true,
+  "replay_same_code": true,
+  "source": "trace"
+ }
+}
