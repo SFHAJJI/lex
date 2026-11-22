@@ -502,6 +502,37 @@ SHOTS.push(
   ["r5s2-fr-02-notice-answer--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK_DONE(NOTICE, false), 3000],
   ["r5s2-fr-03-architecture-changes--tall", "/fr/architecture.html", 1366, 4200, false, false, PART("arch-changes"), 2500],
 );
+// rc5t (22/11/2026): the second pages-only release on rc5's engine (code t13t on 20261122e) at the revision's own address (0 %, no
+// label): the visitor review's defects checked (B1 the dossier's worked example, M1 Results in plain words, M4 / M9 coverage,
+// M5 / M6 the text page and its compare view, M7 the home's scope line, M8 Decisions, M11 the not-found evidence). Home FR / EN;
+// the policyholder's notice (first screen, then the trace opened whole); one English answer; a not found; a communal rule not
+// held; Results; the dossier (first screen, tall, parts 8-9, EN); How; coverage; Decisions; the 1997 law art. 21 and its compare
+// view; phone: home and the heir's answer. Six questions.
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5t-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["r5t-en-01-home--1366x768", "/en/", 1366, 768, false, false, null, 6000],
+  ["r5t-fr-02-notice-answer--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK_DONE(NOTICE, false), 3000],
+  ["r5t-fr-03-notice-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_DONE(NOTICE, true), 2000],
+  ["r5t-en-02-answer--tall", "/en/radar.html", 1366, 3600, false, false, ASK_DONE(EN_PRESCRIPTION, false), 3000],
+  ["r5t-fr-04-not-found-evidence--tall", "/fr/radar.html", 1366, 3600, false, false, ASK_DONE(P.none, false), 3000],
+  ["r5t-fr-05-not-held-communal--tall", "/fr/radar.html", 1366, 3600, false, false, ASK_DONE(RC4.communal, false), 3000],
+  ["r5t-fr-06-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["r5t-fr-07-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["r5t-en-03-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["r5t-fr-08-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5t-fr-09-architecture--tall", "/fr/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["r5t-fr-10-architecture-changes--tall", "/fr/architecture.html", 1366, 4200, false, false, PART("arch-changes"), 2500],
+  ["r5t-en-04-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5t-fr-11-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["r5t-fr-12-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 7000],
+  ["r5t-fr-13-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["r5t-fr-14-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
+  ["r5t-fr-15-text-1997-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
+  ["r5t-fr-16-compare-1997-art21--1366x768", `/fr${text("&from=2007-12-21&to=2025-11-25&article=art_21")}`, 1366, 768, false, false, null, 0],
+  ["r5t-fr-17-home--phone", "/fr/", 390, 844, true, false, null, 6000],
+  ["r5t-fr-18-heir-answer--phone", "/fr/radar.html", 390, 844, true, false, ASK_DONE(RC4.heir, false), 3000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
