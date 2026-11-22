@@ -437,7 +437,27 @@ SHOTS.push(
   ["z-en-02-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
   ["z-fr-11-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
 );
-const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// rc5r (22/11/2026): rc5's engine with test 05's checked results on the Results page and in the dossier, and rc5.md's pages-only
+// defects fixed, at the private label address `cand` (code t13r on 20261122e). Results FR first screen and tall, EN first screen;
+// the dossier FR first screen, part six (the test), FR tall, EN first screen; How FR / EN tall (step 3, the licence, the side
+// panel's models); Decisions FR tall (the approval line); home FR (the find field); one real answer with the trace open (the
+// heir's question: the dock's lead, the articles named with their text, the trace's foot line). One question only.
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5r-fr-01-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["r5r-fr-02-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["r5r-en-01-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["r5r-fr-03-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5r-fr-04-architecture-evaluation--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-evaluation"), 2500],
+  ["r5r-fr-05-architecture--tall", "/fr/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["r5r-en-02-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5r-fr-06-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["r5r-en-03-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["r5r-fr-07-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
+  ["r5r-fr-08-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["r5r-fr-09-heir-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_FINDS(RC4.heir, true), 3000],
+);
+const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
 const browser = await findBrowser();
