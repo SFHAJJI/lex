@@ -457,6 +457,42 @@ SHOTS.push(
   ["r5r-fr-08-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
   ["r5r-fr-09-heir-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_FINDS(RC4.heir, true), 3000],
 );
+// rc5s (22/11/2026): pages-only release on rc5's engine (code t13s on 20261122e) at the revision's own address (0 %, no label).
+// The test 05 sentence said truly and the conditions table aligned left (Results, dossier); home FR / EN; a policyholder's notice
+// to end a contract (first screen, then the trace opened whole, then on a phone); one English answer; a not found with its
+// evidence; a communal regulation not held; How, coverage, Decisions; the 1997 law art. 21 and its compare view. Six questions.
+const NOTICE = "Avec quel préavis le preneur d'assurance peut-il résilier son contrat d'assurance à l'échéance annuelle ?";
+// Asks, waits for the answer (its trace's fold, at most 55 s), optionally opens the trace and "the other articles", no scroll.
+const ASK_DONE = (question, open) => `(() => { const asked = ${ASK(question)}; if (asked !== 'asked') return asked;
+  return new Promise((resolve) => { const t0 = Date.now(); const tick = () => { const d = document.querySelector('details[data-dock-trace]');
+    if (d) { ${open ? "d.open = true; setTimeout(() => { document.querySelectorAll('details[data-finds-more]').forEach((x) => { x.open = true; }); setTimeout(() => resolve('asked'), 1500); }, 3000);" : "resolve('asked');"} }
+    else if (Date.now() - t0 > 55000) resolve('no trace'); else setTimeout(tick, 500); }; tick(); }); })()`;
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5s-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["r5s-fr-02-home--tall", "/fr/", 1366, 1800, false, false, null, 6000],
+  ["r5s-en-01-home--1366x768", "/en/", 1366, 768, false, false, null, 6000],
+  ["r5s-fr-03-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["r5s-fr-04-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["r5s-en-02-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["r5s-fr-05-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5s-fr-06-architecture-evaluation--1366x768", "/fr/architecture.html", 1366, 768, false, false, PART("arch-evaluation"), 2500],
+  ["r5s-fr-07-architecture--tall", "/fr/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["r5s-en-03-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
+  ["r5s-fr-08-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["r5s-fr-09-coverage--1366x768", "/fr/coverage.html", 1366, 768, false, false, null, 7000],
+  ["r5s-fr-10-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["r5s-fr-11-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
+  ["r5s-fr-12-text-1997-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
+  ["r5s-fr-13-compare-1997-art21--1366x768", `/fr${text("&from=2007-12-21&to=2025-11-25&article=art_21")}`, 1366, 768, false, false, null, 0],
+  ["r5s-fr-14-home--phone", "/fr/", 390, 844, true, false, null, 6000],
+  ["r5s-fr-15-notice-answer--1366x768", "/fr/", 1366, 768, false, false, ASK_DONE(NOTICE, false), 3000],
+  ["r5s-fr-16-notice-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_DONE(NOTICE, true), 2000],
+  ["r5s-en-04-answer--tall", "/en/radar.html", 1366, 3600, false, false, ASK_DONE(EN_PRESCRIPTION, false), 3000],
+  ["r5s-fr-17-not-found-evidence--tall", "/fr/radar.html", 1366, 3600, false, false, ASK_DONE(P.none, false), 3000],
+  ["r5s-fr-18-not-held-communal--tall", "/fr/radar.html", 1366, 3600, false, false, ASK_DONE(RC4.communal, false), 3000],
+  ["r5s-fr-19-notice-answer--phone", "/fr/radar.html", 390, 844, true, false, ASK_DONE(NOTICE, false), 3000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
