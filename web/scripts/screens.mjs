@@ -373,6 +373,47 @@ SHOTS.push(
   ["x-fr-10-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
   ["x-fr-11-how--phone-whole", "/fr/evidence.html", 390, 844, true, true, null, 7000],
 );
+// rc4 (22/11/2026): the release candidate rc4 (code t12: fix-engine3's engine, fix-pages3's pages; data 20261122d) at its private
+// label address, real answers of the deployed engine (no preview, no fixture). Above all the dock's searches side by side at
+// 1366x768: the answer asked, the trace opened as a reader opens it, the dock scrolled to the searches list. Then the typed
+// answers that must keep the law's words, the two tax texts of 20261122d, a communal rule, a dated not held, Results, How.
+const EN_PRESCRIPTION = "What is the limitation period for actions arising from an insurance contract?";
+const RC4 = {
+  heir: "Mon père assurait sa maison contre l'incendie et il vient de mourir. Moi, son héritier, combien de temps ai-je pour mettre fin à ce contrat ?",
+  vat: "Quel est aujourd'hui le taux normal de la TVA au Luxembourg ?",
+  housing: "J'ai 35 ans et je cotise à un contrat d'épargne-logement : quel montant puis-je déduire au maximum par an de mes impôts ?",
+  communal: "Le règlement de police de la commune de Differdange interdit-il de tondre sa pelouse le dimanche ?",
+  hours: "What is the maximum number of hours an employee may work in a single day in Luxembourg?",
+  leave2016: "En 2016, combien de jours de congé annuel payé un salarié avait-il au minimum ?",
+};
+// Asks, waits for the answer's trace (at most 45 s), opens it, optionally opens "the other articles", then scrolls the searches
+// list to the top of the dock.
+const ASK_FINDS = (question, more) => `(() => { const asked = ${ASK(question)}; if (asked !== 'asked') return asked;
+  return new Promise((resolve) => { const t0 = Date.now(); const tick = () => { const d = document.querySelector('details[data-dock-trace]');
+    if (d) { d.open = true; setTimeout(() => { ${more ? "document.querySelectorAll('details[data-finds-more]').forEach((x) => { x.open = true; });" : ""}
+      setTimeout(() => { const t = document.querySelector('[data-trace-table="detectors"]'); if (t) t.scrollIntoView({ block: 'start' }); resolve(t ? 'asked' : 'no searches list'); }, 1500); }, 3000); }
+    else if (Date.now() - t0 > 45000) resolve('no trace'); else setTimeout(tick, 500); }; tick(); }); })()`;
+SHOTS.length = 0;
+SHOTS.push(
+  ["y-fr-01-searches--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK_FINDS(PRESCRIPTION, false), 3000],
+  ["y-fr-02-searches-more--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK_FINDS(PRESCRIPTION, true), 3000],
+  ["y-en-01-searches--1366x768", "/en/radar.html", 1366, 768, false, false, ASK_FINDS(EN_PRESCRIPTION, false), 3000],
+  ["y-fr-03-trace-open--tall", "/fr/radar.html", 1366, 9000, false, false, ASK_FINDS(PRESCRIPTION, true), 3000],
+  ["y-fr-04-searches--phone", "/fr/radar.html", 390, 844, true, false, ASK_FINDS(PRESCRIPTION, false), 3000],
+  ["y-fr-05-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
+  ["y-fr-06-heir--tall", "/fr/radar.html", 1366, 4200, false, false, ASK(RC4.heir), 30000],
+  ["y-fr-07-vat--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(RC4.vat), 30000],
+  ["y-fr-08-housing-savings--tall", "/fr/radar.html", 1366, 3600, false, false, ASK(RC4.housing), 30000],
+  ["y-fr-09-communal--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(RC4.communal), 30000],
+  ["y-en-02-hours--tall", "/en/radar.html", 1366, 3600, false, false, ASK(RC4.hours), 30000],
+  ["y-fr-10-leave-2016--tall", "/fr/radar.html", 1366, 3000, false, false, ASK(RC4.leave2016), 30000],
+  ["y-fr-11-results--1366x768", "/fr/results.html", 1366, 768, false, false, null, 7000],
+  ["y-fr-12-results--tall", "/fr/results.html", 1366, 9000, false, false, null, 7000],
+  ["y-en-03-results--1366x768", "/en/results.html", 1366, 768, false, false, null, 7000],
+  ["y-fr-13-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
+  ["y-fr-14-coverage--tall", "/fr/coverage.html", 1366, 9000, false, false, null, 7000],
+  ["y-fr-15-decisions--tall", "/fr/decisions.html", 1366, 4200, false, false, null, 6000],
+);
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
@@ -423,6 +464,7 @@ try {
       if (action !== null) {
         const said = await evaluate(action);
         if (said === "no dock") report.push(`${name}: no dock on the page`);
+        else if (typeof said === "string" && said.startsWith("no ")) report.push(`${name}: ${said}`);
         await settle(wait);
       } else if (wait > 0) {
         await settle(wait);
