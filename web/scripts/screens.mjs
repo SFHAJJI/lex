@@ -368,7 +368,8 @@ SHOTS.push(
 );
 // rc-dossier (22/11/2026): the revision dossier1 (code t11d = tag rc3's engine + the dossier pages, data 20261122c) at the private
 // label address, no preview: the pages as the revision serves them. The dossier FR and EN at 1366x768, tall, folds open, phone;
-// How, coverage and results first screens. No question is asked (none of these pages asks one).
+// How, coverage and results first screens. No question is asked (none of these pages asks one). Second run: the revision
+// dossier1b (the repair: the diagram's last box keeps its border, the interval scale's labels sit on their lines), same list.
 const PART = (id) => `(() => { const el = document.getElementById(${JSON.stringify(id)}); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()`;
 SHOTS.length = 0;
 SHOTS.push(
