@@ -228,7 +228,7 @@ const R = {
 const OPEN_DICT = "(() => { document.querySelectorAll('details[data-dictionary-rows]').forEach((d) => { d.open = true; }); return 'opened'; })()";
 // repair-pages, second run: the V4 pages scroll inside their frame, so whole pages are shot in tall viewports.
 const OPEN_ALL = "(() => { document.querySelectorAll('main details').forEach((d) => { d.open = true; }); return 'opened'; })()";
-const SECOND = [
+const SECOND_RUN = [
   ["u-fr-01-how--tall", "/fr/evidence.html", 1366, 9000, false, false, null, 7000],
   ["u-fr-02-how-dictionary-open--tall", "/fr/evidence.html", 1366, 9000, false, false, OPEN_DICT, 2500],
   ["u-en-01-how--tall", "/en/evidence.html", 1366, 9000, false, false, null, 7000],
@@ -247,7 +247,7 @@ const SECOND = [
   ["u-fr-12-coverage--phone", "/fr/coverage.html", 390, 844, true, false, null, 7000],
 ];
 SHOTS.length = 0;
-SHOTS.push(...SECOND);
+SHOTS.push(...SECOND_RUN);
 const FIRST_RUN = [
   ["t-fr-01-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
   ["t-fr-02-home--1366-whole", "/fr/", 1366, 768, false, true, null, 6000],
