@@ -4327,11 +4327,11 @@ html[data-layout="v4"] .lx-arch-kinds-table td, html[data-layout="v4"] .lx-arch-
 html[data-layout="v4"] .lx-arch-kinds-table .lx-arch-count { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 html[data-layout="v4"] .lx-arch-edges { margin: 6px 0 0; padding: 0 0 0 20px; font-size: 14.5px; line-height: 1.55; }
 html[data-layout="v4"] .lx-arch-flow, html[data-layout="v4"] .lx-arch-ladder { margin: 8px 0 0; padding: 0; list-style: none; }
-html[data-layout="v4"] .lx-arch-flow li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-arch-flow > li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--lx-line); }
 html[data-layout="v4"] .lx-arch-flow p, html[data-layout="v4"] .lx-arch-ladder-body p { margin: 0; font-size: 14.5px; line-height: 1.55; }
 html[data-layout="v4"] .lx-arch-flow-n { font-family: var(--lx-serif); font-size: 22px; line-height: 1.1; color: var(--lx-faint); }
 html[data-layout="v4"] .lx-arch-question { display: inline-block; margin: 10px 0 0; padding: 10px 14px; max-width: 760px; font-size: 15px; line-height: 1.5; color: #FFFFFF; background: var(--lx-green); border-radius: 12px 12px 12px 3px; }
-html[data-layout="v4"] .lx-arch-ladder li { display: grid; grid-template-columns: 30px 210px minmax(0, 1fr); gap: 4px 16px; padding: 14px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-arch-ladder > li { display: grid; grid-template-columns: 30px 210px minmax(0, 1fr); gap: 4px 16px; padding: 14px 0; border-top: 1px solid var(--lx-line); }
 html[data-layout="v4"] .lx-arch-ladder-name h3 { margin: 0 0 6px; font-size: 15.5px; }
 html[data-layout="v4"] .lx-arch-ladder-name .lx-how-tag { margin-right: 6px; }
 html[data-layout="v4"] .lx-arch-ladder-body { min-width: 0; }
@@ -4352,6 +4352,7 @@ html[data-layout="v4"] .lx-arch-note p { margin: 6px 0 0; max-width: 900px; font
 html[data-layout="v4"] .lx-arch-fault { border-left-color: var(--lx-indigo); }
 html[data-layout="v4"] .lx-arch-chart th[scope="row"] { font-weight: 400; min-width: 220px; }
 html[data-layout="v4"] .lx-arch-main-row th[scope="row"], html[data-layout="v4"] .lx-arch-main-row td { font-weight: 600; }
+html[data-layout="v4"] .lx-arch-chart td:last-child { min-width: 220px; }
 html[data-layout="v4"] .lx-arch-chart td:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; }
 html[data-layout="v4"] .lx-arch-chart-cell, html[data-layout="v4"] .lx-arch-chart-scale { width: 300px; }
 html[data-layout="v4"] .lx-arch-ticks { display: flex; justify-content: space-between; width: 300px; margin-top: 4px; font-size: 11px; font-weight: 400; color: var(--lx-muted); }
@@ -4374,7 +4375,8 @@ html[data-layout="v4"] .lx-arch-sources { margin: 40px 0 0; padding-top: 12px; b
   html[data-layout="v4"] .lx-arch h2 { font-size: 22px; }
   html[data-layout="v4"] .lx-arch-kinds { grid-template-columns: minmax(0, 1fr); }
   html[data-layout="v4"] .lx-arch-path li, html[data-layout="v4"] .lx-arch-card dl > div { grid-template-columns: minmax(0, 1fr); }
-  html[data-layout="v4"] .lx-arch-ladder li { grid-template-columns: 30px minmax(0, 1fr); }
+  html[data-layout="v4"] .lx-arch-ladder > li { grid-template-columns: 30px minmax(0, 1fr); }
+  html[data-layout="v4"] .lx-arch-chart th[scope="row"] { min-width: 150px; }
   html[data-layout="v4"] .lx-arch-ladder-body { grid-column: 1 / -1; }
   html[data-layout="v4"] .lx-arch-example, html[data-layout="v4"] .lx-arch-answer { padding: 12px; }
   html[data-layout="v4"] .lx-arch-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

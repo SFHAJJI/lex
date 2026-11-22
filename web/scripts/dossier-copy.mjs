@@ -88,7 +88,7 @@ const EN = Object.freeze({
     }),
     side: Object.freeze({
       links: Object.freeze({ name: 'Links between texts', count: '{count} links', text: '{count} links between texts read from the publisher’s data: amends, repeals, has as its legal basis, transposes…' }),
-      annexes: Object.freeze({ name: 'Annexes', count: '{count} as text today', text: '{text} annexes of today’s versions are held as text, {pdf} only as PDF.' }),
+      annexes: Object.freeze({ name: 'Annexes', count: '{count} as text', text: '{text} annexes of today’s versions are held as text, {pdf} only as PDF.' }),
       definitions: Object.freeze({ name: 'Definitions', count: '{count} definitions', text: '{count} definitions read in the texts’ own definition articles; {terms} defined terms enter the keyword index.' }),
       tables: Object.freeze({ name: 'Tables', count: '{count} tables', text: '{count} tables; header rows found by code in {withHeader} of them. A row of a table keeps the line numbers of its header rows.' }),
       refs: Object.freeze({ name: 'References', count: '{count} references', text: '{count} reference links, from a line to an article: part four.' }),
@@ -125,7 +125,7 @@ const EN = Object.freeze({
   indexes: Object.freeze({
     heading: 'The indexes: four ways to find, each with its use',
     say: 'The indexes decide nothing: each proposes candidates in its own column, and the model and code both see which index proposed what.',
-    labels: Object.freeze({ engine: 'How', count: 'Size', row: 'One row is', use: 'Used for', by: 'Written by', status: 'Status' }),
+    labels: Object.freeze({ engine: 'How', count: 'Size', row: 'One row is', use: 'Used for', by: 'Written by', status: 'Status', leftOut: 'Left out' }),
     keyword: Object.freeze({
       name: 'Keyword index',
       engine: '{engine}, accents folded, words matched by their stem',
@@ -141,7 +141,7 @@ const EN = Object.freeze({
       row: 'the text’s title, the article’s number, heading and path, then its text: a first row of {first} characters, then stretches of about {stretch} characters along line boundaries',
       use: 'the “meaning” detector inside the texts picked and over the whole store; the texts of the closest articles at the corpus level. A main passage found by meaning alone is checked again before it is asserted.',
       by: 'code, which calls the embedding model; no language model writes a row',
-      leftOut: 'Left out: articles that only amend another text ({amending}), texts that no longer apply ({notApplicable}), individual measures that name persons ({personal}).',
+      leftOut: 'articles that only amend another text ({amending}), texts that no longer apply ({notApplicable}), individual measures that name persons ({personal})',
     }),
     routing: Object.freeze({
       name: 'Routing lines',
@@ -463,7 +463,7 @@ const FR = Object.freeze({
     }),
     side: Object.freeze({
       links: Object.freeze({ name: 'Liens entre textes', count: '{count} liens', text: `{count} liens entre textes lus dans les données de l’éditeur${NB}: modifie, abroge, a pour base légale, transpose…` }),
-      annexes: Object.freeze({ name: 'Annexes', count: '{count} en texte aujourd’hui', text: '{text} annexes des versions d’aujourd’hui sont détenues en texte, {pdf} seulement en PDF.' }),
+      annexes: Object.freeze({ name: 'Annexes', count: '{count} en texte', text: '{text} annexes des versions d’aujourd’hui sont détenues en texte, {pdf} seulement en PDF.' }),
       definitions: Object.freeze({ name: 'Définitions', count: '{count} définitions', text: `{count} définitions lues dans les articles de définitions des textes${NB}; {terms} termes définis entrent dans l’index des mots.` }),
       tables: Object.freeze({ name: 'Tableaux', count: '{count} tableaux', text: `{count} tableaux${NB}; des lignes d’en-tête trouvées par le code dans {withHeader} d’entre eux. Une ligne de tableau garde les numéros de ses lignes d’en-tête.` }),
       refs: Object.freeze({ name: 'Renvois', count: '{count} renvois', text: `{count} liens de renvoi, d’une ligne vers un article${NB}: quatrième partie.` }),
@@ -500,7 +500,7 @@ const FR = Object.freeze({
   indexes: Object.freeze({
     heading: `Les index${NB}: quatre façons de trouver, chacune avec son usage`,
     say: `Les index ne décident rien${NB}: chacun propose des candidats dans sa propre colonne, et le modèle comme le code voient quel index a proposé quoi.`,
-    labels: Object.freeze({ engine: 'Comment', count: 'Taille', row: 'Une ligne, c’est', use: 'Sert à', by: 'Écrit par', status: 'État' }),
+    labels: Object.freeze({ engine: 'Comment', count: 'Taille', row: 'Une ligne, c’est', use: 'Sert à', by: 'Écrit par', status: 'État', leftOut: 'Hors de l’index' }),
     keyword: Object.freeze({
       name: 'Index des mots',
       engine: '{engine}, accents repliés, mots retrouvés par leur racine',
@@ -516,7 +516,7 @@ const FR = Object.freeze({
       row: `le titre du texte, le numéro, l’intitulé et le chemin de l’article, puis son texte${NB}: une première ligne de {first} caractères, puis des tranches d’environ {stretch} caractères le long des lignes`,
       use: `le détecteur «${NB}sens${NB}» dans les textes choisis et dans tout le magasin${NB}; les textes des articles les plus proches à l’étage du corpus. Un passage principal trouvé par le sens seul est vérifié de nouveau avant d’être affirmé.`,
       by: `le code, qui appelle le modèle d’embedding${NB}; aucun modèle de langage n’écrit une ligne`,
-      leftOut: `Hors de l’index${NB}: les articles qui ne font que modifier un autre texte ({amending}), les textes qui ne s’appliquent plus ({notApplicable}), les mesures individuelles qui nomment des personnes ({personal}).`,
+      leftOut: 'les articles qui ne font que modifier un autre texte ({amending}), les textes qui ne s’appliquent plus ({notApplicable}), les mesures individuelles qui nomment des personnes ({personal})',
     }),
     routing: Object.freeze({
       name: 'Lignes d’aiguillage',

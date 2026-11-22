@@ -56,6 +56,8 @@ const isCount = (value) => typeof value === 'number' && Number.isFinite(value);
 const obj = (value) => (value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null);
 const arr = (value) => (Array.isArray(value) ? value : []);
 const txt = (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : null);
+/** A trigger as the parser matched it, cut inside a word (« à l’exception d »): said with an ellipsis. */
+const trigger = (value) => (/(?:^|[\s'’])[dl]$/u.test(String(value ?? '')) ? `${value}…` : String(value ?? ''));
 
 /** Every live address in its first state. */
 export const loadingLive = () => Object.fromEntries(Object.keys(LIVE_ADDRESSES).map((key) => [key, { state: 'loading', data: null }]));
@@ -410,7 +412,7 @@ function DataPart({ ctx }) {
             <li data-step="line" key={line.n}><span className="lx-arch-step">{d.exampleLevels.line}</span><span>{fillNext(e.line, { n: line.n })} <q className="lx-arch-law" lang={lawLang}>{line.text}</q></span></li>
           ))}
         </ol>
-        {arr(ex.cited_by).map((row) => <p className="lx-arch-line" key={`${row.article}-${row.raw}`} data-arch="cited-by">{fillNext(e.citedBy, { article: row.article, heading: row.heading, trigger: row.trigger, raw: row.raw })}</p>)}
+        {arr(ex.cited_by).map((row) => <p className="lx-arch-line" key={`${row.article}-${row.raw}`} data-arch="cited-by">{fillNext(e.citedBy, { article: row.article, heading: row.heading, trigger: trigger(row.trigger), raw: row.raw })}</p>)}
         <p className="lx-next-note" data-arch="example-source">{ex.from === 'live' ? d.exampleSource.live : fillNext(d.exampleSource.stored, { date: f.date(FACTS.sources.example.date), source: FACTS.sources.example.file })}</p>
       </section>
       <details className="lx-how-fold" data-arch-fold="tables">
@@ -467,7 +469,7 @@ function IndexesPart({ ctx }) {
             ['count', fillNext(x.meaning.count, { rows: f.count(vectors.rows), units: f.count(vectors.articles_with_rows), inUse: f.count(FACTS.store.vector_rows_in_use) })],
             ['row', fillNext(x.meaning.row, { first: f.count(b.row_first_chars), stretch: f.count(b.row_stretch_chars) })],
             ['use', x.meaning.use], ['by', x.meaning.by],
-            ['status', fillNext(x.meaning.leftOut, { amending: f.count(leftOut.amending), notApplicable: f.count(leftOut.not_applicable_act), personal: f.count(leftOut.personal_measure) })],
+            ['leftOut', fillNext(x.meaning.leftOut, { amending: f.count(leftOut.amending), notApplicable: f.count(leftOut.not_applicable_act), personal: f.count(leftOut.personal_measure) })],
           ]}
         />
         <IndexCard
@@ -580,7 +582,7 @@ function ReferencesPart({ ctx }) {
         <h3 id="arch-refs-example">{r.exampleHeading}</h3>
         <p className="lx-arch-line">{r.exampleEdges}</p>
         <ul className="lx-arch-edges" data-arch="edges">
-          {edgeLines.map((row) => <li key={`${row.from}-${row.to}`}>{fillNext(r.edgeLine, { from: row.from, to: row.to, kind: r.kinds[row.type]?.name ?? row.type, trigger: row.trigger, raw: row.raw, certainty: r.certaintyNames[row.certainty] ?? row.certainty })}</li>)}
+          {edgeLines.map((row) => <li key={`${row.from}-${row.to}`}>{fillNext(r.edgeLine, { from: row.from, to: row.to, kind: r.kinds[row.type]?.name ?? row.type, trigger: trigger(row.trigger), raw: row.raw, certainty: r.certaintyNames[row.certainty] ?? row.certainty })}</li>)}
           {definition && term ? <li>{fillNext(r.definitionLine, { from: definition.from, to: definition.to, term })}</li> : null}
         </ul>
       </section>

@@ -350,17 +350,21 @@ SHOTS.push(
   ["w-fr-12-text-art21--1366x768", `/fr${text("&article=art_21")}`, 1366, 768, false, false, null, 0],
 );
 // dossier-page (22/11/2026): the architecture dossier (architecture.html) built from this branch, its live counts read from the
-// public site by GET (no question asked, no model call): first screen, whole page, every fold open, a phone; How it works for its link.
+// public site by GET (no question asked, no model call). Second run: first screens of four parts, tall pages (the V4 frame
+// scrolls inside itself, so a "whole" shot stops at the viewport), every fold open, a phone.
 SHOTS.length = 0;
 SHOTS.push(
   ["d-fr-01-dossier--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 9000],
-  ["d-fr-02-dossier--1366-whole", "/fr/architecture.html", 1366, 768, false, true, null, 9000],
-  ["d-fr-03-dossier-open--1366-whole", "/fr/architecture.html", 1366, 768, false, true, OPEN_ALL, 3000],
-  ["d-fr-04-dossier--phone", "/fr/architecture.html", 390, 844, true, false, null, 9000],
-  ["d-fr-05-dossier--phone-whole", "/fr/architecture.html", 390, 844, true, true, null, 9000],
+  ["d-fr-02-data--1366x768", "/fr/architecture.html", 1366, 768, false, false, '(() => { const el = document.getElementById("arch-data"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
+  ["d-fr-03-references--1366x768", "/fr/architecture.html", 1366, 768, false, false, '(() => { const el = document.getElementById("arch-references"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
+  ["d-fr-04-funnel--1366x768", "/fr/architecture.html", 1366, 768, false, false, '(() => { const el = document.getElementById("arch-funnel"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
+  ["d-fr-05-evaluation--1366x768", "/fr/architecture.html", 1366, 768, false, false, '(() => { const el = document.getElementById("arch-evaluation"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
+  ["d-fr-06-dossier--tall", "/fr/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["d-fr-07-dossier-open--tall", "/fr/architecture.html", 1366, 26000, false, false, OPEN_ALL, 3000],
   ["d-en-01-dossier--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 9000],
-  ["d-en-02-dossier--1366-whole", "/en/architecture.html", 1366, 768, false, true, null, 9000],
-  ["d-fr-06-how--1366-whole", "/fr/evidence.html", 1366, 768, false, true, null, 7000],
+  ["d-en-02-dossier--tall", "/en/architecture.html", 1366, 16000, false, false, null, 9000],
+  ["d-fr-08-funnel--phone", "/fr/architecture.html", 390, 844, true, false, '(() => { const el = document.getElementById("arch-funnel"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
+  ["d-fr-09-evaluation--phone", "/fr/architecture.html", 390, 844, true, false, '(() => { const el = document.getElementById("arch-evaluation"); if (!el) return "none"; el.scrollIntoView(); return "scrolled"; })()', 2500],
 );
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
