@@ -596,6 +596,31 @@ SHOTS.push(
   ["r5w-fr-13-explorer--phone", `/fr/${XP57}`, 390, 844, true, false, null, 9000],
   ["r5w-fr-14-examples--phone", "/fr/examples.html", 390, 844, true, false, null, 6000],
 );
+// rc5w, second look (24/11/2026): the live Architecture and Examples pages in full, for the independent reviews of their
+// content and their UI: each part tall, as a visitor first sees it and with every fold opened. No question is asked.
+const OPEN_PART = (id) => `(() => { document.querySelectorAll('main details').forEach((d) => { d.open = true; }); const el = document.getElementById(${JSON.stringify(id)}); if (!el) return "no part"; el.scrollIntoView(); return "scrolled"; })()`;
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5w2-fr-a01-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 7000],
+  ["r5w2-fr-a02-architecture-top--tall", "/fr/architecture.html", 1366, 9000, false, false, null, 7000],
+  ["r5w2-fr-a03-architecture-parsing-open--tall", "/fr/architecture.html", 1366, 9000, false, false, OPEN_PART("arch-parsing"), 4000],
+  ["r5w2-fr-a04-architecture-indexes-open--tall", "/fr/architecture.html", 1366, 9000, false, false, OPEN_PART("arch-indexes"), 4000],
+  ["r5w2-fr-a05-architecture-funnel--tall", "/fr/architecture.html", 1366, 9000, false, false, PART("arch-funnel"), 4000],
+  ["r5w2-fr-a06-architecture-funnel-open--tall", "/fr/architecture.html", 1366, 9000, false, false, OPEN_PART("arch-funnel"), 4000],
+  ["r5w2-fr-a07-architecture-evaluation-open--tall", "/fr/architecture.html", 1366, 9000, false, false, OPEN_PART("arch-evaluation"), 4000],
+  ["r5w2-fr-a08-architecture-operations-open--tall", "/fr/architecture.html", 1366, 9000, false, false, OPEN_PART("arch-operations"), 4000],
+  ["r5w2-en-a09-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 7000],
+  ["r5w2-en-a10-architecture-funnel-open--tall", "/en/architecture.html", 1366, 9000, false, false, OPEN_PART("arch-funnel"), 4000],
+  ["r5w2-fr-a11-architecture--phone", "/fr/architecture.html", 390, 844, true, false, null, 7000],
+  ["r5w2-fr-e01-examples-heir--tall", "/fr/examples.html#heir", 1366, 9000, false, false, null, 6000],
+  ["r5w2-fr-e02-examples-heir-open--tall", "/fr/examples.html#heir", 1366, 9000, false, false, OPEN_PART("lx-ex-route-h-heir"), 4000],
+  ["r5w2-fr-e03-examples-heir-steps-open--tall", "/fr/examples.html#heir", 1366, 9000, false, false, OPEN_PART("lx-ex-steps-h-heir"), 4000],
+  ["r5w2-fr-e04-examples-loop-open--tall", "/fr/examples.html#loop", 1366, 9000, false, false, OPEN_PART("lx-ex-route-h-loop"), 4000],
+  ["r5w2-fr-e05-examples-loop-steps-open--tall", "/fr/examples.html#loop", 1366, 9000, false, false, OPEN_PART("lx-ex-steps-h-loop"), 4000],
+  ["r5w2-fr-e06-examples-notfound-open--tall", "/fr/examples.html#notfound", 1366, 9000, false, false, OPEN_PART("lx-ex-absence-h-notfound"), 4000],
+  ["r5w2-en-e07-examples-loop--tall", "/en/examples.html#loop", 1366, 9000, false, false, null, 6000],
+  ["r5w2-fr-e08-examples--phone", "/fr/examples.html", 390, 844, true, false, null, 6000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
