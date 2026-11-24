@@ -564,6 +564,38 @@ SHOTS.push(
   ["r5v-fr-06-home--1366x768", "/fr/", 1366, 768, false, false, null, 6000],
   ["r5v-fr-07-results--phone", "/fr/results.html", 390, 844, true, false, null, 7000],
 );
+// rc5w (24/11/2026): the pages release (engine unchanged) at the revision's own address (0 %, no label): the Explorer (every
+// text held, read live; the insurance law opened at Art. 57; the whole text; the four lists as files), the Examples (three
+// stored questions, step by step), Architecture with How it works folded in, the answer panel (answer first, the how behind a
+// fold, widen, the answer's pack). Two questions are asked, to show the answer panel.
+const XP_TAB = (key) => `(() => { const b = document.getElementById(${JSON.stringify(`lx-xp-tab-${key}`)}); if (!b) return "no tab"; b.click(); return "clicked"; })()`;
+const LOOP_Q = "Si mon assureur fait l'objet d'une mesure d'assainissement ou de liquidation, puis-je résilier mon contrat d'assurance ?";
+const WIDE_THEN_HOW = "setTimeout(() => { document.querySelector('[data-dock-wide-toggle]')?.click(); document.querySelectorAll('details[data-dock-how]').forEach((d) => { d.open = true; }); }, 20000);";
+const XP57 = "explorer.html#loi-1997-07-27-n10/art_57";
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5w-fr-01-explorer-art57--1366x768", `/fr/${XP57}`, 1366, 768, false, false, null, 9000],
+  ["r5w-fr-02-explorer-art57--tall", `/fr/${XP57}`, 1366, 2600, false, false, null, 9000],
+  ["r5w-fr-03-explorer-whole-text--tall", `/fr/${XP57}`, 1366, 2600, false, false, XP_TAB("law"), 5000],
+  ["r5w-fr-04-explorer-files--tall", `/fr/${XP57}`, 1366, 2000, false, false, XP_TAB("files"), 6000],
+  ["r5w-fr-05-explorer-2015-law--1366x768", "/fr/explorer.html#loi-2015-12-07-n1", 1366, 768, false, false, null, 9000],
+  ["r5w-en-01-explorer-art57--1366x768", `/en/${XP57}`, 1366, 768, false, false, null, 9000],
+  ["r5w-fr-06-examples--1366x768", "/fr/examples.html", 1366, 768, false, false, null, 6000],
+  ["r5w-fr-07-examples-heir--whole", "/fr/examples.html#heir", 1366, 768, false, true, null, 6000],
+  ["r5w-fr-07b-examples-heir-details-open--whole", "/fr/examples.html#heir", 1366, 768, false, true, OPEN_ALL, 3000],
+  ["r5w-fr-07c-examples-loop-details-open--whole", "/fr/examples.html#loop", 1366, 768, false, true, OPEN_ALL, 3000],
+  ["r5w-fr-07d-examples-notfound--whole", "/fr/examples.html#notfound", 1366, 768, false, true, null, 6000],
+  ["r5w-en-02-examples--1366x768", "/en/examples.html", 1366, 768, false, false, null, 6000],
+  ["r5w-en-02b-examples-loop--whole", "/en/examples.html#loop", 1366, 768, false, true, null, 6000],
+  ["r5w-fr-08-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 6000],
+  ["r5w-fr-09-architecture--whole", "/fr/architecture.html", 1366, 768, false, true, null, 6000],
+  ["r5w-en-03-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 6000],
+  ["r5w-fr-10-how-it-works-address--1366x768", "/fr/evidence.html", 1366, 768, false, false, null, 6000],
+  ["r5w-fr-11-answer-first--1366x768", "/fr/radar.html", 1366, 768, false, false, ASK(LOOP_Q), 30000],
+  ["r5w-fr-12-answer-wide-how-open--tall", "/fr/radar.html", 1366, 2400, false, false, `(() => { const asked = ${ASK(LOOP_Q)}; ${WIDE_THEN_HOW} return asked; })()`, 32000],
+  ["r5w-fr-13-explorer--phone", `/fr/${XP57}`, 390, 844, true, false, null, 9000],
+  ["r5w-fr-14-examples--phone", "/fr/examples.html", 390, 844, true, false, null, 6000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
