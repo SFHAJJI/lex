@@ -621,6 +621,38 @@ SHOTS.push(
   ["r5w2-en-e07-examples-loop--tall", "/en/examples.html#loop", 1366, 9000, false, false, null, 6000],
   ["r5w2-fr-e08-examples--phone", "/fr/examples.html", 390, 844, true, false, null, 6000],
 );
+// rc5x (25/11/2026): the three pages rebuilt from the independent reviews (the Explorer on the indexes; Architecture with the
+// machinery first; Examples with the route first), live at law.soufien.lu on the owner's standing word. One question asked,
+// to see the widened answer panel keep the page readable.
+const XP = (hash) => `/fr/explorer.html#${hash}`;
+SHOTS.length = 0;
+SHOTS.push(
+  ["r5x-fr-x01-explorer-art57--1366x768", XP("loi-1997-07-27-n10/art_57"), 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x02-explorer-art57--tall", XP("loi-1997-07-27-n10/art_57"), 1366, 2400, false, false, null, 9000],
+  ["r5x-fr-x03-explorer-art69--1366x768", XP("loi-1997-07-27-n10/art_69"), 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x04-explorer-art57-sens--1366x768", XP("loi-1997-07-27-n10/art_57?onglet=sens"), 1366, 768, false, false, null, 11000],
+  ["r5x-fr-x05-explorer-art1-definitions--1366x768", XP("loi-1997-07-27-n10/art_1er?onglet=definitions"), 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x06-explorer-art20-versions--1366x768", XP("loi-1997-07-27-n10/art_20?onglet=versions"), 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x07-explorer-art57-mots--1366x768", XP("loi-1997-07-27-n10/art_57?onglet=mots"), 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x08-explorer-2015-law--1366x768", XP("loi-2015-12-07-n1"), 1366, 768, false, false, null, 10000],
+  ["r5x-fr-x09-explorer-small-text--1366x768", XP("rgd-2013-03-13-n1"), 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x10-explorer-whole-text-open--tall", XP("loi-1997-07-27-n10/art_57"), 1366, 2400, false, false, "(() => { document.querySelectorAll('main details').forEach((d) => { d.open = true; }); return 'opened'; })()", 3000],
+  ["r5x-en-x11-explorer-art57--1366x768", "/en/explorer.html#loi-1997-07-27-n10/art_57", 1366, 768, false, false, null, 9000],
+  ["r5x-fr-x12-explorer--phone", XP("loi-1997-07-27-n10/art_57"), 390, 844, true, false, null, 9000],
+  ["r5x-fr-a01-architecture--1366x768", "/fr/architecture.html", 1366, 768, false, false, null, 7000],
+  ["r5x-fr-a02-architecture--tall", "/fr/architecture.html", 1366, 9000, false, false, null, 7000],
+  ["r5x-fr-a03-architecture-evaluation--tall", "/fr/architecture.html", 1366, 6000, false, false, PART("arch-evaluation"), 4000],
+  ["r5x-en-a04-architecture--1366x768", "/en/architecture.html", 1366, 768, false, false, null, 7000],
+  ["r5x-fr-a05-architecture--phone", "/fr/architecture.html", 390, 844, true, false, null, 7000],
+  ["r5x-fr-e01-examples-heir--1366x768", "/fr/examples.html#heir", 1366, 768, false, false, null, 6000],
+  ["r5x-fr-e02-examples-loop--1366x768", "/fr/examples.html#loop", 1366, 768, false, false, null, 6000],
+  ["r5x-fr-e03-examples-notfound--1366x768", "/fr/examples.html#notfound", 1366, 768, false, false, null, 6000],
+  ["r5x-fr-e04-examples-heir--tall", "/fr/examples.html#heir", 1366, 9000, false, false, null, 6000],
+  ["r5x-fr-e05-examples-loop--tall", "/fr/examples.html#loop", 1366, 9000, false, false, null, 6000],
+  ["r5x-en-e06-examples-heir--1366x768", "/en/examples.html#heir", 1366, 768, false, false, null, 6000],
+  ["r5x-fr-e07-examples--phone", "/fr/examples.html#heir", 390, 844, true, false, null, 6000],
+  ["r5x-fr-p01-answer-wide--tall", "/fr/radar.html", 1366, 2400, false, false, `(() => { const asked = ${ASK("Mon assureur peut-il résilier mon contrat après un sinistre ?")}; setTimeout(() => { document.querySelector('[data-dock-wide-toggle]')?.click(); }, 20000); return asked; })()`, 32000],
+);
 const settle =(ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
